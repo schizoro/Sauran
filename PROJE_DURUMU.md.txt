@@ -1,0 +1,53 @@
+# PROJE DURUMU - SAURAN
+
+## 1. Proje Özeti
+- **Proje Adı:** Sauran
+- **Amaç:** Discord benzeri, tamamen bağımsız bir gerçek zamanlı sohbet uygulaması geliştirmek.
+- **Temel Özellikler:**
+  - Kullanıcılar mesaj yazabilsin
+  - Mesajlar kalıcı olsun (sayfa yenilense / uygulama kapansa bile kaybolmasın)
+  - Gerçek zamanlı çalışsın (mesaj anında diğer kullanıcılara gitsin)
+  - Basit, koyu temalı (Discord tarzı) arayüz
+
+## 2. Teknoloji Kararları
+- **Backend:** Node.js + Express
+- **Gerçek Zamanlı:** Socket.io
+- **Veritabanı:** better-sqlite3 (yerel)
+- **Frontend:** Düz HTML + CSS + JavaScript
+- **Yapı:** server / client / data klasörleri ayrı
+
+## 3. Şu Anki Aşama
+- v1.0 (İlk çalışan sürüm) başarıyla tamamlandı.
+- v1.1 (Güvenlik ve Sağlamlaştırma) tamamlandı. 
+- Aynı kullanıcı adıyla çakışma, boş mesaj ve spam (uzun mesaj) engelleri sisteme eklendi.
+- Altyapı artık çok daha stabil.
+
+## 4. Alınan Kararlar
+- Discord botu yapılmayacak. Tamamen kendi uygulamamız olacak.
+- Önce yerelde çalışır hâle getirilecek (Şu an yerelde tam aktif).
+- Veritabanı işlemleri `db.js` içinde soyut yazıldı.
+- Kullanıcı sistemi şimdilik sadece kullanıcı adı ile (giriş ekranı) yapıldı.
+
+## 5. Bilinçli Olarak Ertelediklerimiz
+- Şifreli giriş / e-posta sistemi
+- Birden fazla kanal (Şu an sadece #general var)
+- Dosya / resim gönderme
+- İnternete açma (Hosting)
+## 6. Şu Anki Hedef
+**v1.3 (Canlı Kullanıcı Durumu) başarıyla tamamlandı.
+*   **Amaç:** Sohbette kimlerin aktif olduğunu kullanıcıya arayüzü boğmadan, sade bir şekilde göstermek.
+*   **Yapılacaklar:**
+    *   Socket.io üzerinden aktif kullanıcıları takip et.
+    *   Kullanıcı giriş/çıkış yaptığında listeyi anlık güncelle.
+    *   Aktif kullanıcı sayısını üst barda göster (Çevrimiçi butonu).
+    *   Butona tıklanınca açılan küçük bir kullanıcı listesi (popup/modal) oluştur.
+*   **Kesinlikle Yapılmayacaklar (Şimdilik):**
+    *   Veritabanına (SQLite) online durum kaydı.
+    *   Sistem mesajlarını (girdi/çıktı) sohbet ekranına yansıtma.
+    *   Discord tarzı sürekli açık sağ kullanıcı paneli.
+    *   Gelişmiş durumlar (Boşta, Rahatsız Etmeyin vb.).
+    *   Arkadaş / Özel mesaj / Profil sistemleri.
+
+## 7. Notlar
+- Her önemli adımdan sonra bu dosya güncellenecek.
+- Farklı yapay zekalara soru sorulurken bu metin yapıştırılacak.
