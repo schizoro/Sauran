@@ -1,5 +1,11 @@
 require('dotenv').config();
+const dns = require('dns');
 const nodemailer = require('nodemailer');
+
+// Bazı barındırma ortamları (ör. Render'ın ücretsiz katmanı) IPv6 çıkışını
+// desteklemiyor. Gmail'in SMTP sunucusu IPv6 adresi döndürdüğünde bağlantı
+// "ENETUNREACH" ile düşüyordu — IPv4'ü önceliklendirerek bunu önlüyoruz.
+dns.setDefaultResultOrder('ipv4first');
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -7,6 +13,7 @@ const transporter = nodemailer.createTransport({
     user: process.env.MAIL_USER,
     pass: process.env.MAIL_PASS
   },
+  family: 4,
   connectionTimeout: 10000,
   greetingTimeout: 10000,
   socketTimeout: 10000
