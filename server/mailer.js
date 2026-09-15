@@ -1,28 +1,12 @@
 require('dotenv').config();
-const dns = require('dns');
-const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 
-// Bazı barındırma ortamları (ör. Render'ın ücretsiz katmanı) IPv6 çıkışını
-// desteklemiyor. Gmail'in SMTP sunucusu IPv6 adresi döndürdüğünde bağlantı
-// "ENETUNREACH" ile düşüyordu — IPv4'ü önceliklendirerek bunu önlüyoruz.
-dns.setDefaultResultOrder('ipv4first');
-
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.MAIL_USER,
-    pass: process.env.MAIL_PASS
-  },
-  family: 4,
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 10000
-});
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 async function sendVerificationEmail(toEmail, code) {
-  await transporter.sendMail({
-    from: `"Sauran" <${process.env.MAIL_USER}>`,
+  await sgMail.send({
     to: toEmail,
+    from: process.env.MAIL_FROM,
     subject: 'Sauran — E-posta Doğrulama Kodun',
     html: `
       <div style="font-family: 'Segoe UI', sans-serif; background: #0b0c10; color: #c5c6c7; padding: 40px; max-width: 480px; margin: auto; border-radius: 4px;">
