@@ -1,6 +1,9 @@
- 
+
 node_modules/
 server/node_modules/
 data/sauran.db
 data/sauran.db-shm
 data/sauran.db-wal
+.env
+server/.env
+*.env

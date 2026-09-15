@@ -6,52 +6,660 @@
     <title>Sauran</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
-    <!-- Giriş Ekranı -->
+
+    <!-- ================================================= -->
+    <!-- GİRİŞ / KAYIT EKRANI -->
+    <!-- ================================================= -->
+
     <div id="login-screen">
+
         <div class="login-box">
-            <h2>Sauran'a Hoş Geldin</h2>
-            <input type="text" id="username-input" placeholder="Kullanıcı Adın" autocomplete="off" autofocus>
-            <button id="join-btn">Katıl</button>
+
+            <h2 id="auth-title">Sauran'a Hoş Geldin</h2>
+
+            <!-- GİRİŞ FORMU -->
+
+            <div id="login-form">
+
+                <input
+                    type="text"
+                    id="login-username-input"
+                    placeholder="Kullanıcı Adın"
+                    autocomplete="username"
+                >
+
+                <input
+                    type="password"
+                    id="login-password-input"
+                    placeholder="Şifren"
+                    autocomplete="current-password"
+                >
+
+                <button id="login-btn">
+                    Giriş Yap
+                </button>
+
+                <div class="auth-switch">
+                    Hesabın yok mu?
+                    <button id="show-register-btn" type="button">
+                        Kayıt Ol
+                    </button>
+                </div>
+
+            </div>
+
+
+            <!-- KAYIT FORMU -->
+
+            <div id="register-form" style="display: none;">
+
+                <input
+                    type="text"
+                    id="register-username-input"
+                    placeholder="Kullanıcı Adın"
+                    autocomplete="username"
+                >
+
+                <input
+                    type="email"
+                    id="register-email-input"
+                    placeholder="E-posta Adresin"
+                    autocomplete="email"
+                >
+
+                <input
+                    type="password"
+                    id="register-password-input"
+                    placeholder="Şifren"
+                    autocomplete="new-password"
+                >
+
+                <input
+                    type="password"
+                    id="register-password-confirm-input"
+                    placeholder="Şifreni Tekrar Gir"
+                    autocomplete="new-password"
+                >
+
+                <button id="register-btn">
+                    Kayıt Ol
+                </button>
+
+                <div class="auth-switch">
+                    Zaten hesabın var mı?
+                    <button id="show-login-btn" type="button">
+                        Giriş Yap
+                    </button>
+                </div>
+
+            </div>
+
+
+            <!-- DOĞRULAMA FORMU -->
+
+            <div id="verify-form" style="display: none;">
+
+                <p class="verify-info">
+                    <span id="verify-email-label"></span> adresine gönderilen
+                    6 haneli kodu gir.
+                </p>
+
+                <input
+                    type="text"
+                    id="verify-code-input"
+                    placeholder="Doğrulama Kodu"
+                    inputmode="numeric"
+                    maxlength="6"
+                    autocomplete="one-time-code"
+                >
+
+                <button id="verify-btn">
+                    Doğrula
+                </button>
+
+                <div class="auth-switch">
+                    <button id="back-to-register-btn" type="button">
+                        Geri Dön
+                    </button>
+                </div>
+
+            </div>
+
+
+            <!-- HATA / BİLGİ MESAJI -->
+
+            <div
+                id="auth-error"
+                class="auth-error"
+                style="display: none;"
+            ></div>
+
         </div>
+
     </div>
 
-    <!-- Ana Sohbet Ekranı -->
-    <div id="chat-screen" style="display: none;">
-        <div class="sidebar">
-            <h3>Sauran</h3>
-            <div class="channel active"># general</div>
 
-            <!-- v1.3: Çevrimiçi Kullanıcı Butonu -->
-            <div class="online-section">
-                <button id="online-btn">
-                    <span class="online-dot"></span>
-                    <span id="online-count">0</span> Çevrimiçi
-                </button>
+    <!-- ================================================= -->
+    <!-- ANA SOHBET EKRANI -->
+    <!-- ================================================= -->
+
+    <div id="chat-screen" style="display: none;">
+
+        <div class="sidebar">
+
+            <h3>Sauran</h3>
+
+            <div class="channel active" id="nav-hubs" data-view="hubs">
+                🧩 Hublar
             </div>
+
+
+            <!-- ÇEVRİMİÇİ / ARKADAŞLAR -->
+
+            <div class="online-section">
+
+                <button id="online-btn">
+
+                    <span class="online-dot"></span>
+
+                    <span id="online-count">
+                        0
+                    </span>
+
+                    <span id="online-label">Çevrimiçi</span>
+
+                </button>
+
+            </div>
+
+
+            <!-- PROFİL -->
+
+            <div class="profile-section">
+
+                <button id="profile-btn">
+
+                    <span class="profile-avatar-wrap profile-avatar-wrap-sm">
+                        <span id="profile-avatar" class="profile-avatar"></span>
+                        <img id="profile-avatar-img" class="profile-avatar-img" style="display:none;" alt="">
+                        <span id="sidebar-status-dot" class="status-dot status-signal status-dot-sm"><span class="status-dot-core"></span></span>
+                    </span>
+
+                    <span id="profile-username" class="profile-username"></span>
+
+                </button>
+
+            </div>
+
         </div>
+
+
+        <!-- SOHBET -->
 
         <div class="chat-area">
-            <div id="messages"></div>
-            <form id="chat-form">
-                <input type="text" id="message-input" autocomplete="off" placeholder="#general kanalına mesaj gönder...">
+
+            <!-- HUB LİSTESİ -->
+
+            <div id="hub-list-view" class="view-panel">
+
+                <div class="hub-list-header">
+
+                    <h2>🧩 HUBLAR</h2>
+
+                    <button id="hub-create-open-btn" class="hub-create-btn">
+                        + YENİ HUB
+                    </button>
+
+                </div>
+
+                <div id="hub-list-grid" class="hub-list-grid"></div>
+
+                <div id="hub-list-empty" class="hub-list-empty" style="display:none;">
+                    Henüz bir Hub yok. İlk Hub'ı sen kur.
+                </div>
+
+            </div>
+
+
+            <!-- HUB DETAY -->
+
+            <div id="hub-detail-view" class="view-panel hub-detail-view" style="display:none;">
+
+                <div class="hub-detail-main">
+
+                    <div class="hub-detail-header">
+
+                        <button id="hub-back-btn" class="hub-back-btn" type="button">← Hublar</button>
+
+                        <span id="hub-detail-icon" class="hub-detail-icon"></span>
+                        <h2 id="hub-detail-name"></h2>
+                        <span id="hub-detail-count" class="hub-detail-count"></span>
+
+                        <button id="hub-delete-btn" class="hub-delete-btn" type="button" style="display:none;">🗑 Sil</button>
+
+                    </div>
+
+                    <div id="hub-feed" class="hub-feed"></div>
+
+                    <div class="hub-composer">
+
+                        <button id="hub-start-btn" class="hub-start-btn" type="button">
+                            ＋ Bir şey başlat
+                        </button>
+
+                        <div id="hub-start-menu" class="hub-start-menu" style="display:none;">
+                            <button data-action="chat" type="button">💬 Sohbet</button>
+                            <button data-action="poll" type="button">📊 Oylama</button>
+                            <button data-action="share" type="button">📌 Paylaşım</button>
+                        </div>
+
+                        <form id="hub-chat-form">
+                            <input type="text" id="hub-message-input" autocomplete="off" placeholder="Bir mesaj yaz...">
+                            <button type="submit">Gönder</button>
+                        </form>
+
+                    </div>
+
+                </div>
+
+                <div class="hub-detail-side">
+
+                    <div class="hub-side-section">
+
+                        <div class="hub-side-title">ROLLER</div>
+
+                        <div id="hub-role-list" class="hub-role-list"></div>
+
+                        <button id="hub-add-role-btn" class="hub-add-role-btn" type="button" style="display:none;">
+                            + Rol Ekle
+                        </button>
+
+                    </div>
+
+                    <div class="hub-side-section">
+
+                        <div class="hub-side-title">ÜYELER</div>
+
+                        <div id="hub-member-list" class="hub-member-list"></div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ================================================= -->
+    <!-- HUB OLUŞTURMA MODALI -->
+    <!-- ================================================= -->
+
+    <div id="hub-create-modal" class="modal-overlay" style="display:none;">
+
+        <div class="modal-box hub-create-box">
+
+            <div class="modal-header">
+                <span>Yeni Hub</span>
+                <button id="hub-create-close-btn">✕</button>
+            </div>
+
+            <div id="hub-create-body" class="hub-create-body"></div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ================================================= -->
+    <!-- ANKET OLUŞTURMA MODALI -->
+    <!-- ================================================= -->
+
+    <div id="poll-create-modal" class="modal-overlay" style="display:none;">
+
+        <div class="modal-box poll-create-box">
+
+            <div class="modal-header">
+                <span>📊 Oylama Başlat</span>
+                <button id="poll-create-close-btn">✕</button>
+            </div>
+
+            <div class="poll-create-body">
+
+                <input type="text" id="poll-question-input" placeholder="Soru yaz..." maxlength="200">
+
+                <div id="poll-options-list" class="poll-options-list"></div>
+
+                <button id="poll-add-option-btn" type="button" class="about-btn about-btn-ghost">+ Seçenek Ekle</button>
+
+                <button id="poll-submit-btn" type="button" class="about-btn about-btn-primary poll-submit-btn">Oylamayı Başlat</button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ================================================= -->
+    <!-- PAYLAŞIM OLUŞTURMA MODALI -->
+    <!-- ================================================= -->
+
+    <div id="share-create-modal" class="modal-overlay" style="display:none;">
+
+        <div class="modal-box share-create-box">
+
+            <div class="modal-header">
+                <span>📌 Paylaşım Yap</span>
+                <button id="share-create-close-btn">✕</button>
+            </div>
+
+            <div class="poll-create-body">
+
+                <textarea id="share-content-input" placeholder="Ne paylaşmak istersin?" maxlength="300"></textarea>
+
+                <input type="text" id="share-url-input" placeholder="Bağlantı (opsiyonel)">
+
+                <button id="share-submit-btn" type="button" class="about-btn about-btn-primary poll-submit-btn">Paylaş</button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ================================================= -->
+    <!-- ÇEVRİMİÇİ KULLANICILAR MODAL -->
+    <!-- ================================================= -->
+
+    <div
+        id="users-modal"
+        class="modal-overlay"
+        style="display: none;"
+    >
+
+        <div class="modal-box users-modal-box">
+
+            <div class="modal-header">
+
+                <span id="users-modal-title">
+                    Çevrimiçi
+                </span>
+
+                <button id="close-modal-btn">
+                    ✕
+                </button>
+
+            </div>
+
+            <div id="friend-add-section" class="friend-add-section" style="display:none;">
+
+                <input type="text" id="friend-add-input" placeholder="Kullanıcı adıyla arkadaş ekle...">
+                <button id="friend-add-btn" type="button">Ekle</button>
+
+            </div>
+
+            <div id="friend-add-error" class="friend-add-error"></div>
+
+            <div id="friend-requests-section" class="friend-requests-section" style="display:none;">
+
+                <div class="users-modal-subtitle">BEKLEYEN İSTEKLER</div>
+                <div id="friend-requests-list"></div>
+
+            </div>
+
+            <div class="users-modal-subtitle" id="users-list-subtitle" style="display:none;"></div>
+
+            <ul id="users-list"></ul>
+
+        </div>
+
+    </div>
+
+
+    <!-- ================================================= -->
+    <!-- BAŞKASININ PROFİLİ -->
+    <!-- ================================================= -->
+
+    <div id="other-profile-modal" class="modal-overlay" style="display:none;">
+
+        <div class="modal-box profile-modal-box">
+
+            <div class="profile-banner">
+
+                <button id="close-other-profile-btn" class="profile-close-btn">✕</button>
+
+                <div class="profile-avatar-wrap">
+                    <span id="other-profile-avatar" class="profile-avatar profile-avatar-lg"></span>
+                    <img id="other-profile-avatar-img" class="profile-avatar-img" style="display:none;" alt="">
+                    <span id="other-profile-status-dot" class="status-dot status-signal"><span class="status-dot-core"></span></span>
+                </div>
+
+                <h3 id="other-profile-username" class="profile-modal-username"></h3>
+                <span id="other-profile-status-label" class="status-label"></span>
+
+            </div>
+
+            <div class="profile-tab-panel" data-panel="info">
+
+                <div class="profile-field">
+                    <span class="profile-field-label">Hakkında</span>
+                    <div class="about-view" style="cursor:default;">
+                        <p id="other-profile-about"></p>
+                    </div>
+                </div>
+
+                <div id="other-profile-actions" class="other-profile-actions"></div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ================================================= -->
+    <!-- DM PANELİ -->
+    <!-- ================================================= -->
+
+    <div id="dm-modal" class="modal-overlay" style="display:none;">
+
+        <div class="modal-box dm-modal-box">
+
+            <div class="modal-header">
+                <span id="dm-modal-title"></span>
+                <button id="dm-close-btn">✕</button>
+            </div>
+
+            <div id="dm-feed" class="dm-feed"></div>
+
+            <form id="dm-form" class="dm-form">
+                <input type="text" id="dm-message-input" autocomplete="off" placeholder="Bir mesaj yaz...">
                 <button type="submit">Gönder</button>
             </form>
+
         </div>
+
     </div>
 
-    <!-- v1.3: Kullanıcı Listesi Modal -->
-    <div id="users-modal" class="modal-overlay" style="display:none;">
-        <div class="modal-box">
-            <div class="modal-header">
-                <span>Çevrimiçi Kullanıcılar</span>
-                <button id="close-modal-btn">✕</button>
+
+    <!-- ================================================= -->
+    <!-- PROFİL MODAL -->
+    <!-- ================================================= -->
+
+    <div
+        id="profile-modal"
+        class="modal-overlay"
+        style="display: none;"
+    >
+
+        <div class="modal-box profile-modal-box">
+
+            <div class="profile-banner">
+
+                <button id="close-profile-modal-btn" class="profile-close-btn">
+                    ✕
+                </button>
+
+                <div class="profile-avatar-wrap">
+
+                    <span id="profile-modal-avatar" class="profile-avatar profile-avatar-lg"></span>
+
+                    <img id="profile-modal-avatar-img" class="profile-avatar-img" style="display:none;" alt="">
+
+                    <button id="avatar-change-btn" class="avatar-change-overlay" type="button">
+                        <svg viewBox="0 0 24 24" width="18" height="18">
+                            <path fill="currentColor" d="M9 3l-1.8 2H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9zm3 5.5a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
+                        </svg>
+                        <span>Değiştir</span>
+                    </button>
+
+                    <input type="file" id="avatar-file-input" accept="image/png,image/jpeg,image/webp" hidden>
+
+                    <!-- DURUM GÖSTERGESİ -->
+                    <button id="status-dot-btn" class="status-dot status-signal" type="button" aria-label="Durumu değiştir">
+                        <span class="status-dot-core"></span>
+                    </button>
+
+                    <!-- DURUM MENÜSÜ -->
+                    <div id="status-dropdown" class="status-dropdown" style="display:none;">
+
+                        <button class="status-option" data-status="signal" type="button">
+                            <span class="status-dot status-signal status-option-dot"><span class="status-dot-core"></span></span>
+                            <span class="status-option-text">
+                                <strong>Sinyal Aktif</strong>
+                                <small>Çevrimiçi ve erişilebilirsin</small>
+                            </span>
+                        </button>
+
+                        <button class="status-option" data-status="sleep" type="button">
+                            <span class="status-dot status-sleep status-option-dot"><span class="status-dot-core"></span></span>
+                            <span class="status-option-text">
+                                <strong>Uyku Modu</strong>
+                                <small>Buradasın ama pasifsin</small>
+                            </span>
+                        </button>
+
+                        <button class="status-option" data-status="locked" type="button">
+                            <span class="status-dot status-locked status-option-dot"><span class="status-dot-core"></span></span>
+                            <span class="status-option-text">
+                                <strong>Kilitli Frekans</strong>
+                                <small>Rahatsız edilmek istemiyorsun</small>
+                            </span>
+                        </button>
+
+                    </div>
+
+                </div>
+
+                <h3 id="profile-modal-username" class="profile-modal-username"></h3>
+
+                <span id="status-label" class="status-label"></span>
+
             </div>
-            <ul id="users-list"></ul>
+
+            <!-- SEKMELER -->
+
+            <div class="profile-tabs">
+
+                <button class="profile-tab-btn active" data-tab="info" type="button">
+                    Profil
+                </button>
+
+                <button class="profile-tab-btn" data-tab="privacy" type="button">
+                    Ayarlar / Gizlilik
+                </button>
+
+            </div>
+
+            <!-- PROFİL SEKMESİ -->
+
+            <div class="profile-tab-panel" data-panel="info">
+
+                <div class="profile-field">
+                    <span class="profile-field-label">E-posta</span>
+                    <span id="profile-modal-email" class="profile-field-value"></span>
+                </div>
+
+                <div class="profile-field">
+
+                    <span class="profile-field-label">Hakkında</span>
+
+                    <div id="about-view" class="about-view">
+                        <p id="about-text"></p>
+                        <span class="about-edit-hint">düzenlemek için tıkla</span>
+                    </div>
+
+                    <div id="about-edit" class="about-edit" style="display:none;">
+
+                        <textarea
+                            id="about-textarea"
+                            maxlength="300"
+                            placeholder="Kendinden bahset... (maks. 300 karakter)"
+                        ></textarea>
+
+                        <div class="about-edit-footer">
+                            <span id="about-char-count" class="about-char-count">0 / 300</span>
+                            <div class="about-edit-actions">
+                                <button id="about-cancel-btn" class="about-btn about-btn-ghost" type="button">Vazgeç</button>
+                                <button id="about-save-btn" class="about-btn about-btn-primary" type="button">Kaydet</button>
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <button id="logout-btn" class="logout-btn">
+                    Çıkış Yap
+                </button>
+
+            </div>
+
+            <!-- GİZLİLİK SEKMESİ -->
+
+            <div class="profile-tab-panel" data-panel="privacy" style="display:none;">
+
+                <span class="profile-field-label">Profil Fotoğrafı Görünürlüğü</span>
+
+                <div class="privacy-options">
+
+                    <button class="privacy-option" data-visibility="public" type="button">
+                        <span class="privacy-option-title">Herkese Açık</span>
+                        <span class="privacy-option-desc">Sauran'daki herkes fotoğrafını görebilir</span>
+                    </button>
+
+                    <button class="privacy-option" data-visibility="friends" type="button">
+                        <span class="privacy-option-title">Sadece Arkadaşlar</span>
+                        <span class="privacy-option-desc">Yalnızca arkadaş listendekiler görebilir</span>
+                    </button>
+
+                    <button class="privacy-option" data-visibility="private" type="button">
+                        <span class="privacy-option-title">Hiçkimse (Gizli)</span>
+                        <span class="privacy-option-desc">Fotoğrafın kimseye gösterilmez</span>
+                    </button>
+
+                </div>
+
+            </div>
+
         </div>
+
     </div>
+
+
+    <!-- SOCKET.IO -->
 
     <script src="/socket.io/socket.io.js"></script>
+
+    <!-- SAURAN -->
+
     <script src="script.js"></script>
+
 </body>
 </html>
