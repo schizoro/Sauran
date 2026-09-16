@@ -108,9 +108,10 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 .profile-avatar-img { border-radius: 50%; object-fit: cover; }
 .profile-username { color: #c5c6c7; font-size: 13px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.profile-avatar-wrap { position: relative; display: inline-flex; }
+.profile-avatar-wrap { position: relative; display: inline-flex; flex-shrink: 0; }
+.profile-avatar-wrap-sm { width: 30px; height: 30px; }
 .profile-avatar-wrap-sm .profile-avatar { width: 30px; height: 30px; font-size: 13px; }
-.profile-avatar-wrap-sm .profile-avatar-img { width: 30px; height: 30px; position: absolute; inset: 0; }
+.profile-avatar-wrap-sm .profile-avatar-img { width: 30px; height: 30px; max-width: 30px; max-height: 30px; position: absolute; inset: 0; }
 
 /* ─── v1.9: Durum Altıgenleri (Aktif / Takılıyor / Meşgul / Gizli) ───────── */
 .status-hex {
