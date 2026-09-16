@@ -196,6 +196,40 @@ db.exec(`
   );
 `);
 
+const hubColumns = db
+  .prepare(`PRAGMA table_info(hubs)`)
+  .all()
+  .map(col => col.name);
+
+if (!hubColumns.includes('image_data')) {
+  db.exec(`ALTER TABLE hubs ADD COLUMN image_data TEXT`);
+}
+
+// =====================================================
+// v1.10 MIGRATION — BİLDİRİMLER / ŞİFRE SIFIRLAMA
+// =====================================================
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    data TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS password_resets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    code TEXT NOT NULL,
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+`);
+
 // =====================================================
 // E-POSTA DOĞRULAMA TABLOSU
 // =====================================================
@@ -490,14 +524,7 @@ function getMessages(limit = 50, room = 'general') {
 // HUB SİSTEMİ
 // =====================================================
 
-const HUB_TEMPLATES = {
-  chat: { icon: '💬', label: 'Sohbet Hubu' },
-  game: { icon: '🎮', label: 'Oyun Hubu' },
-  stream: { icon: '📺', label: 'Yayın Hubu' },
-  custom: { icon: '🧩', label: 'Özel Hub' }
-};
-
-function createHub(userId, { name, type, template, roles }) {
+function createHub(userId, { name, image_data }) {
   try {
     name = String(name || '').trim();
 
@@ -505,36 +532,17 @@ function createHub(userId, { name, type, template, roles }) {
       return { success: false, error: 'Hub adı 3-40 karakter olmalıdır.' };
     }
 
-    if (!HUB_TYPES.includes(type)) {
-      return { success: false, error: 'Geçersiz Hub türü.' };
+    if (image_data && !/^data:image\/(png|jpe?g|webp|gif);base64,/.test(image_data)) {
+      return { success: false, error: 'Geçersiz görsel formatı.' };
     }
 
-    const icon = (HUB_TEMPLATES[type] && HUB_TEMPLATES[type].icon) || '🧩';
-
     const insertHub = db.prepare(`
-      INSERT INTO hubs (name, type, template, icon, created_by)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO hubs (name, type, icon, image_data, created_by)
+      VALUES (?, 'custom', '🧩', ?, ?)
     `);
 
-    const hubResult = insertHub.run(name, type, String(template || '').trim() || null, icon, userId);
+    const hubResult = insertHub.run(name, image_data || null, userId);
     const hubId = hubResult.lastInsertRowid;
-
-    const roleList = Array.isArray(roles) ? roles.slice(0, 12) : [];
-
-    const insertRole = db.prepare(`
-      INSERT INTO hub_roles (hub_id, name, icon, slot_limit, position)
-      VALUES (?, ?, ?, ?, ?)
-    `);
-
-    roleList.forEach((role, index) => {
-      const roleName = String(role?.name || '').trim().slice(0, 24);
-      if (!roleName) return;
-
-      const roleIcon = String(role?.icon || '⚪').trim().slice(0, 4) || '⚪';
-      const slotLimit = Number.isInteger(role?.slot_limit) && role.slot_limit > 0 ? role.slot_limit : null;
-
-      insertRole.run(hubId, roleName, roleIcon, slotLimit, index);
-    });
 
     db.prepare(`INSERT INTO hub_members (hub_id, user_id) VALUES (?, ?)`).run(hubId, userId);
 
@@ -549,12 +557,12 @@ function createHub(userId, { name, type, template, roles }) {
 function listHubs(userId) {
   return db.prepare(`
     SELECT
-      hubs.id, hubs.name, hubs.type, hubs.icon, hubs.created_at,
+      hubs.id, hubs.name, hubs.type, hubs.icon, hubs.image_data, hubs.created_at, hubs.created_by,
       (SELECT COUNT(*) FROM hub_members WHERE hub_members.hub_id = hubs.id) AS member_count
     FROM hubs
     INNER JOIN hub_members ON hub_members.hub_id = hubs.id AND hub_members.user_id = ?
     ORDER BY hubs.created_at DESC
-  `).all(userId);
+  `).all(userId).map(h => ({ ...h, is_owner: h.created_by === userId }));
 }
 
 function generateInviteCode() {
@@ -899,6 +907,138 @@ function listIncomingRequests(userId) {
   `).all(userId, userId, userId);
 }
 
+function getTopFriends(userId, limit = 5) {
+  const friends = listFriends(userId);
+
+  const withCounts = friends.map((friend) => {
+    const room = dmRoom(userId, friend.id);
+    const count = db.prepare(`SELECT COUNT(*) AS c FROM messages WHERE room = ? AND kind = 'dm'`).get(room).c;
+    return { ...friend, message_count: count };
+  });
+
+  return withCounts
+    .sort((a, b) => b.message_count - a.message_count)
+    .filter(f => f.message_count > 0)
+    .slice(0, limit);
+}
+
+// =====================================================
+// HUB DAVETİ (ARKADAŞA) / BİLDİRİMLER
+// =====================================================
+
+function sendHubInviteNotification(hubId, fromUserId, fromUsername, toUserId) {
+  if (!areFriends(fromUserId, toUserId)) {
+    return { success: false, error: 'Sadece arkadaşlarını davet edebilirsin.' };
+  }
+
+  if (!isHubMember(hubId, fromUserId)) {
+    return { success: false, error: 'Bu Hub\'a üye değilsin.' };
+  }
+
+  if (isHubMember(hubId, toUserId)) {
+    return { success: false, error: 'Bu kişi zaten Hub\'a üye.' };
+  }
+
+  const hub = db.prepare(`SELECT id, name, icon, image_data FROM hubs WHERE id = ?`).get(hubId);
+  if (!hub) return { success: false, error: 'Hub bulunamadı.' };
+
+  const existing = db.prepare(`
+    SELECT id FROM notifications
+    WHERE user_id = ? AND type = 'hub_invite' AND status = 'pending'
+      AND json_extract(data, '$.hub_id') = ? AND json_extract(data, '$.from_user_id') = ?
+  `).get(toUserId, hubId, fromUserId);
+
+  if (existing) return { success: false, error: 'Zaten bekleyen bir davetin var.' };
+
+  const data = JSON.stringify({
+    hub_id: hub.id,
+    hub_name: hub.name,
+    hub_icon: hub.icon,
+    from_user_id: fromUserId,
+    from_username: fromUsername
+  });
+
+  const info = db.prepare(`
+    INSERT INTO notifications (user_id, type, data) VALUES (?, 'hub_invite', ?)
+  `).run(toUserId, data);
+
+  return { success: true, id: info.lastInsertRowid };
+}
+
+function listNotifications(userId) {
+  const rows = db.prepare(`
+    SELECT id, type, data, status, created_at FROM notifications
+    WHERE user_id = ? AND status = 'pending'
+    ORDER BY created_at DESC
+  `).all(userId);
+
+  return rows.map(r => ({ ...r, data: JSON.parse(r.data) }));
+}
+
+function respondHubInviteNotification(notificationId, userId, accept) {
+  const notif = db.prepare(`SELECT * FROM notifications WHERE id = ? AND user_id = ?`).get(notificationId, userId);
+  if (!notif || notif.status !== 'pending') return { success: false, error: 'Bildirim bulunamadı.' };
+
+  const data = JSON.parse(notif.data);
+
+  if (accept) {
+    if (!isHubMember(data.hub_id, userId)) {
+      db.prepare(`INSERT INTO hub_members (hub_id, user_id) VALUES (?, ?)`).run(data.hub_id, userId);
+    }
+    db.prepare(`UPDATE notifications SET status = 'accepted' WHERE id = ?`).run(notificationId);
+    return { success: true, hub_id: data.hub_id };
+  }
+
+  db.prepare(`UPDATE notifications SET status = 'declined' WHERE id = ?`).run(notificationId);
+  return { success: true };
+}
+
+// =====================================================
+// ŞİFREMİ UNUTTUM
+// =====================================================
+
+function requestPasswordReset(email) {
+  email = String(email || '').trim().toLowerCase();
+
+  const user = db.prepare(`SELECT id FROM users WHERE LOWER(email) = LOWER(?)`).get(email);
+  if (!user) return { success: false, error: 'Bu e-posta ile kayıtlı bir hesap yok.' };
+
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+  db.prepare(`DELETE FROM password_resets WHERE user_id = ?`).run(user.id);
+  db.prepare(`INSERT INTO password_resets (user_id, code, expires_at) VALUES (?, ?, ?)`).run(user.id, code, expiresAt);
+
+  return { success: true, code, userId: user.id };
+}
+
+function confirmPasswordReset(email, code, newPassword) {
+  email = String(email || '').trim().toLowerCase();
+  code = String(code || '').trim();
+
+  const user = db.prepare(`SELECT id FROM users WHERE LOWER(email) = LOWER(?)`).get(email);
+  if (!user) return { success: false, error: 'Geçersiz istek.' };
+
+  const reset = db.prepare(`SELECT * FROM password_resets WHERE user_id = ? AND code = ?`).get(user.id, code);
+  if (!reset) return { success: false, error: 'Geçersiz kod.' };
+
+  if (new Date(reset.expires_at).getTime() <= Date.now()) {
+    db.prepare(`DELETE FROM password_resets WHERE id = ?`).run(reset.id);
+    return { success: false, error: 'Kodun süresi dolmuş.' };
+  }
+
+  const newPasswordStr = String(newPassword || '');
+  if (newPasswordStr.length < 6) {
+    return { success: false, error: 'Yeni şifre en az 6 karakter olmalıdır.' };
+  }
+
+  const { hash, salt } = hashPassword(newPasswordStr);
+  db.prepare(`UPDATE users SET password_hash = ?, password_salt = ? WHERE id = ?`).run(hash, salt, user.id);
+  db.prepare(`DELETE FROM password_resets WHERE user_id = ?`).run(user.id);
+
+  return { success: true };
+}
+
 function getUserPublicProfile(viewerId, targetId) {
   const user = db.prepare(`
     SELECT id, username, status, avatar_data
@@ -1073,5 +1213,11 @@ module.exports = {
   isBlocked,
   updateUsername,
   updatePassword,
+  getTopFriends,
+  sendHubInviteNotification,
+  listNotifications,
+  respondHubInviteNotification,
+  requestPasswordReset,
+  confirmPasswordReset,
   db
 };

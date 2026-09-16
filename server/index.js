@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { sendVerificationEmail } = require('./mailer');
+const { sendVerificationEmail, sendPasswordResetEmail } = require('./mailer');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -44,6 +44,12 @@ const {
   unblockUser,
   updateUsername,
   updatePassword,
+  getTopFriends,
+  sendHubInviteNotification,
+  listNotifications,
+  respondHubInviteNotification,
+  requestPasswordReset,
+  confirmPasswordReset,
   db
 } = require('./db');
 
@@ -607,6 +613,30 @@ app.post('/api/hubs/:id/invite', (req, res) => {
   }
 });
 
+app.post('/api/hubs/:id/invite-friend', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    const result = sendHubInviteNotification(Number(req.params.id), user.id, user.username, Number(req.body?.to_user_id));
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    const targetSockets = activeUsers.get(Number(req.body?.to_user_id));
+    if (targetSockets) {
+      targetSockets.forEach(sid => io.to(sid).emit('notification_received'));
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Hub daveti gönderme hatası:', error);
+    res.status(500).json({ success: false, error: 'Davet gönderilemedi.' });
+  }
+});
+
 app.post('/api/hubs/join', (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
@@ -805,6 +835,93 @@ app.get('/api/friends', (req, res) => {
   } catch (error) {
     console.error('Arkadaş listesi hatası:', error);
     res.status(500).json({ success: false, error: 'Arkadaşlar alınamadı.' });
+  }
+});
+
+app.get('/api/friends/top', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    const friends = getTopFriends(user.id, 5).map(f => ({ ...f, online: isUserOnline(f.id) }));
+    return res.json({ success: true, friends });
+  } catch (error) {
+    console.error('Sık tercihler hatası:', error);
+    res.status(500).json({ success: false, error: 'Alınamadı.' });
+  }
+});
+
+// =====================================================
+// BİLDİRİMLER
+// =====================================================
+
+app.get('/api/notifications', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    return res.json({ success: true, notifications: listNotifications(user.id) });
+  } catch (error) {
+    console.error('Bildirim listesi hatası:', error);
+    res.status(500).json({ success: false, error: 'Alınamadı.' });
+  }
+});
+
+app.post('/api/notifications/:id/respond', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    const result = respondHubInviteNotification(Number(req.params.id), user.id, Boolean(req.body?.accept));
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Bildirim yanıtlama hatası:', error);
+    res.status(500).json({ success: false, error: 'Yanıtlanamadı.' });
+  }
+});
+
+// =====================================================
+// ŞİFREMİ UNUTTUM
+// =====================================================
+
+app.post('/api/password-reset/request', async (req, res) => {
+  try {
+    const result = requestPasswordReset(req.body?.email);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    const user = db.prepare(`SELECT email FROM users WHERE id = ?`).get(result.userId);
+    await sendPasswordResetEmail(user.email, result.code);
+
+    return res.json({ success: true });
+
+  } catch (error) {
+    console.error('Şifre sıfırlama isteği hatası:', error);
+    res.status(500).json({ success: false, error: 'İstek gönderilemedi.' });
+  }
+});
+
+app.post('/api/password-reset/confirm', (req, res) => {
+  try {
+    const result = confirmPasswordReset(req.body?.email, req.body?.code, req.body?.new_password);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Şifre sıfırlama onay hatası:', error);
+    res.status(500).json({ success: false, error: 'Sıfırlanamadı.' });
   }
 });
 

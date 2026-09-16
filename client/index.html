@@ -42,9 +42,60 @@
                 </button>
 
                 <div class="auth-switch">
+                    <button id="show-forgot-btn" type="button" class="forgot-link">
+                        Şifremi Unuttum
+                    </button>
+                </div>
+
+                <div class="auth-switch">
                     Hesabın yok mu?
                     <button id="show-register-btn" type="button">
                         Kayıt Ol
+                    </button>
+                </div>
+
+            </div>
+
+
+            <!-- ŞİFREMİ UNUTTUM — E-POSTA -->
+
+            <div id="forgot-email-form" style="display: none;">
+
+                <p class="verify-info">Kayıtlı e-posta adresini gir, sana bir sıfırlama kodu gönderelim.</p>
+
+                <input type="email" id="forgot-email-input" placeholder="E-posta Adresin" autocomplete="email">
+
+                <button id="forgot-email-btn">
+                    Kod Gönder
+                </button>
+
+                <div class="auth-switch">
+                    <button id="back-to-login-from-forgot-btn" type="button">
+                        Geri Dön
+                    </button>
+                </div>
+
+            </div>
+
+
+            <!-- ŞİFREMİ UNUTTUM — KOD + YENİ ŞİFRE -->
+
+            <div id="forgot-reset-form" style="display: none;">
+
+                <p class="verify-info">
+                    <span id="forgot-email-label"></span> adresine gönderilen kodu ve yeni şifreni gir.
+                </p>
+
+                <input type="text" id="forgot-code-input" placeholder="Doğrulama Kodu" inputmode="numeric" maxlength="6">
+                <input type="password" id="forgot-new-password-input" placeholder="Yeni Şifren" autocomplete="new-password">
+
+                <button id="forgot-reset-btn">
+                    Şifreyi Sıfırla
+                </button>
+
+                <div class="auth-switch">
+                    <button id="back-to-login-from-reset-btn" type="button">
+                        Geri Dön
                     </button>
                 </div>
 
@@ -157,10 +208,17 @@
 
                 <button id="hub-join-open-btn" class="topbar-icon-btn" title="Davet koduyla katıl" type="button">🔑</button>
 
+                <button id="notifications-btn" class="topbar-icon-btn" title="Bildirimler" type="button">
+                    🔔
+                    <span id="notifications-badge" class="topbar-badge" style="display:none;">0</span>
+                </button>
+
                 <button id="online-btn" class="topbar-icon-btn" title="Arkadaşlar">
                     👥
                     <span id="online-count" class="topbar-badge" style="display:none;">0</span>
                 </button>
+
+                <button id="friend-add-open-btn" class="topbar-icon-btn" title="Arkadaş Ekle" type="button">➕</button>
 
                 <button id="settings-btn" class="topbar-icon-btn" title="Ayarlar" type="button">⚙️</button>
 
@@ -199,7 +257,19 @@
 
                 </div>
 
-                <div id="hub-list-grid" class="hub-list-grid"></div>
+                <div id="hub-list-content" style="display:none;">
+
+                    <div class="hub-list-section">
+                        <div class="hub-list-subtitle">OLUŞTURDUĞUM HUBLAR</div>
+                        <div id="hub-list-grid-owned" class="hub-list-grid"></div>
+                    </div>
+
+                    <div class="hub-list-section">
+                        <div class="hub-list-subtitle">KATILDIĞIM HUBLAR</div>
+                        <div id="hub-list-grid-joined" class="hub-list-grid"></div>
+                    </div>
+
+                </div>
 
                 <div id="hub-list-empty" class="hub-list-empty" style="display:none;">
 
@@ -225,6 +295,7 @@
                         <h2 id="hub-detail-name"></h2>
                         <span id="hub-detail-count" class="hub-detail-count"></span>
 
+                        <button id="hub-invite-friend-btn" class="hub-delete-btn" type="button">👥 Davet Et</button>
                         <button id="hub-invite-btn" class="hub-delete-btn" type="button">🔑 Davet</button>
                         <button id="hub-delete-btn" class="hub-delete-btn" type="button" style="display:none;">🗑 Sil</button>
 
@@ -239,7 +310,6 @@
                         </button>
 
                         <div id="hub-start-menu" class="hub-start-menu" style="display:none;">
-                            <button data-action="chat" type="button">💬 Sohbet</button>
                             <button data-action="poll" type="button">📊 Oylama</button>
                             <button data-action="share" type="button">📌 Paylaşım</button>
                         </div>
@@ -254,18 +324,6 @@
                 </div>
 
                 <div class="hub-detail-side">
-
-                    <div class="hub-side-section">
-
-                        <div class="hub-side-title">ROLLER</div>
-
-                        <div id="hub-role-list" class="hub-role-list"></div>
-
-                        <button id="hub-add-role-btn" class="hub-add-role-btn" type="button" style="display:none;">
-                            + Rol Ekle
-                        </button>
-
-                    </div>
 
                     <div class="hub-side-section">
 
@@ -297,7 +355,61 @@
                 <button id="hub-create-close-btn">✕</button>
             </div>
 
-            <div id="hub-create-body" class="hub-create-body"></div>
+            <div class="hub-create-body">
+
+                <div class="hub-create-image-wrap">
+                    <span id="hub-create-image-preview" class="hub-create-image-preview">🧩</span>
+                    <button id="hub-create-image-btn" class="hub-create-image-btn" type="button">Görsel Ekle</button>
+                    <input type="file" id="hub-create-image-input" accept="image/png,image/jpeg,image/webp" hidden>
+                </div>
+
+                <input type="text" id="hub-create-name-input" class="hub-name-input" placeholder="Hub adı" maxlength="40">
+
+                <div id="hub-create-error" class="hub-create-error"></div>
+
+                <button id="hub-create-submit-btn" class="hub-create-submit" type="button">Hub'ı Oluştur</button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ================================================= -->
+    <!-- ARKADAŞINI HUB'A DAVET ET -->
+    <!-- ================================================= -->
+
+    <div id="hub-invite-friend-modal" class="modal-overlay" style="display:none;">
+
+        <div class="modal-box users-modal-box">
+
+            <div class="modal-header">
+                <span>👥 Arkadaşını Davet Et</span>
+                <button id="hub-invite-friend-close-btn">✕</button>
+            </div>
+
+            <ul id="hub-invite-friend-list"></ul>
+
+        </div>
+
+    </div>
+
+
+    <!-- ================================================= -->
+    <!-- BİLDİRİMLER -->
+    <!-- ================================================= -->
+
+    <div id="notifications-modal" class="modal-overlay" style="display:none;">
+
+        <div class="modal-box users-modal-box">
+
+            <div class="modal-header">
+                <span>🔔 Bildirimler</span>
+                <button id="notifications-close-btn">✕</button>
+            </div>
+
+            <div id="notifications-list" class="notifications-list"></div>
 
         </div>
 
@@ -419,11 +531,11 @@
 
     <div
         id="users-modal"
-        class="modal-overlay"
+        class="modal-overlay users-modal-overlay"
         style="display: none;"
     >
 
-        <div class="modal-box users-modal-box">
+        <div class="side-panel">
 
             <div class="modal-header">
 
@@ -437,7 +549,47 @@
 
             </div>
 
-            <div id="friend-add-section" class="friend-add-section" style="display:none;">
+            <div class="side-panel-scroll">
+
+                <div id="friend-requests-section" class="friend-requests-section" style="display:none;">
+
+                    <div class="users-modal-subtitle">BEKLEYEN İSTEKLER</div>
+                    <div id="friend-requests-list"></div>
+
+                </div>
+
+                <div id="top-friends-section" style="display:none;">
+
+                    <div class="users-modal-subtitle">SIK TERCİHLERİM</div>
+                    <div id="top-friends-list" class="top-friends-list"></div>
+
+                </div>
+
+                <div class="users-modal-subtitle" id="users-list-subtitle" style="display:none;"></div>
+
+                <ul id="users-list"></ul>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ================================================= -->
+    <!-- ARKADAŞ EKLE -->
+    <!-- ================================================= -->
+
+    <div id="friend-add-modal" class="modal-overlay" style="display:none;">
+
+        <div class="modal-box poll-create-box">
+
+            <div class="modal-header">
+                <span>➕ Arkadaş Ekle</span>
+                <button id="friend-add-close-btn">✕</button>
+            </div>
+
+            <div class="friend-add-section">
 
                 <input type="text" id="friend-add-input" placeholder="Kullanıcı adıyla arkadaş ekle...">
                 <button id="friend-add-btn" type="button">Ekle</button>
@@ -445,17 +597,6 @@
             </div>
 
             <div id="friend-add-error" class="friend-add-error"></div>
-
-            <div id="friend-requests-section" class="friend-requests-section" style="display:none;">
-
-                <div class="users-modal-subtitle">BEKLEYEN İSTEKLER</div>
-                <div id="friend-requests-list"></div>
-
-            </div>
-
-            <div class="users-modal-subtitle" id="users-list-subtitle" style="display:none;"></div>
-
-            <ul id="users-list"></ul>
 
         </div>
 
@@ -652,6 +793,8 @@
                         <span class="privacy-option-title">English</span>
                     </button>
                 </div>
+
+                <button id="lang-confirm-btn" class="about-btn about-btn-primary poll-submit-btn" type="button" style="display:none;">Dili Onayla</button>
 
                 <span class="profile-field-label">Şifre Değiştir</span>
                 <input type="password" id="settings-current-password" placeholder="Mevcut şifren">

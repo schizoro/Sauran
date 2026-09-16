@@ -74,6 +74,46 @@ let pendingVerifyEmail = '';
 
 
 // =====================================================
+// ŞİFREMİ UNUTTUM
+// =====================================================
+
+const showForgotBtn =
+    document.getElementById('show-forgot-btn');
+
+const forgotEmailForm =
+    document.getElementById('forgot-email-form');
+
+const forgotEmailInput =
+    document.getElementById('forgot-email-input');
+
+const forgotEmailBtn =
+    document.getElementById('forgot-email-btn');
+
+const backToLoginFromForgotBtn =
+    document.getElementById('back-to-login-from-forgot-btn');
+
+const forgotResetForm =
+    document.getElementById('forgot-reset-form');
+
+const forgotEmailLabel =
+    document.getElementById('forgot-email-label');
+
+const forgotCodeInput =
+    document.getElementById('forgot-code-input');
+
+const forgotNewPasswordInput =
+    document.getElementById('forgot-new-password-input');
+
+const forgotResetBtn =
+    document.getElementById('forgot-reset-btn');
+
+const backToLoginFromResetBtn =
+    document.getElementById('back-to-login-from-reset-btn');
+
+let pendingResetEmail = '';
+
+
+// =====================================================
 // GEÇİŞ
 // =====================================================
 
@@ -120,8 +160,31 @@ const usersListSubtitle =
 const closeModalBtn =
     document.getElementById('close-modal-btn');
 
-const friendAddSection =
-    document.getElementById('friend-add-section');
+const friendRequestsSection =
+    document.getElementById('friend-requests-section');
+
+const friendRequestsList =
+    document.getElementById('friend-requests-list');
+
+const topFriendsSection =
+    document.getElementById('top-friends-section');
+
+const topFriendsList =
+    document.getElementById('top-friends-list');
+
+
+// =====================================================
+// ARKADAŞ EKLE (AYRI MODAL)
+// =====================================================
+
+const friendAddOpenBtn =
+    document.getElementById('friend-add-open-btn');
+
+const friendAddModal =
+    document.getElementById('friend-add-modal');
+
+const friendAddCloseBtn =
+    document.getElementById('friend-add-close-btn');
 
 const friendAddInput =
     document.getElementById('friend-add-input');
@@ -132,11 +195,25 @@ const friendAddBtn =
 const friendAddError =
     document.getElementById('friend-add-error');
 
-const friendRequestsSection =
-    document.getElementById('friend-requests-section');
 
-const friendRequestsList =
-    document.getElementById('friend-requests-list');
+// =====================================================
+// BİLDİRİMLER
+// =====================================================
+
+const notificationsBtn =
+    document.getElementById('notifications-btn');
+
+const notificationsBadge =
+    document.getElementById('notifications-badge');
+
+const notificationsModal =
+    document.getElementById('notifications-modal');
+
+const notificationsCloseBtn =
+    document.getElementById('notifications-close-btn');
+
+const notificationsList =
+    document.getElementById('notifications-list');
 
 
 // =====================================================
@@ -429,6 +506,12 @@ function showLoginForm() {
     verifyForm.style.display =
         'none';
 
+    forgotEmailForm.style.display =
+        'none';
+
+    forgotResetForm.style.display =
+        'none';
+
     loginUsernameInput.focus();
 
 }
@@ -450,9 +533,188 @@ function showRegisterForm() {
     verifyForm.style.display =
         'none';
 
+    forgotEmailForm.style.display =
+        'none';
+
+    forgotResetForm.style.display =
+        'none';
+
     registerUsernameInput.focus();
 
 }
+
+
+function showForgotEmailForm() {
+
+    clearAuthError();
+
+    authTitle.textContent =
+        'Şifremi Unuttum';
+
+    loginForm.style.display =
+        'none';
+
+    registerForm.style.display =
+        'none';
+
+    verifyForm.style.display =
+        'none';
+
+    forgotResetForm.style.display =
+        'none';
+
+    forgotEmailForm.style.display =
+        'block';
+
+    forgotEmailInput.value =
+        '';
+
+    forgotEmailInput.focus();
+
+}
+
+
+function showForgotResetForm(email) {
+
+    clearAuthError();
+
+    pendingResetEmail = email;
+
+    authTitle.textContent =
+        'Şifreyi Sıfırla';
+
+    forgotEmailForm.style.display =
+        'none';
+
+    forgotResetForm.style.display =
+        'block';
+
+    forgotEmailLabel.textContent =
+        email;
+
+    forgotCodeInput.value =
+        '';
+
+    forgotNewPasswordInput.value =
+        '';
+
+    forgotCodeInput.focus();
+
+}
+
+
+showForgotBtn.addEventListener(
+    'click',
+    showForgotEmailForm
+);
+
+
+backToLoginFromForgotBtn.addEventListener(
+    'click',
+    showLoginForm
+);
+
+
+backToLoginFromResetBtn.addEventListener(
+    'click',
+    showLoginForm
+);
+
+
+forgotEmailBtn.addEventListener(
+    'click',
+    async () => {
+
+        const email = forgotEmailInput.value.trim();
+
+        if (!email) {
+            showAuthError('E-posta adresini gir.');
+            return;
+        }
+
+        forgotEmailBtn.disabled = true;
+        forgotEmailBtn.textContent = 'Gönderiliyor...';
+
+        try {
+
+            const response = await fetch('/api/password-reset/request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                showAuthError(data.error || 'İstek gönderilemedi.');
+                return;
+            }
+
+            showForgotResetForm(email);
+
+        } catch (error) {
+
+            console.error('Şifre sıfırlama isteği hatası:', error);
+            showAuthError('Sunucuya bağlanılamadı.');
+
+        } finally {
+
+            forgotEmailBtn.disabled = false;
+            forgotEmailBtn.textContent = 'Kod Gönder';
+
+        }
+
+    }
+);
+
+
+forgotResetBtn.addEventListener(
+    'click',
+    async () => {
+
+        const code = forgotCodeInput.value.trim();
+        const newPassword = forgotNewPasswordInput.value;
+
+        if (!code || !newPassword) {
+            showAuthError('Kodu ve yeni şifreni gir.');
+            return;
+        }
+
+        forgotResetBtn.disabled = true;
+        forgotResetBtn.textContent = 'Sıfırlanıyor...';
+
+        try {
+
+            const response = await fetch('/api/password-reset/confirm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: pendingResetEmail, code, new_password: newPassword })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                showAuthError(data.error || 'Sıfırlanamadı.');
+                return;
+            }
+
+            showLoginForm();
+            showAuthError('Şifren güncellendi, şimdi giriş yapabilirsin.');
+
+        } catch (error) {
+
+            console.error('Şifre sıfırlama onay hatası:', error);
+            showAuthError('Sunucuya bağlanılamadı.');
+
+        } finally {
+
+            forgotResetBtn.disabled = false;
+            forgotResetBtn.textContent = 'Şifreyi Sıfırla';
+
+        }
+
+    }
+);
 
 
 function showVerifyForm(email) {
@@ -476,6 +738,12 @@ function showVerifyForm(email) {
 
     verifyForm.style.display =
         'block';
+
+    forgotEmailForm.style.display =
+        'none';
+
+    forgotResetForm.style.display =
+        'none';
 
     verifyCodeInput.value =
         '';
@@ -1292,6 +1560,15 @@ usernameSaveBtn.addEventListener(
 // AVATAR DEĞİŞTİRME / KALDIRMA
 // =====================================================
 
+profileModalAvatar.addEventListener('click', () => {
+    document.querySelector('#profile-modal .avatar-change-overlay').classList.toggle('show');
+});
+
+profileModalAvatarImg.addEventListener('click', () => {
+    document.querySelector('#profile-modal .avatar-change-overlay').classList.toggle('show');
+});
+
+
 avatarChangeBtn.addEventListener(
     'click',
     () => {
@@ -1504,6 +1781,7 @@ settingsBtn.addEventListener(
 
         themeButtons.forEach(b => b.classList.toggle('selected', b.dataset.theme === savedTheme));
         langButtons.forEach(b => b.classList.toggle('selected', b.dataset.lang === savedLang));
+        document.getElementById('lang-confirm-btn').style.display = 'none';
 
         settingsCurrentPassword.value = '';
         settingsNewPassword.value = '';
@@ -1541,14 +1819,31 @@ themeButtons.forEach((btn) => {
 });
 
 
+const langConfirmBtn = document.getElementById('lang-confirm-btn');
+
 langButtons.forEach((btn) => {
 
     btn.addEventListener('click', () => {
 
-        localStorage.setItem('sauran_lang', btn.dataset.lang);
         langButtons.forEach(b => b.classList.toggle('selected', b === btn));
 
+        const currentLang = localStorage.getItem('sauran_lang') || 'tr';
+        langConfirmBtn.style.display = btn.dataset.lang !== currentLang ? 'block' : 'none';
+
     });
+
+});
+
+
+langConfirmBtn.addEventListener('click', () => {
+
+    const selected = document.querySelector('#settings-modal [data-lang].selected');
+    if (!selected) return;
+
+    const lang = selected.dataset.lang;
+    localStorage.setItem('sauran_lang', lang);
+    applyLanguage(lang);
+    langConfirmBtn.style.display = 'none';
 
 });
 
@@ -1561,6 +1856,64 @@ function applyTheme(theme) {
 
 
 applyTheme(localStorage.getItem('sauran_theme') || 'dark');
+
+
+// =====================================================
+// DİL (i18n)
+// =====================================================
+
+const TRANSLATIONS = {
+    'auth-title': { tr: "Sauran'a Hoş Geldin", en: 'Welcome to Sauran' },
+    'show-forgot-btn': { tr: 'Şifremi Unuttum', en: 'Forgot Password' },
+    'show-register-btn': { tr: 'Kayıt Ol', en: 'Sign Up' },
+    'show-login-btn': { tr: 'Giriş Yap', en: 'Log In' },
+    'login-btn': { tr: 'Giriş Yap', en: 'Log In' },
+    'register-btn': { tr: 'Kayıt Ol', en: 'Sign Up' },
+    'verify-btn': { tr: 'Doğrula', en: 'Verify' },
+    'back-to-register-btn': { tr: 'Geri Dön', en: 'Back' },
+    'back-to-login-from-forgot-btn': { tr: 'Geri Dön', en: 'Back' },
+    'back-to-login-from-reset-btn': { tr: 'Geri Dön', en: 'Back' },
+    'forgot-email-btn': { tr: 'Kod Gönder', en: 'Send Code' },
+    'forgot-reset-btn': { tr: 'Şifreyi Sıfırla', en: 'Reset Password' },
+    'hub-create-open-btn': { tr: '+ Yeni Hub', en: '+ New Hub' },
+    'hub-create-submit-btn': { tr: "Hub'ı Oluştur", en: 'Create Hub' },
+    'hub-create-image-btn': { tr: 'Görsel Ekle', en: 'Add Image' },
+    'logout-btn': { tr: 'Çıkış Yap', en: 'Log Out' },
+    'settings-password-btn': { tr: 'Şifreyi Güncelle', en: 'Update Password' },
+    'lang-confirm-btn': { tr: 'Dili Onayla', en: 'Confirm Language' },
+    'hub-join-submit-btn': { tr: 'Katıl', en: 'Join' },
+    'friend-add-btn': { tr: 'Ekle', en: 'Add' }
+};
+
+const TRANSLATIONS_PLACEHOLDER = {
+    'login-username-input': { tr: 'Kullanıcı Adın', en: 'Username' },
+    'login-password-input': { tr: 'Şifren', en: 'Password' },
+    'register-username-input': { tr: 'Kullanıcı Adın', en: 'Username' },
+    'register-email-input': { tr: 'E-posta Adresin', en: 'Your Email' },
+    'register-password-input': { tr: 'Şifren', en: 'Password' },
+    'register-password-confirm-input': { tr: 'Şifreni Tekrar Gir', en: 'Confirm Password' },
+    'hub-create-name-input': { tr: 'Hub adı', en: 'Hub name' },
+    'friend-add-input': { tr: 'Kullanıcı adıyla arkadaş ekle...', en: 'Add friend by username...' },
+    'hub-join-code-input': { tr: 'Davet kodunu gir...', en: 'Enter invite code...' },
+    'hub-message-input': { tr: 'Bir mesaj yaz...', en: 'Type a message...' }
+};
+
+function applyLanguage(lang) {
+
+    Object.entries(TRANSLATIONS).forEach(([id, text]) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text[lang] || text.tr;
+    });
+
+    Object.entries(TRANSLATIONS_PLACEHOLDER).forEach(([id, text]) => {
+        const el = document.getElementById(id);
+        if (el) el.placeholder = text[lang] || text.tr;
+    });
+
+}
+
+
+applyLanguage(localStorage.getItem('sauran_lang') || 'tr');
 
 
 settingsPasswordBtn.addEventListener(
@@ -1848,8 +2201,19 @@ function connectToChat() {
     );
 
 
+    // -------------------------------------------------
+    // Bildirim geldi
+    // -------------------------------------------------
+
+    socket.on(
+        'notification_received',
+        () => refreshNotificationsBadge()
+    );
+
+
     switchToView('hubs');
     loadHubList();
+    refreshNotificationsBadge();
 
 }
 
@@ -2056,6 +2420,18 @@ async function logout() {
     hubInviteModal.style.display =
         'none';
 
+    hubInviteFriendModal.style.display =
+        'none';
+
+    friendAddModal.style.display =
+        'none';
+
+    notificationsModal.style.display =
+        'none';
+
+    notificationsBadge.style.display =
+        'none';
+
 
     showLoginForm();
 
@@ -2143,8 +2519,8 @@ async function openOnlinePanel() {
     if (currentHub) {
 
         usersModalTitle.textContent = `🧩 ${currentHub.name} — Üyeler`;
-        friendAddSection.style.display = 'none';
         friendRequestsSection.style.display = 'none';
+        topFriendsSection.style.display = 'none';
         usersListSubtitle.style.display = 'none';
 
         renderUsersList(
@@ -2157,21 +2533,21 @@ async function openOnlinePanel() {
     }
 
     usersModalTitle.textContent = '👥 Arkadaşlar';
-    friendAddSection.style.display = 'flex';
     friendRequestsSection.style.display = 'none';
     usersListSubtitle.style.display = 'block';
     usersListSubtitle.textContent = 'ARKADAŞLARIM';
-    friendAddError.textContent = '';
 
     try {
 
-        const [friendsRes, requestsRes] = await Promise.all([
+        const [friendsRes, requestsRes, topRes] = await Promise.all([
             fetch('/api/friends', { credentials: 'include' }),
-            fetch('/api/friends/requests', { credentials: 'include' })
+            fetch('/api/friends/requests', { credentials: 'include' }),
+            fetch('/api/friends/top', { credentials: 'include' })
         ]);
 
         const friendsData = await friendsRes.json();
         const requestsData = await requestsRes.json();
+        const topData = await topRes.json();
 
         const onlineFriendCount = friendsData.friends.filter(f => f.online).length;
         onlineCount.style.display = onlineFriendCount > 0 ? 'flex' : 'none';
@@ -2190,11 +2566,43 @@ async function openOnlinePanel() {
 
         }
 
+        if (topData.success && topData.friends.length > 0) {
+
+            topFriendsSection.style.display = 'block';
+            renderTopFriends(topData.friends);
+
+        } else {
+
+            topFriendsSection.style.display = 'none';
+
+        }
+
     } catch (error) {
 
         console.error('Arkadaşlar alınamadı:', error);
 
     }
+
+}
+
+
+function renderTopFriends(friends) {
+
+    topFriendsList.innerHTML = friends.map(f => `
+        <div class="top-friend-item" data-user-id="${f.id}">
+            <span class="profile-avatar" style="--user-color:${getUserColor(f.username)};">${f.username.charAt(0).toUpperCase()}</span>
+            <span>${escapeHtml(f.username)}</span>
+        </div>
+    `).join('');
+
+    topFriendsList.querySelectorAll('.top-friend-item').forEach((item) => {
+
+        item.addEventListener('click', () => {
+            usersModal.style.display = 'none';
+            openOtherProfile(Number(item.dataset.userId));
+        });
+
+    });
 
 }
 
@@ -2285,6 +2693,33 @@ function renderFriendRequests(requests) {
 }
 
 
+friendAddOpenBtn.addEventListener(
+    'click',
+    () => {
+
+        friendAddInput.value = '';
+        friendAddError.textContent = '';
+        friendAddModal.style.display = 'flex';
+        friendAddInput.focus();
+
+    }
+);
+
+
+friendAddCloseBtn.addEventListener(
+    'click',
+    () => friendAddModal.style.display = 'none'
+);
+
+
+friendAddModal.addEventListener(
+    'click',
+    (event) => {
+        if (event.target === friendAddModal) friendAddModal.style.display = 'none';
+    }
+);
+
+
 friendAddBtn.addEventListener(
     'click',
     async () => {
@@ -2319,11 +2754,13 @@ friendAddBtn.addEventListener(
             }
 
             friendAddInput.value = '';
-            friendAddError.textContent = '';
+            friendAddError.style.color = '#57f287';
+            friendAddError.textContent = 'İstek gönderildi.';
 
         } catch (error) {
 
             console.error('Arkadaş eklenemedi:', error);
+            friendAddError.style.color = '';
             friendAddError.textContent = 'Sunucuya bağlanılamadı.';
 
         }
@@ -2338,6 +2775,143 @@ friendAddInput.addEventListener(
         if (event.key === 'Enter') friendAddBtn.click();
     }
 );
+
+
+// =====================================================
+// BİLDİRİMLER
+// =====================================================
+
+async function refreshNotificationsBadge() {
+
+    try {
+
+        const response = await fetch('/api/notifications', { credentials: 'include' });
+        const data = await response.json();
+
+        if (!data.success) return;
+
+        const count = data.notifications.length;
+        notificationsBadge.style.display = count > 0 ? 'flex' : 'none';
+        notificationsBadge.textContent = count;
+
+    } catch (error) {
+
+        console.error('Bildirimler alınamadı:', error);
+
+    }
+
+}
+
+
+notificationsBtn.addEventListener(
+    'click',
+    async () => {
+
+        try {
+
+            const response = await fetch('/api/notifications', { credentials: 'include' });
+            const data = await response.json();
+
+            if (!data.success) return;
+
+            renderNotifications(data.notifications);
+            notificationsModal.style.display = 'flex';
+
+        } catch (error) {
+
+            console.error('Bildirimler alınamadı:', error);
+
+        }
+
+    }
+);
+
+
+notificationsCloseBtn.addEventListener(
+    'click',
+    () => notificationsModal.style.display = 'none'
+);
+
+
+notificationsModal.addEventListener(
+    'click',
+    (event) => {
+        if (event.target === notificationsModal) notificationsModal.style.display = 'none';
+    }
+);
+
+
+function renderNotifications(notifications) {
+
+    if (notifications.length === 0) {
+        notificationsList.innerHTML = '<div class="notifications-empty">Bildirim yok.</div>';
+        return;
+    }
+
+    notificationsList.innerHTML = notifications.map((n) => {
+
+        if (n.type === 'hub_invite') {
+
+            return `
+                <div class="notification-card" data-notif-id="${n.id}">
+                    <div class="notification-text">
+                        <strong>${escapeHtml(n.data.from_username)}</strong> seni
+                        <strong>${escapeHtml(n.data.hub_name)}</strong> Hub'ına davet etti.
+                    </div>
+                    <div class="notification-actions">
+                        <button class="notification-accept" data-accept type="button">Katıl</button>
+                        <button class="notification-decline" data-decline type="button">Reddet</button>
+                    </div>
+                </div>
+            `;
+
+        }
+
+        return '';
+
+    }).join('');
+
+    notificationsList.querySelectorAll('.notification-card').forEach((card) => {
+
+        const notifId = Number(card.dataset.notifId);
+
+        card.querySelector('[data-accept]').addEventListener('click', async () => {
+
+            const response = await fetch(`/api/notifications/${notifId}/respond`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ accept: true })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                notificationsModal.style.display = 'none';
+                loadHubList();
+                refreshNotificationsBadge();
+                openHub(data.hub_id);
+            }
+
+        });
+
+        card.querySelector('[data-decline]').addEventListener('click', async () => {
+
+            await fetch(`/api/notifications/${notifId}/respond`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ accept: false })
+            });
+
+            card.remove();
+            refreshNotificationsBadge();
+
+        });
+
+    });
+
+}
 
 
 // =====================================================
@@ -2625,14 +3199,21 @@ const hubListView = document.getElementById('hub-list-view');
 const hubDetailView = document.getElementById('hub-detail-view');
 
 const hubListHeader = document.getElementById('hub-list-header');
-const hubListGrid = document.getElementById('hub-list-grid');
+const hubListContent = document.getElementById('hub-list-content');
+const hubListGridOwned = document.getElementById('hub-list-grid-owned');
+const hubListGridJoined = document.getElementById('hub-list-grid-joined');
 const hubListEmpty = document.getElementById('hub-list-empty');
 const hubCreateOpenBtn = document.getElementById('hub-create-open-btn');
 const hubCreateOpenBtnBig = document.getElementById('hub-create-open-btn-big');
 
 const hubCreateModal = document.getElementById('hub-create-modal');
 const hubCreateCloseBtn = document.getElementById('hub-create-close-btn');
-const hubCreateBody = document.getElementById('hub-create-body');
+const hubCreateNameInput = document.getElementById('hub-create-name-input');
+const hubCreateImagePreview = document.getElementById('hub-create-image-preview');
+const hubCreateImageBtn = document.getElementById('hub-create-image-btn');
+const hubCreateImageInput = document.getElementById('hub-create-image-input');
+const hubCreateError = document.getElementById('hub-create-error');
+const hubCreateSubmitBtn = document.getElementById('hub-create-submit-btn');
 
 const hubJoinOpenBtn = document.getElementById('hub-join-open-btn');
 const hubJoinModal = document.getElementById('hub-join-modal');
@@ -2646,6 +3227,11 @@ const hubInviteModal = document.getElementById('hub-invite-modal');
 const hubInviteCloseBtn = document.getElementById('hub-invite-close-btn');
 const hubInviteCodeDisplay = document.getElementById('hub-invite-code-display');
 
+const hubInviteFriendBtn = document.getElementById('hub-invite-friend-btn');
+const hubInviteFriendModal = document.getElementById('hub-invite-friend-modal');
+const hubInviteFriendCloseBtn = document.getElementById('hub-invite-friend-close-btn');
+const hubInviteFriendList = document.getElementById('hub-invite-friend-list');
+
 const hubBackBtn = document.getElementById('hub-back-btn');
 const hubDetailIcon = document.getElementById('hub-detail-icon');
 const hubDetailName = document.getElementById('hub-detail-name');
@@ -2657,8 +3243,6 @@ const hubStartMenu = document.getElementById('hub-start-menu');
 const hubChatForm = document.getElementById('hub-chat-form');
 const hubMessageInput = document.getElementById('hub-message-input');
 
-const hubRoleList = document.getElementById('hub-role-list');
-const hubAddRoleBtn = document.getElementById('hub-add-role-btn');
 const hubMemberList = document.getElementById('hub-member-list');
 const hubDeleteBtn = document.getElementById('hub-delete-btn');
 
@@ -2681,52 +3265,7 @@ const shareSubmitBtn = document.getElementById('share-submit-btn');
 // =====================================================
 
 let currentHub = null;
-
-const HUB_TEMPLATES = [
-    { type: 'chat', icon: '💬', title: 'Sohbet Hubu', desc: 'Yazışmak ve takılmak' },
-    { type: 'game', icon: '🎮', title: 'Oyun Hubu', desc: 'Birlikte oyun oynamak' },
-    { type: 'stream', icon: '📺', title: 'Yayın Hubu', desc: 'İzlemek ve paylaşmak' },
-    { type: 'custom', icon: '🧩', title: 'Özel Hub', desc: 'Kendi Hub\'ını oluştur' }
-];
-
-const GAME_SUBTYPES = [
-    { key: 'takim-kur', title: '⚔️ Takım kur', roles: [
-        { name: 'DUELIST', icon: '🟢', slot_limit: 1 },
-        { name: 'CONTROLLER', icon: '🟢', slot_limit: 1 },
-        { name: 'INITIATOR', icon: '🟢', slot_limit: 1 },
-        { name: 'SENTINEL', icon: '⚪', slot_limit: 1 },
-        { name: 'FLEX', icon: '⚪', slot_limit: 1 }
-    ] },
-    { key: 'konvoy', title: '🏎️ Konvoy oluştur', roles: [
-        { name: 'SÜRÜCÜ', icon: '🟢', slot_limit: null },
-        { name: 'NAVİGATÖR', icon: '🟢', slot_limit: null },
-        { name: 'ARKA KORUMA', icon: '⚪', slot_limit: null }
-    ] },
-    { key: 'birlikte-oyna', title: '🎯 Birlikte oyna', roles: [
-        { name: 'OYUNCU', icon: '🟢', slot_limit: null }
-    ] },
-    { key: 'serbest-ekip', title: '🎮 Serbest ekip', roles: [] }
-];
-
-const SOCIAL_ROLES = [
-    { name: 'Muhabbet', icon: '🎙', slot_limit: null },
-    { name: 'Müzik', icon: '🎵', slot_limit: null },
-    { name: 'Dinleyici', icon: '👂', slot_limit: null },
-    { name: 'Yayıncı', icon: '📺', slot_limit: null }
-];
-
-const STREAM_ROLES = [
-    { name: 'Yayıncı', icon: '📺', slot_limit: 1 },
-    { name: 'İzleyici', icon: '👁', slot_limit: null }
-];
-
-let hubCreateState = {
-    step: 'template',
-    type: null,
-    template: null,
-    name: '',
-    roles: []
-};
+let hubCreateImageData = null;
 
 
 // =====================================================
@@ -2757,6 +3296,28 @@ function switchToView(view) {
 // HUB LİSTESİ
 // =====================================================
 
+function renderHubCard(hub) {
+
+    const card = document.createElement('div');
+    card.className = 'hub-card';
+
+    const iconHtml = hub.image_data
+        ? `<img src="${hub.image_data}" class="hub-card-icon" alt="">`
+        : `<span class="hub-card-icon">${hub.icon}</span>`;
+
+    card.innerHTML = `
+        ${iconHtml}
+        <span class="hub-card-name">${escapeHtml(hub.name)}</span>
+        <span class="hub-card-meta">👥 ${hub.member_count} kişi</span>
+    `;
+
+    card.addEventListener('click', () => openHub(hub.id));
+
+    return card;
+
+}
+
+
 async function loadHubList() {
 
     try {
@@ -2766,29 +3327,29 @@ async function loadHubList() {
 
         if (!data.success) return;
 
-        hubListGrid.innerHTML = '';
+        hubListGridOwned.innerHTML = '';
+        hubListGridJoined.innerHTML = '';
 
         const hasHubs = data.hubs.length > 0;
 
         hubListEmpty.style.display = hasHubs ? 'none' : 'flex';
         hubListHeader.style.display = hasHubs ? 'flex' : 'none';
+        hubListContent.style.display = hasHubs ? 'block' : 'none';
 
         data.hubs.forEach((hub) => {
 
-            const card = document.createElement('div');
-            card.className = 'hub-card';
+            const card = renderHubCard(hub);
 
-            card.innerHTML = `
-                <span class="hub-card-icon">${hub.icon}</span>
-                <span class="hub-card-name">${escapeHtml(hub.name)}</span>
-                <span class="hub-card-meta">👥 ${hub.member_count} kişi</span>
-            `;
-
-            card.addEventListener('click', () => openHub(hub.id));
-
-            hubListGrid.appendChild(card);
+            if (hub.is_owner) {
+                hubListGridOwned.appendChild(card);
+            } else {
+                hubListGridJoined.appendChild(card);
+            }
 
         });
+
+        hubListGridOwned.parentElement.style.display = hubListGridOwned.children.length ? 'block' : 'none';
+        hubListGridJoined.parentElement.style.display = hubListGridJoined.children.length ? 'block' : 'none';
 
     } catch (error) {
 
@@ -2800,20 +3361,106 @@ async function loadHubList() {
 
 
 // =====================================================
-// HUB OLUŞTURMA SİHİRBAZI
+// HUB OLUŞTURMA
 // =====================================================
 
 function openHubCreateModal() {
 
-    hubCreateState = { step: 'template', type: null, template: null, name: '', roles: [] };
-    renderHubCreateStep();
+    hubCreateNameInput.value = '';
+    hubCreateImageData = null;
+    hubCreateImagePreview.innerHTML = '🧩';
+    hubCreateError.textContent = '';
     hubCreateModal.style.display = 'flex';
+    hubCreateNameInput.focus();
 
 }
 
 
 hubCreateOpenBtn.addEventListener('click', openHubCreateModal);
 hubCreateOpenBtnBig.addEventListener('click', openHubCreateModal);
+
+
+hubCreateImageBtn.addEventListener(
+    'click',
+    () => hubCreateImageInput.click()
+);
+
+
+hubCreateImageInput.addEventListener(
+    'change',
+    async () => {
+
+        const file = hubCreateImageInput.files[0];
+        if (!file) return;
+
+        try {
+
+            hubCreateImageData = await resizeImageToDataUrl(file, 128);
+            hubCreateImagePreview.innerHTML = `<img src="${hubCreateImageData}" alt="">`;
+
+        } catch (error) {
+
+            console.error('Görsel işlenemedi:', error);
+
+        } finally {
+
+            hubCreateImageInput.value = '';
+
+        }
+
+    }
+);
+
+
+hubCreateSubmitBtn.addEventListener(
+    'click',
+    async () => {
+
+        const name = hubCreateNameInput.value.trim();
+        hubCreateError.textContent = '';
+
+        if (!name) {
+            hubCreateError.textContent = 'Hub adı gerekli.';
+            return;
+        }
+
+        hubCreateSubmitBtn.disabled = true;
+        hubCreateSubmitBtn.textContent = 'Oluşturuluyor...';
+
+        try {
+
+            const response = await fetch('/api/hubs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ name, image_data: hubCreateImageData })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                hubCreateError.textContent = data.error || 'Hub oluşturulamadı.';
+                return;
+            }
+
+            hubCreateModal.style.display = 'none';
+            loadHubList();
+            openHub(data.id);
+
+        } catch (error) {
+
+            console.error('Hub oluşturulamadı:', error);
+            hubCreateError.textContent = 'Sunucuya bağlanılamadı.';
+
+        } finally {
+
+            hubCreateSubmitBtn.disabled = false;
+            hubCreateSubmitBtn.textContent = 'Hub\'ı Oluştur';
+
+        }
+
+    }
+);
 
 
 // =====================================================
@@ -2937,6 +3584,93 @@ hubInviteModal.addEventListener(
 );
 
 
+// =====================================================
+// ARKADAŞINI HUB'A DAVET ET
+// =====================================================
+
+hubInviteFriendBtn.addEventListener(
+    'click',
+    async () => {
+
+        if (!currentHub) return;
+
+        try {
+
+            const response = await fetch('/api/friends', { credentials: 'include' });
+            const data = await response.json();
+
+            if (!data.success) return;
+
+            hubInviteFriendList.innerHTML = '';
+
+            if (data.friends.length === 0) {
+                hubInviteFriendList.innerHTML = '<div class="users-list-empty">Henüz arkadaşın yok.</div>';
+            }
+
+            data.friends.forEach((friend) => {
+
+                const li = document.createElement('li');
+                li.style.justifyContent = 'space-between';
+
+                li.innerHTML = `
+                    <span>${escapeHtml(friend.username)}</span>
+                    <button class="friend-accept-btn" data-invite-user="${friend.id}" type="button">Davet Et</button>
+                `;
+
+                hubInviteFriendList.appendChild(li);
+
+            });
+
+            hubInviteFriendList.querySelectorAll('[data-invite-user]').forEach((btn) => {
+
+                btn.addEventListener('click', async (event) => {
+
+                    event.stopPropagation();
+
+                    const toUserId = Number(btn.dataset.inviteUser);
+
+                    const response = await fetch(`/api/hubs/${currentHub.id}/invite-friend`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ to_user_id: toUserId })
+                    });
+
+                    const result = await response.json();
+
+                    btn.textContent = result.success ? 'Gönderildi ✓' : (result.error || 'Hata');
+                    btn.disabled = true;
+
+                });
+
+            });
+
+            hubInviteFriendModal.style.display = 'flex';
+
+        } catch (error) {
+
+            console.error('Arkadaş listesi alınamadı:', error);
+
+        }
+
+    }
+);
+
+
+hubInviteFriendCloseBtn.addEventListener(
+    'click',
+    () => hubInviteFriendModal.style.display = 'none'
+);
+
+
+hubInviteFriendModal.addEventListener(
+    'click',
+    (event) => {
+        if (event.target === hubInviteFriendModal) hubInviteFriendModal.style.display = 'none';
+    }
+);
+
+
 hubCreateCloseBtn.addEventListener(
     'click',
     () => hubCreateModal.style.display = 'none'
@@ -2950,229 +3684,6 @@ hubCreateModal.addEventListener(
     }
 );
 
-
-function renderHubCreateStep() {
-
-    if (hubCreateState.step === 'template') {
-
-        hubCreateBody.innerHTML = `
-            <div class="hub-create-title">Nasıl bir Hub?</div>
-            <div class="template-grid">
-                ${HUB_TEMPLATES.map((t, i) => `
-                    <div class="template-card" data-index="${i}">
-                        <span class="template-card-icon">${t.icon}</span>
-                        <span class="template-card-title">${t.title}</span>
-                        <span class="template-card-desc">${t.desc}</span>
-                    </div>
-                `).join('')}
-            </div>
-        `;
-
-        hubCreateBody.querySelectorAll('.template-card').forEach((card) => {
-
-            card.addEventListener('click', () => {
-
-                const t = HUB_TEMPLATES[Number(card.dataset.index)];
-                hubCreateState.type = t.type;
-
-                if (t.type === 'game') {
-                    hubCreateState.step = 'subtype';
-                } else {
-                    hubCreateState.template = t.type;
-                    hubCreateState.roles =
-                        t.type === 'social' ? [...SOCIAL_ROLES] :
-                        t.type === 'stream' ? [...STREAM_ROLES] :
-                        [];
-                    hubCreateState.name = '';
-                    hubCreateState.step = 'build';
-                }
-
-                renderHubCreateStep();
-
-            });
-
-        });
-
-        return;
-
-    }
-
-    if (hubCreateState.step === 'subtype') {
-
-        hubCreateBody.innerHTML = `
-            <button class="hub-back-link" id="hub-step-back">← Geri</button>
-            <div class="hub-create-title">Ne yapmak istiyorsunuz?</div>
-            <div class="subtype-list">
-                ${GAME_SUBTYPES.map((s, i) => `
-                    <div class="subtype-option" data-index="${i}">${s.title}</div>
-                `).join('')}
-            </div>
-        `;
-
-        document.getElementById('hub-step-back').addEventListener('click', () => {
-            hubCreateState.step = 'template';
-            renderHubCreateStep();
-        });
-
-        hubCreateBody.querySelectorAll('.subtype-option').forEach((opt) => {
-
-            opt.addEventListener('click', () => {
-
-                const s = GAME_SUBTYPES[Number(opt.dataset.index)];
-                hubCreateState.template = s.key;
-                hubCreateState.roles = s.roles.map(r => ({ ...r }));
-                hubCreateState.name = '';
-                hubCreateState.step = 'build';
-                renderHubCreateStep();
-
-            });
-
-        });
-
-        return;
-
-    }
-
-    if (hubCreateState.step === 'build') {
-
-        renderHubBuildStep();
-
-    }
-
-}
-
-
-function renderHubBuildStep() {
-
-    hubCreateBody.innerHTML = `
-        <button class="hub-back-link" id="hub-step-back">← Geri</button>
-        <div class="hub-create-title">Hub'ını Kur</div>
-
-        <input type="text" id="hub-name-input" class="hub-name-input" placeholder="Hub adı" maxlength="40" value="${escapeAttr(hubCreateState.name)}">
-
-        <div class="hub-side-title">ROLLER</div>
-        <div id="role-builder-list" class="role-builder-list"></div>
-        <button id="role-add-btn" class="role-add-btn" type="button">+ Rol Ekle</button>
-
-        <div id="hub-create-error" class="hub-create-error"></div>
-
-        <button id="hub-create-submit" class="hub-create-submit" type="button">Hub'ı Oluştur</button>
-    `;
-
-    document.getElementById('hub-step-back').addEventListener('click', () => {
-        hubCreateState.step = hubCreateState.type === 'game' ? 'subtype' : 'template';
-        renderHubCreateStep();
-    });
-
-    const nameInput = document.getElementById('hub-name-input');
-    nameInput.addEventListener('input', () => hubCreateState.name = nameInput.value);
-
-    renderRoleBuilderList();
-
-    document.getElementById('role-add-btn').addEventListener('click', () => {
-        hubCreateState.roles.push({ name: '', icon: '⚪', slot_limit: null });
-        renderRoleBuilderList();
-    });
-
-    document.getElementById('hub-create-submit').addEventListener('click', submitHubCreate);
-
-}
-
-
-function renderRoleBuilderList() {
-
-    const list = document.getElementById('role-builder-list');
-
-    list.innerHTML = hubCreateState.roles.map((role, i) => `
-        <div class="role-builder-row" data-index="${i}">
-            <input type="text" class="role-icon-input" maxlength="2" value="${escapeAttr(role.icon)}" data-field="icon">
-            <input type="text" placeholder="Rol adı" maxlength="24" value="${escapeAttr(role.name)}" data-field="name">
-            <input type="number" class="role-slot-input" placeholder="∞" min="1" value="${role.slot_limit || ''}" data-field="slot_limit">
-            <button class="role-remove-btn" type="button" data-remove="${i}">✕</button>
-        </div>
-    `).join('') || '<div class="about-edit-hint" style="opacity:1;">Rol eklemek zorunlu değil, serbest bir Hub da kurabilirsin.</div>';
-
-    list.querySelectorAll('input').forEach((input) => {
-
-        input.addEventListener('input', () => {
-
-            const row = input.closest('.role-builder-row');
-            const index = Number(row.dataset.index);
-            const field = input.dataset.field;
-
-            if (field === 'slot_limit') {
-                hubCreateState.roles[index].slot_limit = input.value ? Number(input.value) : null;
-            } else {
-                hubCreateState.roles[index][field] = input.value;
-            }
-
-        });
-
-    });
-
-    list.querySelectorAll('[data-remove]').forEach((btn) => {
-
-        btn.addEventListener('click', () => {
-            hubCreateState.roles.splice(Number(btn.dataset.remove), 1);
-            renderRoleBuilderList();
-        });
-
-    });
-
-}
-
-
-async function submitHubCreate() {
-
-    const errorEl = document.getElementById('hub-create-error');
-    const submitBtn = document.getElementById('hub-create-submit');
-
-    errorEl.textContent = '';
-
-    const cleanRoles = hubCreateState.roles.filter(r => r.name.trim());
-
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Oluşturuluyor...';
-
-    try {
-
-        const response = await fetch('/api/hubs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
-                name: hubCreateState.name,
-                type: hubCreateState.type,
-                template: hubCreateState.template,
-                roles: cleanRoles
-            })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok || !data.success) {
-            errorEl.textContent = data.error || 'Hub oluşturulamadı.';
-            return;
-        }
-
-        hubCreateModal.style.display = 'none';
-        switchToView('hubs');
-        loadHubList();
-        openHub(data.id);
-
-    } catch (error) {
-
-        console.error('Hub oluşturulamadı:', error);
-        errorEl.textContent = 'Sunucuya bağlanılamadı.';
-
-    } finally {
-
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Hub\'ı Oluştur';
-
-    }
-
-}
 
 
 // =====================================================
@@ -3221,14 +3732,17 @@ function renderHubDetail() {
 
     if (!currentHub) return;
 
-    hubDetailIcon.textContent = currentHub.icon;
+    if (currentHub.image_data) {
+        hubDetailIcon.innerHTML = `<img src="${currentHub.image_data}" alt="" style="width:22px;height:22px;border-radius:6px;object-fit:cover;">`;
+    } else {
+        hubDetailIcon.textContent = currentHub.icon;
+    }
+
     hubDetailName.textContent = currentHub.name;
     hubDetailCount.textContent = `👥 ${currentHub.members.length} kişi`;
 
-    hubAddRoleBtn.style.display = currentHub.is_owner ? 'block' : 'none';
     hubDeleteBtn.style.display = currentHub.is_owner ? 'block' : 'none';
 
-    renderHubRoles();
     renderHubMembers();
 
 }
@@ -3257,63 +3771,6 @@ hubDeleteBtn.addEventListener(
 );
 
 
-function renderHubRoles() {
-
-    if (currentHub.roles.length === 0) {
-
-        hubRoleList.innerHTML = '<div class="about-edit-hint" style="opacity:1;">Bu Hub\'da rol yok — serbest katılım.</div>';
-        return;
-
-    }
-
-    hubRoleList.innerHTML = currentHub.roles.map((role) => {
-
-        const membersInRole = currentHub.members.filter(m => m.role_id === role.id);
-        const isMine = role.id === currentHub.my_role_id;
-        const isFull = role.slot_limit && membersInRole.length >= role.slot_limit && !isMine;
-
-        return `
-            <div class="hub-role-row ${isMine ? 'mine' : ''} ${isFull ? 'full' : ''}" data-role-id="${role.id}">
-                <span class="hub-role-icon">${role.icon}</span>
-                <span class="hub-role-info">
-                    <span class="hub-role-name">${escapeHtml(role.name)}</span>
-                    <span class="hub-role-members">${membersInRole.map(m => escapeHtml(m.username)).join(', ') || 'Boş'}</span>
-                </span>
-                <span class="hub-role-slots">${role.slot_limit ? membersInRole.length + '/' + role.slot_limit : '∞'}</span>
-            </div>
-        `;
-
-    }).join('');
-
-    hubRoleList.querySelectorAll('.hub-role-row:not(.full)').forEach((row) => {
-
-        row.addEventListener('click', async () => {
-
-            const roleId = Number(row.dataset.roleId);
-            const targetRoleId = roleId === currentHub.my_role_id ? null : roleId;
-
-            const response = await fetch(`/api/hubs/${currentHub.id}/role`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ role_id: targetRoleId })
-            });
-
-            const data = await response.json();
-            if (!data.success) return;
-
-            const detail = await fetch(`/api/hubs/${currentHub.id}`, { credentials: 'include' });
-            const detailData = await detail.json();
-            currentHub = detailData.hub;
-
-            renderHubDetail();
-
-        });
-
-    });
-
-}
-
 
 function renderHubMembers() {
 
@@ -3334,35 +3791,6 @@ function renderHubMembers() {
     });
 
 }
-
-
-hubAddRoleBtn.addEventListener(
-    'click',
-    async () => {
-
-        const name = prompt('Rol adı:');
-        if (!name || !name.trim()) return;
-
-        const icon = prompt('Rol ikonu (bir emoji):', '⚪') || '⚪';
-
-        const response = await fetch(`/api/hubs/${currentHub.id}/roles`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ name, icon, slot_limit: null })
-        });
-
-        const data = await response.json();
-        if (!data.success) return;
-
-        const detail = await fetch(`/api/hubs/${currentHub.id}`, { credentials: 'include' });
-        const detailData = await detail.json();
-        currentHub = detailData.hub;
-
-        renderHubDetail();
-
-    }
-);
 
 
 // =====================================================
