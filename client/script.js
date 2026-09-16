@@ -296,9 +296,6 @@ const dmForm =
 const dmMessageInput =
     document.getElementById('dm-message-input');
 
-const dmDictateBtn =
-    document.getElementById('dm-dictate-btn');
-
 const dmVoiceBtn =
     document.getElementById('dm-voice-btn');
 
@@ -2100,6 +2097,8 @@ const I18N = {
     'voice-room-you-are-here': { tr: 'Bu odadasın', en: "You're here" },
     'voice-room-delete-confirm': { tr: 'Bu sesli odayı silmek istediğine emin misin?', en: 'Are you sure you want to delete this voice room?' },
     'voice-room-name-prompt': { tr: 'Oda adı:', en: 'Room name:' },
+    'voice-room-join': { tr: 'Katıl', en: 'Join' },
+    'voice-room-nobody-here': { tr: 'Bu odada henüz kimse yok.', en: 'Nobody is here yet.' },
 
     // Dinamik JS metinleri (t() ile kullanılır)
     'send': { tr: 'Gönder', en: 'Send' },
@@ -2539,6 +2538,7 @@ function connectToChat() {
         if (room) {
             room.participants = data.participants;
             if (currentHub) renderVoiceRoomsList();
+            if (pendingVoiceRoomId === data.room_id) renderVoiceRoomPreviewList(room);
         }
     });
 
@@ -4158,7 +4158,6 @@ const hubStartBtn = document.getElementById('hub-start-btn');
 const hubStartMenu = document.getElementById('hub-start-menu');
 const hubChatForm = document.getElementById('hub-chat-form');
 const hubMessageInput = document.getElementById('hub-message-input');
-const hubDictateBtn = document.getElementById('hub-dictate-btn');
 const hubVoiceBtn = document.getElementById('hub-voice-btn');
 wireAttachMenu('hub', async (file) => {
 
@@ -4285,11 +4284,10 @@ function renderVoiceRoomsList() {
             const room = voiceRoomsCache.find(r => r.id === roomId);
             if (!room) return;
 
-            if (currentVoiceRoomId === roomId) {
-                leaveCall();
-            } else {
-                joinVoiceRoom(room);
-            }
+            // Zaten bu odadaysa hiçbir şey yapma — mevcut bağlantı bozulmasın.
+            if (currentVoiceRoomId === roomId) return;
+
+            openVoiceRoomPreview(room);
         });
     });
 
@@ -4326,6 +4324,64 @@ hubVoiceRoomAddBtn.addEventListener('click', async () => {
         console.error('Sesli oda oluşturulamadı:', error);
     }
 
+});
+
+const voiceRoomPreviewModal = document.getElementById('voice-room-preview-modal');
+const voiceRoomPreviewTitle = document.getElementById('voice-room-preview-title');
+const voiceRoomPreviewList = document.getElementById('voice-room-preview-list');
+const voiceRoomPreviewJoinBtn = document.getElementById('voice-room-preview-join-btn');
+const voiceRoomPreviewCloseBtn = document.getElementById('voice-room-preview-close-btn');
+
+let pendingVoiceRoomId = null;
+
+function openVoiceRoomPreview(room) {
+
+    pendingVoiceRoomId = room.id;
+    voiceRoomPreviewTitle.textContent = `🎙 ${room.name}`;
+    renderVoiceRoomPreviewList(room);
+    voiceRoomPreviewModal.style.display = 'flex';
+
+}
+
+function renderVoiceRoomPreviewList(room) {
+
+    const participants = room.participants || [];
+
+    if (participants.length === 0) {
+        voiceRoomPreviewList.innerHTML = `<div class="voice-room-preview-empty">${t('voice-room-nobody-here')}</div>`;
+        return;
+    }
+
+    voiceRoomPreviewList.innerHTML = participants.map((name) => {
+        const color = getUserColor(name);
+        const initial = name.charAt(0).toUpperCase();
+        return `
+            <div class="voice-room-preview-person">
+                <span class="voice-room-preview-avatar" style="--user-color:${color};">${escapeHtml(initial)}</span>
+                <span class="voice-room-preview-name">${escapeHtml(name)}</span>
+            </div>
+        `;
+    }).join('');
+
+}
+
+voiceRoomPreviewCloseBtn.addEventListener('click', () => {
+    voiceRoomPreviewModal.style.display = 'none';
+    pendingVoiceRoomId = null;
+});
+
+voiceRoomPreviewModal.addEventListener('click', (event) => {
+    if (event.target === voiceRoomPreviewModal) {
+        voiceRoomPreviewModal.style.display = 'none';
+        pendingVoiceRoomId = null;
+    }
+});
+
+voiceRoomPreviewJoinBtn.addEventListener('click', () => {
+    const room = voiceRoomsCache.find(r => r.id === pendingVoiceRoomId);
+    voiceRoomPreviewModal.style.display = 'none';
+    pendingVoiceRoomId = null;
+    if (room) joinVoiceRoom(room);
 });
 
 async function joinVoiceRoom(room) {
@@ -5399,63 +5455,6 @@ hubChatForm.addEventListener(
 
     }
 );
-
-
-// =====================================================
-// DİKTE (KONUŞARAK YAZMA)
-// =====================================================
-
-const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-function setupDictation(button, input) {
-
-    if (!SpeechRecognitionClass) {
-        button.style.display = 'none';
-        return;
-    }
-
-    let recognition = null;
-    let listening = false;
-
-    button.addEventListener('click', () => {
-
-        if (listening) {
-            recognition?.stop();
-            return;
-        }
-
-        recognition = new SpeechRecognitionClass();
-        recognition.lang = (localStorage.getItem('sauran_lang') || 'tr') === 'en' ? 'en-US' : 'tr-TR';
-        recognition.interimResults = false;
-        recognition.maxAlternatives = 1;
-
-        recognition.onstart = () => {
-            listening = true;
-            button.classList.add('listening');
-        };
-
-        recognition.onresult = (event) => {
-            const transcript = event.results[0][0].transcript;
-            input.value = (input.value ? input.value + ' ' : '') + transcript;
-            input.focus();
-        };
-
-        recognition.onerror = () => {};
-
-        recognition.onend = () => {
-            listening = false;
-            button.classList.remove('listening');
-        };
-
-        recognition.start();
-
-    });
-
-}
-
-
-setupDictation(hubDictateBtn, hubMessageInput);
-setupDictation(dmDictateBtn, dmMessageInput);
 
 
 // =====================================================

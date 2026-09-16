@@ -356,7 +356,6 @@
                                     </div>
                                 </div>
                                 <input type="text" id="hub-message-input" autocomplete="off" placeholder="Bir mesaj yaz...">
-                                <button type="button" id="hub-dictate-btn" class="mic-btn composer-icon-btn" title="Dikte et">🎙️</button>
                                 <button type="button" id="hub-voice-btn" class="mic-btn composer-icon-btn" title="Sesli mesaj gönder">🎤</button>
                                 <button type="submit" id="hub-send-btn" class="composer-send-btn" title="Gönder">➤</button>
                             </div>
@@ -390,6 +389,29 @@
                         <button id="hub-voice-room-add-btn" class="hub-voice-room-add-btn liquid-glass" type="button" style="display:none;">
                             ＋ <span data-i18n="voice-room-add">Oda Ekle</span>
                         </button>
+
+                    </div>
+
+                </div>
+
+                <div id="voice-room-preview-modal" class="modal-overlay" style="display:none;">
+
+                    <div class="modal-box voice-room-preview-box">
+
+                        <div class="modal-header">
+                            <span id="voice-room-preview-title"></span>
+                            <button id="voice-room-preview-close-btn">✕</button>
+                        </div>
+
+                        <div class="voice-room-preview-body">
+
+                            <div id="voice-room-preview-list" class="voice-room-preview-list"></div>
+
+                            <button id="voice-room-preview-join-btn" class="voice-room-preview-join-btn liquid-glass" type="button">
+                                🎙 <span data-i18n="voice-room-join">Katıl</span>
+                            </button>
+
+                        </div>
 
                     </div>
 
@@ -778,7 +800,6 @@
                         </div>
                     </div>
                     <input type="text" id="dm-message-input" autocomplete="off" placeholder="Bir mesaj yaz...">
-                    <button type="button" id="dm-dictate-btn" class="mic-btn composer-icon-btn" title="Dikte et">🎙️</button>
                     <button type="button" id="dm-voice-btn" class="mic-btn composer-icon-btn" title="Sesli mesaj gönder">🎤</button>
                     <button type="submit" class="composer-send-btn" title="Gönder">➤</button>
                 </div>
