@@ -3,7 +3,10 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 
-const dataDir = path.join(__dirname, '..', 'data');
+// DATA_DIR verilirse (örn. Render'da bağlı kalıcı disk) oraya, verilmezse
+// projenin kendi 'data' klasörüne yazar. Böylece kalıcı disk eklendiğinde
+// tek yapılması gereken DATA_DIR ortam değişkenini disk yoluna ayarlamak.
+const dataDir = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 fs.mkdirSync(dataDir, { recursive: true });
 
 const dbPath = path.join(dataDir, 'sauran.db');
