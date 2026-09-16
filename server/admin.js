@@ -13,9 +13,28 @@ function listPending() {
 }
 
 function deleteUser(identifier) {
-  const info = db.prepare(`
-    DELETE FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?)
-  `).run(identifier, identifier);
+  const user = db.prepare(`
+    SELECT id FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?)
+  `).get(identifier, identifier);
+
+  if (!user) {
+    console.log(`Bulunamadı: ${identifier}`);
+    return;
+  }
+
+  const ownedHubs = db.prepare(`SELECT id FROM hubs WHERE created_by = ?`).all(user.id);
+  ownedHubs.forEach(h => {
+    db.prepare(`DELETE FROM hub_poll_votes WHERE message_id IN (SELECT id FROM messages WHERE hub_id = ?)`).run(h.id);
+    db.prepare(`DELETE FROM messages WHERE hub_id = ?`).run(h.id);
+    db.prepare(`DELETE FROM hub_members WHERE hub_id = ?`).run(h.id);
+    db.prepare(`DELETE FROM hub_roles WHERE hub_id = ?`).run(h.id);
+    db.prepare(`DELETE FROM hub_invites WHERE hub_id = ?`).run(h.id);
+    db.prepare(`DELETE FROM hubs WHERE id = ?`).run(h.id);
+  });
+
+  db.prepare(`DELETE FROM hub_invites WHERE created_by = ?`).run(user.id);
+
+  const info = db.prepare(`DELETE FROM users WHERE id = ?`).run(user.id);
   console.log(info.changes ? `Silindi: ${identifier}` : `Bulunamadı: ${identifier}`);
 }
 

@@ -18,7 +18,7 @@ const {
   createHub,
   listHubs,
   getHubDetail,
-  joinHub,
+  setHubRole,
   leaveHub,
   addHubRole,
   isHubMember,
@@ -28,6 +28,8 @@ const {
   voteHubPoll,
   createHubShare,
   deleteHub,
+  createHubInvite,
+  joinHubByCode,
   sendFriendRequest,
   respondFriendRequest,
   removeFriend,
@@ -38,6 +40,10 @@ const {
   saveDmMessage,
   getDmMessages,
   findUserByUsername,
+  blockUser,
+  unblockUser,
+  updateUsername,
+  updatePassword,
   db
 } = require('./db');
 
@@ -391,6 +397,85 @@ app.patch('/api/profile/avatar', (req, res) => {
   }
 });
 
+app.patch('/api/profile/username', (req, res) => {
+  try {
+    const user = getUserFromRequest(req);
+
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
+    }
+
+    const result = updateUsername(user.id, req.body.username);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Kullanıcı adı güncelleme API hatası:', error);
+    return res.status(500).json({ success: false, error: 'Güncellenemedi.' });
+  }
+});
+
+app.patch('/api/profile/password', (req, res) => {
+  try {
+    const user = getUserFromRequest(req);
+
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
+    }
+
+    const result = updatePassword(user.id, req.body.current_password, req.body.new_password);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Şifre güncelleme API hatası:', error);
+    return res.status(500).json({ success: false, error: 'Güncellenemedi.' });
+  }
+});
+
+// =====================================================
+// ENGELLEME
+// =====================================================
+
+app.post('/api/users/:id/block', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    const result = blockUser(user.id, Number(req.params.id));
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Engelleme API hatası:', error);
+    res.status(500).json({ success: false, error: 'Engellenemedi.' });
+  }
+});
+
+app.delete('/api/users/:id/block', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    return res.json(unblockUser(user.id, Number(req.params.id)));
+  } catch (error) {
+    console.error('Engel kaldırma API hatası:', error);
+    res.status(500).json({ success: false, error: 'Engel kaldırılamadı.' });
+  }
+});
+
 // =====================================================
 // ÇIKIŞ
 // =====================================================
@@ -427,8 +512,11 @@ function requireAuth(req, res) {
 }
 
 app.get('/api/hubs', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
   try {
-    res.json({ success: true, hubs: listHubs() });
+    res.json({ success: true, hubs: listHubs(user.id) });
   } catch (error) {
     console.error('Hub listeleme hatası:', error);
     res.status(500).json({ success: false, error: 'Hublar alınamadı.' });
@@ -455,10 +543,17 @@ app.post('/api/hubs', (req, res) => {
 });
 
 app.get('/api/hubs/:id', (req, res) => {
-  const user = getUserFromRequest(req);
+  const user = requireAuth(req, res);
+  if (!user) return;
 
   try {
-    const hub = getHubDetail(Number(req.params.id), user?.id);
+    const hubId = Number(req.params.id);
+
+    if (!isHubMember(hubId, user.id)) {
+      return res.status(403).json({ success: false, error: 'Bu Hub\'a üye değilsin.' });
+    }
+
+    const hub = getHubDetail(hubId, user.id);
 
     if (!hub) {
       return res.status(404).json({ success: false, error: 'Hub bulunamadı.' });
@@ -474,12 +569,12 @@ app.get('/api/hubs/:id', (req, res) => {
   }
 });
 
-app.post('/api/hubs/:id/join', (req, res) => {
+app.post('/api/hubs/:id/role', (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
 
   try {
-    const result = joinHub(Number(req.params.id), user.id, req.body?.role_id || null);
+    const result = setHubRole(Number(req.params.id), user.id, req.body?.role_id || null);
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -488,7 +583,45 @@ app.post('/api/hubs/:id/join', (req, res) => {
     return res.json(result);
 
   } catch (error) {
-    console.error('Hub katılım API hatası:', error);
+    console.error('Rol atama API hatası:', error);
+    res.status(500).json({ success: false, error: 'Rol atanamadı.' });
+  }
+});
+
+app.post('/api/hubs/:id/invite', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    const result = createHubInvite(Number(req.params.id), user.id);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Davet oluşturma API hatası:', error);
+    res.status(500).json({ success: false, error: 'Davet oluşturulamadı.' });
+  }
+});
+
+app.post('/api/hubs/join', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    const result = joinHubByCode(req.body?.code, user.id);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Davetle katılma API hatası:', error);
     res.status(500).json({ success: false, error: 'Katılınamadı.' });
   }
 });

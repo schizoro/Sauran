@@ -61,8 +61,14 @@ if (!userColumns.includes('about_me')) {
   db.exec(`ALTER TABLE users ADD COLUMN about_me TEXT`);
 }
 if (!userColumns.includes('status')) {
-  db.exec(`ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'signal'`);
+  db.exec(`ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'`);
 }
+
+db.exec(`
+  UPDATE users SET status = 'active' WHERE status IS NULL OR status = 'signal';
+  UPDATE users SET status = 'idle' WHERE status = 'sleep';
+  UPDATE users SET status = 'busy' WHERE status = 'locked';
+`);
 if (!userColumns.includes('avatar_visibility')) {
   db.exec(`ALTER TABLE users ADD COLUMN avatar_visibility TEXT DEFAULT 'public'`);
 }
@@ -70,7 +76,7 @@ if (!userColumns.includes('avatar_data')) {
   db.exec(`ALTER TABLE users ADD COLUMN avatar_data TEXT`);
 }
 
-const VALID_STATUSES = ['signal', 'sleep', 'locked'];
+const VALID_STATUSES = ['active', 'idle', 'busy', 'invisible'];
 const VALID_VISIBILITIES = ['public', 'friends', 'private'];
 
 // =====================================================
@@ -141,7 +147,7 @@ if (!messageColumns.includes('to_user_id')) {
   db.exec(`ALTER TABLE messages ADD COLUMN to_user_id INTEGER`);
 }
 
-const HUB_TYPES = ['game', 'social', 'stream', 'custom'];
+const HUB_TYPES = ['chat', 'game', 'stream', 'custom'];
 
 // =====================================================
 // v1.7 MIGRATION — ARKADAŞLIK
@@ -159,6 +165,34 @@ db.exec(`
     UNIQUE(user_low, user_high),
     FOREIGN KEY (user_low) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (user_high) REFERENCES users(id) ON DELETE CASCADE
+  );
+`);
+
+// =====================================================
+// v1.8 MIGRATION — DAVET / ENGELLEME / GİZLİLİK
+// =====================================================
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS hub_invites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hub_id INTEGER NOT NULL,
+    code TEXT UNIQUE NOT NULL,
+    created_by INTEGER NOT NULL,
+    max_uses INTEGER,
+    uses INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (hub_id) REFERENCES hubs(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS blocked_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    blocked_user_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, blocked_user_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (blocked_user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 `);
 
@@ -457,10 +491,10 @@ function getMessages(limit = 50, room = 'general') {
 // =====================================================
 
 const HUB_TEMPLATES = {
-  game: { icon: '🎮', label: 'Oyun' },
-  social: { icon: '🎙', label: 'Sosyal' },
-  stream: { icon: '📺', label: 'Yayın' },
-  custom: { icon: '🧩', label: 'Özel' }
+  chat: { icon: '💬', label: 'Sohbet Hubu' },
+  game: { icon: '🎮', label: 'Oyun Hubu' },
+  stream: { icon: '📺', label: 'Yayın Hubu' },
+  custom: { icon: '🧩', label: 'Özel Hub' }
 };
 
 function createHub(userId, { name, type, template, roles }) {
@@ -512,14 +546,52 @@ function createHub(userId, { name, type, template, roles }) {
   }
 }
 
-function listHubs() {
+function listHubs(userId) {
   return db.prepare(`
     SELECT
       hubs.id, hubs.name, hubs.type, hubs.icon, hubs.created_at,
       (SELECT COUNT(*) FROM hub_members WHERE hub_members.hub_id = hubs.id) AS member_count
     FROM hubs
+    INNER JOIN hub_members ON hub_members.hub_id = hubs.id AND hub_members.user_id = ?
     ORDER BY hubs.created_at DESC
-  `).all();
+  `).all(userId);
+}
+
+function generateInviteCode() {
+  return crypto.randomBytes(5).toString('hex');
+}
+
+function createHubInvite(hubId, userId) {
+  if (!isHubMember(hubId, userId)) {
+    return { success: false, error: 'Bu Hub\'a üye değilsin.' };
+  }
+
+  const code = generateInviteCode();
+
+  db.prepare(`
+    INSERT INTO hub_invites (hub_id, code, created_by)
+    VALUES (?, ?, ?)
+  `).run(hubId, code, userId);
+
+  return { success: true, code };
+}
+
+function joinHubByCode(code, userId) {
+  const invite = db.prepare(`SELECT * FROM hub_invites WHERE code = ?`).get(String(code || '').trim());
+
+  if (!invite) return { success: false, error: 'Geçersiz davet kodu.' };
+  if (invite.max_uses && invite.uses >= invite.max_uses) {
+    return { success: false, error: 'Bu davet kodu kullanım limitine ulaşmış.' };
+  }
+
+  if (isHubMember(invite.hub_id, userId)) {
+    return { success: false, error: 'Bu Hub\'a zaten üyesin.' };
+  }
+
+  db.prepare(`INSERT INTO hub_members (hub_id, user_id) VALUES (?, ?)`).run(invite.hub_id, userId);
+  db.prepare(`UPDATE hub_invites SET uses = uses + 1 WHERE id = ?`).run(invite.id);
+
+  return { success: true, hub_id: invite.hub_id };
 }
 
 function getHubDetail(hubId, userId) {
@@ -552,10 +624,11 @@ function getHubDetail(hubId, userId) {
   };
 }
 
-function joinHub(hubId, userId, roleId) {
+function setHubRole(hubId, userId, roleId) {
   try {
-    const hub = db.prepare(`SELECT id FROM hubs WHERE id = ?`).get(hubId);
-    if (!hub) return { success: false, error: 'Hub bulunamadı.' };
+    if (!isHubMember(hubId, userId)) {
+      return { success: false, error: 'Bu Hub\'a üye değilsin. Önce bir davet koduyla katılmalısın.' };
+    }
 
     if (roleId) {
       const role = db.prepare(`SELECT id, slot_limit FROM hub_roles WHERE id = ? AND hub_id = ?`).get(roleId, hubId);
@@ -745,6 +818,10 @@ function sendFriendRequest(fromId, toId) {
   const targetUser = db.prepare(`SELECT id FROM users WHERE id = ?`).get(toId);
   if (!targetUser) return { success: false, error: 'Kullanıcı bulunamadı.' };
 
+  if (isBlocked(fromId, toId) || isBlocked(toId, fromId)) {
+    return { success: false, error: 'Bu kullanıcıya istek gönderilemiyor.' };
+  }
+
   const [low, high] = pairKey(fromId, toId);
 
   const existing = db.prepare(`SELECT * FROM friendships WHERE user_low = ? AND user_high = ?`).get(low, high);
@@ -824,28 +901,87 @@ function listIncomingRequests(userId) {
 
 function getUserPublicProfile(viewerId, targetId) {
   const user = db.prepare(`
-    SELECT id, username, about_me, status, avatar_visibility, avatar_data
+    SELECT id, username, status, avatar_data
     FROM users WHERE id = ?
   `).get(targetId);
 
   if (!user) return null;
 
-  const friendship = viewerId ? getFriendshipStatus(viewerId, targetId) : 'none';
   const isSelf = viewerId === targetId;
-
-  const canSeeAvatar =
-    isSelf ||
-    user.avatar_visibility === 'public' ||
-    (user.avatar_visibility === 'friends' && friendship === 'friends');
+  const friendship = viewerId ? getFriendshipStatus(viewerId, targetId) : 'none';
+  const blockedByMe = viewerId ? isBlocked(viewerId, targetId) : false;
 
   return {
     id: user.id,
     username: user.username,
-    about_me: user.about_me,
     status: user.status,
-    avatar_data: canSeeAvatar ? user.avatar_data : null,
-    friendship_status: isSelf ? 'self' : friendship
+    avatar_data: user.avatar_data,
+    friendship_status: isSelf ? 'self' : friendship,
+    blocked_by_me: blockedByMe
   };
+}
+
+// =====================================================
+// ENGELLEME
+// =====================================================
+
+function blockUser(userId, targetId) {
+  if (userId === targetId) return { success: false, error: 'Kendini engelleyemezsin.' };
+
+  db.prepare(`
+    INSERT INTO blocked_users (user_id, blocked_user_id) VALUES (?, ?)
+    ON CONFLICT(user_id, blocked_user_id) DO NOTHING
+  `).run(userId, targetId);
+
+  removeFriend(userId, targetId);
+
+  return { success: true };
+}
+
+function unblockUser(userId, targetId) {
+  db.prepare(`DELETE FROM blocked_users WHERE user_id = ? AND blocked_user_id = ?`).run(userId, targetId);
+  return { success: true };
+}
+
+function isBlocked(userId, targetId) {
+  return Boolean(db.prepare(`SELECT 1 FROM blocked_users WHERE user_id = ? AND blocked_user_id = ?`).get(userId, targetId));
+}
+
+// =====================================================
+// KULLANICI ADI / ŞİFRE DEĞİŞTİRME
+// =====================================================
+
+function updateUsername(userId, newUsername) {
+  newUsername = String(newUsername || '').trim();
+
+  if (newUsername.length < 3 || newUsername.length > 20) {
+    return { success: false, error: 'Kullanıcı adı 3-20 karakter olmalıdır.' };
+  }
+
+  const existing = db.prepare(`SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?`).get(newUsername, userId);
+  if (existing) return { success: false, error: 'Bu kullanıcı adı zaten alınmış.' };
+
+  db.prepare(`UPDATE users SET username = ? WHERE id = ?`).run(newUsername, userId);
+  return { success: true, username: newUsername };
+}
+
+function updatePassword(userId, currentPassword, newPassword) {
+  const user = db.prepare(`SELECT password_hash, password_salt FROM users WHERE id = ?`).get(userId);
+  if (!user) return { success: false, error: 'Kullanıcı bulunamadı.' };
+
+  if (!verifyPassword(currentPassword, user.password_hash, user.password_salt)) {
+    return { success: false, error: 'Mevcut şifre yanlış.' };
+  }
+
+  const newPasswordStr = String(newPassword || '');
+  if (newPasswordStr.length < 6) {
+    return { success: false, error: 'Yeni şifre en az 6 karakter olmalıdır.' };
+  }
+
+  const { hash, salt } = hashPassword(newPasswordStr);
+  db.prepare(`UPDATE users SET password_hash = ?, password_salt = ? WHERE id = ?`).run(hash, salt, userId);
+
+  return { success: true };
 }
 
 // =====================================================
@@ -909,7 +1045,7 @@ module.exports = {
   createHub,
   listHubs,
   getHubDetail,
-  joinHub,
+  setHubRole,
   leaveHub,
   addHubRole,
   isHubMember,
@@ -919,6 +1055,8 @@ module.exports = {
   voteHubPoll,
   createHubShare,
   deleteHub,
+  createHubInvite,
+  joinHubByCode,
   sendFriendRequest,
   respondFriendRequest,
   removeFriend,
@@ -930,5 +1068,10 @@ module.exports = {
   saveDmMessage,
   getDmMessages,
   findUserByUsername,
+  blockUser,
+  unblockUser,
+  isBlocked,
+  updateUsername,
+  updatePassword,
   db
 };

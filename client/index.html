@@ -147,44 +147,29 @@
 
     <div id="chat-screen" style="display: none;">
 
-        <div class="sidebar">
+        <!-- ÜST BAR -->
 
-            <h3>Sauran</h3>
+        <div class="topbar">
 
-            <div class="channel active" id="nav-hubs" data-view="hubs">
-                🧩 Hublar
-            </div>
+            <span class="topbar-logo">SAURAN</span>
 
+            <div class="topbar-actions">
 
-            <!-- ÇEVRİMİÇİ / ARKADAŞLAR -->
+                <button id="hub-join-open-btn" class="topbar-icon-btn" title="Davet koduyla katıl" type="button">🔑</button>
 
-            <div class="online-section">
-
-                <button id="online-btn">
-
-                    <span class="online-dot"></span>
-
-                    <span id="online-count">
-                        0
-                    </span>
-
-                    <span id="online-label">Çevrimiçi</span>
-
+                <button id="online-btn" class="topbar-icon-btn" title="Arkadaşlar">
+                    👥
+                    <span id="online-count" class="topbar-badge" style="display:none;">0</span>
                 </button>
 
-            </div>
+                <button id="settings-btn" class="topbar-icon-btn" title="Ayarlar" type="button">⚙️</button>
 
-
-            <!-- PROFİL -->
-
-            <div class="profile-section">
-
-                <button id="profile-btn">
+                <button id="profile-btn" class="topbar-profile-btn">
 
                     <span class="profile-avatar-wrap profile-avatar-wrap-sm">
                         <span id="profile-avatar" class="profile-avatar"></span>
                         <img id="profile-avatar-img" class="profile-avatar-img" style="display:none;" alt="">
-                        <span id="sidebar-status-dot" class="status-dot status-signal status-dot-sm"><span class="status-dot-core"></span></span>
+                        <span id="sidebar-status-dot" class="status-hex status-hex-sm status-active"></span>
                     </span>
 
                     <span id="profile-username" class="profile-username"></span>
@@ -204,12 +189,12 @@
 
             <div id="hub-list-view" class="view-panel">
 
-                <div class="hub-list-header">
+                <div class="hub-list-header" id="hub-list-header" style="display:none;">
 
-                    <h2>🧩 HUBLAR</h2>
+                    <h2>HUBLARIM</h2>
 
                     <button id="hub-create-open-btn" class="hub-create-btn">
-                        + YENİ HUB
+                        + Yeni Hub
                     </button>
 
                 </div>
@@ -217,7 +202,10 @@
                 <div id="hub-list-grid" class="hub-list-grid"></div>
 
                 <div id="hub-list-empty" class="hub-list-empty" style="display:none;">
-                    Henüz bir Hub yok. İlk Hub'ı sen kur.
+
+                    <button id="hub-create-open-btn-big" class="hub-create-btn-big" type="button">+</button>
+                    <p>İlk Hub'ını oluştur</p>
+
                 </div>
 
             </div>
@@ -237,6 +225,7 @@
                         <h2 id="hub-detail-name"></h2>
                         <span id="hub-detail-count" class="hub-detail-count"></span>
 
+                        <button id="hub-invite-btn" class="hub-delete-btn" type="button">🔑 Davet</button>
                         <button id="hub-delete-btn" class="hub-delete-btn" type="button" style="display:none;">🗑 Sil</button>
 
                     </div>
@@ -309,6 +298,57 @@
             </div>
 
             <div id="hub-create-body" class="hub-create-body"></div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ================================================= -->
+    <!-- DAVET KODUYLA KATIL -->
+    <!-- ================================================= -->
+
+    <div id="hub-join-modal" class="modal-overlay" style="display:none;">
+
+        <div class="modal-box poll-create-box">
+
+            <div class="modal-header">
+                <span>🔑 Davet Koduyla Katıl</span>
+                <button id="hub-join-close-btn">✕</button>
+            </div>
+
+            <div class="poll-create-body">
+
+                <input type="text" id="hub-join-code-input" placeholder="Davet kodunu gir...">
+                <div id="hub-join-error" class="friend-add-error"></div>
+                <button id="hub-join-submit-btn" type="button" class="about-btn about-btn-primary poll-submit-btn">Katıl</button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ================================================= -->
+    <!-- DAVET KODU GÖSTERİMİ -->
+    <!-- ================================================= -->
+
+    <div id="hub-invite-modal" class="modal-overlay" style="display:none;">
+
+        <div class="modal-box poll-create-box">
+
+            <div class="modal-header">
+                <span>🔑 Davet Kodu</span>
+                <button id="hub-invite-close-btn">✕</button>
+            </div>
+
+            <div class="poll-create-body">
+
+                <p class="verify-info">Bu kodu arkadaşınla paylaş, Hub'a katılabilsin.</p>
+                <div id="hub-invite-code-display" class="invite-code-display"></div>
+
+            </div>
 
         </div>
 
@@ -437,7 +477,7 @@
                 <div class="profile-avatar-wrap">
                     <span id="other-profile-avatar" class="profile-avatar profile-avatar-lg"></span>
                     <img id="other-profile-avatar-img" class="profile-avatar-img" style="display:none;" alt="">
-                    <span id="other-profile-status-dot" class="status-dot status-signal"><span class="status-dot-core"></span></span>
+                    <span id="other-profile-status-dot" class="status-hex"></span>
                 </div>
 
                 <h3 id="other-profile-username" class="profile-modal-username"></h3>
@@ -446,13 +486,6 @@
             </div>
 
             <div class="profile-tab-panel" data-panel="info">
-
-                <div class="profile-field">
-                    <span class="profile-field-label">Hakkında</span>
-                    <div class="about-view" style="cursor:default;">
-                        <p id="other-profile-about"></p>
-                    </div>
-                </div>
 
                 <div id="other-profile-actions" class="other-profile-actions"></div>
 
@@ -498,7 +531,7 @@
         style="display: none;"
     >
 
-        <div class="modal-box profile-modal-box">
+        <div class="modal-box profile-modal-box profile-modal-box-minimal">
 
             <div class="profile-banner">
 
@@ -512,108 +545,65 @@
 
                     <img id="profile-modal-avatar-img" class="profile-avatar-img" style="display:none;" alt="">
 
-                    <button id="avatar-change-btn" class="avatar-change-overlay" type="button">
-                        <svg viewBox="0 0 24 24" width="18" height="18">
-                            <path fill="currentColor" d="M9 3l-1.8 2H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9zm3 5.5a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
-                        </svg>
-                        <span>Değiştir</span>
-                    </button>
+                    <div class="avatar-change-overlay">
+                        <button id="avatar-change-btn" type="button" title="Değiştir">
+                            <svg viewBox="0 0 24 24" width="16" height="16">
+                                <path fill="currentColor" d="M9 3l-1.8 2H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9zm3 5.5a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
+                            </svg>
+                        </button>
+                        <button id="avatar-remove-btn" type="button" title="Kaldır">🗑</button>
+                    </div>
 
                     <input type="file" id="avatar-file-input" accept="image/png,image/jpeg,image/webp" hidden>
 
                     <!-- DURUM GÖSTERGESİ -->
-                    <button id="status-dot-btn" class="status-dot status-signal" type="button" aria-label="Durumu değiştir">
-                        <span class="status-dot-core"></span>
-                    </button>
+                    <button id="status-dot-btn" class="status-hex" type="button" aria-label="Durumu değiştir"></button>
 
                     <!-- DURUM MENÜSÜ -->
                     <div id="status-dropdown" class="status-dropdown" style="display:none;">
 
-                        <button class="status-option" data-status="signal" type="button">
-                            <span class="status-dot status-signal status-option-dot"><span class="status-dot-core"></span></span>
-                            <span class="status-option-text">
-                                <strong>Sinyal Aktif</strong>
-                                <small>Çevrimiçi ve erişilebilirsin</small>
-                            </span>
+                        <button class="status-option" data-status="active" type="button">
+                            <span class="status-hex status-option-dot status-active"></span>
+                            <span class="status-option-text"><strong>Aktif</strong></span>
                         </button>
 
-                        <button class="status-option" data-status="sleep" type="button">
-                            <span class="status-dot status-sleep status-option-dot"><span class="status-dot-core"></span></span>
-                            <span class="status-option-text">
-                                <strong>Uyku Modu</strong>
-                                <small>Buradasın ama pasifsin</small>
-                            </span>
+                        <button class="status-option" data-status="idle" type="button">
+                            <span class="status-hex status-option-dot status-idle"></span>
+                            <span class="status-option-text"><strong>Takılıyor</strong></span>
                         </button>
 
-                        <button class="status-option" data-status="locked" type="button">
-                            <span class="status-dot status-locked status-option-dot"><span class="status-dot-core"></span></span>
-                            <span class="status-option-text">
-                                <strong>Kilitli Frekans</strong>
-                                <small>Rahatsız edilmek istemiyorsun</small>
-                            </span>
+                        <button class="status-option" data-status="busy" type="button">
+                            <span class="status-hex status-option-dot status-busy"></span>
+                            <span class="status-option-text"><strong>Meşgul</strong></span>
+                        </button>
+
+                        <button class="status-option" data-status="invisible" type="button">
+                            <span class="status-hex status-option-dot status-invisible">👻</span>
+                            <span class="status-option-text"><strong>Gizli</strong><small>Kimse göremez</small></span>
                         </button>
 
                     </div>
 
                 </div>
 
-                <h3 id="profile-modal-username" class="profile-modal-username"></h3>
+                <div id="username-view" class="username-view">
+                    <h3 id="profile-modal-username" class="profile-modal-username"></h3>
+                    <button id="username-edit-btn" class="username-edit-btn" type="button" title="Kullanıcı adını değiştir">✎</button>
+                </div>
+
+                <div id="username-edit" class="username-edit" style="display:none;">
+                    <input type="text" id="username-edit-input" maxlength="20">
+                    <button id="username-save-btn" class="about-btn about-btn-primary" type="button">Kaydet</button>
+                    <button id="username-cancel-btn" class="about-btn about-btn-ghost" type="button">Vazgeç</button>
+                </div>
+
+                <span id="username-edit-error" class="friend-add-error"></span>
 
                 <span id="status-label" class="status-label"></span>
 
             </div>
 
-            <!-- SEKMELER -->
-
-            <div class="profile-tabs">
-
-                <button class="profile-tab-btn active" data-tab="info" type="button">
-                    Profil
-                </button>
-
-                <button class="profile-tab-btn" data-tab="privacy" type="button">
-                    Ayarlar / Gizlilik
-                </button>
-
-            </div>
-
-            <!-- PROFİL SEKMESİ -->
-
-            <div class="profile-tab-panel" data-panel="info">
-
-                <div class="profile-field">
-                    <span class="profile-field-label">E-posta</span>
-                    <span id="profile-modal-email" class="profile-field-value"></span>
-                </div>
-
-                <div class="profile-field">
-
-                    <span class="profile-field-label">Hakkında</span>
-
-                    <div id="about-view" class="about-view">
-                        <p id="about-text"></p>
-                        <span class="about-edit-hint">düzenlemek için tıkla</span>
-                    </div>
-
-                    <div id="about-edit" class="about-edit" style="display:none;">
-
-                        <textarea
-                            id="about-textarea"
-                            maxlength="300"
-                            placeholder="Kendinden bahset... (maks. 300 karakter)"
-                        ></textarea>
-
-                        <div class="about-edit-footer">
-                            <span id="about-char-count" class="about-char-count">0 / 300</span>
-                            <div class="about-edit-actions">
-                                <button id="about-cancel-btn" class="about-btn about-btn-ghost" type="button">Vazgeç</button>
-                                <button id="about-save-btn" class="about-btn about-btn-primary" type="button">Kaydet</button>
-                            </div>
-                        </div>
-
-                    </div>
-
-                </div>
+            <div class="profile-tab-panel">
 
                 <button id="logout-btn" class="logout-btn">
                     Çıkış Yap
@@ -621,30 +611,53 @@
 
             </div>
 
-            <!-- GİZLİLİK SEKMESİ -->
+        </div>
 
-            <div class="profile-tab-panel" data-panel="privacy" style="display:none;">
+    </div>
 
-                <span class="profile-field-label">Profil Fotoğrafı Görünürlüğü</span>
 
+    <!-- ================================================= -->
+    <!-- AYARLAR MODALI -->
+    <!-- ================================================= -->
+
+    <div id="settings-modal" class="modal-overlay" style="display:none;">
+
+        <div class="modal-box poll-create-box">
+
+            <div class="modal-header">
+                <span>⚙️ Ayarlar</span>
+                <button id="settings-close-btn">✕</button>
+            </div>
+
+            <div class="poll-create-body">
+
+                <span class="profile-field-label">Tema</span>
                 <div class="privacy-options">
-
-                    <button class="privacy-option" data-visibility="public" type="button">
-                        <span class="privacy-option-title">Herkese Açık</span>
-                        <span class="privacy-option-desc">Sauran'daki herkes fotoğrafını görebilir</span>
+                    <button class="privacy-option" data-theme="dark" type="button">
+                        <span class="privacy-option-title">Kapalı Tema</span>
+                        <span class="privacy-option-desc">Siyah, karanlık arayüz</span>
                     </button>
-
-                    <button class="privacy-option" data-visibility="friends" type="button">
-                        <span class="privacy-option-title">Sadece Arkadaşlar</span>
-                        <span class="privacy-option-desc">Yalnızca arkadaş listendekiler görebilir</span>
+                    <button class="privacy-option" data-theme="light" type="button">
+                        <span class="privacy-option-title">Açık Tema</span>
+                        <span class="privacy-option-desc">Açık gri arayüz</span>
                     </button>
-
-                    <button class="privacy-option" data-visibility="private" type="button">
-                        <span class="privacy-option-title">Hiçkimse (Gizli)</span>
-                        <span class="privacy-option-desc">Fotoğrafın kimseye gösterilmez</span>
-                    </button>
-
                 </div>
+
+                <span class="profile-field-label">Dil</span>
+                <div class="privacy-options">
+                    <button class="privacy-option" data-lang="tr" type="button">
+                        <span class="privacy-option-title">Türkçe</span>
+                    </button>
+                    <button class="privacy-option" data-lang="en" type="button">
+                        <span class="privacy-option-title">English</span>
+                    </button>
+                </div>
+
+                <span class="profile-field-label">Şifre Değiştir</span>
+                <input type="password" id="settings-current-password" placeholder="Mevcut şifren">
+                <input type="password" id="settings-new-password" placeholder="Yeni şifre">
+                <div id="settings-password-error" class="friend-add-error"></div>
+                <button id="settings-password-btn" type="button" class="about-btn about-btn-primary poll-submit-btn">Şifreyi Güncelle</button>
 
             </div>
 

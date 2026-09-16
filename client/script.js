@@ -105,9 +105,6 @@ const onlineBtn =
 const onlineCount =
     document.getElementById('online-count');
 
-const onlineLabel =
-    document.getElementById('online-label');
-
 const usersModal =
     document.getElementById('users-modal');
 
@@ -166,9 +163,6 @@ const otherProfileUsername =
 
 const otherProfileStatusLabel =
     document.getElementById('other-profile-status-label');
-
-const otherProfileAbout =
-    document.getElementById('other-profile-about');
 
 const otherProfileActions =
     document.getElementById('other-profile-actions');
@@ -230,9 +224,6 @@ const profileModalAvatarImg =
 const profileModalUsername =
     document.getElementById('profile-modal-username');
 
-const profileModalEmail =
-    document.getElementById('profile-modal-email');
-
 const closeProfileModalBtn =
     document.getElementById('close-profile-modal-btn');
 
@@ -241,11 +232,40 @@ const logoutBtn =
 
 
 // =====================================================
+// PROFİL — KULLANICI ADI DÜZENLEME
+// =====================================================
+
+const usernameView =
+    document.getElementById('username-view');
+
+const usernameEditBtn =
+    document.getElementById('username-edit-btn');
+
+const usernameEdit =
+    document.getElementById('username-edit');
+
+const usernameEditInput =
+    document.getElementById('username-edit-input');
+
+const usernameSaveBtn =
+    document.getElementById('username-save-btn');
+
+const usernameCancelBtn =
+    document.getElementById('username-cancel-btn');
+
+const usernameEditError =
+    document.getElementById('username-edit-error');
+
+
+// =====================================================
 // PROFİL — AVATAR DEĞİŞTİRME
 // =====================================================
 
 const avatarChangeBtn =
     document.getElementById('avatar-change-btn');
+
+const avatarRemoveBtn =
+    document.getElementById('avatar-remove-btn');
 
 const avatarFileInput =
     document.getElementById('avatar-file-input');
@@ -269,48 +289,35 @@ const statusOptionButtons =
 
 
 // =====================================================
-// PROFİL — SEKMELER
+// AYARLAR
 // =====================================================
 
-const profileTabButtons =
-    document.querySelectorAll('.profile-tab-btn');
+const settingsBtn =
+    document.getElementById('settings-btn');
 
-const profileTabPanels =
-    document.querySelectorAll('.profile-tab-panel');
+const settingsModal =
+    document.getElementById('settings-modal');
 
+const settingsCloseBtn =
+    document.getElementById('settings-close-btn');
 
-// =====================================================
-// PROFİL — HAKKINDA
-// =====================================================
+const themeButtons =
+    document.querySelectorAll('[data-theme]');
 
-const aboutView =
-    document.getElementById('about-view');
+const langButtons =
+    document.querySelectorAll('[data-lang]');
 
-const aboutText =
-    document.getElementById('about-text');
+const settingsCurrentPassword =
+    document.getElementById('settings-current-password');
 
-const aboutEdit =
-    document.getElementById('about-edit');
+const settingsNewPassword =
+    document.getElementById('settings-new-password');
 
-const aboutTextarea =
-    document.getElementById('about-textarea');
+const settingsPasswordError =
+    document.getElementById('settings-password-error');
 
-const aboutCharCount =
-    document.getElementById('about-char-count');
-
-const aboutSaveBtn =
-    document.getElementById('about-save-btn');
-
-const aboutCancelBtn =
-    document.getElementById('about-cancel-btn');
-
-
-// =====================================================
-// PROFİL — GİZLİLİK
-// =====================================================
-
-const privacyOptionButtons =
-    document.querySelectorAll('.privacy-option');
+const settingsPasswordBtn =
+    document.getElementById('settings-password-btn');
 
 
 // =====================================================
@@ -318,10 +325,13 @@ const privacyOptionButtons =
 // =====================================================
 
 const STATUS_INFO = {
-    signal: { label: 'Sinyal Aktif', className: 'status-signal' },
-    sleep: { label: 'Uyku Modu', className: 'status-sleep' },
-    locked: { label: 'Kilitli Frekans', className: 'status-locked' }
+    active: { label: 'Aktif', className: 'status-active' },
+    idle: { label: 'Takılıyor', className: 'status-idle' },
+    busy: { label: 'Meşgul', className: 'status-busy' },
+    invisible: { label: 'Gizli', className: 'status-invisible' }
 };
+
+const STATUS_CLASS_NAMES = ['status-active', 'status-idle', 'status-busy', 'status-invisible'];
 
 
 // =====================================================
@@ -1060,19 +1070,6 @@ function renderProfile() {
     profileModalUsername.textContent =
         currentUser.username;
 
-    profileModalEmail.textContent =
-        currentUser.email ||
-        '—';
-
-
-    // ------------------------------------------------
-    // Hakkında
-    // ------------------------------------------------
-
-    aboutText.textContent =
-        currentUser.about_me ||
-        '';
-
 
     // ------------------------------------------------
     // Durum
@@ -1080,17 +1077,7 @@ function renderProfile() {
 
     renderStatus(
         currentUser.status ||
-        'signal'
-    );
-
-
-    // ------------------------------------------------
-    // Gizlilik
-    // ------------------------------------------------
-
-    renderPrivacySelection(
-        currentUser.avatar_visibility ||
-        'public'
+        'active'
     );
 
 }
@@ -1104,21 +1091,22 @@ function renderStatus(status) {
 
     const info =
         STATUS_INFO[status] ||
-        STATUS_INFO.signal;
+        STATUS_INFO.active;
 
 
     [statusDotBtn, sidebarStatusDot].forEach(
         (dot) => {
 
             dot.classList.remove(
-                'status-signal',
-                'status-sleep',
-                'status-locked'
+                ...STATUS_CLASS_NAMES
             );
 
             dot.classList.add(
                 info.className
             );
+
+            dot.textContent =
+                status === 'invisible' ? '👻' : '';
 
         }
     );
@@ -1220,176 +1208,79 @@ document.addEventListener(
 
 
 // =====================================================
-// PROFİL SEKMELERİ
+// KULLANICI ADI DÜZENLEME
 // =====================================================
 
-profileTabButtons.forEach(
-    (btn) => {
-
-        btn.addEventListener(
-            'click',
-            () => {
-
-                const tab =
-                    btn.dataset.tab;
-
-
-                profileTabButtons.forEach(
-                    (b) => b.classList.toggle(
-                        'active',
-                        b === btn
-                    )
-                );
-
-                profileTabPanels.forEach(
-                    (panel) => {
-
-                        panel.style.display =
-                            panel.dataset.panel === tab ?
-                                'flex' :
-                                'none';
-
-                    }
-                );
-
-            }
-        );
-
-    }
-);
-
-
-// =====================================================
-// HAKKINDA — DÜZENLEME
-// =====================================================
-
-aboutView.addEventListener(
+usernameEditBtn.addEventListener(
     'click',
     () => {
 
-        aboutTextarea.value =
-            currentUser?.about_me ||
-            '';
+        usernameEditInput.value = currentUser?.username || '';
+        usernameEditError.textContent = '';
 
-        updateAboutCharCount();
+        usernameView.style.display = 'none';
+        usernameEdit.style.display = 'flex';
 
-        aboutView.style.display =
-            'none';
-
-        aboutEdit.style.display =
-            'block';
-
-        aboutTextarea.focus();
+        usernameEditInput.focus();
 
     }
 );
 
 
-aboutTextarea.addEventListener(
-    'input',
-    updateAboutCharCount
-);
-
-
-function updateAboutCharCount() {
-
-    aboutCharCount.textContent =
-        `${aboutTextarea.value.length} / 300`;
-
-}
-
-
-aboutCancelBtn.addEventListener(
+usernameCancelBtn.addEventListener(
     'click',
     () => {
 
-        aboutEdit.style.display =
-            'none';
-
-        aboutView.style.display =
-            'block';
+        usernameEdit.style.display = 'none';
+        usernameView.style.display = 'flex';
 
     }
 );
 
 
-aboutSaveBtn.addEventListener(
+usernameSaveBtn.addEventListener(
     'click',
     async () => {
 
-        const value =
-            aboutTextarea.value.trim();
+        const newUsername = usernameEditInput.value.trim();
+        usernameEditError.textContent = '';
 
+        if (!newUsername) return;
 
-        aboutSaveBtn.disabled =
-            true;
-
-        aboutSaveBtn.textContent =
-            'Kaydediliyor...';
-
+        usernameSaveBtn.disabled = true;
 
         try {
 
-            const response =
-                await fetch(
-                    '/api/profile/about',
-                    {
-                        method: 'PATCH',
+            const response = await fetch('/api/profile/username', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ username: newUsername })
+            });
 
-                        headers: {
-                            'Content-Type':
-                                'application/json'
-                        },
+            const data = await response.json();
 
-                        credentials: 'include',
-
-                        body: JSON.stringify({
-                            about_me: value
-                        })
-                    }
-                );
-
-            const data =
-                await response.json();
-
-
-            if (
-                !response.ok ||
-                !data.success
-            ) {
-
+            if (!response.ok || !data.success) {
+                usernameEditError.textContent = data.error || 'Güncellenemedi.';
                 return;
-
             }
 
+            currentUser.username = data.username;
+            currentUsername = data.username;
 
-            if (currentUser) {
-                currentUser.about_me = data.about_me;
-            }
+            renderProfile();
 
-            aboutText.textContent =
-                data.about_me;
-
-            aboutEdit.style.display =
-                'none';
-
-            aboutView.style.display =
-                'block';
+            usernameEdit.style.display = 'none';
+            usernameView.style.display = 'flex';
 
         } catch (error) {
 
-            console.error(
-                'Hakkında kaydedilemedi:',
-                error
-            );
+            console.error('Kullanıcı adı güncellenemedi:', error);
+            usernameEditError.textContent = 'Sunucuya bağlanılamadı.';
 
         } finally {
 
-            aboutSaveBtn.disabled =
-                false;
-
-            aboutSaveBtn.textContent =
-                'Kaydet';
+            usernameSaveBtn.disabled = false;
 
         }
 
@@ -1398,7 +1289,7 @@ aboutSaveBtn.addEventListener(
 
 
 // =====================================================
-// AVATAR DEĞİŞTİRME
+// AVATAR DEĞİŞTİRME / KALDIRMA
 // =====================================================
 
 avatarChangeBtn.addEventListener(
@@ -1406,6 +1297,38 @@ avatarChangeBtn.addEventListener(
     () => {
 
         avatarFileInput.click();
+
+    }
+);
+
+
+avatarRemoveBtn.addEventListener(
+    'click',
+    async () => {
+
+        if (!currentUser?.avatar_data) return;
+
+        try {
+
+            const response = await fetch('/api/profile/avatar', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ avatar_data: null })
+            });
+
+            const data = await response.json();
+
+            if (!data.success) return;
+
+            currentUser.avatar_data = null;
+            renderProfile();
+
+        } catch (error) {
+
+            console.error('Avatar kaldırılamadı:', error);
+
+        }
 
     }
 );
@@ -1567,75 +1490,126 @@ function resizeImageToDataUrl(file, size) {
 
 
 // =====================================================
-// GİZLİLİK
+// AYARLAR — TEMA / DİL / ŞİFRE
 // =====================================================
 
-function renderPrivacySelection(visibility) {
+settingsBtn.addEventListener(
+    'click',
+    () => {
 
-    privacyOptionButtons.forEach(
-        (btn) => {
+        settingsModal.style.display = 'flex';
 
-            btn.classList.toggle(
-                'selected',
-                btn.dataset.visibility === visibility
-            );
+        const savedTheme = localStorage.getItem('sauran_theme') || 'dark';
+        const savedLang = localStorage.getItem('sauran_lang') || 'tr';
 
-        }
-    );
+        themeButtons.forEach(b => b.classList.toggle('selected', b.dataset.theme === savedTheme));
+        langButtons.forEach(b => b.classList.toggle('selected', b.dataset.lang === savedLang));
+
+        settingsCurrentPassword.value = '';
+        settingsNewPassword.value = '';
+        settingsPasswordError.textContent = '';
+
+    }
+);
+
+
+settingsCloseBtn.addEventListener(
+    'click',
+    () => settingsModal.style.display = 'none'
+);
+
+
+settingsModal.addEventListener(
+    'click',
+    (event) => {
+        if (event.target === settingsModal) settingsModal.style.display = 'none';
+    }
+);
+
+
+themeButtons.forEach((btn) => {
+
+    btn.addEventListener('click', () => {
+
+        const theme = btn.dataset.theme;
+        localStorage.setItem('sauran_theme', theme);
+        applyTheme(theme);
+        themeButtons.forEach(b => b.classList.toggle('selected', b === btn));
+
+    });
+
+});
+
+
+langButtons.forEach((btn) => {
+
+    btn.addEventListener('click', () => {
+
+        localStorage.setItem('sauran_lang', btn.dataset.lang);
+        langButtons.forEach(b => b.classList.toggle('selected', b === btn));
+
+    });
+
+});
+
+
+function applyTheme(theme) {
+
+    document.body.classList.toggle('theme-light', theme === 'light');
 
 }
 
 
-privacyOptionButtons.forEach(
-    (btn) => {
-
-        btn.addEventListener(
-            'click',
-            async () => {
-
-                const visibility =
-                    btn.dataset.visibility;
-
-                renderPrivacySelection(
-                    visibility
-                );
-
-                if (currentUser) {
-                    currentUser.avatar_visibility = visibility;
-                }
+applyTheme(localStorage.getItem('sauran_theme') || 'dark');
 
 
-                try {
+settingsPasswordBtn.addEventListener(
+    'click',
+    async () => {
 
-                    await fetch(
-                        '/api/profile/privacy',
-                        {
-                            method: 'PATCH',
+        const currentPassword = settingsCurrentPassword.value;
+        const newPassword = settingsNewPassword.value;
 
-                            headers: {
-                                'Content-Type':
-                                    'application/json'
-                            },
+        settingsPasswordError.textContent = '';
 
-                            credentials: 'include',
+        if (!currentPassword || !newPassword) {
+            settingsPasswordError.textContent = 'İki alanı da doldurmalısın.';
+            return;
+        }
 
-                            body: JSON.stringify({
-                                avatar_visibility: visibility
-                            })
-                        }
-                    );
+        settingsPasswordBtn.disabled = true;
 
-                } catch (error) {
+        try {
 
-                    console.error(
-                        'Gizlilik güncellenemedi:',
-                        error
-                    );
+            const response = await fetch('/api/profile/password', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
+            });
 
-                }
+            const data = await response.json();
 
+            if (!response.ok || !data.success) {
+                settingsPasswordError.textContent = data.error || 'Güncellenemedi.';
+                return;
             }
-        );
+
+            settingsCurrentPassword.value = '';
+            settingsNewPassword.value = '';
+            settingsPasswordError.textContent = 'Şifren güncellendi.';
+            settingsPasswordError.style.color = '#57f287';
+
+        } catch (error) {
+
+            console.error('Şifre güncellenemedi:', error);
+            settingsPasswordError.textContent = 'Sunucuya bağlanılamadı.';
+
+        } finally {
+
+            settingsPasswordBtn.disabled = false;
+
+        }
 
     }
 );
@@ -2037,8 +2011,8 @@ async function logout() {
         '';
 
 
-    onlineCount.textContent =
-        '0';
+    onlineCount.style.display =
+        'none';
 
     usersList.innerHTML =
         '';
@@ -2067,11 +2041,20 @@ async function logout() {
     profileAvatarImg.style.display =
         'none';
 
-    aboutEdit.style.display =
+    usernameEdit.style.display =
         'none';
 
-    aboutView.style.display =
-        'block';
+    usernameView.style.display =
+        'flex';
+
+    settingsModal.style.display =
+        'none';
+
+    hubJoinModal.style.display =
+        'none';
+
+    hubInviteModal.style.display =
+        'none';
 
 
     showLoginForm();
@@ -2128,13 +2111,14 @@ function updateOnlineLabel() {
 
     if (currentHub) {
 
-        onlineLabel.textContent = 'Hub Üyeleri';
+        onlineBtn.title = 'Hub Üyeleri';
+        onlineCount.style.display = 'flex';
         onlineCount.textContent = currentHub.members.length;
 
     } else {
 
-        onlineLabel.textContent = 'Arkadaşlar';
-        onlineCount.textContent = '';
+        onlineBtn.title = 'Arkadaşlar';
+        onlineCount.style.display = 'none';
 
     }
 
@@ -2189,7 +2173,9 @@ async function openOnlinePanel() {
         const friendsData = await friendsRes.json();
         const requestsData = await requestsRes.json();
 
-        onlineCount.textContent = friendsData.friends.filter(f => f.online).length;
+        const onlineFriendCount = friendsData.friends.filter(f => f.online).length;
+        onlineCount.style.display = onlineFriendCount > 0 ? 'flex' : 'none';
+        onlineCount.textContent = onlineFriendCount;
 
         renderUsersList(friendsData.friends, false);
 
@@ -2398,11 +2384,11 @@ function renderOtherProfile() {
     otherProfileAvatarImg.style.display = hasAvatar ? 'block' : 'none';
 
     otherProfileUsername.textContent = profile.username;
-    otherProfileAbout.textContent = profile.about_me || 'Henüz bir şey yazmamış.';
 
-    const info = STATUS_INFO[profile.status] || STATUS_INFO.signal;
-    otherProfileStatusDot.classList.remove('status-signal', 'status-sleep', 'status-locked');
+    const info = STATUS_INFO[profile.status] || STATUS_INFO.active;
+    otherProfileStatusDot.classList.remove(...STATUS_CLASS_NAMES);
     otherProfileStatusDot.classList.add(info.className);
+    otherProfileStatusDot.textContent = profile.status === 'invisible' ? '👻' : '';
     otherProfileStatusLabel.textContent = info.label;
 
     renderOtherProfileActions(profile);
@@ -2412,85 +2398,120 @@ function renderOtherProfile() {
 
 function renderOtherProfileActions(profile) {
 
-    if (profile.friendship_status === 'friends') {
+    let html = '';
 
-        otherProfileActions.innerHTML = `
+    if (profile.blocked_by_me) {
+
+        html = `<button class="profile-action-btn profile-action-disabled" id="unblock-btn">Engeli Kaldır</button>`;
+
+    } else if (profile.friendship_status === 'friends') {
+
+        html = `
             <button class="profile-action-btn profile-action-primary" id="dm-open-btn">💬 Mesaj Gönder</button>
             <button class="profile-action-btn profile-action-danger" id="unfriend-btn">Arkadaşlıktan Çıkar</button>
+            <button class="profile-action-btn profile-action-disabled" id="block-btn">🚫 Engelle</button>
         `;
-
-        document.getElementById('dm-open-btn').addEventListener('click', () => {
-            otherProfileModal.style.display = 'none';
-            openDm(profile.id, profile.username);
-        });
-
-        document.getElementById('unfriend-btn').addEventListener('click', async () => {
-
-            if (!confirm(`${profile.username} ile arkadaşlığı sonlandırmak istediğine emin misin?`)) return;
-
-            await fetch(`/api/friends/${profile.id}`, { method: 'DELETE', credentials: 'include' });
-            otherProfileModal.style.display = 'none';
-
-        });
 
     } else if (profile.friendship_status === 'pending_sent') {
 
-        otherProfileActions.innerHTML = `<button class="profile-action-btn profile-action-disabled" disabled>İstek Gönderildi</button>`;
+        html = `
+            <button class="profile-action-btn profile-action-disabled" disabled>İstek Gönderildi</button>
+            <button class="profile-action-btn profile-action-disabled" id="block-btn">🚫 Engelle</button>
+        `;
 
     } else if (profile.friendship_status === 'pending_received') {
 
-        otherProfileActions.innerHTML = `
+        html = `
             <div class="profile-action-row">
                 <button class="profile-action-btn profile-action-primary" id="accept-req-btn">Kabul Et</button>
                 <button class="profile-action-btn profile-action-danger" id="decline-req-btn">Reddet</button>
             </div>
+            <button class="profile-action-btn profile-action-disabled" id="block-btn">🚫 Engelle</button>
         `;
-
-        document.getElementById('accept-req-btn').addEventListener('click', async () => {
-
-            await fetch('/api/friends/respond', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ user_id: profile.id, accept: true })
-            });
-
-            openOtherProfile(profile.id);
-
-        });
-
-        document.getElementById('decline-req-btn').addEventListener('click', async () => {
-
-            await fetch('/api/friends/respond', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ user_id: profile.id, accept: false })
-            });
-
-            otherProfileModal.style.display = 'none';
-
-        });
 
     } else {
 
-        otherProfileActions.innerHTML = `<button class="profile-action-btn profile-action-primary" id="add-friend-btn">+ Arkadaş Ekle</button>`;
-
-        document.getElementById('add-friend-btn').addEventListener('click', async () => {
-
-            const response = await fetch('/api/friends/request', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ to_user_id: profile.id })
-            });
-
-            const data = await response.json();
-            if (data.success) openOtherProfile(profile.id);
-
-        });
+        html = `
+            <button class="profile-action-btn profile-action-primary" id="add-friend-btn">+ Arkadaş Ekle</button>
+            <button class="profile-action-btn profile-action-disabled" id="block-btn">🚫 Engelle</button>
+        `;
 
     }
+
+    otherProfileActions.innerHTML = html;
+
+
+    document.getElementById('dm-open-btn')?.addEventListener('click', () => {
+        otherProfileModal.style.display = 'none';
+        openDm(profile.id, profile.username);
+    });
+
+    document.getElementById('unfriend-btn')?.addEventListener('click', async () => {
+
+        if (!confirm(`${profile.username} ile arkadaşlığı sonlandırmak istediğine emin misin?`)) return;
+
+        await fetch(`/api/friends/${profile.id}`, { method: 'DELETE', credentials: 'include' });
+        otherProfileModal.style.display = 'none';
+
+    });
+
+    document.getElementById('accept-req-btn')?.addEventListener('click', async () => {
+
+        await fetch('/api/friends/respond', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ user_id: profile.id, accept: true })
+        });
+
+        openOtherProfile(profile.id);
+
+    });
+
+    document.getElementById('decline-req-btn')?.addEventListener('click', async () => {
+
+        await fetch('/api/friends/respond', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ user_id: profile.id, accept: false })
+        });
+
+        otherProfileModal.style.display = 'none';
+
+    });
+
+    document.getElementById('add-friend-btn')?.addEventListener('click', async () => {
+
+        const response = await fetch('/api/friends/request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ to_user_id: profile.id })
+        });
+
+        const data = await response.json();
+        if (data.success) openOtherProfile(profile.id);
+
+    });
+
+    document.getElementById('block-btn')?.addEventListener('click', async () => {
+
+        if (!confirm(`${profile.username} kullanıcısını engellemek istediğine emin misin?`)) return;
+
+        const response = await fetch(`/api/users/${profile.id}/block`, { method: 'POST', credentials: 'include' });
+        const data = await response.json();
+        if (data.success) openOtherProfile(profile.id);
+
+    });
+
+    document.getElementById('unblock-btn')?.addEventListener('click', async () => {
+
+        const response = await fetch(`/api/users/${profile.id}/block`, { method: 'DELETE', credentials: 'include' });
+        const data = await response.json();
+        if (data.success) openOtherProfile(profile.id);
+
+    });
 
 }
 
@@ -2600,17 +2621,30 @@ dmModal.addEventListener(
 // HUB SİSTEMİ — DOM
 // =====================================================
 
-const navHubs = document.getElementById('nav-hubs');
 const hubListView = document.getElementById('hub-list-view');
 const hubDetailView = document.getElementById('hub-detail-view');
 
+const hubListHeader = document.getElementById('hub-list-header');
 const hubListGrid = document.getElementById('hub-list-grid');
 const hubListEmpty = document.getElementById('hub-list-empty');
 const hubCreateOpenBtn = document.getElementById('hub-create-open-btn');
+const hubCreateOpenBtnBig = document.getElementById('hub-create-open-btn-big');
 
 const hubCreateModal = document.getElementById('hub-create-modal');
 const hubCreateCloseBtn = document.getElementById('hub-create-close-btn');
 const hubCreateBody = document.getElementById('hub-create-body');
+
+const hubJoinOpenBtn = document.getElementById('hub-join-open-btn');
+const hubJoinModal = document.getElementById('hub-join-modal');
+const hubJoinCloseBtn = document.getElementById('hub-join-close-btn');
+const hubJoinCodeInput = document.getElementById('hub-join-code-input');
+const hubJoinError = document.getElementById('hub-join-error');
+const hubJoinSubmitBtn = document.getElementById('hub-join-submit-btn');
+
+const hubInviteBtn = document.getElementById('hub-invite-btn');
+const hubInviteModal = document.getElementById('hub-invite-modal');
+const hubInviteCloseBtn = document.getElementById('hub-invite-close-btn');
+const hubInviteCodeDisplay = document.getElementById('hub-invite-code-display');
 
 const hubBackBtn = document.getElementById('hub-back-btn');
 const hubDetailIcon = document.getElementById('hub-detail-icon');
@@ -2649,10 +2683,10 @@ const shareSubmitBtn = document.getElementById('share-submit-btn');
 let currentHub = null;
 
 const HUB_TEMPLATES = [
-    { type: 'game', icon: '🎮', title: 'Oyun', desc: 'Birlikte oyun oynamak' },
-    { type: 'social', icon: '🎙', title: 'Sosyal', desc: 'Takılmak ve konuşmak' },
-    { type: 'stream', icon: '📺', title: 'Yayın', desc: 'İzlemek ve paylaşmak' },
-    { type: 'custom', icon: '🧩', title: 'Özel', desc: 'Kendi Hub\'ını oluştur' }
+    { type: 'chat', icon: '💬', title: 'Sohbet Hubu', desc: 'Yazışmak ve takılmak' },
+    { type: 'game', icon: '🎮', title: 'Oyun Hubu', desc: 'Birlikte oyun oynamak' },
+    { type: 'stream', icon: '📺', title: 'Yayın Hubu', desc: 'İzlemek ve paylaşmak' },
+    { type: 'custom', icon: '🧩', title: 'Özel Hub', desc: 'Kendi Hub\'ını oluştur' }
 ];
 
 const GAME_SUBTYPES = [
@@ -2701,8 +2735,6 @@ let hubCreateState = {
 
 function switchToView(view) {
 
-    navHubs.classList.toggle('active', view === 'hubs' || view === 'hub-detail');
-
     hubListView.style.display = view === 'hubs' ? 'flex' : 'none';
     hubDetailView.style.display = view === 'hub-detail' ? 'flex' : 'none';
 
@@ -2721,17 +2753,6 @@ function switchToView(view) {
 }
 
 
-navHubs.addEventListener(
-    'click',
-    () => {
-
-        switchToView('hubs');
-        loadHubList();
-
-    }
-);
-
-
 // =====================================================
 // HUB LİSTESİ
 // =====================================================
@@ -2747,7 +2768,10 @@ async function loadHubList() {
 
         hubListGrid.innerHTML = '';
 
-        hubListEmpty.style.display = data.hubs.length === 0 ? 'block' : 'none';
+        const hasHubs = data.hubs.length > 0;
+
+        hubListEmpty.style.display = hasHubs ? 'none' : 'flex';
+        hubListHeader.style.display = hasHubs ? 'flex' : 'none';
 
         data.hubs.forEach((hub) => {
 
@@ -2779,14 +2803,136 @@ async function loadHubList() {
 // HUB OLUŞTURMA SİHİRBAZI
 // =====================================================
 
-hubCreateOpenBtn.addEventListener(
+function openHubCreateModal() {
+
+    hubCreateState = { step: 'template', type: null, template: null, name: '', roles: [] };
+    renderHubCreateStep();
+    hubCreateModal.style.display = 'flex';
+
+}
+
+
+hubCreateOpenBtn.addEventListener('click', openHubCreateModal);
+hubCreateOpenBtnBig.addEventListener('click', openHubCreateModal);
+
+
+// =====================================================
+// DAVET KODUYLA KATIL / DAVET OLUŞTUR
+// =====================================================
+
+hubJoinOpenBtn.addEventListener(
     'click',
     () => {
 
-        hubCreateState = { step: 'template', type: null, template: null, name: '', roles: [] };
-        renderHubCreateStep();
-        hubCreateModal.style.display = 'flex';
+        hubJoinCodeInput.value = '';
+        hubJoinError.textContent = '';
+        hubJoinModal.style.display = 'flex';
+        hubJoinCodeInput.focus();
 
+    }
+);
+
+
+hubJoinCloseBtn.addEventListener(
+    'click',
+    () => hubJoinModal.style.display = 'none'
+);
+
+
+hubJoinModal.addEventListener(
+    'click',
+    (event) => {
+        if (event.target === hubJoinModal) hubJoinModal.style.display = 'none';
+    }
+);
+
+
+hubJoinSubmitBtn.addEventListener(
+    'click',
+    async () => {
+
+        const code = hubJoinCodeInput.value.trim();
+        hubJoinError.textContent = '';
+
+        if (!code) return;
+
+        hubJoinSubmitBtn.disabled = true;
+
+        try {
+
+            const response = await fetch('/api/hubs/join', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ code })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                hubJoinError.textContent = data.error || 'Katılınamadı.';
+                return;
+            }
+
+            hubJoinModal.style.display = 'none';
+            loadHubList();
+            openHub(data.hub_id);
+
+        } catch (error) {
+
+            console.error('Davetle katılınamadı:', error);
+            hubJoinError.textContent = 'Sunucuya bağlanılamadı.';
+
+        } finally {
+
+            hubJoinSubmitBtn.disabled = false;
+
+        }
+
+    }
+);
+
+
+hubInviteBtn.addEventListener(
+    'click',
+    async () => {
+
+        if (!currentHub) return;
+
+        try {
+
+            const response = await fetch(`/api/hubs/${currentHub.id}/invite`, {
+                method: 'POST',
+                credentials: 'include'
+            });
+
+            const data = await response.json();
+
+            if (!data.success) return;
+
+            hubInviteCodeDisplay.textContent = data.code;
+            hubInviteModal.style.display = 'flex';
+
+        } catch (error) {
+
+            console.error('Davet oluşturulamadı:', error);
+
+        }
+
+    }
+);
+
+
+hubInviteCloseBtn.addEventListener(
+    'click',
+    () => hubInviteModal.style.display = 'none'
+);
+
+
+hubInviteModal.addEventListener(
+    'click',
+    (event) => {
+        if (event.target === hubInviteModal) hubInviteModal.style.display = 'none';
     }
 );
 
@@ -3042,24 +3188,7 @@ async function openHub(hubId) {
 
         if (!data.success) return;
 
-        if (!data.hub.is_member) {
-
-            await fetch(`/api/hubs/${hubId}/join`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({})
-            });
-
-            const refreshed = await fetch(`/api/hubs/${hubId}`, { credentials: 'include' });
-            const refreshedData = await refreshed.json();
-            currentHub = refreshedData.hub;
-
-        } else {
-
-            currentHub = data.hub;
-
-        }
+        currentHub = data.hub;
 
         switchToView('hub-detail');
         renderHubDetail();
@@ -3163,7 +3292,7 @@ function renderHubRoles() {
             const roleId = Number(row.dataset.roleId);
             const targetRoleId = roleId === currentHub.my_role_id ? null : roleId;
 
-            const response = await fetch(`/api/hubs/${currentHub.id}/join`, {
+            const response = await fetch(`/api/hubs/${currentHub.id}/role`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
