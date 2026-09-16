@@ -24,6 +24,7 @@ const {
   isHubMember,
   getHubMessages,
   saveHubMessage,
+  createHubVoiceMessage,
   createHubPoll,
   voteHubPoll,
   createHubShare,
@@ -38,6 +39,7 @@ const {
   listIncomingRequests,
   getUserPublicProfile,
   saveDmMessage,
+  saveDmVoiceMessage,
   getDmMessages,
   findUserByUsername,
   blockUser,
@@ -61,7 +63,8 @@ const io = new Server(server, {
     origin: true,
     credentials: true,
     methods: ['GET', 'POST']
-  }
+  },
+  maxHttpBufferSize: 4_000_000
 });
 
 app.use(cors({ origin: true, credentials: true }));
@@ -786,6 +789,33 @@ app.post('/api/hubs/:id/share', (req, res) => {
   }
 });
 
+app.post('/api/hubs/:id/voice', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const hubId = Number(req.params.id);
+
+  if (!isHubMember(hubId, user.id)) {
+    return res.status(403).json({ success: false, error: 'Bu Hub\'a üye değilsin.' });
+  }
+
+  try {
+    const result = createHubVoiceMessage(hubId, user.id, user.username, req.body?.audio_data, req.body?.duration);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    io.to(`hub:${hubId}`).emit('hub_message', result.message);
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Sesli mesaj hatası:', error);
+    res.status(500).json({ success: false, error: 'Gönderilemedi.' });
+  }
+});
+
 // =====================================================
 // AKTİF KULLANICILAR
 // userId -> Set(socketId)
@@ -1128,6 +1158,29 @@ io.on('connection', (socket) => {
     } catch (error) {
       console.error('DM kaydedilirken hata:', error);
       socket.emit('message_error', 'Mesaj gönderilemedi.');
+    }
+  });
+
+  socket.on('dm_voice_message', (data) => {
+    try {
+      if (!socket.userId || !socket.username) {
+        socket.emit('message_error', 'Oturum doğrulanamadı.');
+        return;
+      }
+
+      const toUserId = Number(data?.to_user_id);
+      const result = saveDmVoiceMessage(socket.userId, socket.username, toUserId, data?.audio_data, data?.duration);
+
+      if (!result.success) {
+        socket.emit('message_error', result.error);
+        return;
+      }
+
+      io.to(`user:${socket.userId}`).to(`user:${toUserId}`).emit('dm_message', result.message);
+
+    } catch (error) {
+      console.error('Sesli DM kaydedilirken hata:', error);
+      socket.emit('message_error', 'Sesli mesaj gönderilemedi.');
     }
   });
 

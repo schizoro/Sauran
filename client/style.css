@@ -357,6 +357,27 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 #hub-chat-form button { padding: 0 22px; background: transparent; color: #66fcf1; border: 1px solid #66fcf1; cursor: pointer; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; transition: 0.3s; }
 #hub-chat-form button:hover { background: #66fcf1; color: #0b0c10; box-shadow: 0 0 10px rgba(102, 252, 241, 0.3); }
 
+/* ─── v1.11: Mikrofon Butonları (Dikte / Sesli Mesaj) ────────────────────── */
+.mic-btn { padding: 0 !important; width: 42px; flex-shrink: 0; background: transparent; border: 1px solid #1f2833 !important; color: #8e9297; font-size: 15px; cursor: pointer; transition: 0.2s; text-transform: none !important; letter-spacing: normal !important; }
+.mic-btn:hover { border-color: #66fcf1 !important; color: #66fcf1; background: transparent !important; box-shadow: none !important; }
+.mic-btn.recording { border-color: #ff2e46 !important; color: #ff2e46; animation: mic-pulse 1.2s ease-in-out infinite; }
+.mic-btn.listening { border-color: #66fcf1 !important; color: #66fcf1; animation: mic-pulse-cyan 1.2s ease-in-out infinite; }
+
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(255, 46, 70, 0.5); }
+  50% { box-shadow: 0 0 12px rgba(255, 46, 70, 0.8); }
+}
+@keyframes mic-pulse-cyan {
+  0%, 100% { box-shadow: 0 0 0 rgba(102, 252, 241, 0.4); }
+  50% { box-shadow: 0 0 12px rgba(102, 252, 241, 0.7); }
+}
+
+/* Sesli Mesaj Baloncuğu */
+.voice-msg-card { background: #12141a; border: 1px solid #1f2833; border-left: 3px solid #66fcf1; padding: 10px 14px; display: flex; align-items: center; gap: 10px; min-width: 220px; }
+.voice-msg-card audio { height: 32px; flex: 1; }
+.voice-msg-duration { color: #45a29e; font-size: 11px; flex-shrink: 0; }
+.dm-msg-mine .voice-msg-card { border-left-color: #66fcf1; }
+
 .hub-side-title { color: #45a29e; font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px; }
 .hub-role-list, .hub-member-list { display: flex; flex-direction: column; gap: 6px; }
 

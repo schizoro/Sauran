@@ -267,6 +267,12 @@ const dmForm =
 const dmMessageInput =
     document.getElementById('dm-message-input');
 
+const dmDictateBtn =
+    document.getElementById('dm-dictate-btn');
+
+const dmVoiceBtn =
+    document.getElementById('dm-voice-btn');
+
 let activeDmUserId = null;
 
 
@@ -3146,10 +3152,35 @@ function appendDmMessage(msg) {
         ? new Date(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
         : '';
 
-    wrap.innerHTML = `${escapeHtml(msg.content)}<span class="dm-msg-time">${time}</span>`;
+    if (msg.kind === 'dm_voice' && msg.payload) {
+
+        wrap.innerHTML = `
+            <div class="voice-msg-card">
+                🎤
+                <audio controls src="${msg.payload.audio}"></audio>
+                <span class="voice-msg-duration">${formatDuration(msg.payload.duration)}</span>
+            </div>
+            <span class="dm-msg-time">${time}</span>
+        `;
+
+    } else {
+
+        wrap.innerHTML = `${escapeHtml(msg.content)}<span class="dm-msg-time">${time}</span>`;
+
+    }
 
     dmFeed.appendChild(wrap);
     dmFeed.scrollTop = dmFeed.scrollHeight;
+
+}
+
+
+function formatDuration(seconds) {
+
+    seconds = Math.round(seconds || 0);
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
 
 }
 
@@ -3242,6 +3273,8 @@ const hubStartBtn = document.getElementById('hub-start-btn');
 const hubStartMenu = document.getElementById('hub-start-menu');
 const hubChatForm = document.getElementById('hub-chat-form');
 const hubMessageInput = document.getElementById('hub-message-input');
+const hubDictateBtn = document.getElementById('hub-dictate-btn');
+const hubVoiceBtn = document.getElementById('hub-voice-btn');
 
 const hubMemberList = document.getElementById('hub-member-list');
 const hubDeleteBtn = document.getElementById('hub-delete-btn');
@@ -3859,6 +3892,152 @@ hubChatForm.addEventListener(
 );
 
 
+// =====================================================
+// DİKTE (KONUŞARAK YAZMA)
+// =====================================================
+
+const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+function setupDictation(button, input) {
+
+    if (!SpeechRecognitionClass) {
+        button.style.display = 'none';
+        return;
+    }
+
+    let recognition = null;
+    let listening = false;
+
+    button.addEventListener('click', () => {
+
+        if (listening) {
+            recognition?.stop();
+            return;
+        }
+
+        recognition = new SpeechRecognitionClass();
+        recognition.lang = (localStorage.getItem('sauran_lang') || 'tr') === 'en' ? 'en-US' : 'tr-TR';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        recognition.onstart = () => {
+            listening = true;
+            button.classList.add('listening');
+        };
+
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            input.value = (input.value ? input.value + ' ' : '') + transcript;
+            input.focus();
+        };
+
+        recognition.onerror = () => {};
+
+        recognition.onend = () => {
+            listening = false;
+            button.classList.remove('listening');
+        };
+
+        recognition.start();
+
+    });
+
+}
+
+
+setupDictation(hubDictateBtn, hubMessageInput);
+setupDictation(dmDictateBtn, dmMessageInput);
+
+
+// =====================================================
+// SESLİ MESAJ KAYDI
+// =====================================================
+
+function setupVoiceRecorder(button, onRecorded) {
+
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+        button.style.display = 'none';
+        return;
+    }
+
+    let mediaRecorder = null;
+    let chunks = [];
+    let startTime = 0;
+    let stream = null;
+
+    button.addEventListener('click', async () => {
+
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+            return;
+        }
+
+        try {
+
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            chunks = [];
+
+            mediaRecorder = new MediaRecorder(stream);
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) chunks.push(event.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+
+                button.classList.remove('recording');
+                stream.getTracks().forEach(track => track.stop());
+
+                const duration = (Date.now() - startTime) / 1000;
+                if (duration < 0.5) return;
+
+                const blob = new Blob(chunks, { type: 'audio/webm' });
+
+                const reader = new FileReader();
+                reader.onload = () => onRecorded(reader.result, duration);
+                reader.readAsDataURL(blob);
+
+            };
+
+            startTime = Date.now();
+            mediaRecorder.start();
+            button.classList.add('recording');
+
+        } catch (error) {
+
+            console.error('Mikrofona erişilemedi:', error);
+            showAuthError('Mikrofona erişim izni gerekiyor.');
+
+        }
+
+    });
+
+}
+
+
+setupVoiceRecorder(hubVoiceBtn, (audioData, duration) => {
+
+    if (!currentHub) return;
+
+    fetch(`/api/hubs/${currentHub.id}/voice`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ audio_data: audioData, duration })
+    }).catch(error => console.error('Sesli mesaj gönderilemedi:', error));
+
+});
+
+
+setupVoiceRecorder(dmVoiceBtn, (audioData, duration) => {
+
+    if (!activeDmUserId || !socket) return;
+
+    socket.emit('dm_voice_message', { to_user_id: activeDmUserId, audio_data: audioData, duration });
+
+});
+
+
 async function loadHubMessages(hubId) {
 
     try {
@@ -3934,6 +4113,16 @@ function appendHubMessage(msg) {
                 <span class="hub-share-tag">📌 Paylaşım</span>
                 ${msg.content ? `<div class="hub-share-content">${escapeHtml(msg.content)}</div>` : ''}
                 ${msg.payload?.url ? `<div class="hub-share-url">${escapeHtml(msg.payload.url)}</div>` : ''}
+            </div>
+        `;
+
+    } else if (msg.kind === 'voice' && msg.payload) {
+
+        wrap.innerHTML = header + `
+            <div class="voice-msg-card">
+                🎤
+                <audio controls src="${msg.payload.audio}"></audio>
+                <span class="voice-msg-duration">${formatDuration(msg.payload.duration)}</span>
             </div>
         `;
 

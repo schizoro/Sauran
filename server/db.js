@@ -794,6 +794,25 @@ function createHubShare(hubId, userId, username, content, url) {
   return { success: true, message: hydrateMessage(db.prepare(`SELECT id, username, content, kind, payload, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid)) };
 }
 
+function createHubVoiceMessage(hubId, userId, username, audioData, duration) {
+  if (typeof audioData !== 'string' || !/^data:audio\/(webm|ogg|mp4|mpeg|wav);base64,/.test(audioData)) {
+    return { success: false, error: 'Geçersiz ses formatı.' };
+  }
+
+  if (audioData.length > 3_000_000) {
+    return { success: false, error: 'Sesli mesaj çok uzun.' };
+  }
+
+  const payload = JSON.stringify({ audio: audioData, duration: Number(duration) || 0 });
+
+  const info = db.prepare(`
+    INSERT INTO messages (user_id, username, content, room, hub_id, kind, payload)
+    VALUES (?, ?, '', ?, ?, 'voice', ?)
+  `).run(userId, username, `hub_${hubId}`, hubId, payload);
+
+  return { success: true, message: hydrateMessage(db.prepare(`SELECT id, username, content, kind, payload, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid)) };
+}
+
 function deleteHub(hubId, userId) {
   const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
   if (!hub) return { success: false, error: 'Hub bulunamadı.' };
@@ -912,7 +931,7 @@ function getTopFriends(userId, limit = 5) {
 
   const withCounts = friends.map((friend) => {
     const room = dmRoom(userId, friend.id);
-    const count = db.prepare(`SELECT COUNT(*) AS c FROM messages WHERE room = ? AND kind = 'dm'`).get(room).c;
+    const count = db.prepare(`SELECT COUNT(*) AS c FROM messages WHERE room = ? AND kind IN ('dm', 'dm_voice')`).get(room).c;
     return { ...friend, message_count: count };
   });
 
@@ -1148,18 +1167,44 @@ function saveDmMessage(fromId, fromUsername, toId, content) {
 
   return {
     success: true,
-    message: db.prepare(`SELECT id, user_id, username, content, to_user_id, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid)
+    message: hydrateMessage(db.prepare(`SELECT id, user_id, username, content, to_user_id, kind, payload, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid))
+  };
+}
+
+function saveDmVoiceMessage(fromId, fromUsername, toId, audioData, duration) {
+  if (!areFriends(fromId, toId)) {
+    return { success: false, error: 'Sadece arkadaşlarınla mesajlaşabilirsin.' };
+  }
+
+  if (typeof audioData !== 'string' || !/^data:audio\/(webm|ogg|mp4|mpeg|wav);base64,/.test(audioData)) {
+    return { success: false, error: 'Geçersiz ses formatı.' };
+  }
+
+  if (audioData.length > 3_000_000) {
+    return { success: false, error: 'Sesli mesaj çok uzun.' };
+  }
+
+  const payload = JSON.stringify({ audio: audioData, duration: Number(duration) || 0 });
+
+  const info = db.prepare(`
+    INSERT INTO messages (user_id, username, content, room, to_user_id, kind, payload)
+    VALUES (?, ?, '', ?, ?, 'dm_voice', ?)
+  `).run(fromId, fromUsername, dmRoom(fromId, toId), toId, payload);
+
+  return {
+    success: true,
+    message: hydrateMessage(db.prepare(`SELECT id, user_id, username, content, to_user_id, kind, payload, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid))
   };
 }
 
 function getDmMessages(userId, otherUserId, limit = 50) {
   const rows = db.prepare(`
-    SELECT id, user_id, username, content, to_user_id, created_at
+    SELECT id, user_id, username, content, to_user_id, kind, payload, created_at
     FROM messages WHERE room = ?
     ORDER BY id DESC LIMIT ?
   `).all(dmRoom(userId, otherUserId), limit);
 
-  return rows.reverse();
+  return rows.reverse().map(hydrateMessage);
 }
 
 function createUser(username) {
@@ -1191,6 +1236,7 @@ module.exports = {
   isHubMember,
   getHubMessages,
   saveHubMessage,
+  createHubVoiceMessage,
   createHubPoll,
   voteHubPoll,
   createHubShare,
@@ -1206,6 +1252,7 @@ module.exports = {
   listIncomingRequests,
   getUserPublicProfile,
   saveDmMessage,
+  saveDmVoiceMessage,
   getDmMessages,
   findUserByUsername,
   blockUser,
