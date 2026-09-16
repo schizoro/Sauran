@@ -2355,6 +2355,8 @@ async function logout() {
 
     }
 
+    if (callFrame) leaveCall();
+
     currentHub = null;
 
     switchToView('hubs');
@@ -3405,6 +3407,14 @@ const hubVoiceBtn = document.getElementById('hub-voice-btn');
 
 const hubMemberList = document.getElementById('hub-member-list');
 const hubDeleteBtn = document.getElementById('hub-delete-btn');
+const hubCallBtn = document.getElementById('hub-call-btn');
+
+const callOverlay = document.getElementById('call-overlay');
+const callHubName = document.getElementById('call-hub-name');
+const callFrameContainer = document.getElementById('call-frame-container');
+const callLeaveBtn = document.getElementById('call-leave-btn');
+
+let callFrame = null;
 
 const pollCreateModal = document.getElementById('poll-create-modal');
 const pollCreateCloseBtn = document.getElementById('poll-create-close-btn');
@@ -3442,6 +3452,8 @@ function switchToView(view) {
         if (socket) {
             socket.emit('leave_hub', currentHub.id);
         }
+
+        if (callFrame) leaveCall();
 
         currentHub = null;
 
@@ -3931,6 +3943,92 @@ hubDeleteBtn.addEventListener(
 
     }
 );
+
+
+// =====================================================
+// SESLİ SOHBET (DAILY.CO)
+// =====================================================
+
+hubCallBtn.addEventListener(
+    'click',
+    async () => {
+
+        if (callFrame) {
+            leaveCall();
+            return;
+        }
+
+        if (!currentHub) return;
+
+        hubCallBtn.disabled = true;
+        hubCallBtn.textContent = 'Bağlanıyor...';
+
+        try {
+
+            const response = await fetch(`/api/hubs/${currentHub.id}/call/join`, {
+                method: 'POST',
+                credentials: 'include'
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                alert(data.error || 'Sesli sohbete katılınamadı.');
+                return;
+            }
+
+            if (typeof DailyIframe === 'undefined') {
+                alert('Sesli sohbet bileşeni yüklenemedi.');
+                return;
+            }
+
+            callHubName.textContent = `🎙️ ${currentHub.name}`;
+            callOverlay.style.display = 'flex';
+
+            callFrame = DailyIframe.createFrame(callFrameContainer, {
+                showLeaveButton: false,
+                iframeStyle: { width: '100%', height: '100%', border: 'none' }
+            });
+
+            await callFrame.join({ url: data.room_url, token: data.token });
+
+            hubCallBtn.classList.add('in-call');
+            hubCallBtn.textContent = '🔴 Aramadan Ayrıl';
+
+            callFrame.on('left-meeting', leaveCall);
+
+        } catch (error) {
+
+            console.error('Sesli sohbete katılınamadı:', error);
+            alert('Sesli sohbete katılınamadı.');
+
+        } finally {
+
+            hubCallBtn.disabled = false;
+            if (!callFrame) hubCallBtn.textContent = '🎙️ Sesli Sohbet';
+
+        }
+
+    }
+);
+
+
+callLeaveBtn.addEventListener('click', leaveCall);
+
+
+function leaveCall() {
+
+    if (callFrame) {
+        callFrame.leave();
+        callFrame.destroy();
+        callFrame = null;
+    }
+
+    callOverlay.style.display = 'none';
+    hubCallBtn.classList.remove('in-call');
+    hubCallBtn.textContent = '🎙️ Sesli Sohbet';
+
+}
 
 
 

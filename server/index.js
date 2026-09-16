@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { sendVerificationEmail, sendPasswordResetEmail } = require('./mailer');
+const daily = require('./daily');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -31,6 +32,8 @@ const {
   voteHubPoll,
   createHubShare,
   deleteHub,
+  getHubDailyRoomName,
+  setHubDailyRoomName,
   createHubInvite,
   joinHubByCode,
   sendFriendRequest,
@@ -815,6 +818,51 @@ app.post('/api/hubs/:id/voice', (req, res) => {
   } catch (error) {
     console.error('Sesli mesaj hatası:', error);
     res.status(500).json({ success: false, error: 'Gönderilemedi.' });
+  }
+});
+
+// =====================================================
+// SESLİ SOHBET (DAILY.CO)
+// =====================================================
+
+app.post('/api/hubs/:id/call/join', async (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const hubId = Number(req.params.id);
+
+  if (!isHubMember(hubId, user.id)) {
+    return res.status(403).json({ success: false, error: 'Bu Hub\'a üye değilsin.' });
+  }
+
+  if (!daily.isConfigured()) {
+    return res.status(503).json({ success: false, error: 'Sesli sohbet henüz yapılandırılmadı.' });
+  }
+
+  try {
+    let roomName = getHubDailyRoomName(hubId);
+    let roomUrl = null;
+
+    if (roomName) {
+      const existing = await daily.getRoom(roomName);
+      if (existing) roomUrl = existing.url;
+      else roomName = null;
+    }
+
+    if (!roomName) {
+      roomName = `sauran-hub-${hubId}-${crypto.randomBytes(3).toString('hex')}`;
+      const created = await daily.createRoom(roomName);
+      roomUrl = created.url;
+      setHubDailyRoomName(hubId, roomName);
+    }
+
+    const token = await daily.createMeetingToken(roomName, user.username);
+
+    return res.json({ success: true, room_url: roomUrl, token });
+
+  } catch (error) {
+    console.error('Sesli sohbet başlatma hatası:', error);
+    res.status(500).json({ success: false, error: 'Sesli sohbete katılınamadı.' });
   }
 });
 

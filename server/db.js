@@ -207,6 +207,9 @@ const hubColumns = db
 if (!hubColumns.includes('image_data')) {
   db.exec(`ALTER TABLE hubs ADD COLUMN image_data TEXT`);
 }
+if (!hubColumns.includes('daily_room_name')) {
+  db.exec(`ALTER TABLE hubs ADD COLUMN daily_room_name TEXT`);
+}
 
 // =====================================================
 // v1.10 MIGRATION — BİLDİRİMLER / ŞİFRE SIFIRLAMA
@@ -846,6 +849,15 @@ function createHubVoiceMessage(hubId, userId, username, audioData, duration) {
   return { success: true, message: hydrateMessage(db.prepare(`SELECT id, user_id, username, content, kind, payload, edited, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid)) };
 }
 
+function getHubDailyRoomName(hubId) {
+  const hub = db.prepare(`SELECT daily_room_name FROM hubs WHERE id = ?`).get(hubId);
+  return hub ? hub.daily_room_name : null;
+}
+
+function setHubDailyRoomName(hubId, roomName) {
+  db.prepare(`UPDATE hubs SET daily_room_name = ? WHERE id = ?`).run(roomName, hubId);
+}
+
 function deleteHub(hubId, userId) {
   const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
   if (!hub) return { success: false, error: 'Hub bulunamadı.' };
@@ -1276,6 +1288,8 @@ module.exports = {
   voteHubPoll,
   createHubShare,
   deleteHub,
+  getHubDailyRoomName,
+  setHubDailyRoomName,
   createHubInvite,
   joinHubByCode,
   sendFriendRequest,

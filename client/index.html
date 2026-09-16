@@ -299,6 +299,7 @@
                             <span id="hub-detail-count" class="hub-detail-count"></span>
                         </div>
 
+                        <button id="hub-call-btn" class="hub-call-btn" type="button">🎙️ Sesli Sohbet</button>
                         <button id="hub-invite-friend-btn" class="hub-delete-btn" type="button">👥 Davet Et</button>
                         <button id="hub-invite-btn" class="hub-delete-btn" type="button">🔑 Davet</button>
                         <button id="hub-delete-btn" class="hub-delete-btn" type="button" style="display:none;">🗑 Sil</button>
@@ -817,9 +818,29 @@
     </div>
 
 
+    <!-- ================================================= -->
+    <!-- SESLİ SOHBET OVERLAY -->
+    <!-- ================================================= -->
+
+    <div id="call-overlay" class="call-overlay" style="display:none;">
+
+        <div class="call-header">
+            <span id="call-hub-name">🎙️ Sesli Sohbet</span>
+            <button id="call-leave-btn" type="button">Ayrıl</button>
+        </div>
+
+        <div id="call-frame-container" class="call-frame-container"></div>
+
+    </div>
+
+
     <!-- SOCKET.IO -->
 
     <script src="/socket.io/socket.io.js"></script>
+
+    <!-- DAILY.CO (SESLİ SOHBET) -->
+
+    <script src="https://unpkg.com/@daily-co/daily-js"></script>
 
     <!-- SAURAN -->
 
