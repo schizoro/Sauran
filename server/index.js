@@ -36,6 +36,12 @@ const {
   createHubShare,
   deleteHub,
   getHubDailyRoomName,
+  listVoiceRooms,
+  createVoiceRoom,
+  deleteVoiceRoom,
+  getVoiceRoomDailyName,
+  setVoiceRoomDailyName,
+  getVoiceRoom,
   setHubDailyRoomName,
   createHubInvite,
   joinHubByCode,
@@ -680,7 +686,7 @@ app.post('/api/hubs/:id/invite-friend', (req, res) => {
 
     const targetSockets = activeUsers.get(Number(req.body?.to_user_id));
     if (targetSockets) {
-      targetSockets.forEach(sid => io.to(sid).emit('notification_received'));
+      targetSockets.forEach(sid => io.to(sid).emit('notification_received', { type: 'hub_invite' }));
     }
 
     return res.json(result);
@@ -939,6 +945,109 @@ app.post('/api/hubs/:id/call/join', async (req, res) => {
   }
 });
 
+// =====================================================
+// SESLİ ODALAR (Hub içinde birden fazla oda)
+// =====================================================
+
+app.get('/api/hubs/:id/voice-rooms', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const hubId = Number(req.params.id);
+
+  if (!isHubMember(hubId, user.id)) {
+    return res.status(403).json({ success: false, error: 'Bu Hub\'a üye değilsin.' });
+  }
+
+  const rooms = listVoiceRooms(hubId).map(room => ({
+    ...room,
+    participants: Array.from(voiceRoomParticipants.get(room.id) || []).map(uid => activeUserNames.get(uid) || '').filter(Boolean)
+  }));
+
+  return res.json({ success: true, rooms });
+});
+
+app.post('/api/hubs/:id/voice-rooms', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const hubId = Number(req.params.id);
+  const result = createVoiceRoom(hubId, user.id, req.body?.name);
+
+  if (!result.success) {
+    return res.status(400).json(result);
+  }
+
+  io.to(`hub:${hubId}`).emit('voice_room_created', result.room);
+
+  return res.json(result);
+});
+
+app.delete('/api/hubs/:id/voice-rooms/:roomId', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const hubId = Number(req.params.id);
+  const roomId = Number(req.params.roomId);
+  const result = deleteVoiceRoom(hubId, user.id, roomId);
+
+  if (!result.success) {
+    return res.status(400).json(result);
+  }
+
+  voiceRoomParticipants.delete(roomId);
+  io.to(`hub:${hubId}`).emit('voice_room_deleted', { id: roomId });
+
+  return res.json(result);
+});
+
+app.post('/api/hubs/:id/voice-rooms/:roomId/join', async (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const hubId = Number(req.params.id);
+  const roomId = Number(req.params.roomId);
+
+  if (!isHubMember(hubId, user.id)) {
+    return res.status(403).json({ success: false, error: 'Bu Hub\'a üye değilsin.' });
+  }
+
+  const room = getVoiceRoom(roomId);
+  if (!room || room.hub_id !== hubId) {
+    return res.status(404).json({ success: false, error: 'Oda bulunamadı.' });
+  }
+
+  if (!daily.isConfigured()) {
+    return res.status(503).json({ success: false, error: 'Sesli sohbet henüz yapılandırılmadı.' });
+  }
+
+  try {
+    let roomName = getVoiceRoomDailyName(roomId);
+    let roomUrl = null;
+
+    if (roomName) {
+      const existing = await daily.getRoom(roomName);
+      if (existing) roomUrl = existing.url;
+      else roomName = null;
+    }
+
+    if (!roomName) {
+      roomName = `sauran-vr-${roomId}-${crypto.randomBytes(3).toString('hex')}`;
+      const created = await daily.createRoom(roomName);
+      roomUrl = created.url;
+      setVoiceRoomDailyName(roomId, roomName);
+    }
+
+    const token = await daily.createMeetingToken(roomName, user.username);
+
+    return res.json({ success: true, room_url: roomUrl, token, room_id: roomId, room_name: room.name });
+
+  } catch (error) {
+    console.error('Sesli oda başlatma hatası:', error);
+    res.status(500).json({ success: false, error: 'Sesli odaya katılınamadı.' });
+  }
+});
+
 // Özel (DM) sesli arama — sadece iki arkadaş arasında, kamera/ekran paylaşımı yok.
 app.post('/api/dm/:userId/call/join', async (req, res) => {
   const user = requireAuth(req, res);
@@ -1038,10 +1147,22 @@ app.patch('/api/messages/:id', (req, res) => {
 // =====================================================
 
 const activeUsers = new Map();
+const activeUserNames = new Map(); // userId -> username (son bilinen)
 
 function isUserOnline(userId) {
   const sockets = activeUsers.get(userId);
   return Boolean(sockets && sockets.size > 0);
+}
+
+// =====================================================
+// SESLİ ODA KATILIMCILARI (bellek içi, gerçek zamanlı)
+// roomId -> Set(userId)
+// =====================================================
+
+const voiceRoomParticipants = new Map();
+
+function getVoiceRoomParticipantIds(roomId) {
+  return Array.from(voiceRoomParticipants.get(roomId) || []);
 }
 
 // =====================================================
@@ -1215,7 +1336,10 @@ app.post('/api/friends/request', (req, res) => {
 
     const targetSockets = activeUsers.get(Number(req.body?.to_user_id));
     if (targetSockets) {
-      targetSockets.forEach(sid => io.to(sid).emit('friend_request_received', { from_username: user.username }));
+      targetSockets.forEach(sid => {
+        io.to(sid).emit('friend_request_received', { from_username: user.username });
+        io.to(sid).emit('notification_received', { type: 'friend_request' });
+      });
     }
 
     return res.json(result);
@@ -1344,6 +1468,7 @@ io.on('connection', (socket) => {
     }
 
     activeUsers.get(userId).add(socket.id);
+    activeUserNames.set(userId, username);
 
     socket.join(`user:${userId}`);
 
@@ -1521,10 +1646,55 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('voice_room_join', (data) => {
+    if (!socket.userId) return;
+
+    const roomId = Number(data?.room_id);
+    const hubId = Number(data?.hub_id);
+    if (!roomId || !hubId) return;
+
+    if (!voiceRoomParticipants.has(roomId)) voiceRoomParticipants.set(roomId, new Set());
+    voiceRoomParticipants.get(roomId).add(socket.userId);
+    socket.data.voiceRoomId = roomId;
+    socket.data.voiceRoomHubId = hubId;
+
+    io.to(`hub:${hubId}`).emit('voice_room_participants_updated', {
+      room_id: roomId,
+      participants: getVoiceRoomParticipantIds(roomId).map(uid => activeUserNames.get(uid) || '').filter(Boolean)
+    });
+  });
+
+  socket.on('voice_room_leave', (data) => {
+    if (!socket.userId) return;
+
+    const roomId = Number(data?.room_id) || socket.data.voiceRoomId;
+    const hubId = Number(data?.hub_id) || socket.data.voiceRoomHubId;
+    if (!roomId || !hubId) return;
+
+    voiceRoomParticipants.get(roomId)?.delete(socket.userId);
+    socket.data.voiceRoomId = null;
+    socket.data.voiceRoomHubId = null;
+
+    io.to(`hub:${hubId}`).emit('voice_room_participants_updated', {
+      room_id: roomId,
+      participants: getVoiceRoomParticipantIds(roomId).map(uid => activeUserNames.get(uid) || '').filter(Boolean)
+    });
+  });
+
   socket.on('disconnect', (reason) => {
     console.log(`Socket ayrıldı: ${username} [${socket.id}] - ${reason}`);
 
     if (!socket.userId) return;
+
+    if (socket.data.voiceRoomId && socket.data.voiceRoomHubId) {
+      const roomId = socket.data.voiceRoomId;
+      const hubId = socket.data.voiceRoomHubId;
+      voiceRoomParticipants.get(roomId)?.delete(socket.userId);
+      io.to(`hub:${hubId}`).emit('voice_room_participants_updated', {
+        room_id: roomId,
+        participants: getVoiceRoomParticipantIds(roomId).map(uid => activeUserNames.get(uid) || '').filter(Boolean)
+      });
+    }
 
     const userSockets = activeUsers.get(socket.userId);
     if (!userSockets) return;

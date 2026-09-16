@@ -2084,11 +2084,22 @@ const I18N = {
     'call-accept': { tr: 'Kabul Et', en: 'Accept' },
     'call-incoming-sub': { tr: 'seni arıyor...', en: 'is calling you...' },
     'call-leave': { tr: 'Ayrıl', en: 'Leave' },
+    'call-connected': { tr: 'Bağlandı', en: 'Connected' },
+    'notif-friend-request': { tr: '1 arkadaşlık isteği', en: '1 friend request' },
+    'notif-hub-invite': { tr: '1 hub daveti', en: '1 hub invite' },
+    'friend-request-notif-text': { tr: 'sana arkadaşlık isteği gönderdi', en: 'sent you a friend request' },
+    'friends-empty': { tr: 'Henüz arkadaşın yok.', en: "You don't have any friends yet." },
     'back-to-hubs': { tr: 'Hublar', en: 'Hubs' },
     'start-something': { tr: 'Bir şey başlat', en: 'Start something' },
     'start-poll': { tr: 'Oylama', en: 'Poll' },
     'start-share': { tr: 'Paylaşım', en: 'Share' },
     'member-count': { tr: 'kişi', en: 'members' },
+    'voice-rooms-title': { tr: 'SESLİ ODALAR', en: 'VOICE ROOMS' },
+    'voice-room-add': { tr: 'Oda Ekle', en: 'Add Room' },
+    'voice-rooms-empty': { tr: 'Henüz sesli oda yok.', en: 'No voice rooms yet.' },
+    'voice-room-you-are-here': { tr: 'Bu odadasın', en: "You're here" },
+    'voice-room-delete-confirm': { tr: 'Bu sesli odayı silmek istediğine emin misin?', en: 'Are you sure you want to delete this voice room?' },
+    'voice-room-name-prompt': { tr: 'Oda adı:', en: 'Room name:' },
 
     // Dinamik JS metinleri (t() ile kullanılır)
     'send': { tr: 'Gönder', en: 'Send' },
@@ -2416,6 +2427,7 @@ function connectToChat() {
         () => {
 
             refreshOnlinePanelIfOpen();
+            refreshFriendsSidebar();
 
         }
     );
@@ -2456,6 +2468,11 @@ function connectToChat() {
 
                 appendDmMessage(msg);
 
+            } else if (msg.user_id !== currentUser.id) {
+
+                unreadDmCounts.set(otherId, (unreadDmCounts.get(otherId) || 0) + 1);
+                refreshFriendsSidebar();
+
             }
 
         }
@@ -2468,7 +2485,11 @@ function connectToChat() {
 
     socket.on(
         'notification_received',
-        () => refreshNotificationsBadge()
+        (data) => {
+            refreshNotificationsBadge();
+            const label = data?.type === 'friend_request' ? t('notif-friend-request') : t('notif-hub-invite');
+            showCenterToast(label);
+        }
     );
 
 
@@ -2492,6 +2513,32 @@ function connectToChat() {
     socket.on('dm_call_ended', (data) => {
         if (callFrame && (data.from_user_id === outgoingCallToId || data.from_user_id === incomingCallFromId)) {
             leaveCall();
+        }
+    });
+
+
+    // -------------------------------------------------
+    // Sesli oda değişiklikleri
+    // -------------------------------------------------
+
+    socket.on('voice_room_created', (room) => {
+        if (currentHub && room.hub_id === currentHub.id) {
+            voiceRoomsCache.push({ ...room, participants: [] });
+            renderVoiceRoomsList();
+        }
+    });
+
+    socket.on('voice_room_deleted', (data) => {
+        voiceRoomsCache = voiceRoomsCache.filter(r => r.id !== data.id);
+        if (currentHub) renderVoiceRoomsList();
+        if (currentVoiceRoomId === data.id) leaveCall();
+    });
+
+    socket.on('voice_room_participants_updated', (data) => {
+        const room = voiceRoomsCache.find(r => r.id === data.room_id);
+        if (room) {
+            room.participants = data.participants;
+            if (currentHub) renderVoiceRoomsList();
         }
     });
 
@@ -2737,6 +2784,80 @@ function escapeHtml(value) {
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#039;');
+
+}
+
+
+// =====================================================
+// ARKADAŞLAR PANELİ (ana ekran sağı)
+// =====================================================
+
+const friendsSidebarToggleBtn2 = document.getElementById('friends-sidebar-toggle-btn');
+const friendsSidebar2 = document.getElementById('friends-sidebar');
+const friendsSidebarList = document.getElementById('friends-sidebar-list');
+const unreadDmCounts = new Map(); // userId -> count
+
+friendsSidebarToggleBtn2.addEventListener('click', () => {
+    friendsSidebar2.classList.toggle('open');
+    friendsSidebarToggleBtn2.classList.toggle('open');
+});
+
+async function loadFriendsSidebar() {
+
+    try {
+
+        const response = await fetch('/api/friends', { credentials: 'include' });
+        const data = await response.json();
+        if (!data.success) return;
+
+        renderFriendsSidebar(data.friends);
+
+    } catch (error) {
+        console.error('Arkadaş listesi alınamadı:', error);
+    }
+
+}
+
+function refreshFriendsSidebar() {
+    if (hubListView.style.display !== 'none') loadFriendsSidebar();
+}
+
+function renderFriendsSidebar(friends) {
+
+    if (!friends || friends.length === 0) {
+        friendsSidebarList.innerHTML = `<div class="friends-sidebar-empty">${t('friends-empty')}</div>`;
+        return;
+    }
+
+    friendsSidebarList.innerHTML = friends.map((f) => {
+
+        const color = getUserColor(f.username);
+        const initial = f.username.charAt(0).toUpperCase();
+        const unread = unreadDmCounts.get(f.id) || 0;
+
+        const avatarInner = f.avatar_data
+            ? `<img src="${escapeAttr(f.avatar_data)}" alt="">`
+            : escapeHtml(initial);
+
+        return `
+            <div class="friends-sidebar-row ${f.online ? 'online' : ''}" data-friend-id="${f.id}" data-friend-name="${escapeAttr(f.username)}">
+                <span class="friends-sidebar-avatar" style="--user-color:${color};">${avatarInner}</span>
+                <span class="friends-sidebar-name">${escapeHtml(f.username)}</span>
+                ${unread > 0 ? `<span class="friends-sidebar-unread">${unread}</span>` : ''}
+            </div>
+        `;
+
+    }).join('');
+
+    friendsSidebarList.querySelectorAll('.friends-sidebar-row').forEach((row) => {
+        row.addEventListener('click', () => {
+            const userId = Number(row.dataset.friendId);
+            const username = row.dataset.friendName;
+            unreadDmCounts.delete(userId);
+            renderFriendsSidebar(friends);
+            openDm(userId, username);
+        });
+    });
 
 }
 
@@ -3141,7 +3262,7 @@ function renderNotifications(notifications) {
         if (n.type === 'hub_invite') {
 
             return `
-                <div class="notification-card" data-notif-id="${n.id}">
+                <div class="notification-card" data-notif-id="${n.id}" data-notif-type="hub_invite">
                     <div class="notification-text">
                         <strong>${escapeHtml(n.data.from_username)}</strong> seni
                         <strong>${escapeHtml(n.data.hub_name)}</strong> Hub'ına davet etti.
@@ -3155,11 +3276,52 @@ function renderNotifications(notifications) {
 
         }
 
+        if (n.type === 'friend_request') {
+
+            return `
+                <div class="notification-card" data-notif-id="${n.id}" data-notif-type="friend_request" data-from-user-id="${n.data.from_user_id}">
+                    <div class="notification-text">
+                        <strong>${escapeHtml(n.data.from_username)}</strong> ${t('friend-request-notif-text')}.
+                    </div>
+                    <div class="notification-actions">
+                        <button class="notification-accept" data-accept type="button">${t('call-accept')}</button>
+                        <button class="notification-decline" data-decline type="button">${t('call-decline')}</button>
+                    </div>
+                </div>
+            `;
+
+        }
+
         return '';
 
     }).join('');
 
-    notificationsList.querySelectorAll('.notification-card').forEach((card) => {
+    notificationsList.querySelectorAll('[data-notif-type="friend_request"]').forEach((card) => {
+
+        const fromUserId = Number(card.dataset.fromUserId);
+
+        card.querySelector('[data-accept]').addEventListener('click', async () => {
+            await fetch('/api/friends/respond', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                body: JSON.stringify({ user_id: fromUserId, accept: true })
+            });
+            refreshFriendsSidebar();
+            refreshNotificationsBadge();
+            card.remove();
+        });
+
+        card.querySelector('[data-decline]').addEventListener('click', async () => {
+            await fetch('/api/friends/respond', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                body: JSON.stringify({ user_id: fromUserId, accept: false })
+            });
+            refreshNotificationsBadge();
+            card.remove();
+        });
+
+    });
+
+    notificationsList.querySelectorAll('[data-notif-type="hub_invite"]').forEach((card) => {
 
         const notifId = Number(card.dataset.notifId);
 
@@ -3411,6 +3573,9 @@ async function openDm(userId, username) {
     dmModalTitle.textContent = `💬 ${username}`;
     dmFeed.innerHTML = '';
 
+    unreadDmCounts.delete(userId);
+    refreshFriendsSidebar();
+
     try {
 
         const response = await fetch(`/api/dm/${userId}/messages`, { credentials: 'include' });
@@ -3634,6 +3799,21 @@ function showToast(message) {
 }
 
 
+function showCenterToast(message) {
+
+    const bubble = document.createElement('div');
+    bubble.className = 'center-toast';
+    bubble.textContent = message;
+    document.body.appendChild(bubble);
+
+    setTimeout(() => {
+        bubble.classList.add('center-toast-leaving');
+        setTimeout(() => bubble.remove(), 300);
+    }, 2000);
+
+}
+
+
 // =====================================================
 // DOSYA / FOTOĞRAF / VİDEO MESAJLARI
 // =====================================================
@@ -3738,7 +3918,7 @@ function buildFileCardHtml(payload) {
     if (mime.startsWith('image/')) {
         return `
             <div class="file-msg-card image-msg-card">
-                <img src="${escapeAttr(payload.data)}" alt="${escapeAttr(name)}" loading="lazy">
+                <img class="lightbox-img" src="${escapeAttr(payload.data)}" alt="${escapeAttr(name)}" loading="lazy">
             </div>
         `;
     }
@@ -4020,8 +4200,174 @@ hubSideBackdrop.addEventListener('click', () => {
     hubSideBackdrop.classList.remove('open');
     hubMembersToggleBtn.classList.remove('open');
 });
+
 const hubDeleteBtn = document.getElementById('hub-delete-btn');
-const hubCallBtn = document.getElementById('hub-call-btn');
+
+const hubVoiceRoomsToggleBtn = document.getElementById('hub-voice-rooms-toggle-btn');
+const hubVoiceRoomsSide = document.getElementById('hub-voice-rooms-side');
+const hubVoiceRoomsBackdrop = document.getElementById('hub-voice-rooms-backdrop');
+const hubVoiceRoomsList = document.getElementById('hub-voice-rooms-list');
+const hubVoiceRoomAddBtn = document.getElementById('hub-voice-room-add-btn');
+const hubInRoomPill = document.getElementById('hub-in-room-pill');
+const hubInRoomName = document.getElementById('hub-in-room-name');
+
+hubVoiceRoomsToggleBtn.addEventListener('click', () => {
+    hubVoiceRoomsSide.classList.toggle('open');
+    hubVoiceRoomsBackdrop.classList.toggle('open');
+    hubVoiceRoomsToggleBtn.classList.toggle('open');
+});
+
+hubVoiceRoomsBackdrop.addEventListener('click', () => {
+    hubVoiceRoomsSide.classList.remove('open');
+    hubVoiceRoomsBackdrop.classList.remove('open');
+    hubVoiceRoomsToggleBtn.classList.remove('open');
+});
+
+hubInRoomPill.addEventListener('click', () => {
+    if (callFrame) {
+        callMiniBar.style.display = 'none';
+        callOverlay.style.display = 'flex';
+    }
+});
+
+let voiceRoomsCache = [];
+let currentVoiceRoomId = null;
+let currentVoiceRoomName = '';
+
+async function loadVoiceRooms(hubId) {
+
+    try {
+
+        const response = await fetch(`/api/hubs/${hubId}/voice-rooms`, { credentials: 'include' });
+        const data = await response.json();
+        if (!data.success) return;
+
+        voiceRoomsCache = data.rooms;
+        renderVoiceRoomsList();
+
+    } catch (error) {
+        console.error('Sesli odalar alınamadı:', error);
+    }
+
+}
+
+function renderVoiceRoomsList() {
+
+    hubVoiceRoomAddBtn.style.display = currentHub?.is_owner ? 'block' : 'none';
+
+    const anyActive = voiceRoomsCache.some(r => r.participants && r.participants.length > 0);
+    hubVoiceRoomsToggleBtn.classList.toggle('has-active', anyActive);
+
+    if (voiceRoomsCache.length === 0) {
+        hubVoiceRoomsList.innerHTML = `<div class="users-list-empty">${t('voice-rooms-empty')}</div>`;
+        return;
+    }
+
+    hubVoiceRoomsList.innerHTML = voiceRoomsCache.map((room) => {
+        const isActive = room.id === currentVoiceRoomId;
+        const count = room.participants?.length || 0;
+        return `
+            <div class="hub-voice-room-row ${isActive ? 'active' : ''}" data-room-id="${room.id}">
+                <span class="hub-voice-room-icon">${isActive ? '🔊' : '🔈'}</span>
+                <div class="hub-voice-room-info">
+                    <div class="hub-voice-room-name">${escapeHtml(room.name)}</div>
+                    <div class="hub-voice-room-count">${isActive ? t('voice-room-you-are-here') : `${count} ${t('member-count')}`}</div>
+                </div>
+                ${currentHub?.is_owner ? `<button class="hub-voice-room-delete" data-delete-room="${room.id}" type="button" title="${t('delete')}">🗑</button>` : ''}
+            </div>
+        `;
+    }).join('');
+
+    hubVoiceRoomsList.querySelectorAll('.hub-voice-room-row').forEach((row) => {
+        row.addEventListener('click', (event) => {
+            if (event.target.closest('[data-delete-room]')) return;
+            const roomId = Number(row.dataset.roomId);
+            const room = voiceRoomsCache.find(r => r.id === roomId);
+            if (!room) return;
+
+            if (currentVoiceRoomId === roomId) {
+                leaveCall();
+            } else {
+                joinVoiceRoom(room);
+            }
+        });
+    });
+
+    hubVoiceRoomsList.querySelectorAll('[data-delete-room]').forEach((btn) => {
+        btn.addEventListener('click', async (event) => {
+            event.stopPropagation();
+            const roomId = Number(btn.dataset.deleteRoom);
+            if (!confirm(t('voice-room-delete-confirm'))) return;
+
+            await fetch(`/api/hubs/${currentHub.id}/voice-rooms/${roomId}`, { method: 'DELETE', credentials: 'include' });
+        });
+    });
+
+}
+
+hubVoiceRoomAddBtn.addEventListener('click', async () => {
+
+    const name = prompt(t('voice-room-name-prompt'));
+    if (!name || !name.trim()) return;
+
+    try {
+
+        const response = await fetch(`/api/hubs/${currentHub.id}/voice-rooms`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ name: name.trim() })
+        });
+
+        const data = await response.json();
+        if (!data.success) showToast(data.error || 'Oda oluşturulamadı.');
+
+    } catch (error) {
+        console.error('Sesli oda oluşturulamadı:', error);
+    }
+
+});
+
+async function joinVoiceRoom(room) {
+
+    if (callFrame) leaveCall();
+
+    try {
+
+        const response = await fetch(`/api/hubs/${currentHub.id}/voice-rooms/${room.id}/join`, {
+            method: 'POST',
+            credentials: 'include'
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            alert(data.error || 'Sesli odaya katılınamadı.');
+            return;
+        }
+
+        callMode = 'hub-room';
+        currentVoiceRoomId = room.id;
+        currentVoiceRoomName = room.name;
+        callHubName.textContent = `🎙️ ${room.name}`;
+        callScreenshareBtn.style.display = 'inline-block';
+
+        await joinCallFrame(data.room_url, data.token);
+
+        socket?.emit('voice_room_join', { room_id: room.id, hub_id: currentHub.id });
+
+        hubInRoomPill.style.display = 'flex';
+        hubInRoomName.textContent = room.name;
+
+        renderVoiceRoomsList();
+
+    } catch (error) {
+        console.error('Sesli odaya katılınamadı:', error);
+        alert('Sesli odaya katılınamadı.');
+        leaveCall();
+    }
+
+}
 
 const hubSettingsOpenBtn = document.getElementById('hub-settings-open-btn');
 const hubSettingsModal = document.getElementById('hub-settings-modal');
@@ -4196,17 +4542,26 @@ function switchToView(view) {
     hubListView.style.display = view === 'hubs' ? 'flex' : 'none';
     hubDetailView.style.display = view === 'hub-detail' ? 'flex' : 'none';
 
+    const friendsSidebar = document.getElementById('friends-sidebar');
+    const friendsSidebarToggleBtn = document.getElementById('friends-sidebar-toggle-btn');
+    const showFriendsSidebar = view === 'hubs';
+    friendsSidebar.style.display = showFriendsSidebar ? 'flex' : 'none';
+    friendsSidebarToggleBtn.style.display = showFriendsSidebar ? 'flex' : 'none';
+
     if (view !== 'hub-detail' && currentHub) {
 
         if (socket) {
             socket.emit('leave_hub', currentHub.id);
         }
 
-        if (callFrame) leaveCall();
+        // Sesli odadaysa bağlantı kopmaz — kullanıcı "Ayrıl" demeden çağrı
+        // arka planda (küçültülmüş çubukta) devam eder.
 
         currentHub = null;
 
     }
+
+    if (showFriendsSidebar) loadFriendsSidebar();
 
     updateOnlineLabel();
 
@@ -4635,6 +4990,7 @@ async function openHub(hubId) {
         }
 
         loadHubMessages(hubId);
+        loadVoiceRooms(hubId);
 
     } catch (error) {
 
@@ -4701,58 +5057,8 @@ hubDeleteBtn.addEventListener(
 // SESLİ SOHBET (DAILY.CO)
 // =====================================================
 
-hubCallBtn.addEventListener(
-    'click',
-    async () => {
-
-        if (callFrame) {
-            leaveCall();
-            return;
-        }
-
-        if (!currentHub) return;
-
-        hubCallBtn.disabled = true;
-        hubCallBtn.textContent = '⏳';
-
-        try {
-
-            const response = await fetch(`/api/hubs/${currentHub.id}/call/join`, {
-                method: 'POST',
-                credentials: 'include'
-            });
-
-            const data = await response.json();
-
-            if (!data.success) {
-                alert(data.error || 'Sesli sohbete katılınamadı.');
-                return;
-            }
-
-            callMode = 'hub';
-            callHubName.textContent = `🎙️ ${currentHub.name}`;
-            callScreenshareBtn.style.display = 'inline-block';
-
-            await joinCallFrame(data.room_url, data.token);
-
-            hubCallBtn.classList.add('in-call');
-            hubCallBtn.textContent = '🔴';
-
-        } catch (error) {
-
-            console.error('Sesli sohbete katılınamadı:', error);
-            alert('Sesli sohbete katılınamadı.');
-            leaveCall();
-
-        } finally {
-
-            hubCallBtn.disabled = false;
-            if (!callFrame) hubCallBtn.textContent = '🔊';
-
-        }
-
-    }
-);
+// Hub sesli sohbeti artık odalar üzerinden yönetiliyor (bkz. joinVoiceRoom,
+// hub-voice-rooms-side paneli). Eski tekil "Sesli Sohbet" butonu kaldırıldı.
 
 
 // ─── DM SESLİ ARAMA (kamera / ekran paylaşımı yok) ───────────────────────
@@ -4825,8 +5131,31 @@ async function joinDmCall(userId, username) {
     callHubName.textContent = `📞 ${username}`;
     callScreenshareBtn.style.display = 'none';
     callRingingState.style.display = 'none';
-    callFrameContainer.style.display = 'block';
+    callFrameContainer.style.display = 'none';
     callOverlay.style.display = 'flex';
+
+    const dmProfile = document.getElementById('call-dm-profile');
+    const dmAvatar = document.getElementById('call-dm-avatar');
+    const dmAvatarImg = document.getElementById('call-dm-avatar-img');
+    const dmUsernameEl = document.getElementById('call-dm-username');
+
+    dmUsernameEl.textContent = username;
+    dmAvatar.textContent = username.charAt(0).toUpperCase();
+    dmAvatar.style.setProperty('--user-color', getUserColor(username));
+    dmAvatarImg.style.display = 'none';
+    dmAvatar.style.display = 'flex';
+    dmProfile.style.display = 'flex';
+
+    fetch(`/api/users/${userId}/profile`, { credentials: 'include' })
+        .then(r => r.json())
+        .then((data) => {
+            if (data.success && data.profile.avatar_data) {
+                dmAvatarImg.src = data.profile.avatar_data;
+                dmAvatarImg.style.display = 'block';
+                dmAvatar.style.display = 'none';
+            }
+        })
+        .catch(() => {});
 
     try {
 
@@ -4859,6 +5188,7 @@ function endDmCallUi() {
     callOverlay.style.display = 'none';
     callRingingState.style.display = 'none';
     callFrameContainer.style.display = 'block';
+    document.getElementById('call-dm-profile').style.display = 'none';
     callMode = null;
     outgoingCallToId = null;
     outgoingCallToUsername = '';
@@ -4952,6 +5282,10 @@ function leaveCall() {
         socket.emit('dm_call_end', { to_user_id: outgoingCallToId || incomingCallFromId });
     }
 
+    if (callMode === 'hub-room' && currentVoiceRoomId && socket && currentHub) {
+        socket.emit('voice_room_leave', { room_id: currentVoiceRoomId, hub_id: currentHub.id });
+    }
+
     if (callFrame) {
         callFrame.leave();
         callFrame.destroy();
@@ -4962,11 +5296,15 @@ function leaveCall() {
     callMiniBar.style.display = 'none';
     callRingingState.style.display = 'none';
     callFrameContainer.style.display = 'block';
+    document.getElementById('call-dm-profile').style.display = 'none';
     callScreenshareBtn.classList.remove('active');
 
-    hubCallBtn.classList.remove('in-call');
-    hubCallBtn.textContent = '🔊';
     dmCallBtn.classList.remove('in-call');
+
+    currentVoiceRoomId = null;
+    currentVoiceRoomName = '';
+    hubInRoomPill.style.display = 'none';
+    renderVoiceRoomsList();
 
     callMode = null;
     outgoingCallToId = null;
@@ -5706,4 +6044,31 @@ function escapeAttr(value) {
 // =====================================================
 
 applyLanguage(localStorage.getItem('sauran_lang') || 'tr');
+// =====================================================
+// FOTOĞRAF TAM EKRAN (LIGHTBOX)
+// =====================================================
+
+const imageLightbox = document.getElementById('image-lightbox');
+const imageLightboxImg = document.getElementById('image-lightbox-img');
+const imageLightboxClose = document.getElementById('image-lightbox-close');
+
+document.addEventListener('click', (event) => {
+    const img = event.target.closest('.lightbox-img');
+    if (!img) return;
+    imageLightboxImg.src = img.src;
+    imageLightbox.style.display = 'flex';
+});
+
+imageLightbox.addEventListener('click', () => {
+    imageLightbox.style.display = 'none';
+    imageLightboxImg.src = '';
+});
+
+imageLightboxClose.addEventListener('click', (event) => {
+    event.stopPropagation();
+    imageLightbox.style.display = 'none';
+    imageLightboxImg.src = '';
+});
+
+
 checkExistingSession();

@@ -33,7 +33,8 @@ async function createRoom(roomName, { screenshare = true } = {}) {
         enable_chat: false,
         start_video_off: true,
         start_audio_off: false,
-        eject_at_room_exp: false
+        eject_at_room_exp: false,
+        enable_prejoin_ui: false
       }
     })
   });

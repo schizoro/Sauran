@@ -218,6 +218,23 @@ if (!hubColumns.includes('daily_room_name')) {
 }
 
 // =====================================================
+// v1.16 MIGRATION — SESLİ ODALAR (BİRDEN FAZLA)
+// =====================================================
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS hub_voice_rooms (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hub_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    daily_room_name TEXT,
+    created_by INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (hub_id) REFERENCES hubs(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id)
+  );
+`);
+
+// =====================================================
 // v1.10 MIGRATION — BİLDİRİMLER / ŞİFRE SIFIRLAMA
 // =====================================================
 
@@ -968,6 +985,51 @@ function setHubDailyRoomName(hubId, roomName) {
   db.prepare(`UPDATE hubs SET daily_room_name = ? WHERE id = ?`).run(roomName, hubId);
 }
 
+// =====================================================
+// SESLİ ODALAR (Hub içinde birden fazla oda)
+// =====================================================
+
+function listVoiceRooms(hubId) {
+  return db.prepare(`SELECT id, hub_id, name, created_by, created_at FROM hub_voice_rooms WHERE hub_id = ? ORDER BY id ASC`).all(hubId);
+}
+
+function createVoiceRoom(hubId, userId, name) {
+  const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
+  if (!hub) return { success: false, error: 'Hub bulunamadı.' };
+  if (hub.created_by !== userId) return { success: false, error: 'Yalnızca Hub sahibi sesli oda açabilir.' };
+
+  name = String(name || '').trim().slice(0, 40);
+  if (!name) return { success: false, error: 'Oda adı gerekli.' };
+
+  const info = db.prepare(`INSERT INTO hub_voice_rooms (hub_id, name, created_by) VALUES (?, ?, ?)`).run(hubId, name, userId);
+
+  return { success: true, room: db.prepare(`SELECT id, hub_id, name, created_by, created_at FROM hub_voice_rooms WHERE id = ?`).get(info.lastInsertRowid) };
+}
+
+function deleteVoiceRoom(hubId, userId, roomId) {
+  const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
+  if (!hub) return { success: false, error: 'Hub bulunamadı.' };
+  if (hub.created_by !== userId) return { success: false, error: 'Yalnızca Hub sahibi sesli odayı silebilir.' };
+
+  const info = db.prepare(`DELETE FROM hub_voice_rooms WHERE id = ? AND hub_id = ?`).run(roomId, hubId);
+  if (!info.changes) return { success: false, error: 'Oda bulunamadı.' };
+
+  return { success: true };
+}
+
+function getVoiceRoomDailyName(roomId) {
+  const room = db.prepare(`SELECT daily_room_name FROM hub_voice_rooms WHERE id = ?`).get(roomId);
+  return room ? room.daily_room_name : null;
+}
+
+function setVoiceRoomDailyName(roomId, dailyRoomName) {
+  db.prepare(`UPDATE hub_voice_rooms SET daily_room_name = ? WHERE id = ?`).run(dailyRoomName, roomId);
+}
+
+function getVoiceRoom(roomId) {
+  return db.prepare(`SELECT id, hub_id, name, created_by FROM hub_voice_rooms WHERE id = ?`).get(roomId);
+}
+
 function deleteHub(hubId, userId) {
   const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
   if (!hub) return { success: false, error: 'Hub bulunamadı.' };
@@ -1019,6 +1081,10 @@ function sendFriendRequest(fromId, toId) {
     ON CONFLICT(user_low, user_high) DO UPDATE SET status = 'pending', requested_by = excluded.requested_by, created_at = CURRENT_TIMESTAMP, responded_at = NULL
   `).run(low, high, fromId);
 
+  const fromUser = db.prepare(`SELECT username FROM users WHERE id = ?`).get(fromId);
+  const data = JSON.stringify({ from_user_id: fromId, from_username: fromUser?.username || '' });
+  db.prepare(`INSERT INTO notifications (user_id, type, data) VALUES (?, 'friend_request', ?)`).run(toId, data);
+
   return { success: true };
 }
 
@@ -1034,6 +1100,11 @@ function respondFriendRequest(userId, otherUserId, accept) {
   } else {
     db.prepare(`DELETE FROM friendships WHERE id = ?`).run(existing.id);
   }
+
+  db.prepare(`
+    UPDATE notifications SET status = ? WHERE user_id = ? AND type = 'friend_request' AND status = 'pending'
+    AND json_extract(data, '$.from_user_id') = ?
+  `).run(accept ? 'accepted' : 'declined', userId, otherUserId);
 
   return { success: true };
 }
@@ -1434,6 +1505,12 @@ module.exports = {
   createHubShare,
   deleteHub,
   getHubDailyRoomName,
+  listVoiceRooms,
+  createVoiceRoom,
+  deleteVoiceRoom,
+  getVoiceRoomDailyName,
+  setVoiceRoomDailyName,
+  getVoiceRoom,
   setHubDailyRoomName,
   createHubInvite,
   joinHubByCode,

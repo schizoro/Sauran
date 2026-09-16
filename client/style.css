@@ -293,6 +293,52 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 }
 .hub-create-btn:hover { background: rgba(102, 252, 241, 0.22); box-shadow: 0 0 14px rgba(102, 252, 241, 0.3); }
 .hub-list-empty { display: flex; flex-direction: column; align-items: center; gap: 16px; color: #6b7280; font-size: 13px; text-align: center; margin-top: 100px; }
+
+/* ─── v1.16: Arkadaşlar Paneli (ana ekran sağı) ───────────────────────────── */
+.friends-sidebar {
+  position: fixed; top: 60px; right: 0; bottom: 0; width: 270px; max-width: 84vw;
+  padding: 18px 14px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
+  border-left: 1px solid rgba(255, 255, 255, 0.08); border-radius: 0;
+  transform: translateX(0); transition: transform 0.25s ease; z-index: 40;
+}
+.friends-sidebar:not(.open) { transform: translateX(100%); }
+.friends-sidebar-title { color: #fff; font-size: 12px; font-weight: bold; letter-spacing: 1.5px; text-transform: uppercase; }
+.friends-sidebar-list { display: flex; flex-direction: column; gap: 6px; }
+
+.friends-sidebar-row {
+  position: relative; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; cursor: pointer; transition: 0.15s;
+}
+.friends-sidebar-row:hover { background: rgba(255, 255, 255, 0.06); }
+.friends-sidebar-avatar {
+  position: relative; width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: bold; color: var(--user-color, #66fcf1); background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); overflow: hidden;
+}
+.friends-sidebar-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.friends-sidebar-name { flex: 1; min-width: 0; color: #c5c6c7; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.friends-sidebar-row.online .friends-sidebar-name { color: #fff; }
+.friends-sidebar-unread {
+  flex-shrink: 0; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #66fcf1; color: #0b0c10;
+  font-size: 10px; font-weight: bold; display: flex; align-items: center; justify-content: center;
+}
+.friends-sidebar-empty { color: #4b5563; font-size: 12px; text-align: center; margin-top: 20px; }
+
+.friends-sidebar-toggle-btn {
+  position: fixed; top: 50%; right: 0; transform: translateY(-50%);
+  width: 26px; height: 52px; border-radius: 12px 0 0 12px; z-index: 41;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+  background: rgba(255, 255, 255, 0.07); backdrop-filter: blur(14px) saturate(160%); -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.14); border-right: none; color: #8e9297; cursor: pointer; transition: right 0.25s ease, color 0.2s;
+}
+.friends-sidebar-toggle-btn:hover { color: #66fcf1; }
+.friends-sidebar-toggle-btn.open { right: 270px; }
+.friends-sidebar-toggle-arrow { display: inline-block; font-size: 13px; transition: transform 0.25s ease; }
+.friends-sidebar-toggle-btn.open .friends-sidebar-toggle-arrow { transform: rotate(180deg); }
+
+@media (max-width: 768px) {
+  .friends-sidebar.open { transform: translateX(0); }
+  .friends-sidebar.open ~ .friends-sidebar-toggle-btn,
+  .friends-sidebar-toggle-btn.open { right: 84vw; }
+}
 .hub-create-btn-big { width: 88px; height: 88px; border-radius: 50%; background: transparent; border: 2px solid #66fcf1; color: #66fcf1; font-size: 40px; font-weight: 300; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
 .hub-create-btn-big:hover { background: #66fcf1; color: #0b0c10; box-shadow: 0 0 24px rgba(102, 252, 241, 0.5); transform: scale(1.05); }
 
@@ -415,6 +461,59 @@ body.theme-light .profile-field-value { color: #1a1d21; }
   .hub-members-toggle-btn.open { right: 82vw; }
 }
 
+/* ─── v1.16: Sesli Odalar Paneli (sol taraf) ─────────────────────────────── */
+.hub-voice-rooms-side {
+  position: fixed; top: 0; left: 0; height: 100%; width: 260px; max-width: 82vw;
+  border-right: 1px solid #1f2833; background: #101319; padding: 18px 14px;
+  display: flex; flex-direction: column; gap: 14px; overflow-y: auto;
+  transform: translateX(-100%); transition: transform 0.25s ease; z-index: 60;
+  box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5);
+}
+.hub-voice-rooms-side.open { transform: translateX(0); }
+
+.hub-voice-rooms-toggle-btn {
+  position: fixed; top: 50%; left: 0; transform: translateY(-50%);
+  width: 26px; height: 130px; border-radius: 0 12px 12px 0; z-index: 61;
+  display: flex; align-items: center; justify-content: center; padding: 8px 0;
+  background: rgba(255, 255, 255, 0.07); backdrop-filter: blur(14px) saturate(160%); -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.14); border-left: none;
+  color: #8e9297; cursor: pointer; transition: left 0.25s ease, color 0.2s;
+}
+.hub-voice-rooms-toggle-btn span {
+  writing-mode: vertical-rl; transform: rotate(180deg); font-size: 10px; font-weight: bold; letter-spacing: 1.5px; white-space: nowrap;
+}
+.hub-voice-rooms-toggle-btn:hover { color: #66fcf1; }
+.hub-voice-rooms-toggle-btn.open { left: 260px; }
+.hub-voice-rooms-toggle-btn.has-active { color: #57f287; border-color: rgba(87, 242, 135, 0.4); }
+
+@media (max-width: 768px) {
+  .hub-voice-rooms-toggle-btn.open { left: 82vw; }
+}
+
+.hub-voice-rooms-list { display: flex; flex-direction: column; gap: 8px; }
+.hub-voice-room-row {
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1); transition: 0.2s;
+}
+.hub-voice-room-row:hover { border-color: rgba(102, 252, 241, 0.35); }
+.hub-voice-room-row.active { background: rgba(87, 242, 135, 0.1); border-color: rgba(87, 242, 135, 0.4); }
+.hub-voice-room-icon { font-size: 15px; flex-shrink: 0; }
+.hub-voice-room-info { flex: 1; min-width: 0; }
+.hub-voice-room-name { color: #fff; font-size: 12px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-voice-room-count { color: #6b7280; font-size: 10px; }
+.hub-voice-room-row.active .hub-voice-room-count { color: #57f287; }
+.hub-voice-room-delete { flex-shrink: 0; background: none; border: none; color: #4b5563; font-size: 11px; cursor: pointer; padding: 4px; }
+.hub-voice-room-delete:hover { color: #ff2e46; }
+.hub-voice-room-add-btn {
+  padding: 9px; border-radius: 12px; font-weight: bold; font-size: 12px; color: #66fcf1; cursor: pointer; text-align: center;
+}
+
+.hub-in-room-pill {
+  display: flex; align-items: center; gap: 7px; padding: 6px 14px; border-radius: 999px; cursor: pointer;
+  background: rgba(87, 242, 135, 0.12); border: 1px solid rgba(87, 242, 135, 0.4); color: #57f287; font-size: 11px; font-weight: bold;
+}
+.hub-in-room-dot { width: 7px; height: 7px; border-radius: 50%; background: #57f287; animation: mic-pulse-cyan 1.4s ease-in-out infinite; }
+
 .hub-detail-header { display: flex; align-items: center; gap: 10px; padding: 14px 25px; border-bottom: 1px solid #1f2833; background: #0b0c10; }
 .hub-back-btn {
   display: flex; align-items: center; gap: 6px; border-radius: 999px; color: #8e9297; font-size: 12px; font-weight: bold; padding: 8px 16px; cursor: pointer;
@@ -517,7 +616,11 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 }
 
 /* Sesli Mesaj Baloncuğu */
-.voice-msg-card { background: #12141a; border: 1px solid #1f2833; border-left: 3px solid #66fcf1; padding: 10px 14px; display: flex; align-items: center; gap: 10px; min-width: 220px; }
+.voice-msg-card {
+  background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px) saturate(160%); -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.1); border-left: 3px solid rgba(102, 252, 241, 0.5); border-radius: 14px;
+  padding: 10px 14px; display: flex; align-items: center; gap: 10px; width: fit-content; min-width: 200px;
+}
 .voice-msg-card audio { height: 32px; flex: 1; }
 .voice-msg-duration { color: #45a29e; font-size: 11px; flex-shrink: 0; }
 .dm-msg-mine .voice-msg-card { border-left-color: #66fcf1; }
@@ -640,6 +743,21 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 .call-frame-container { flex: 1; }
 .call-frame-container iframe { width: 100%; height: 100%; border: none; }
 
+/* ─── v1.16: DM Arama — Sadece Profil Görünümü ───────────────────────────── */
+.call-dm-profile { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
+.call-dm-avatar-wrap { position: relative; width: 120px; height: 120px; }
+.call-dm-avatar {
+  width: 120px; height: 120px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 44px; font-weight: bold; color: var(--user-color, #66fcf1);
+  background: rgba(255, 255, 255, 0.06); backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid rgba(102, 252, 241, 0.35); box-shadow: 0 0 30px rgba(102, 252, 241, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  animation: mic-pulse-cyan 2s ease-in-out infinite;
+}
+.call-dm-avatar-img { position: absolute; inset: 0; width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(102, 252, 241, 0.35); }
+.call-dm-username { color: #fff; font-size: 18px; font-weight: bold; letter-spacing: 0.5px; }
+.call-dm-status { display: flex; align-items: center; gap: 7px; color: #57f287; font-size: 12px; font-weight: bold; }
+.call-dm-status-dot { width: 8px; height: 8px; border-radius: 50%; background: #57f287; }
+
 /* ─── v1.14: Arama Çalma (Ringing) Durumu ────────────────────────────────── */
 .call-ringing-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
 .call-ringing-avatar { font-size: 48px; animation: mic-pulse-cyan 1.4s ease-in-out infinite; border-radius: 50%; width: 90px; height: 90px; display: flex; align-items: center; justify-content: center; background: #12141a; border: 1px solid #1f2833; }
@@ -670,8 +788,24 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes toast-out { from { opacity: 1; } to { opacity: 0; transform: translateY(-6px); } }
 
+/* ─── v1.16: Merkez Bildirim Baloncuğu ────────────────────────────────────── */
+.center-toast {
+  position: fixed; top: 60px; left: 50%; transform: translateX(-50%) scale(0.9); z-index: 600;
+  padding: 12px 24px; border-radius: 999px; color: #fff; font-size: 13px; font-weight: bold; white-space: nowrap;
+  background: rgba(20, 22, 28, 0.75); backdrop-filter: blur(18px) saturate(170%); -webkit-backdrop-filter: blur(18px) saturate(170%);
+  border: 1px solid rgba(102, 252, 241, 0.35); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 20px rgba(102, 252, 241, 0.15);
+  animation: center-toast-in 0.25s ease-out forwards;
+}
+.center-toast-leaving { animation: center-toast-out 0.3s ease-in forwards; }
+@keyframes center-toast-in { from { opacity: 0; transform: translateX(-50%) translateY(-12px) scale(0.9); } to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } }
+@keyframes center-toast-out { from { opacity: 1; transform: translateX(-50%) scale(1); } to { opacity: 0; transform: translateX(-50%) scale(0.92); } }
+
 /* ─── v1.14: Dosya / Fotoğraf / Video Mesaj Kartları ─────────────────────── */
-.file-msg-card { background: #12141a; border: 1px solid #1f2833; border-left: 3px solid #66fcf1; padding: 10px 14px; display: flex; align-items: center; gap: 10px; min-width: 200px; max-width: 280px; }
+.file-msg-card {
+  background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px) saturate(160%); -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.1); border-left: 3px solid rgba(102, 252, 241, 0.5); border-radius: 14px;
+  padding: 10px 14px; display: flex; align-items: center; gap: 10px; width: fit-content; max-width: 280px;
+}
 .file-msg-icon { font-size: 22px; flex-shrink: 0; }
 .file-msg-info { min-width: 0; }
 .file-msg-name { color: #c5c6c7; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -679,7 +813,19 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 .file-msg-download { color: #66fcf1; font-size: 11px; text-decoration: none; flex-shrink: 0; margin-left: auto; }
 .file-msg-download:hover { text-decoration: underline; }
 
-.image-msg-card img { max-width: 260px; max-height: 260px; border-radius: 6px; display: block; cursor: pointer; border: 1px solid #1f2833; }
+.image-msg-card img { max-width: 260px; max-height: 260px; border-radius: 6px; display: block; cursor: zoom-in; border: 1px solid #1f2833; }
+
+/* ─── v1.16: Fotoğraf Tam Ekran (Lightbox) ────────────────────────────────── */
+.image-lightbox {
+  position: fixed; inset: 0; z-index: 500; display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.88); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); cursor: zoom-out;
+  animation: toast-in 0.15s ease-out;
+}
+.image-lightbox img { max-width: 92vw; max-height: 92vh; object-fit: contain; border-radius: 4px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
+.image-lightbox-close {
+  position: absolute; top: 18px; right: 18px; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.16); color: #fff; font-size: 15px; cursor: pointer;
+}
 .video-msg-card video { max-width: 280px; max-height: 280px; border-radius: 6px; display: block; border: 1px solid #1f2833; background: #000; }
 
 /* ─── v1.7: Çevrimiçi / Arkadaşlar Modalı ────────────────────────────────── */
@@ -724,12 +870,26 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 .profile-action-row .profile-action-btn { flex: 1; }
 
 /* ─── v1.7: DM Paneli ─────────────────────────────────────────────────────── */
-.dm-modal-box { width: 380px; height: 520px; display: flex; flex-direction: column; }
+.dm-side-panel {
+  position: fixed; top: 0; right: 0; height: 100%; width: 380px; max-width: 90vw; z-index: 120;
+  transform: translateX(0); animation: dm-panel-in 0.22s ease-out;
+  box-shadow: -14px 0 40px rgba(0, 0, 0, 0.5);
+}
+@keyframes dm-panel-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+.dm-modal-box {
+  width: 100%; height: 100%; max-height: none; max-width: none; display: flex; flex-direction: column;
+  border-radius: 0; border: none; border-left: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(15, 17, 22, 0.82); backdrop-filter: blur(22px) saturate(170%); -webkit-backdrop-filter: blur(22px) saturate(170%);
+  box-shadow: none;
+}
 .dm-feed { flex: 1; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
 .dm-msg-row { display: flex; gap: 8px; align-items: flex-end; max-width: 100%; }
-.dm-msg { position: relative; max-width: 80%; padding: 9px 13px; font-size: 13px; line-height: 1.5; border-radius: 2px; }
-.dm-msg-mine { background: rgba(102, 252, 241, 0.12); border: 1px solid rgba(102, 252, 241, 0.3); color: #c5c6c7; }
-.dm-msg-theirs { background: #12141a; border: 1px solid #1f2833; color: #c5c6c7; }
+.dm-msg {
+  position: relative; max-width: 80%; width: fit-content; padding: 9px 15px; font-size: 13px; line-height: 1.5; border-radius: 18px;
+  backdrop-filter: blur(12px) saturate(160%); -webkit-backdrop-filter: blur(12px) saturate(160%);
+}
+.dm-msg-mine { background: rgba(102, 252, 241, 0.1); border: 1px solid rgba(102, 252, 241, 0.28); color: #e2f8f6; }
+.dm-msg-theirs { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #c5c6c7; }
 .dm-msg-line { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
 .dm-msg-time { flex-shrink: 0; font-size: 9px; color: #6b7280; }
 .dm-msg .hub-msg-actions { top: -12px; right: 4px; }
@@ -755,8 +915,9 @@ body.theme-light .profile-field-value { color: #1a1d21; }
   input, textarea, select { font-size: 16px !important; }
 
   .modal-box { max-width: 92vw; }
-  .hub-create-box, .poll-create-box, .share-create-box, .dm-modal-box, .users-modal-box { width: 92vw; max-width: 360px; }
-  .dm-modal-box { height: 80vh; }
+  .hub-create-box, .poll-create-box, .share-create-box, .users-modal-box { width: 92vw; max-width: 360px; }
+  .dm-side-panel { width: 100vw; max-width: 100vw; }
+  .dm-modal-box { width: 100%; height: 100%; }
 
   .topbar { padding: 10px 10px; gap: 6px; }
   .topbar-logo { font-size: 12px; letter-spacing: 1px; flex-shrink: 0; }
