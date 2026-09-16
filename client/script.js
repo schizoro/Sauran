@@ -2152,6 +2152,36 @@ function connectToChat() {
     );
 
 
+    socket.on(
+        'hub_message_deleted',
+        (data) => {
+
+            removeHubMessage(data.id);
+
+        }
+    );
+
+
+    socket.on(
+        'dm_message_deleted',
+        (data) => {
+
+            removeDmMessage(data.id);
+
+        }
+    );
+
+
+    socket.on(
+        'dm_message_update',
+        (msg) => {
+
+            updateDmMessage(msg);
+
+        }
+    );
+
+
     // -------------------------------------------------
     // Varlık (kim çevrimiçi) değişti
     // -------------------------------------------------
@@ -3147,30 +3177,127 @@ function appendDmMessage(msg) {
     const isMine = msg.user_id === currentUser.id;
 
     wrap.className = `dm-msg ${isMine ? 'dm-msg-mine' : 'dm-msg-theirs'}`;
+    wrap.dataset.messageId = msg.id;
+
+    renderDmMessageIntoWrap(wrap, msg, isMine);
+
+    dmFeed.appendChild(wrap);
+    dmFeed.scrollTop = dmFeed.scrollHeight;
+
+}
+
+
+function renderDmMessageIntoWrap(wrap, msg, isMine) {
 
     const time = msg.created_at
         ? new Date(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
         : '';
 
-    if (msg.kind === 'dm_voice' && msg.payload) {
+    const editedTag = msg.edited ? ' <span class="edited-tag">(düzenlendi)</span>' : '';
 
-        wrap.innerHTML = `
+    const canEdit = isMine && msg.kind === 'dm';
+    const canDelete = isMine && msg.kind !== 'deleted';
+
+    const actions = canDelete ? `
+        <div class="hub-msg-actions">
+            ${canEdit ? '<button class="msg-edit-btn" type="button" title="Düzenle">✎</button>' : ''}
+            <button class="msg-delete-btn" type="button" title="Sil">🗑</button>
+        </div>
+    ` : '';
+
+    let body;
+
+    if (msg.kind === 'deleted') {
+
+        body = `<span class="hub-msg-deleted">Bu mesaj silindi</span>`;
+
+    } else if (msg.kind === 'dm_voice' && msg.payload) {
+
+        body = `
             <div class="voice-msg-card">
                 🎤
                 <audio controls src="${msg.payload.audio}"></audio>
                 <span class="voice-msg-duration">${formatDuration(msg.payload.duration)}</span>
             </div>
-            <span class="dm-msg-time">${time}</span>
         `;
 
     } else {
 
-        wrap.innerHTML = `${escapeHtml(msg.content)}<span class="dm-msg-time">${time}</span>`;
+        body = `<span class="dm-msg-content">${escapeHtml(msg.content)}</span>`;
 
     }
 
-    dmFeed.appendChild(wrap);
-    dmFeed.scrollTop = dmFeed.scrollHeight;
+    wrap.innerHTML = `${actions}${body}<span class="dm-msg-time">${time}${editedTag}</span>`;
+
+    wrap.querySelector('.msg-delete-btn')?.addEventListener('click', async () => {
+
+        if (!confirm('Bu mesajı silmek istediğine emin misin?')) return;
+
+        await fetch(`/api/messages/${msg.id}`, { method: 'DELETE', credentials: 'include' });
+
+    });
+
+    wrap.querySelector('.msg-edit-btn')?.addEventListener('click', () => {
+
+        const contentEl = wrap.querySelector('.dm-msg-content');
+        if (!contentEl) return;
+
+        contentEl.outerHTML = `
+            <span class="hub-msg-edit-box">
+                <input type="text" value="${escapeAttr(msg.content)}" maxlength="500">
+                <button class="msg-edit-save" type="button">Kaydet</button>
+                <button class="msg-edit-cancel" type="button">Vazgeç</button>
+            </span>
+        `;
+
+        const box = wrap.querySelector('.hub-msg-edit-box');
+        const input = box.querySelector('input');
+        input.focus();
+
+        box.querySelector('.msg-edit-save').addEventListener('click', async () => {
+
+            const newContent = input.value.trim();
+            if (!newContent) return;
+
+            await fetch(`/api/messages/${msg.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ content: newContent })
+            });
+
+        });
+
+        box.querySelector('.msg-edit-cancel').addEventListener('click', () => {
+            renderDmMessageIntoWrap(wrap, msg, isMine);
+        });
+
+        input.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') box.querySelector('.msg-edit-save').click();
+        });
+
+    });
+
+}
+
+
+function updateDmMessage(msg) {
+
+    const wrap = dmFeed.querySelector(`[data-message-id="${msg.id}"]`);
+    if (!wrap) return;
+
+    renderDmMessageIntoWrap(wrap, msg, msg.user_id === currentUser.id);
+
+}
+
+
+function removeDmMessage(messageId) {
+
+    const wrap = dmFeed.querySelector(`[data-message-id="${messageId}"]`);
+    if (!wrap) return;
+
+    const isMine = wrap.classList.contains('dm-msg-mine');
+    renderDmMessageIntoWrap(wrap, { id: messageId, kind: 'deleted' }, isMine);
 
 }
 
@@ -4074,41 +4201,54 @@ function appendHubMessage(msg) {
     wrap.className = 'hub-msg';
     wrap.dataset.messageId = msg.id;
 
+    renderHubMessageIntoWrap(wrap, msg);
+
+    hubFeed.appendChild(wrap);
+    hubFeed.scrollTop = hubFeed.scrollHeight;
+
+}
+
+
+function renderHubMessageIntoWrap(wrap, msg) {
+
     const time = msg.created_at
         ? new Date(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
         : '';
+
+    const editedTag = msg.edited ? '<span class="edited-tag">(düzenlendi)</span>' : '';
 
     const header = `
         <div class="header">
             <span class="username">${escapeHtml(msg.username)}</span>
             <span class="time">${time}</span>
+            ${editedTag}
         </div>
     `;
 
-    if (msg.kind === 'poll') {
+    const isMine = currentUser && msg.user_id === currentUser.id;
+    const canEdit = isMine && msg.kind === 'text';
+    const canDelete = isMine && msg.kind !== 'deleted';
 
-        wrap.innerHTML = header + renderPollCard(msg);
+    const actions = canDelete ? `
+        <div class="hub-msg-actions">
+            ${canEdit ? '<button class="msg-edit-btn" type="button" title="Düzenle">✎</button>' : ''}
+            <button class="msg-delete-btn" type="button" title="Sil">🗑</button>
+        </div>
+    ` : '';
 
-        wrap.querySelectorAll('.hub-poll-option').forEach((opt) => {
+    let body;
 
-            opt.addEventListener('click', async () => {
+    if (msg.kind === 'deleted') {
 
-                const optionIndex = Number(opt.dataset.optionIndex);
+        body = `<div class="hub-msg-deleted">Bu mesaj silindi</div>`;
 
-                await fetch(`/api/hubs/${currentHub.id}/poll/${msg.id}/vote`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ option_index: optionIndex })
-                });
+    } else if (msg.kind === 'poll') {
 
-            });
-
-        });
+        body = renderPollCard(msg);
 
     } else if (msg.kind === 'share') {
 
-        wrap.innerHTML = header + `
+        body = `
             <div class="hub-share-card">
                 <span class="hub-share-tag">📌 Paylaşım</span>
                 ${msg.content ? `<div class="hub-share-content">${escapeHtml(msg.content)}</div>` : ''}
@@ -4118,7 +4258,7 @@ function appendHubMessage(msg) {
 
     } else if (msg.kind === 'voice' && msg.payload) {
 
-        wrap.innerHTML = header + `
+        body = `
             <div class="voice-msg-card">
                 🎤
                 <audio controls src="${msg.payload.audio}"></audio>
@@ -4128,12 +4268,77 @@ function appendHubMessage(msg) {
 
     } else {
 
-        wrap.innerHTML = header + `<div class="hub-msg-text">${escapeHtml(msg.content)}</div>`;
+        body = `<div class="hub-msg-text">${escapeHtml(msg.content)}</div>`;
 
     }
 
-    hubFeed.appendChild(wrap);
-    hubFeed.scrollTop = hubFeed.scrollHeight;
+    wrap.innerHTML = header + actions + body;
+
+    wrap.querySelectorAll('.hub-poll-option').forEach((opt) => {
+
+        opt.addEventListener('click', async () => {
+
+            const optionIndex = Number(opt.dataset.optionIndex);
+
+            await fetch(`/api/hubs/${currentHub.id}/poll/${msg.id}/vote`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ option_index: optionIndex })
+            });
+
+        });
+
+    });
+
+    wrap.querySelector('.msg-delete-btn')?.addEventListener('click', async () => {
+
+        if (!confirm('Bu mesajı silmek istediğine emin misin?')) return;
+
+        await fetch(`/api/messages/${msg.id}`, { method: 'DELETE', credentials: 'include' });
+
+    });
+
+    wrap.querySelector('.msg-edit-btn')?.addEventListener('click', () => {
+
+        const textEl = wrap.querySelector('.hub-msg-text');
+        if (!textEl) return;
+
+        textEl.outerHTML = `
+            <div class="hub-msg-edit-box">
+                <input type="text" value="${escapeAttr(msg.content)}" maxlength="500">
+                <button class="msg-edit-save" type="button">Kaydet</button>
+                <button class="msg-edit-cancel" type="button">Vazgeç</button>
+            </div>
+        `;
+
+        const box = wrap.querySelector('.hub-msg-edit-box');
+        const input = box.querySelector('input');
+        input.focus();
+
+        box.querySelector('.msg-edit-save').addEventListener('click', async () => {
+
+            const newContent = input.value.trim();
+            if (!newContent) return;
+
+            await fetch(`/api/messages/${msg.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ content: newContent })
+            });
+
+        });
+
+        box.querySelector('.msg-edit-cancel').addEventListener('click', () => {
+            renderHubMessageIntoWrap(wrap, msg);
+        });
+
+        input.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') box.querySelector('.msg-edit-save').click();
+        });
+
+    });
 
 }
 
@@ -4171,25 +4376,17 @@ function updateHubMessage(msg) {
     const wrap = hubFeed.querySelector(`[data-message-id="${msg.id}"]`);
     if (!wrap) return;
 
-    const header = wrap.querySelector('.header').outerHTML;
-    wrap.innerHTML = header + renderPollCard(msg);
+    renderHubMessageIntoWrap(wrap, msg);
 
-    wrap.querySelectorAll('.hub-poll-option').forEach((opt) => {
+}
 
-        opt.addEventListener('click', async () => {
 
-            const optionIndex = Number(opt.dataset.optionIndex);
+function removeHubMessage(messageId) {
 
-            await fetch(`/api/hubs/${currentHub.id}/poll/${msg.id}/vote`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ option_index: optionIndex })
-            });
+    const wrap = hubFeed.querySelector(`[data-message-id="${messageId}"]`);
+    if (!wrap) return;
 
-        });
-
-    });
+    renderHubMessageIntoWrap(wrap, { id: messageId, kind: 'deleted', username: wrap.querySelector('.username')?.textContent || '' });
 
 }
 

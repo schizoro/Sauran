@@ -24,6 +24,8 @@ const {
   isHubMember,
   getHubMessages,
   saveHubMessage,
+  deleteMessage,
+  editMessage,
   createHubVoiceMessage,
   createHubPoll,
   voteHubPoll,
@@ -813,6 +815,60 @@ app.post('/api/hubs/:id/voice', (req, res) => {
   } catch (error) {
     console.error('Sesli mesaj hatası:', error);
     res.status(500).json({ success: false, error: 'Gönderilemedi.' });
+  }
+});
+
+// =====================================================
+// MESAJ SİLME / DÜZENLEME
+// =====================================================
+
+app.delete('/api/messages/:id', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    const result = deleteMessage(Number(req.params.id), user.id);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    if (result.hub_id) {
+      io.to(`hub:${result.hub_id}`).emit('hub_message_deleted', { id: result.id });
+    } else if (result.to_user_id) {
+      io.to(`user:${user.id}`).to(`user:${result.to_user_id}`).emit('dm_message_deleted', { id: result.id });
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Mesaj silme hatası:', error);
+    res.status(500).json({ success: false, error: 'Silinemedi.' });
+  }
+});
+
+app.patch('/api/messages/:id', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    const result = editMessage(Number(req.params.id), user.id, req.body?.content);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    if (result.hub_id) {
+      io.to(`hub:${result.hub_id}`).emit('hub_message_update', result.message);
+    } else if (result.to_user_id) {
+      io.to(`user:${user.id}`).to(`user:${result.to_user_id}`).emit('dm_message_update', result.message);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Mesaj düzenleme hatası:', error);
+    res.status(500).json({ success: false, error: 'Düzenlenemedi.' });
   }
 });
 

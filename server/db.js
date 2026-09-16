@@ -146,6 +146,9 @@ if (!messageColumns.includes('payload')) {
 if (!messageColumns.includes('to_user_id')) {
   db.exec(`ALTER TABLE messages ADD COLUMN to_user_id INTEGER`);
 }
+if (!messageColumns.includes('edited')) {
+  db.exec(`ALTER TABLE messages ADD COLUMN edited INTEGER DEFAULT 0`);
+}
 
 const HUB_TYPES = ['chat', 'game', 'stream', 'custom'];
 
@@ -698,7 +701,7 @@ function isHubMember(hubId, userId) {
 
 function getHubMessages(hubId, limit = 50) {
   const rows = db.prepare(`
-    SELECT id, username, content, kind, payload, created_at
+    SELECT id, user_id, username, content, kind, payload, edited, created_at
     FROM messages WHERE hub_id = ?
     ORDER BY id DESC LIMIT ?
   `).all(hubId, limit);
@@ -728,13 +731,43 @@ function hydrateMessage(row) {
   return row;
 }
 
+function deleteMessage(messageId, userId) {
+  const msg = db.prepare(`SELECT user_id, hub_id, to_user_id, kind FROM messages WHERE id = ?`).get(messageId);
+  if (!msg) return { success: false, error: 'Mesaj bulunamadı.' };
+  if (msg.user_id !== userId) return { success: false, error: 'Yalnızca kendi mesajını silebilirsin.' };
+  if (msg.kind === 'deleted') return { success: false, error: 'Mesaj zaten silinmiş.' };
+
+  db.prepare(`UPDATE messages SET kind = 'deleted', content = '', payload = NULL WHERE id = ?`).run(messageId);
+
+  return { success: true, id: messageId, hub_id: msg.hub_id, to_user_id: msg.to_user_id };
+}
+
+function editMessage(messageId, userId, newContent) {
+  const msg = db.prepare(`SELECT user_id, hub_id, to_user_id, kind FROM messages WHERE id = ?`).get(messageId);
+  if (!msg) return { success: false, error: 'Mesaj bulunamadı.' };
+  if (msg.user_id !== userId) return { success: false, error: 'Yalnızca kendi mesajını düzenleyebilirsin.' };
+  if (!['text', 'dm'].includes(msg.kind)) return { success: false, error: 'Bu mesaj türü düzenlenemez.' };
+
+  newContent = String(newContent || '').trim().slice(0, 500);
+  if (!newContent) return { success: false, error: 'Boş mesaj gönderilemez.' };
+
+  db.prepare(`UPDATE messages SET content = ?, edited = 1 WHERE id = ?`).run(newContent, messageId);
+
+  return {
+    success: true,
+    hub_id: msg.hub_id,
+    to_user_id: msg.to_user_id,
+    message: hydrateMessage(db.prepare(`SELECT id, user_id, username, content, kind, payload, to_user_id, edited, created_at FROM messages WHERE id = ?`).get(messageId))
+  };
+}
+
 function saveHubMessage(hubId, userId, username, content) {
   const info = db.prepare(`
     INSERT INTO messages (user_id, username, content, room, hub_id, kind)
     VALUES (?, ?, ?, ?, ?, 'text')
   `).run(userId, username, content, `hub_${hubId}`, hubId);
 
-  return hydrateMessage(db.prepare(`SELECT id, username, content, kind, payload, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid));
+  return hydrateMessage(db.prepare(`SELECT id, user_id, username, content, kind, payload, edited, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid));
 }
 
 function createHubPoll(hubId, userId, username, question, options) {
@@ -755,7 +788,7 @@ function createHubPoll(hubId, userId, username, question, options) {
     VALUES (?, ?, ?, ?, ?, 'poll', ?)
   `).run(userId, username, question, `hub_${hubId}`, hubId, payload);
 
-  return { success: true, message: hydrateMessage(db.prepare(`SELECT id, username, content, kind, payload, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid)) };
+  return { success: true, message: hydrateMessage(db.prepare(`SELECT id, user_id, username, content, kind, payload, edited, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid)) };
 }
 
 function voteHubPoll(messageId, userId, optionIndex) {
@@ -773,7 +806,7 @@ function voteHubPoll(messageId, userId, optionIndex) {
     ON CONFLICT(message_id, user_id) DO UPDATE SET option_index = excluded.option_index
   `).run(messageId, userId, optionIndex);
 
-  return { success: true, message: hydrateMessage(db.prepare(`SELECT id, username, content, kind, payload, created_at FROM messages WHERE id = ?`).get(messageId)) };
+  return { success: true, message: hydrateMessage(db.prepare(`SELECT id, user_id, username, content, kind, payload, edited, created_at FROM messages WHERE id = ?`).get(messageId)) };
 }
 
 function createHubShare(hubId, userId, username, content, url) {
@@ -791,7 +824,7 @@ function createHubShare(hubId, userId, username, content, url) {
     VALUES (?, ?, ?, ?, ?, 'share', ?)
   `).run(userId, username, content, `hub_${hubId}`, hubId, payload);
 
-  return { success: true, message: hydrateMessage(db.prepare(`SELECT id, username, content, kind, payload, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid)) };
+  return { success: true, message: hydrateMessage(db.prepare(`SELECT id, user_id, username, content, kind, payload, edited, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid)) };
 }
 
 function createHubVoiceMessage(hubId, userId, username, audioData, duration) {
@@ -810,7 +843,7 @@ function createHubVoiceMessage(hubId, userId, username, audioData, duration) {
     VALUES (?, ?, '', ?, ?, 'voice', ?)
   `).run(userId, username, `hub_${hubId}`, hubId, payload);
 
-  return { success: true, message: hydrateMessage(db.prepare(`SELECT id, username, content, kind, payload, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid)) };
+  return { success: true, message: hydrateMessage(db.prepare(`SELECT id, user_id, username, content, kind, payload, edited, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid)) };
 }
 
 function deleteHub(hubId, userId) {
@@ -1167,7 +1200,7 @@ function saveDmMessage(fromId, fromUsername, toId, content) {
 
   return {
     success: true,
-    message: hydrateMessage(db.prepare(`SELECT id, user_id, username, content, to_user_id, kind, payload, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid))
+    message: hydrateMessage(db.prepare(`SELECT id, user_id, username, content, to_user_id, kind, payload, edited, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid))
   };
 }
 
@@ -1193,13 +1226,13 @@ function saveDmVoiceMessage(fromId, fromUsername, toId, audioData, duration) {
 
   return {
     success: true,
-    message: hydrateMessage(db.prepare(`SELECT id, user_id, username, content, to_user_id, kind, payload, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid))
+    message: hydrateMessage(db.prepare(`SELECT id, user_id, username, content, to_user_id, kind, payload, edited, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid))
   };
 }
 
 function getDmMessages(userId, otherUserId, limit = 50) {
   const rows = db.prepare(`
-    SELECT id, user_id, username, content, to_user_id, kind, payload, created_at
+    SELECT id, user_id, username, content, to_user_id, kind, payload, edited, created_at
     FROM messages WHERE room = ?
     ORDER BY id DESC LIMIT ?
   `).all(dmRoom(userId, otherUserId), limit);
@@ -1236,6 +1269,8 @@ module.exports = {
   isHubMember,
   getHubMessages,
   saveHubMessage,
+  deleteMessage,
+  editMessage,
   createHubVoiceMessage,
   createHubPoll,
   voteHubPoll,

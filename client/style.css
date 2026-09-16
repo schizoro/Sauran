@@ -401,12 +401,26 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 .hub-member-name { color: #c5c6c7; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Hub Sohbet / Anket / Paylaşım Kartları */
-.hub-msg { align-self: flex-start; max-width: 78%; }
-.hub-msg .header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.hub-msg { align-self: flex-start; max-width: 78%; width: 100%; position: relative; padding: 4px 10px; border-radius: 6px; transition: background 0.12s; }
+.hub-msg:hover { background: rgba(255,255,255,0.025); }
+.hub-msg .header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
 .hub-msg .username { color: #66fcf1; font-weight: bold; font-size: 13px; }
 .hub-msg .time { color: #45a29e; font-size: 10px; opacity: 0.6; }
+.hub-msg .edited-tag { color: #4b5563; font-size: 10px; }
 
-.hub-msg-text { background-color: #12141a; padding: 11px 14px; border-radius: 2px; border-left: 2px solid #1f2833; color: #c5c6c7; font-size: 14px; line-height: 1.5; }
+.hub-msg-text { color: #c5c6c7; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+.hub-msg-deleted { color: #4b5563; font-size: 13px; font-style: italic; }
+
+.hub-msg-actions { position: absolute; top: -10px; right: 6px; display: none; gap: 4px; background: #1f2833; border: 1px solid #2a3644; border-radius: 6px; padding: 3px; }
+.hub-msg:hover .hub-msg-actions { display: flex; }
+.hub-msg-actions button { background: none; border: none; color: #8e9297; font-size: 12px; cursor: pointer; padding: 4px 6px; border-radius: 4px; }
+.hub-msg-actions button:hover { color: #66fcf1; background: #12141a; }
+.hub-msg-actions .msg-delete-btn:hover { color: #ff2e46; }
+
+.hub-msg-edit-box { display: flex; gap: 8px; align-items: center; }
+.hub-msg-edit-box input { flex: 1; background: #0b0c10; border: 1px solid #66fcf1; color: #c5c6c7; padding: 7px 10px; font-size: 13px; outline: none; }
+.hub-msg-edit-box button { padding: 6px 10px; font-size: 11px; font-weight: bold; cursor: pointer; border: 1px solid #66fcf1; background: transparent; color: #66fcf1; }
+.hub-msg-edit-box button:hover { background: #66fcf1; color: #0b0c10; }
 
 .hub-poll-card, .hub-share-card { background: #12141a; border: 1px solid #1f2833; border-left: 3px solid #66fcf1; padding: 14px 16px; min-width: 260px; }
 .hub-poll-question { color: #fff; font-size: 13px; font-weight: bold; margin-bottom: 12px; }
@@ -480,10 +494,12 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 /* ─── v1.7: DM Paneli ─────────────────────────────────────────────────────── */
 .dm-modal-box { width: 380px; height: 520px; display: flex; flex-direction: column; }
 .dm-feed { flex: 1; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
-.dm-msg { max-width: 80%; padding: 9px 13px; font-size: 13px; line-height: 1.5; border-radius: 2px; }
+.dm-msg { position: relative; max-width: 80%; padding: 9px 13px; font-size: 13px; line-height: 1.5; border-radius: 2px; }
 .dm-msg-mine { align-self: flex-end; background: rgba(102, 252, 241, 0.12); border: 1px solid rgba(102, 252, 241, 0.3); color: #c5c6c7; }
 .dm-msg-theirs { align-self: flex-start; background: #12141a; border: 1px solid #1f2833; color: #c5c6c7; }
 .dm-msg-time { display: block; margin-top: 4px; font-size: 9px; color: #6b7280; }
+.dm-msg .hub-msg-actions { top: -12px; right: 4px; }
+.dm-msg:hover .hub-msg-actions { display: flex; }
 .dm-form { display: flex; gap: 10px; padding: 14px 18px; border-top: 1px solid #1f2833; background: #12141a; }
 .dm-form input { flex: 1; background: #0b0c10; border: 1px solid #1f2833; padding: 11px; color: #66fcf1; outline: none; font-size: 13px; }
 .dm-form input:focus { border-color: #45a29e; }
