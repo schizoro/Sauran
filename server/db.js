@@ -563,6 +563,29 @@ function createHub(userId, { name, image_data }) {
   }
 }
 
+function updateHub(hubId, userId, { name, image_data }) {
+  const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
+  if (!hub) return { success: false, error: 'Hub bulunamadı.' };
+  if (hub.created_by !== userId) return { success: false, error: 'Sadece Hub sahibi düzenleyebilir.' };
+
+  if (name !== undefined) {
+    name = String(name || '').trim();
+    if (!name || name.length < 3 || name.length > 40) {
+      return { success: false, error: 'Hub adı 3-40 karakter olmalıdır.' };
+    }
+    db.prepare(`UPDATE hubs SET name = ? WHERE id = ?`).run(name, hubId);
+  }
+
+  if (image_data !== undefined) {
+    if (image_data && !/^data:image\/(png|jpe?g|webp|gif);base64,/.test(image_data)) {
+      return { success: false, error: 'Geçersiz görsel formatı.' };
+    }
+    db.prepare(`UPDATE hubs SET image_data = ? WHERE id = ?`).run(image_data || null, hubId);
+  }
+
+  return { success: true };
+}
+
 function listHubs(userId) {
   return db.prepare(`
     SELECT
@@ -849,7 +872,7 @@ function createHubVoiceMessage(hubId, userId, username, audioData, duration) {
     return { success: false, error: 'Geçersiz ses formatı.' };
   }
 
-  if (audioData.length > 3_000_000) {
+  if (audioData.length > 6_000_000) {
     return { success: false, error: 'Sesli mesaj çok uzun.' };
   }
 
@@ -1286,7 +1309,7 @@ function saveDmVoiceMessage(fromId, fromUsername, toId, audioData, duration) {
     return { success: false, error: 'Geçersiz ses formatı.' };
   }
 
-  if (audioData.length > 3_000_000) {
+  if (audioData.length > 6_000_000) {
     return { success: false, error: 'Sesli mesaj çok uzun.' };
   }
 
@@ -1365,6 +1388,7 @@ module.exports = {
   updatePrivacy,
   updateAvatar,
   createHub,
+  updateHub,
   listHubs,
   getHubDetail,
   setHubRole,

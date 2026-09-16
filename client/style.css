@@ -64,14 +64,33 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 #chat-screen { width: 100%; display: flex; flex-direction: column; }
 
 /* ─── v1.9: Üst Bar ───────────────────────────────────────────────────────── */
-.topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 22px; background: #12141a; border-bottom: 1px solid #1f2833; flex-shrink: 0; }
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 22px; background: #12141a; border-bottom: 1px solid #1f2833; flex-shrink: 0; position: relative; z-index: 80; }
 .topbar-logo { color: #66fcf1; font-weight: bold; letter-spacing: 3px; font-size: 14px; }
-.topbar-actions { display: flex; align-items: center; gap: 10px; }
-.topbar-icon-btn { position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: transparent; border: 1px solid #1f2833; color: #c5c6c7; cursor: pointer; font-size: 15px; transition: 0.2s; }
-.topbar-icon-btn:hover { border-color: #66fcf1; box-shadow: 0 0 8px rgba(102, 252, 241, 0.2); }
+.topbar-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .topbar-badge { position: absolute; top: -5px; right: -5px; background: #66fcf1; color: #0b0c10; font-size: 9px; font-weight: bold; padding: 1px 5px; border-radius: 8px; }
-.topbar-profile-btn { display: flex; align-items: center; gap: 8px; padding: 5px 10px 5px 5px; background: transparent; border: 1px solid #1f2833; cursor: pointer; transition: 0.2s; }
+.topbar-profile-btn { display: flex; align-items: center; gap: 8px; padding: 5px 10px 5px 5px; background: transparent; border: 1px solid #1f2833; cursor: pointer; transition: 0.2s; min-width: 0; }
 .topbar-profile-btn:hover { border-color: #66fcf1; }
+
+/* ─── v1.15: Hamburger Menü ───────────────────────────────────────────────── */
+.topbar-menu-btn {
+  position: relative; width: 38px; height: 38px; flex-shrink: 0; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px) saturate(160%); -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.12); color: #c5c6c7; cursor: pointer; font-size: 16px; transition: 0.2s;
+}
+.topbar-menu-btn:hover { border-color: rgba(102, 252, 241, 0.4); color: #66fcf1; }
+.topbar-menu-badge { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: #66fcf1; box-shadow: 0 0 6px rgba(102, 252, 241, 0.7); }
+
+.topbar-menu-dropdown {
+  position: absolute; top: calc(100% + 8px); right: 22px; z-index: 90; min-width: 220px;
+  display: flex; flex-direction: column; padding: 8px; border-radius: 14px;
+  animation: dropdown-in 0.18s ease-out;
+}
+.topbar-menu-item {
+  position: relative; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px;
+  background: none; border: none; color: #c5c6c7; font-size: 13px; cursor: pointer; transition: 0.15s; text-align: left; width: 100%;
+}
+.topbar-menu-item:hover { background: rgba(102, 252, 241, 0.1); color: #66fcf1; }
+.topbar-menu-item .topbar-badge { position: static; margin-left: auto; }
 
 /* Sohbet Alanı */
 .chat-area { flex: 1; display: flex; flex-direction: column; background-color: #0b0c10; min-height: 0; }
@@ -261,7 +280,7 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 
 /* ─── v1.10: Hub Oluşturma — Basit Form ──────────────────────────────────── */
 .hub-create-image-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.hub-create-image-preview { width: 72px; height: 72px; border-radius: 12px; background: #12141a; border: 1px solid #2a3644; display: flex; align-items: center; justify-content: center; font-size: 28px; overflow: hidden; object-fit: cover; }
+.hub-create-image-preview { width: 72px; height: 72px; border-radius: 12px; background-color: #12141a; background-size: cover; background-position: center; border: 1px solid #2a3644; display: flex; align-items: center; justify-content: center; font-size: 28px; overflow: hidden; object-fit: cover; }
 .hub-create-image-preview img { width: 100%; height: 100%; object-fit: cover; }
 .hub-create-image-btn { padding: 6px 14px; background: transparent; border: 1px solid #2a3644; color: #8e9297; font-size: 11px; cursor: pointer; transition: 0.2s; }
 .hub-create-image-btn:hover { border-color: #66fcf1; color: #66fcf1; }
@@ -333,19 +352,63 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 .hub-create-error { color: #ff2e46; font-size: 12px; text-align: center; }
 
 /* ─── v1.6: Hub Detay ─────────────────────────────────────────────────────── */
-.hub-detail-view { flex-direction: row; }
-.hub-detail-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-.hub-detail-side { width: 220px; border-left: 1px solid #1f2833; background: #101319; padding: 18px 14px; display: flex; flex-direction: column; gap: 22px; overflow-y: auto; }
+.hub-detail-view { flex-direction: row; position: relative; }
+.hub-detail-main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+
+/* Üye paneli: her ekran boyutunda varsayılan olarak kapalı, sağdan kayan panel */
+.hub-detail-side {
+  position: fixed; top: 0; right: 0; height: 100%; width: 260px; max-width: 82vw;
+  border-left: 1px solid #1f2833; background: #101319; padding: 18px 14px;
+  display: flex; flex-direction: column; gap: 22px; overflow-y: auto;
+  transform: translateX(100%); transition: transform 0.25s ease; z-index: 60;
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
+}
+.hub-detail-side.open { transform: translateX(0); }
+.hub-side-backdrop { display: none; }
+.hub-side-backdrop.open { display: block; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45); z-index: 55; }
+
+.hub-members-toggle-btn {
+  position: fixed; top: 50%; right: 0; transform: translateY(-50%);
+  width: 26px; height: 52px; border-radius: 12px 0 0 12px; z-index: 61;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+  background: rgba(255, 255, 255, 0.07); backdrop-filter: blur(14px) saturate(160%); -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.14); border-right: none;
+  color: #8e9297; cursor: pointer; transition: right 0.25s ease, color 0.2s;
+}
+.hub-members-toggle-btn:hover { color: #66fcf1; }
+.hub-members-toggle-btn.open { right: 260px; }
+.hub-members-toggle-arrow { display: inline-block; font-size: 13px; transition: transform 0.25s ease; }
+.hub-members-toggle-btn.open .hub-members-toggle-arrow { transform: rotate(180deg); }
+
+@media (max-width: 768px) {
+  .hub-members-toggle-btn.open { right: 82vw; }
+}
 
 .hub-detail-header { display: flex; align-items: center; gap: 10px; padding: 14px 25px; border-bottom: 1px solid #1f2833; background: #0b0c10; }
-.hub-back-btn { display: flex; align-items: center; gap: 6px; background: #12141a; border: 1px solid #1f2833; border-radius: 999px; color: #8e9297; font-size: 12px; font-weight: bold; padding: 8px 16px; cursor: pointer; transition: 0.2s; }
-.hub-back-btn:hover { color: #66fcf1; border-color: #66fcf1; box-shadow: 0 0 8px rgba(102, 252, 241, 0.15); }
+.hub-back-btn {
+  display: flex; align-items: center; gap: 6px; border-radius: 999px; color: #8e9297; font-size: 12px; font-weight: bold; padding: 8px 16px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px) saturate(160%); -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.12); transition: 0.2s;
+}
+.hub-back-btn:hover { color: #66fcf1; border-color: rgba(102, 252, 241, 0.4); box-shadow: 0 0 8px rgba(102, 252, 241, 0.15); }
 .hub-back-arrow { font-size: 13px; }
 
-.hub-title-pill { display: flex; align-items: center; gap: 8px; background: #12141a; border: 1px solid #1f2833; border-radius: 999px; padding: 8px 18px; flex: 1; min-width: 0; }
+.hub-title-pill {
+  display: flex; align-items: center; gap: 8px; border-radius: 999px; padding: 8px 18px; flex: 1; min-width: 0;
+  background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px) saturate(160%); -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
 .hub-detail-icon { font-size: 18px; flex-shrink: 0; }
 .hub-detail-header h2 { color: #fff; font-size: 14px; font-weight: bold; letter-spacing: 0.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; min-width: 0; }
 .hub-detail-count { color: #45a29e; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; flex-shrink: 0; }
+
+.hub-call-btn, .hub-icon-btn {
+  flex-shrink: 0; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px) saturate(160%); -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.12); color: #c5c6c7; transition: 0.2s;
+}
+.hub-call-btn:hover, .hub-icon-btn:hover { border-color: rgba(102, 252, 241, 0.4); color: #66fcf1; box-shadow: 0 0 10px rgba(102, 252, 241, 0.15); }
+.hub-call-btn.in-call { background: rgba(255, 46, 70, 0.16); border-color: rgba(255, 46, 70, 0.5); color: #ff2e46; }
 
 .hub-feed { flex: 1; overflow-y: auto; padding: 20px 25px; display: flex; flex-direction: column; gap: 14px; }
 .hub-feed-empty { color: #4b5563; font-size: 13px; text-align: center; margin-top: 40px; }
@@ -357,8 +420,17 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 .hub-start-menu button { background: none; border: none; color: #c5c6c7; font-size: 13px; padding: 9px 14px; text-align: left; cursor: pointer; transition: 0.15s; white-space: nowrap; }
 .hub-start-menu button:hover { background: #1f2833; color: #66fcf1; }
 #hub-chat-form { display: flex; gap: 12px; }
-#hub-chat-form button[type="submit"] { padding: 0 22px; background: transparent; color: #66fcf1; border: 1px solid #66fcf1; cursor: pointer; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; transition: 0.3s; }
-#hub-chat-form button[type="submit"]:hover { background: #66fcf1; color: #0b0c10; box-shadow: 0 0 10px rgba(102, 252, 241, 0.3); }
+
+/* ─── Liquid Glass temel stili ────────────────────────────────────────────── */
+.liquid-glass {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: 0.2s;
+}
+.liquid-glass:hover { background: rgba(102, 252, 241, 0.1); border-color: rgba(102, 252, 241, 0.4); }
 
 /* ─── v1.14: Birleşik Mesaj Kutusu (Ekle + Yaz + Dikte + Sesli Mesaj) ────── */
 .composer-form { display: flex; gap: 10px; align-items: center; }
@@ -374,6 +446,17 @@ body.theme-light .profile-field-value { color: #1a1d21; }
   background: transparent; border: 1px solid #1f2833; color: #8e9297; font-size: 18px; cursor: pointer; transition: 0.2s;
 }
 .composer-attach-btn:hover { border-color: #66fcf1; color: #66fcf1; }
+
+.composer-send-btn {
+  flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  margin-left: 2px; font-size: 15px; color: #66fcf1; cursor: pointer; transform: rotate(0deg);
+  background: rgba(102, 252, 241, 0.14);
+  backdrop-filter: blur(10px) saturate(160%); -webkit-backdrop-filter: blur(10px) saturate(160%);
+  border: 1px solid rgba(102, 252, 241, 0.4);
+  box-shadow: 0 2px 10px rgba(102, 252, 241, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  transition: 0.2s;
+}
+.composer-send-btn:hover { background: rgba(102, 252, 241, 0.28); box-shadow: 0 2px 14px rgba(102, 252, 241, 0.3); }
 
 /* ─── v1.11: Mikrofon Butonları (Dikte / Sesli Mesaj) ────────────────────── */
 .mic-btn { padding: 0 !important; width: 42px; flex-shrink: 0; background: transparent; border: 1px solid #1f2833 !important; color: #8e9297; font-size: 15px; cursor: pointer; transition: 0.2s; text-transform: none !important; letter-spacing: normal !important; }
@@ -476,15 +559,18 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 .poll-option-row input { flex: 1; }
 .poll-submit-btn { width: 100%; padding: 11px; margin-top: 4px; }
 
-/* ─── v1.7: Hub Silme ─────────────────────────────────────────────────────── */
-.hub-delete-btn { padding: 7px 12px; background: transparent; border: 1px solid #2a3644; color: #6b7280; font-size: 11px; font-weight: bold; letter-spacing: 0.5px; cursor: pointer; transition: 0.2s; }
-.hub-delete-btn:hover { border-color: #ff2e46; color: #ff2e46; box-shadow: 0 0 8px rgba(255, 46, 70, 0.2); }
-
-/* ─── v1.12: Sesli Sohbet ─────────────────────────────────────────────────── */
-.hub-call-btn { padding: 7px 14px; background: transparent; border: 1px solid #57f287; color: #57f287; font-size: 11px; font-weight: bold; letter-spacing: 0.5px; cursor: pointer; transition: 0.2s; }
-.hub-call-btn:hover { background: #57f287; color: #0b0c10; box-shadow: 0 0 10px rgba(87, 242, 135, 0.4); }
-.hub-call-btn.in-call { border-color: #ff2e46; color: #ff2e46; }
-.hub-call-btn.in-call:hover { background: #ff2e46; color: #0b0c10; box-shadow: 0 0 10px rgba(255, 46, 70, 0.4); }
+/* ─── v1.15: Hub Ayarları Modalı ──────────────────────────────────────────── */
+.hub-settings-box { width: 380px; max-width: 92vw; }
+.hub-settings-body { padding: 20px 22px 24px; display: flex; flex-direction: column; gap: 12px; }
+.hub-settings-divider { height: 1px; background: #1f2833; margin: 8px 0; }
+.hub-settings-action-btn {
+  padding: 10px 14px; text-align: left; font-size: 12px; font-weight: bold; letter-spacing: 0.3px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px) saturate(160%); -webkit-backdrop-filter: blur(10px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; color: #c5c6c7; transition: 0.2s;
+}
+.hub-settings-action-btn:hover { border-color: rgba(102, 252, 241, 0.4); color: #66fcf1; }
+.hub-settings-action-btn.hub-settings-danger { color: #ff8a95; }
+.hub-settings-action-btn.hub-settings-danger:hover { border-color: rgba(255, 46, 70, 0.5); color: #ff2e46; }
 
 .call-overlay { position: fixed; inset: 0; background: #0b0c10; z-index: 200; display: flex; flex-direction: column; }
 .call-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 25px; background: #12141a; border-bottom: 1px solid #1f2833; }
@@ -494,6 +580,21 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 #call-screenshare-btn { padding: 8px 16px; background: transparent; border: 1px solid #66fcf1; color: #66fcf1; font-weight: bold; font-size: 12px; cursor: pointer; transition: 0.2s; }
 #call-screenshare-btn:hover { background: #66fcf1; color: #0b0c10; }
 #call-screenshare-btn.active { background: #66fcf1; color: #0b0c10; }
+#call-minimize-btn { width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%; background: transparent; border: 1px solid #2a3644; color: #8e9297; font-size: 12px; cursor: pointer; transition: 0.2s; }
+#call-minimize-btn:hover { border-color: #66fcf1; color: #66fcf1; }
+
+/* ─── v1.15: Küçültülmüş Arama Çubuğu ─────────────────────────────────────── */
+.call-mini-bar {
+  position: fixed; bottom: 18px; right: 18px; z-index: 250; display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: 999px; max-width: calc(100vw - 36px);
+  background: rgba(20, 22, 28, 0.75); backdrop-filter: blur(16px) saturate(170%); -webkit-backdrop-filter: blur(16px) saturate(170%);
+  border: 1px solid rgba(255, 255, 255, 0.14); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+.call-mini-dot { width: 9px; height: 9px; border-radius: 50%; background: #57f287; flex-shrink: 0; animation: mic-pulse-cyan 1.4s ease-in-out infinite; }
+.call-mini-name { color: #fff; font-size: 12px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+.call-mini-bar button { width: 26px; height: 26px; border-radius: 50%; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.16); color: #c5c6c7; font-size: 11px; cursor: pointer; flex-shrink: 0; transition: 0.2s; }
+.call-mini-bar button:hover { color: #66fcf1; border-color: rgba(102, 252, 241, 0.4); }
+#call-mini-leave-btn:hover { color: #ff2e46; border-color: rgba(255, 46, 70, 0.5); }
 .call-frame-container { flex: 1; }
 .call-frame-container iframe { width: 100%; height: 100%; border: none; }
 
@@ -595,8 +696,6 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 }
 .dm-msg.show-actions .hub-msg-actions { display: flex; }
 .dm-modal-box .composer-form { padding: 14px 18px; border-top: 1px solid #1f2833; background: #12141a; }
-.dm-modal-box .composer-form button[type="submit"] { padding: 0 18px; background: transparent; border: 1px solid #66fcf1; color: #66fcf1; font-weight: bold; cursor: pointer; }
-.dm-modal-box .composer-form button[type="submit"]:hover { background: #66fcf1; color: #0b0c10; }
 .dm-call-btn { background: transparent; border: 1px solid #1f2833; color: #66fcf1; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 14px; margin-left: auto; transition: 0.2s; }
 .dm-call-btn:hover { border-color: #66fcf1; box-shadow: 0 0 8px rgba(102, 252, 241, 0.2); }
 .dm-call-btn.in-call { border-color: #ff2e46; color: #ff2e46; }
@@ -607,10 +706,6 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 .voice-msg-card { position: relative; }
 .voice-progress { flex: 1; height: 3px; background: #1f2833; border-radius: 2px; overflow: hidden; min-width: 40px; }
 .voice-progress-fill { height: 100%; width: 0%; background: #66fcf1; transition: width 0.1s linear; }
-
-/* ─── v1.13: Üye Paneli Aç/Kapa (Mobil) ───────────────────────────────────── */
-.hub-members-toggle-btn { display: none; padding: 7px 10px; background: transparent; border: 1px solid #2a3644; color: #8e9297; font-size: 13px; cursor: pointer; }
-.hub-side-backdrop { display: none; }
 
 /* ─── v1.13: MOBİL ────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
@@ -623,10 +718,9 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 
   .topbar { padding: 10px 10px; gap: 6px; }
   .topbar-logo { font-size: 12px; letter-spacing: 1px; flex-shrink: 0; }
-  .topbar-actions { gap: 4px; overflow-x: auto; max-width: 100%; }
-  .topbar-icon-btn { width: 30px; height: 30px; font-size: 12px; flex-shrink: 0; }
   .topbar-profile-btn { padding: 4px 6px 4px 4px; flex-shrink: 0; }
-  .profile-username { display: none; }
+  .profile-username { max-width: 90px; }
+  .topbar-menu-dropdown { right: 10px; min-width: 200px; }
 
   .hub-list-view { padding: 18px 14px; }
   .hub-list-header { flex-wrap: wrap; gap: 10px; }
@@ -638,22 +732,8 @@ body.theme-light .profile-field-value { color: #1a1d21; }
   .hub-title-pill { flex: 1 1 140px; min-width: 140px; padding: 7px 12px; }
   .hub-back-btn { flex-shrink: 0; padding: 7px 10px; font-size: 0; }
   .hub-back-arrow { font-size: 14px; }
-  .hub-call-btn, .hub-delete-btn { flex-shrink: 0; padding: 7px 10px; font-size: 0; }
-  .hub-call-btn::before { content: '🎙️'; font-size: 14px; }
-  #hub-invite-friend-btn::before { content: '👥'; font-size: 14px; }
-  #hub-invite-btn::before { content: '🔑'; font-size: 14px; }
-  #hub-delete-btn::before { content: '🗑'; font-size: 14px; }
-
-  .hub-members-toggle-btn { display: block; flex-shrink: 0; }
 
   .hub-detail-view { flex-direction: column; }
-  .hub-detail-side {
-    position: fixed; top: 0; right: 0; height: 100%; width: 82%; max-width: 300px;
-    transform: translateX(100%); transition: transform 0.22s ease; z-index: 60;
-    box-shadow: -10px 0 30px rgba(0,0,0,0.5);
-  }
-  .hub-detail-side.mobile-open { transform: translateX(0); }
-  .hub-side-backdrop.mobile-open { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 55; }
 
   .hub-feed { padding: 14px 14px; }
   .hub-composer { padding: 12px 14px; }

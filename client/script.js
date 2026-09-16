@@ -174,6 +174,35 @@ const topFriendsList =
 
 
 // =====================================================
+// ÜST BAR HAMBURGER MENÜSÜ
+// =====================================================
+
+const topbarMenuBtn = document.getElementById('topbar-menu-btn');
+const topbarMenuDropdown = document.getElementById('topbar-menu-dropdown');
+const topbarMenuBadge = document.getElementById('topbar-menu-badge');
+
+topbarMenuBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const isOpen = topbarMenuDropdown.style.display === 'flex';
+    topbarMenuDropdown.style.display = isOpen ? 'none' : 'flex';
+});
+
+document.addEventListener('click', (event) => {
+    if (topbarMenuDropdown.style.display === 'flex' &&
+        !topbarMenuDropdown.contains(event.target) &&
+        event.target !== topbarMenuBtn) {
+        topbarMenuDropdown.style.display = 'none';
+    }
+});
+
+topbarMenuDropdown.querySelectorAll('.topbar-menu-item').forEach((btn) => {
+    btn.addEventListener('click', () => {
+        topbarMenuDropdown.style.display = 'none';
+    });
+});
+
+
+// =====================================================
 // ARKADAŞ EKLE (AYRI MODAL)
 // =====================================================
 
@@ -2879,6 +2908,7 @@ async function refreshNotificationsBadge() {
         const count = data.notifications.length;
         notificationsBadge.style.display = count > 0 ? 'flex' : 'none';
         notificationsBadge.textContent = count;
+        topbarMenuBadge.style.display = count > 0 ? 'block' : 'none';
 
     } catch (error) {
 
@@ -3767,16 +3797,117 @@ const hubDetailSide = document.getElementById('hub-detail-side');
 const hubSideBackdrop = document.getElementById('hub-side-backdrop');
 
 hubMembersToggleBtn.addEventListener('click', () => {
-    hubDetailSide.classList.toggle('mobile-open');
-    hubSideBackdrop.classList.toggle('mobile-open');
+    hubDetailSide.classList.toggle('open');
+    hubSideBackdrop.classList.toggle('open');
+    hubMembersToggleBtn.classList.toggle('open');
 });
 
 hubSideBackdrop.addEventListener('click', () => {
-    hubDetailSide.classList.remove('mobile-open');
-    hubSideBackdrop.classList.remove('mobile-open');
+    hubDetailSide.classList.remove('open');
+    hubSideBackdrop.classList.remove('open');
+    hubMembersToggleBtn.classList.remove('open');
 });
 const hubDeleteBtn = document.getElementById('hub-delete-btn');
 const hubCallBtn = document.getElementById('hub-call-btn');
+
+const hubSettingsOpenBtn = document.getElementById('hub-settings-open-btn');
+const hubSettingsModal = document.getElementById('hub-settings-modal');
+const hubSettingsCloseBtn = document.getElementById('hub-settings-close-btn');
+const hubSettingsImagePreview = document.getElementById('hub-settings-image-preview');
+const hubSettingsImageBtn = document.getElementById('hub-settings-image-btn');
+const hubSettingsImageInput = document.getElementById('hub-settings-image-input');
+const hubSettingsNameInput = document.getElementById('hub-settings-name-input');
+const hubSettingsError = document.getElementById('hub-settings-error');
+const hubSettingsSaveBtn = document.getElementById('hub-settings-save-btn');
+
+let hubSettingsNewImageData = undefined;
+
+hubSettingsOpenBtn.addEventListener('click', () => {
+
+    if (!currentHub) return;
+
+    hubSettingsNewImageData = undefined;
+    hubSettingsNameInput.value = currentHub.name || '';
+    hubSettingsError.textContent = '';
+
+    if (currentHub.image_data) {
+        hubSettingsImagePreview.style.backgroundImage = `url(${currentHub.image_data})`;
+        hubSettingsImagePreview.textContent = '';
+    } else {
+        hubSettingsImagePreview.style.backgroundImage = '';
+        hubSettingsImagePreview.textContent = currentHub.icon || '🧩';
+    }
+
+    hubSettingsModal.style.display = 'flex';
+
+});
+
+hubSettingsCloseBtn.addEventListener('click', () => hubSettingsModal.style.display = 'none');
+hubSettingsModal.addEventListener('click', (event) => {
+    if (event.target === hubSettingsModal) hubSettingsModal.style.display = 'none';
+});
+
+hubSettingsImageBtn.addEventListener('click', () => hubSettingsImageInput.click());
+
+hubSettingsImageInput.addEventListener('change', () => {
+
+    const file = hubSettingsImageInput.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+        showToast("Görsel limiti 5 MB'dir.");
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+        hubSettingsNewImageData = reader.result;
+        hubSettingsImagePreview.style.backgroundImage = `url(${reader.result})`;
+        hubSettingsImagePreview.textContent = '';
+    };
+    reader.readAsDataURL(file);
+
+});
+
+hubSettingsSaveBtn.addEventListener('click', async () => {
+
+    if (!currentHub) return;
+
+    const name = hubSettingsNameInput.value.trim();
+
+    if (name.length < 3) {
+        hubSettingsError.textContent = 'Hub adı en az 3 karakter olmalı.';
+        return;
+    }
+
+    const body = { name };
+    if (hubSettingsNewImageData !== undefined) body.image_data = hubSettingsNewImageData;
+
+    try {
+
+        const response = await fetch(`/api/hubs/${currentHub.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(body)
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            hubSettingsError.textContent = data.error || 'Kaydedilemedi.';
+            return;
+        }
+
+        hubSettingsModal.style.display = 'none';
+        openHub(currentHub.id);
+
+    } catch (error) {
+        console.error('Hub ayarları kaydedilemedi:', error);
+        hubSettingsError.textContent = 'Kaydedilemedi.';
+    }
+
+});
 
 const callOverlay = document.getElementById('call-overlay');
 const callHubName = document.getElementById('call-hub-name');
@@ -3786,6 +3917,28 @@ const callScreenshareBtn = document.getElementById('call-screenshare-btn');
 const callRingingState = document.getElementById('call-ringing-state');
 const callRingingText = document.getElementById('call-ringing-text');
 const callRingingCancelBtn = document.getElementById('call-ringing-cancel-btn');
+const callMinimizeBtn = document.getElementById('call-minimize-btn');
+const callMiniBar = document.getElementById('call-mini-bar');
+const callMiniName = document.getElementById('call-mini-name');
+const callMiniExpandBtn = document.getElementById('call-mini-expand-btn');
+const callMiniLeaveBtn = document.getElementById('call-mini-leave-btn');
+
+callMinimizeBtn.addEventListener('click', () => {
+    if (!callFrame && callMode !== 'dm-ringing') return;
+    callMiniName.textContent = callHubName.textContent;
+    callOverlay.style.display = 'none';
+    callMiniBar.style.display = 'flex';
+});
+
+callMiniExpandBtn.addEventListener('click', () => {
+    callMiniBar.style.display = 'none';
+    callOverlay.style.display = 'flex';
+});
+
+callMiniLeaveBtn.addEventListener('click', () => {
+    callMiniBar.style.display = 'none';
+    leaveCall();
+});
 
 const dmIncomingCallModal = document.getElementById('dm-incoming-call-modal');
 const dmIncomingCallUsername = document.getElementById('dm-incoming-call-username');
@@ -4160,11 +4313,14 @@ hubInviteFriendBtn.addEventListener(
 
             hubInviteFriendList.innerHTML = '';
 
-            if (data.friends.length === 0) {
-                hubInviteFriendList.innerHTML = '<div class="users-list-empty">Henüz arkadaşın yok.</div>';
+            const memberIds = new Set((currentHub.members || []).map(m => m.user_id));
+            const invitableFriends = data.friends.filter(friend => !memberIds.has(friend.id));
+
+            if (invitableFriends.length === 0) {
+                hubInviteFriendList.innerHTML = '<div class="users-list-empty">Davet edilebilecek arkadaşın yok.</div>';
             }
 
-            data.friends.forEach((friend) => {
+            invitableFriends.forEach((friend) => {
 
                 const li = document.createElement('li');
                 li.style.justifyContent = 'space-between';
@@ -4344,7 +4500,7 @@ hubCallBtn.addEventListener(
         if (!currentHub) return;
 
         hubCallBtn.disabled = true;
-        hubCallBtn.textContent = 'Bağlanıyor...';
+        hubCallBtn.textContent = '⏳';
 
         try {
 
@@ -4367,17 +4523,18 @@ hubCallBtn.addEventListener(
             await joinCallFrame(data.room_url, data.token);
 
             hubCallBtn.classList.add('in-call');
-            hubCallBtn.textContent = '🔴 Aramadan Ayrıl';
+            hubCallBtn.textContent = '🔴';
 
         } catch (error) {
 
             console.error('Sesli sohbete katılınamadı:', error);
             alert('Sesli sohbete katılınamadı.');
+            leaveCall();
 
         } finally {
 
             hubCallBtn.disabled = false;
-            if (!callFrame) hubCallBtn.textContent = '🎙️ Sesli Sohbet';
+            if (!callFrame) hubCallBtn.textContent = '🔊';
 
         }
 
@@ -4505,15 +4662,35 @@ async function joinCallFrame(roomUrl, token) {
         throw new Error('DailyIframe yok');
     }
 
+    // Önceden bırakılmamış bir çerçeve varsa (ör. başarısız bir önceki deneme),
+    // yeni bağlantı kurmadan önce kaynaklarını serbest bırak.
+    if (callFrame) {
+        try { callFrame.destroy(); } catch (_) { /* yoksay */ }
+        callFrame = null;
+    }
+
     callFrame = DailyIframe.createFrame(callFrameContainer, {
         showLeaveButton: false,
         iframeStyle: { width: '100%', height: '100%', border: 'none' }
     });
 
-    await callFrame.join({ url: roomUrl, token, startVideoOff: true });
+    try {
 
-    // Bu uygulamada görüntülü görüşme yok — kamera her zaman zorla kapalı tutulur.
-    callFrame.setLocalVideo(false);
+        // Bu uygulamada görüntülü görüşme yok — kamerayı hiç istemiyoruz ki
+        // tarayıcı kamera izni bile sormasın (sadece mikrofon).
+        await callFrame.join({
+            url: roomUrl,
+            token,
+            startVideoOff: true,
+            userMediaVideoConstraints: false
+        });
+
+    } catch (error) {
+        callFrame.destroy();
+        callFrame = null;
+        throw error;
+    }
+
     callFrame.on('participant-updated', (event) => {
         if (event?.participant?.local && event.participant.video) {
             callFrame.setLocalVideo(false);
@@ -4521,6 +4698,10 @@ async function joinCallFrame(roomUrl, token) {
     });
 
     callFrame.on('left-meeting', leaveCall);
+    callFrame.on('error', (event) => {
+        console.error('Daily.co çağrı hatası:', event);
+        leaveCall();
+    });
 
 }
 
@@ -4565,12 +4746,13 @@ function leaveCall() {
     }
 
     callOverlay.style.display = 'none';
+    callMiniBar.style.display = 'none';
     callRingingState.style.display = 'none';
     callFrameContainer.style.display = 'block';
     callScreenshareBtn.classList.remove('active');
 
     hubCallBtn.classList.remove('in-call');
-    hubCallBtn.textContent = '🎙️ Sesli Sohbet';
+    hubCallBtn.textContent = '🔊';
     dmCallBtn.classList.remove('in-call');
 
     callMode = null;
@@ -4742,6 +4924,75 @@ function pickSupportedAudioMimeType() {
 }
 
 
+// Tarayıcılar farklı codec'lerle kaydediyor (Chrome: webm, Safari: mp4) ve
+// iOS Safari webm'i hiç oynatamıyor. Herkesin her yerde dinleyebilmesi için
+// kayıttan sonra evrensel destekli mono 16 kHz WAV'a dönüştürüyoruz.
+function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
+function encodeWavMono16(samples, sampleRate) {
+
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+
+    function writeString(offset, str) {
+        for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+    }
+
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + samples.length * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, samples.length * 2, true);
+
+    let offset = 44;
+    for (let i = 0; i < samples.length; i++, offset += 2) {
+        const s = Math.max(-1, Math.min(1, samples[i]));
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    }
+
+    return new Blob([buffer], { type: 'audio/wav' });
+
+}
+
+async function recordingToWavDataUrl(blob) {
+
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const arrayBuffer = await blob.arrayBuffer();
+
+    const decodeCtx = new AudioCtx();
+    const decoded = await decodeCtx.decodeAudioData(arrayBuffer);
+    decodeCtx.close();
+
+    const targetRate = 16000;
+    const offlineCtx = new OfflineAudioContext(1, Math.ceil(decoded.duration * targetRate) + 1, targetRate);
+    const source = offlineCtx.createBufferSource();
+    source.buffer = decoded;
+    source.connect(offlineCtx.destination);
+    source.start(0);
+
+    const rendered = await offlineCtx.startRendering();
+    const wavBlob = encodeWavMono16(rendered.getChannelData(0), targetRate);
+
+    return blobToDataUrl(wavBlob);
+
+}
+
+
 function setupVoiceRecorder(button, onRecorded) {
 
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
@@ -4788,9 +5039,20 @@ function setupVoiceRecorder(button, onRecorded) {
 
                 const blob = new Blob(chunks, { type: recordedType });
 
-                const reader = new FileReader();
-                reader.onload = () => onRecorded(reader.result, duration);
-                reader.readAsDataURL(blob);
+                try {
+
+                    const wavDataUrl = await recordingToWavDataUrl(blob);
+                    onRecorded(wavDataUrl, duration);
+
+                } catch (error) {
+
+                    console.error('Ses WAV formatına dönüştürülemedi, ham format gönderiliyor:', error);
+
+                    const reader = new FileReader();
+                    reader.onload = () => onRecorded(reader.result, duration);
+                    reader.readAsDataURL(blob);
+
+                }
 
             };
 

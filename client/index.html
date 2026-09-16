@@ -202,25 +202,9 @@
 
         <div class="topbar">
 
-            <span class="topbar-logo">SAURAN</span>
+            <div class="topbar-left">
 
-            <div class="topbar-actions">
-
-                <button id="hub-join-open-btn" class="topbar-icon-btn" title="Davet koduyla katıl" type="button">🔑</button>
-
-                <button id="notifications-btn" class="topbar-icon-btn" title="Bildirimler" type="button">
-                    🔔
-                    <span id="notifications-badge" class="topbar-badge" style="display:none;">0</span>
-                </button>
-
-                <button id="online-btn" class="topbar-icon-btn" title="Arkadaşlar">
-                    👥
-                    <span id="online-count" class="topbar-badge" style="display:none;">0</span>
-                </button>
-
-                <button id="friend-add-open-btn" class="topbar-icon-btn" title="Arkadaş Ekle" type="button">➕</button>
-
-                <button id="settings-btn" class="topbar-icon-btn" title="Ayarlar" type="button">⚙️</button>
+                <span class="topbar-logo">SAURAN</span>
 
                 <button id="profile-btn" class="topbar-profile-btn">
 
@@ -233,6 +217,31 @@
                     <span id="profile-username" class="profile-username"></span>
 
                 </button>
+
+            </div>
+
+            <button id="topbar-menu-btn" class="topbar-menu-btn" type="button" title="Menü">
+                <span class="topbar-menu-badge" id="topbar-menu-badge" style="display:none;"></span>
+                ☰
+            </button>
+
+            <div id="topbar-menu-dropdown" class="topbar-menu-dropdown liquid-glass" style="display:none;">
+
+                <button id="hub-join-open-btn" class="topbar-menu-item" title="Davet koduyla katıl" type="button">🔑 <span>Davet Koduyla Katıl</span></button>
+
+                <button id="notifications-btn" class="topbar-menu-item" title="Bildirimler" type="button">
+                    🔔 <span>Bildirimler</span>
+                    <span id="notifications-badge" class="topbar-badge" style="display:none;">0</span>
+                </button>
+
+                <button id="online-btn" class="topbar-menu-item" title="Arkadaşlar">
+                    👥 <span>Arkadaşlar</span>
+                    <span id="online-count" class="topbar-badge" style="display:none;">0</span>
+                </button>
+
+                <button id="friend-add-open-btn" class="topbar-menu-item" title="Arkadaş Ekle" type="button">➕ <span>Arkadaş Ekle</span></button>
+
+                <button id="settings-btn" class="topbar-menu-item" title="Ayarlar" type="button">⚙️ <span>Ayarlar</span></button>
 
             </div>
 
@@ -299,11 +308,8 @@
                             <span id="hub-detail-count" class="hub-detail-count"></span>
                         </div>
 
-                        <button id="hub-call-btn" class="hub-call-btn" type="button">🎙️ Sesli Sohbet</button>
-                        <button id="hub-invite-friend-btn" class="hub-delete-btn" type="button">👥 Davet Et</button>
-                        <button id="hub-invite-btn" class="hub-delete-btn" type="button">🔑 Davet</button>
-                        <button id="hub-delete-btn" class="hub-delete-btn" type="button" style="display:none;">🗑 Sil</button>
-                        <button id="hub-members-toggle-btn" class="hub-members-toggle-btn" type="button">👥</button>
+                        <button id="hub-call-btn" class="hub-call-btn" type="button" title="Sesli Sohbet">🔊</button>
+                        <button id="hub-settings-open-btn" class="hub-icon-btn" type="button" title="Hub Ayarları">⚙️</button>
 
                     </div>
 
@@ -326,12 +332,16 @@
                                 <input type="text" id="hub-message-input" autocomplete="off" placeholder="Bir mesaj yaz...">
                                 <button type="button" id="hub-dictate-btn" class="mic-btn composer-icon-btn" title="Dikte et">🎙️</button>
                                 <button type="button" id="hub-voice-btn" class="mic-btn composer-icon-btn" title="Sesli mesaj gönder">🎤</button>
+                                <button type="submit" id="hub-send-btn" class="composer-send-btn" title="Gönder">➤</button>
                             </div>
                             <input type="file" id="hub-attach-input" hidden accept="image/*,video/*,.pdf,.zip,.rar,.txt,.doc,.docx,.xls,.xlsx">
-                            <button type="submit">Gönder</button>
                         </form>
 
                     </div>
+
+                    <button id="hub-members-toggle-btn" class="hub-members-toggle-btn" type="button" title="Üyeler">
+                        <span class="hub-members-toggle-arrow">‹</span>
+                    </button>
 
                 </div>
 
@@ -382,6 +392,46 @@
                 <div id="hub-create-error" class="hub-create-error"></div>
 
                 <button id="hub-create-submit-btn" class="hub-create-submit" type="button">Hub'ı Oluştur</button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ================================================= -->
+    <!-- HUB AYARLARI -->
+    <!-- ================================================= -->
+
+    <div id="hub-settings-modal" class="modal-overlay" style="display:none;">
+
+        <div class="modal-box hub-settings-box">
+
+            <div class="modal-header">
+                <span>⚙️ Hub Ayarları</span>
+                <button id="hub-settings-close-btn">✕</button>
+            </div>
+
+            <div class="hub-settings-body">
+
+                <div class="hub-create-image-wrap">
+                    <span id="hub-settings-image-preview" class="hub-create-image-preview">🧩</span>
+                    <button id="hub-settings-image-btn" class="hub-create-image-btn" type="button">Görseli Değiştir</button>
+                    <input type="file" id="hub-settings-image-input" accept="image/png,image/jpeg,image/webp" hidden>
+                </div>
+
+                <input type="text" id="hub-settings-name-input" class="hub-name-input" placeholder="Hub adı" maxlength="40">
+
+                <div id="hub-settings-error" class="hub-create-error"></div>
+
+                <button id="hub-settings-save-btn" class="hub-create-submit" type="button">Kaydet</button>
+
+                <div class="hub-settings-divider"></div>
+
+                <button id="hub-invite-friend-btn" class="hub-settings-action-btn" type="button">👥 Arkadaşını Davet Et</button>
+                <button id="hub-invite-btn" class="hub-settings-action-btn" type="button">🔑 Davet Kodu Oluştur</button>
+                <button id="hub-delete-btn" class="hub-settings-action-btn hub-settings-danger" type="button" style="display:none;">🗑 Hub'ı Sil</button>
 
             </div>
 
@@ -673,9 +723,9 @@
                     <input type="text" id="dm-message-input" autocomplete="off" placeholder="Bir mesaj yaz...">
                     <button type="button" id="dm-dictate-btn" class="mic-btn composer-icon-btn" title="Dikte et">🎙️</button>
                     <button type="button" id="dm-voice-btn" class="mic-btn composer-icon-btn" title="Sesli mesaj gönder">🎤</button>
+                    <button type="submit" class="composer-send-btn" title="Gönder">➤</button>
                 </div>
                 <input type="file" id="dm-attach-input" hidden accept="image/*,video/*,.pdf,.zip,.rar,.txt,.doc,.docx,.xls,.xlsx">
-                <button type="submit">Gönder</button>
             </form>
 
         </div>
@@ -839,6 +889,7 @@
         <div class="call-header">
             <span id="call-hub-name">🎙️ Sesli Sohbet</span>
             <button id="call-screenshare-btn" type="button" style="display:none;">🖥️ Ekran Paylaş</button>
+            <button id="call-minimize-btn" type="button" title="Ekranı alta al">▁</button>
             <button id="call-leave-btn" type="button">Ayrıl</button>
         </div>
 
@@ -849,6 +900,18 @@
             <button id="call-ringing-cancel-btn" type="button" class="call-ringing-cancel-btn">İptal Et</button>
         </div>
 
+    </div>
+
+
+    <!-- ================================================= -->
+    <!-- KÜÇÜLTÜLMÜŞ ARAMA ÇUBUĞU -->
+    <!-- ================================================= -->
+
+    <div id="call-mini-bar" class="call-mini-bar" style="display:none;">
+        <span class="call-mini-dot"></span>
+        <span id="call-mini-name" class="call-mini-name"></span>
+        <button id="call-mini-expand-btn" type="button" title="Aramayı genişlet">⬆</button>
+        <button id="call-mini-leave-btn" type="button" title="Aramadan ayrıl">✕</button>
     </div>
 
 

@@ -17,6 +17,7 @@ const {
   updatePrivacy,
   updateAvatar,
   createHub,
+  updateHub,
   listHubs,
   getHubDetail,
   setHubRole,
@@ -555,6 +556,26 @@ app.post('/api/hubs', (req, res) => {
   } catch (error) {
     console.error('Hub oluşturma API hatası:', error);
     res.status(500).json({ success: false, error: 'Hub oluşturulamadı.' });
+  }
+});
+
+app.patch('/api/hubs/:id', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    const hubId = Number(req.params.id);
+    const result = updateHub(hubId, user.id, req.body || {});
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Hub güncelleme hatası:', error);
+    res.status(500).json({ success: false, error: 'Hub güncellenemedi.' });
   }
 });
 
