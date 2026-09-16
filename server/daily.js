@@ -22,14 +22,14 @@ async function dailyFetch(path, options = {}) {
   return data;
 }
 
-async function createRoom(roomName) {
+async function createRoom(roomName, { screenshare = true } = {}) {
   return dailyFetch('/rooms', {
     method: 'POST',
     body: JSON.stringify({
       name: roomName,
       privacy: 'private',
       properties: {
-        enable_screenshare: true,
+        enable_screenshare: screenshare,
         enable_chat: false,
         start_video_off: true,
         start_audio_off: false,

@@ -707,12 +707,23 @@ function isHubMember(hubId, userId) {
 
 function getHubMessages(hubId, limit = 50) {
   const rows = db.prepare(`
-    SELECT id, user_id, username, content, kind, payload, edited, created_at
-    FROM messages WHERE hub_id = ?
-    ORDER BY id DESC LIMIT ?
+    SELECT messages.id, messages.user_id, messages.username, messages.content, messages.kind,
+           messages.payload, messages.edited, messages.created_at, users.avatar_data
+    FROM messages LEFT JOIN users ON users.id = messages.user_id
+    WHERE hub_id = ?
+    ORDER BY messages.id DESC LIMIT ?
   `).all(hubId, limit);
 
   return rows.reverse().map(hydrateMessage);
+}
+
+function getMessageById(id) {
+  return hydrateMessage(db.prepare(`
+    SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
+           messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data
+    FROM messages LEFT JOIN users ON users.id = messages.user_id
+    WHERE messages.id = ?
+  `).get(id));
 }
 
 function hydrateMessage(row) {
@@ -763,7 +774,7 @@ function editMessage(messageId, userId, newContent) {
     success: true,
     hub_id: msg.hub_id,
     to_user_id: msg.to_user_id,
-    message: hydrateMessage(db.prepare(`SELECT id, user_id, username, content, kind, payload, to_user_id, edited, created_at FROM messages WHERE id = ?`).get(messageId))
+    message: getMessageById(messageId)
   };
 }
 
@@ -773,7 +784,7 @@ function saveHubMessage(hubId, userId, username, content) {
     VALUES (?, ?, ?, ?, ?, 'text')
   `).run(userId, username, content, `hub_${hubId}`, hubId);
 
-  return hydrateMessage(db.prepare(`SELECT id, user_id, username, content, kind, payload, edited, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid));
+  return getMessageById(info.lastInsertRowid);
 }
 
 function createHubPoll(hubId, userId, username, question, options) {
@@ -794,7 +805,7 @@ function createHubPoll(hubId, userId, username, question, options) {
     VALUES (?, ?, ?, ?, ?, 'poll', ?)
   `).run(userId, username, question, `hub_${hubId}`, hubId, payload);
 
-  return { success: true, message: hydrateMessage(db.prepare(`SELECT id, user_id, username, content, kind, payload, edited, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid)) };
+  return { success: true, message: getMessageById(info.lastInsertRowid) };
 }
 
 function voteHubPoll(messageId, userId, optionIndex) {
@@ -812,7 +823,7 @@ function voteHubPoll(messageId, userId, optionIndex) {
     ON CONFLICT(message_id, user_id) DO UPDATE SET option_index = excluded.option_index
   `).run(messageId, userId, optionIndex);
 
-  return { success: true, message: hydrateMessage(db.prepare(`SELECT id, user_id, username, content, kind, payload, edited, created_at FROM messages WHERE id = ?`).get(messageId)) };
+  return { success: true, message: getMessageById(messageId) };
 }
 
 function createHubShare(hubId, userId, username, content, url) {
@@ -830,7 +841,7 @@ function createHubShare(hubId, userId, username, content, url) {
     VALUES (?, ?, ?, ?, ?, 'share', ?)
   `).run(userId, username, content, `hub_${hubId}`, hubId, payload);
 
-  return { success: true, message: hydrateMessage(db.prepare(`SELECT id, user_id, username, content, kind, payload, edited, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid)) };
+  return { success: true, message: getMessageById(info.lastInsertRowid) };
 }
 
 function createHubVoiceMessage(hubId, userId, username, audioData, duration) {
@@ -849,7 +860,54 @@ function createHubVoiceMessage(hubId, userId, username, audioData, duration) {
     VALUES (?, ?, '', ?, ?, 'voice', ?)
   `).run(userId, username, `hub_${hubId}`, hubId, payload);
 
-  return { success: true, message: hydrateMessage(db.prepare(`SELECT id, user_id, username, content, kind, payload, edited, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid)) };
+  return { success: true, message: getMessageById(info.lastInsertRowid) };
+}
+
+const FILE_MAX_BYTES = 10 * 1024 * 1024;
+
+function validateFilePayload(fileData, mime, size) {
+  if (typeof fileData !== 'string' || !fileData.startsWith('data:')) {
+    return { success: false, error: 'Geçersiz dosya formatı.' };
+  }
+
+  const declaredSize = Number(size) || 0;
+  if (declaredSize > FILE_MAX_BYTES) {
+    const isVideo = String(mime || '').startsWith('video/');
+    return { success: false, error: isVideo ? 'Video limiti 10 MB\'dir.' : 'Dosya limiti 10 MB\'dir.' };
+  }
+
+  // base64 payload gerçek boyutu ~4/3 katı büyür; ekstra pay bırakarak sunucu tarafında da doğrula.
+  if (fileData.length > FILE_MAX_BYTES * 1.4) {
+    const isVideo = String(mime || '').startsWith('video/');
+    return { success: false, error: isVideo ? 'Video limiti 10 MB\'dir.' : 'Dosya limiti 10 MB\'dir.' };
+  }
+
+  return { success: true };
+}
+
+function createHubFileMessage(hubId, userId, username, file) {
+  const { data, name, mime, size } = file || {};
+
+  const check = validateFilePayload(data, mime, size);
+  if (!check.success) return check;
+
+  const kind = String(mime || '').startsWith('image/') ? 'image'
+    : String(mime || '').startsWith('video/') ? 'video'
+    : 'file';
+
+  const payload = JSON.stringify({
+    data,
+    name: String(name || 'dosya').slice(0, 200),
+    mime: String(mime || 'application/octet-stream').slice(0, 100),
+    size: Number(size) || 0
+  });
+
+  const info = db.prepare(`
+    INSERT INTO messages (user_id, username, content, room, hub_id, kind, payload)
+    VALUES (?, ?, '', ?, ?, ?, ?)
+  `).run(userId, username, `hub_${hubId}`, hubId, kind, payload);
+
+  return { success: true, message: getMessageById(info.lastInsertRowid) };
 }
 
 function getHubDailyRoomName(hubId) {
@@ -1215,7 +1273,7 @@ function saveDmMessage(fromId, fromUsername, toId, content) {
 
   return {
     success: true,
-    message: hydrateMessage(db.prepare(`SELECT id, user_id, username, content, to_user_id, kind, payload, edited, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid))
+    message: getMessageById(info.lastInsertRowid)
   };
 }
 
@@ -1241,15 +1299,46 @@ function saveDmVoiceMessage(fromId, fromUsername, toId, audioData, duration) {
 
   return {
     success: true,
-    message: hydrateMessage(db.prepare(`SELECT id, user_id, username, content, to_user_id, kind, payload, edited, created_at FROM messages WHERE id = ?`).get(info.lastInsertRowid))
+    message: getMessageById(info.lastInsertRowid)
   };
+}
+
+function createDmFileMessage(fromId, fromUsername, toId, file) {
+  if (!areFriends(fromId, toId)) {
+    return { success: false, error: 'Sadece arkadaşlarınla mesajlaşabilirsin.' };
+  }
+
+  const { data, name, mime, size } = file || {};
+
+  const check = validateFilePayload(data, mime, size);
+  if (!check.success) return check;
+
+  const kind = String(mime || '').startsWith('image/') ? 'dm_image'
+    : String(mime || '').startsWith('video/') ? 'dm_video'
+    : 'dm_file';
+
+  const payload = JSON.stringify({
+    data,
+    name: String(name || 'dosya').slice(0, 200),
+    mime: String(mime || 'application/octet-stream').slice(0, 100),
+    size: Number(size) || 0
+  });
+
+  const info = db.prepare(`
+    INSERT INTO messages (user_id, username, content, room, to_user_id, kind, payload)
+    VALUES (?, ?, '', ?, ?, ?, ?)
+  `).run(fromId, fromUsername, dmRoom(fromId, toId), toId, kind, payload);
+
+  return { success: true, message: getMessageById(info.lastInsertRowid) };
 }
 
 function getDmMessages(userId, otherUserId, limit = 50) {
   const rows = db.prepare(`
-    SELECT id, user_id, username, content, to_user_id, kind, payload, edited, created_at
-    FROM messages WHERE room = ?
-    ORDER BY id DESC LIMIT ?
+    SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
+           messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data
+    FROM messages LEFT JOIN users ON users.id = messages.user_id
+    WHERE room = ?
+    ORDER BY messages.id DESC LIMIT ?
   `).all(dmRoom(userId, otherUserId), limit);
 
   return rows.reverse().map(hydrateMessage);
@@ -1287,6 +1376,7 @@ module.exports = {
   deleteMessage,
   editMessage,
   createHubVoiceMessage,
+  createHubFileMessage,
   createHubPoll,
   voteHubPoll,
   createHubShare,
@@ -1305,6 +1395,7 @@ module.exports = {
   getUserPublicProfile,
   saveDmMessage,
   saveDmVoiceMessage,
+  createDmFileMessage,
   getDmMessages,
   findUserByUsername,
   blockUser,

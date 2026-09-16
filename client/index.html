@@ -320,10 +320,14 @@
                             <button data-action="share" type="button">📌 Paylaşım</button>
                         </div>
 
-                        <form id="hub-chat-form">
-                            <input type="text" id="hub-message-input" autocomplete="off" placeholder="Bir mesaj yaz...">
-                            <button type="button" id="hub-dictate-btn" class="mic-btn" title="Dikte et">🎙️</button>
-                            <button type="button" id="hub-voice-btn" class="mic-btn" title="Sesli mesaj gönder">🎤</button>
+                        <form id="hub-chat-form" class="composer-form">
+                            <div class="composer-input-box">
+                                <button type="button" id="hub-attach-btn" class="composer-attach-btn" title="Dosya / fotoğraf / video ekle">＋</button>
+                                <input type="text" id="hub-message-input" autocomplete="off" placeholder="Bir mesaj yaz...">
+                                <button type="button" id="hub-dictate-btn" class="mic-btn composer-icon-btn" title="Dikte et">🎙️</button>
+                                <button type="button" id="hub-voice-btn" class="mic-btn composer-icon-btn" title="Sesli mesaj gönder">🎤</button>
+                            </div>
+                            <input type="file" id="hub-attach-input" hidden accept="image/*,video/*,.pdf,.zip,.rar,.txt,.doc,.docx,.xls,.xlsx">
                             <button type="submit">Gönder</button>
                         </form>
 
@@ -657,15 +661,20 @@
 
             <div class="modal-header">
                 <span id="dm-modal-title"></span>
+                <button id="dm-call-btn" class="dm-call-btn" type="button" title="Sesli ara">📞</button>
                 <button id="dm-close-btn">✕</button>
             </div>
 
             <div id="dm-feed" class="dm-feed"></div>
 
-            <form id="dm-form" class="dm-form">
-                <input type="text" id="dm-message-input" autocomplete="off" placeholder="Bir mesaj yaz...">
-                <button type="button" id="dm-dictate-btn" class="mic-btn" title="Dikte et">🎙️</button>
-                <button type="button" id="dm-voice-btn" class="mic-btn" title="Sesli mesaj gönder">🎤</button>
+            <form id="dm-form" class="composer-form">
+                <div class="composer-input-box">
+                    <button type="button" id="dm-attach-btn" class="composer-attach-btn" title="Dosya / fotoğraf / video ekle">＋</button>
+                    <input type="text" id="dm-message-input" autocomplete="off" placeholder="Bir mesaj yaz...">
+                    <button type="button" id="dm-dictate-btn" class="mic-btn composer-icon-btn" title="Dikte et">🎙️</button>
+                    <button type="button" id="dm-voice-btn" class="mic-btn composer-icon-btn" title="Sesli mesaj gönder">🎤</button>
+                </div>
+                <input type="file" id="dm-attach-input" hidden accept="image/*,video/*,.pdf,.zip,.rar,.txt,.doc,.docx,.xls,.xlsx">
                 <button type="submit">Gönder</button>
             </form>
 
@@ -829,12 +838,47 @@
 
         <div class="call-header">
             <span id="call-hub-name">🎙️ Sesli Sohbet</span>
+            <button id="call-screenshare-btn" type="button" style="display:none;">🖥️ Ekran Paylaş</button>
             <button id="call-leave-btn" type="button">Ayrıl</button>
         </div>
 
         <div id="call-frame-container" class="call-frame-container"></div>
+        <div id="call-ringing-state" class="call-ringing-state" style="display:none;">
+            <div class="call-ringing-avatar">📞</div>
+            <div id="call-ringing-text" class="call-ringing-text">Aranıyor...</div>
+            <button id="call-ringing-cancel-btn" type="button" class="call-ringing-cancel-btn">İptal Et</button>
+        </div>
 
     </div>
+
+
+    <!-- ================================================= -->
+    <!-- GELEN ARAMA MODALI -->
+    <!-- ================================================= -->
+
+    <div id="dm-incoming-call-modal" class="dm-incoming-call-modal" style="display:none;">
+
+        <div class="dm-incoming-call-box">
+
+            <div class="call-ringing-avatar">📞</div>
+            <div id="dm-incoming-call-username" class="dm-incoming-call-username"></div>
+            <div class="dm-incoming-call-sub">seni arıyor...</div>
+
+            <div class="dm-incoming-call-actions">
+                <button id="dm-incoming-call-decline-btn" type="button" class="dm-incoming-decline-btn">Reddet</button>
+                <button id="dm-incoming-call-accept-btn" type="button" class="dm-incoming-accept-btn">Kabul Et</button>
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ================================================= -->
+    <!-- BİLDİRİM (TOAST) -->
+    <!-- ================================================= -->
+
+    <div id="toast-container" class="toast-container"></div>
 
 
     <!-- SOCKET.IO -->

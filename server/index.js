@@ -28,6 +28,7 @@ const {
   deleteMessage,
   editMessage,
   createHubVoiceMessage,
+  createHubFileMessage,
   createHubPoll,
   voteHubPoll,
   createHubShare,
@@ -45,6 +46,7 @@ const {
   getUserPublicProfile,
   saveDmMessage,
   saveDmVoiceMessage,
+  createDmFileMessage,
   getDmMessages,
   findUserByUsername,
   blockUser,
@@ -69,11 +71,11 @@ const io = new Server(server, {
     credentials: true,
     methods: ['GET', 'POST']
   },
-  maxHttpBufferSize: 4_000_000
+  maxHttpBufferSize: 15_000_000
 });
 
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: '3mb' }));
+app.use(express.json({ limit: '15mb' }));
 app.use(express.static(path.join(__dirname, '..', 'client'), {
   etag: false,
   lastModified: false,
@@ -821,6 +823,33 @@ app.post('/api/hubs/:id/voice', (req, res) => {
   }
 });
 
+app.post('/api/hubs/:id/file', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const hubId = Number(req.params.id);
+
+  if (!isHubMember(hubId, user.id)) {
+    return res.status(403).json({ success: false, error: 'Bu Hub\'a üye değilsin.' });
+  }
+
+  try {
+    const result = createHubFileMessage(hubId, user.id, user.username, req.body?.file);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    io.to(`hub:${hubId}`).emit('hub_message', result.message);
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Dosya mesajı hatası:', error);
+    res.status(500).json({ success: false, error: 'Gönderilemedi.' });
+  }
+});
+
 // =====================================================
 // SESLİ SOHBET (DAILY.CO)
 // =====================================================
@@ -863,6 +892,45 @@ app.post('/api/hubs/:id/call/join', async (req, res) => {
   } catch (error) {
     console.error('Sesli sohbet başlatma hatası:', error);
     res.status(500).json({ success: false, error: 'Sesli sohbete katılınamadı.' });
+  }
+});
+
+// Özel (DM) sesli arama — sadece iki arkadaş arasında, kamera/ekran paylaşımı yok.
+app.post('/api/dm/:userId/call/join', async (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const otherId = Number(req.params.userId);
+
+  if (!areFriends(user.id, otherId)) {
+    return res.status(403).json({ success: false, error: 'Sadece arkadaşlarınla sesli arama yapabilirsin.' });
+  }
+
+  if (!daily.isConfigured()) {
+    return res.status(503).json({ success: false, error: 'Sesli arama henüz yapılandırılmadı.' });
+  }
+
+  try {
+    const [low, high] = [user.id, otherId].sort((a, b) => a - b);
+    const roomName = `sauran-dm-${low}-${high}`;
+
+    let roomUrl = null;
+    const existing = await daily.getRoom(roomName);
+
+    if (existing) {
+      roomUrl = existing.url;
+    } else {
+      const created = await daily.createRoom(roomName, { screenshare: false });
+      roomUrl = created.url;
+    }
+
+    const token = await daily.createMeetingToken(roomName, user.username);
+
+    return res.json({ success: true, room_url: roomUrl, token, room_name: roomName });
+
+  } catch (error) {
+    console.error('DM araması başlatma hatası:', error);
+    res.status(500).json({ success: false, error: 'Aramaya katılınamadı.' });
   }
 });
 
@@ -1286,6 +1354,75 @@ io.on('connection', (socket) => {
       console.error('Sesli DM kaydedilirken hata:', error);
       socket.emit('message_error', 'Sesli mesaj gönderilemedi.');
     }
+  });
+
+  socket.on('dm_file_message', (data) => {
+    try {
+      if (!socket.userId || !socket.username) {
+        socket.emit('message_error', 'Oturum doğrulanamadı.');
+        return;
+      }
+
+      const toUserId = Number(data?.to_user_id);
+      const result = createDmFileMessage(socket.userId, socket.username, toUserId, data?.file);
+
+      if (!result.success) {
+        socket.emit('message_error', result.error);
+        return;
+      }
+
+      io.to(`user:${socket.userId}`).to(`user:${toUserId}`).emit('dm_message', result.message);
+
+    } catch (error) {
+      console.error('Dosyalı DM kaydedilirken hata:', error);
+      socket.emit('message_error', 'Dosya gönderilemedi.');
+    }
+  });
+
+  // ─── ÖZEL (DM) SESLİ ARAMA SİNYALLEŞMESİ ─────────────────────────────
+  // Kamera/görüntülü görüşme yok — sadece ses. Odaya asıl giriş REST
+  // /api/dm/:userId/call/join üzerinden auth+arkadaşlık kontrolüyle yapılır;
+  // bu event'ler sadece "biri seni arıyor" bildirimini iletir.
+
+  socket.on('dm_call_invite', (data) => {
+    try {
+      if (!socket.userId || !socket.username) return;
+
+      const toUserId = Number(data?.to_user_id);
+      if (!toUserId || !areFriends(socket.userId, toUserId)) return;
+
+      io.to(`user:${toUserId}`).emit('dm_call_incoming', {
+        from_user_id: socket.userId,
+        from_username: socket.username
+      });
+
+    } catch (error) {
+      console.error('DM arama daveti hatası:', error);
+    }
+  });
+
+  socket.on('dm_call_cancel', (data) => {
+    const toUserId = Number(data?.to_user_id);
+    if (!toUserId || !socket.userId) return;
+    io.to(`user:${toUserId}`).emit('dm_call_cancelled', { from_user_id: socket.userId });
+  });
+
+  socket.on('dm_call_decline', (data) => {
+    const toUserId = Number(data?.to_user_id);
+    if (!toUserId || !socket.userId) return;
+    io.to(`user:${toUserId}`).emit('dm_call_declined', { from_user_id: socket.userId });
+  });
+
+  socket.on('dm_call_accept', (data) => {
+    const toUserId = Number(data?.to_user_id);
+    if (!toUserId || !socket.userId) return;
+    io.to(`user:${toUserId}`).emit('dm_call_accepted', { from_user_id: socket.userId });
+  });
+
+  socket.on('dm_call_end', (data) => {
+    const toUserId = Number(data?.to_user_id);
+    if (!toUserId || !socket.userId) return;
+    io.to(`user:${toUserId}`).emit('dm_call_ended', { from_user_id: socket.userId });
   });
 
   socket.on('join_hub', (hubId) => {

@@ -273,7 +273,31 @@ const dmDictateBtn =
 const dmVoiceBtn =
     document.getElementById('dm-voice-btn');
 
+const dmAttachBtn =
+    document.getElementById('dm-attach-btn');
+
+const dmAttachInput =
+    document.getElementById('dm-attach-input');
+
+const dmCallBtn =
+    document.getElementById('dm-call-btn');
+
 let activeDmUserId = null;
+let activeDmUsername = '';
+
+dmAttachBtn.addEventListener('click', () => dmAttachInput.click());
+
+dmAttachInput.addEventListener('change', async () => {
+
+    const file = dmAttachInput.files?.[0];
+    dmAttachInput.value = '';
+
+    const fileData = await handleAttachedFile(file);
+    if (!fileData || !activeDmUserId || !socket) return;
+
+    socket.emit('dm_file_message', { to_user_id: activeDmUserId, file: fileData });
+
+});
 
 
 // =====================================================
@@ -2247,6 +2271,30 @@ function connectToChat() {
     );
 
 
+    // -------------------------------------------------
+    // DM sesli arama sinyalleşmesi
+    // -------------------------------------------------
+
+    socket.on('dm_call_incoming', (data) => showIncomingCall(data.from_user_id, data.from_username));
+    socket.on('dm_call_cancelled', (data) => {
+        if (data.from_user_id === incomingCallFromId) hideIncomingCall();
+    });
+    socket.on('dm_call_declined', (data) => {
+        if (data.from_user_id === outgoingCallToId) {
+            showToast('Arama reddedildi.');
+            endDmCallUi();
+        }
+    });
+    socket.on('dm_call_accepted', (data) => {
+        if (data.from_user_id === outgoingCallToId) joinDmCall(outgoingCallToId, outgoingCallToUsername);
+    });
+    socket.on('dm_call_ended', (data) => {
+        if (callFrame && (data.from_user_id === outgoingCallToId || data.from_user_id === incomingCallFromId)) {
+            leaveCall();
+        }
+    });
+
+
     switchToView('hubs');
     loadHubList();
     refreshNotificationsBadge();
@@ -3149,6 +3197,7 @@ otherProfileModal.addEventListener(
 async function openDm(userId, username) {
 
     activeDmUserId = userId;
+    activeDmUsername = username;
     dmModalTitle.textContent = `💬 ${username}`;
     dmFeed.innerHTML = '';
 
@@ -3175,15 +3224,23 @@ async function openDm(userId, username) {
 
 function appendDmMessage(msg) {
 
-    const wrap = document.createElement('div');
+    const row = document.createElement('div');
+    row.className = 'dm-msg-row';
+
     const isMine = msg.user_id === currentUser.id;
 
+    row.innerHTML = avatarButtonHtml(msg.user_id, msg.avatar_data, msg.username);
+
+    const wrap = document.createElement('div');
     wrap.className = `dm-msg ${isMine ? 'dm-msg-mine' : 'dm-msg-theirs'}`;
     wrap.dataset.messageId = msg.id;
 
     renderDmMessageIntoWrap(wrap, msg, isMine);
 
-    dmFeed.appendChild(wrap);
+    row.appendChild(wrap);
+    wireMsgAvatars(row);
+
+    dmFeed.appendChild(row);
     dmFeed.scrollTop = dmFeed.scrollHeight;
 
 }
@@ -3217,13 +3274,17 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
 
         body = buildVoiceCardHtml(msg.payload.audio, msg.payload.duration);
 
+    } else if ((msg.kind === 'dm_image' || msg.kind === 'dm_video' || msg.kind === 'dm_file') && msg.payload) {
+
+        body = buildFileCardHtml(msg.payload);
+
     } else {
 
         body = `<span class="dm-msg-content">${escapeHtml(msg.content)}</span>`;
 
     }
 
-    wrap.innerHTML = `${actions}${body}<span class="dm-msg-time">${time}${editedTag}</span>`;
+    wrap.innerHTML = `${actions}<div class="dm-msg-line">${body}<span class="dm-msg-time">${time}${editedTag}</span></div>`;
 
     wireVoiceCards(wrap);
     enableLongPress(wrap);
@@ -3297,6 +3358,158 @@ function removeDmMessage(messageId) {
 
     const isMine = wrap.classList.contains('dm-msg-mine');
     renderDmMessageIntoWrap(wrap, { id: messageId, kind: 'deleted' }, isMine);
+
+}
+
+
+// =====================================================
+// MESAJ AVATARI (Hub + DM ortak)
+// =====================================================
+
+function avatarButtonHtml(userId, avatarData, username) {
+
+    const color = getUserColor(username || '');
+    const initial = (username || '?').charAt(0).toUpperCase();
+
+    const inner = avatarData
+        ? `<img src="${escapeAttr(avatarData)}" alt="">`
+        : escapeHtml(initial);
+
+    return `
+        <button type="button" class="msg-avatar-btn" data-user-id="${userId}" style="--user-color:${color};color:${avatarData ? '' : color};" title="${escapeAttr(username || '')}">
+            ${inner}
+        </button>
+    `;
+
+}
+
+
+function wireMsgAvatars(container) {
+
+    container.querySelectorAll('.msg-avatar-btn').forEach((btn) => {
+
+        if (btn.dataset.wired) return;
+        btn.dataset.wired = '1';
+
+        btn.addEventListener('click', () => {
+            const userId = Number(btn.dataset.userId);
+            if (userId) openOtherProfile(userId);
+        });
+
+    });
+
+}
+
+
+// =====================================================
+// BİLDİRİM (TOAST)
+// =====================================================
+
+function showToast(message) {
+
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.textContent = message;
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.classList.add('toast-leaving');
+        setTimeout(() => toast.remove(), 250);
+    }, 3200);
+
+}
+
+
+// =====================================================
+// DOSYA / FOTOĞRAF / VİDEO MESAJLARI
+// =====================================================
+
+const FILE_MAX_BYTES = 10 * 1024 * 1024;
+
+function formatFileSize(bytes) {
+    bytes = Number(bytes) || 0;
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+async function handleAttachedFile(file) {
+
+    if (!file) return null;
+
+    const isVideo = file.type.startsWith('video/');
+
+    if (file.size > FILE_MAX_BYTES) {
+        showToast(isVideo ? "Video limiti 10 MB'dir." : "Dosya limiti 10 MB'dir.");
+        return null;
+    }
+
+    try {
+
+        const data = await readFileAsDataUrl(file);
+
+        return {
+            data,
+            name: file.name,
+            mime: file.type || 'application/octet-stream',
+            size: file.size
+        };
+
+    } catch (error) {
+
+        console.error('Dosya okunamadı:', error);
+        showToast('Dosya okunamadı, tekrar dene.');
+        return null;
+
+    }
+
+}
+
+function buildFileCardHtml(payload) {
+
+    const mime = payload?.mime || '';
+    const name = payload?.name || 'dosya';
+    const size = formatFileSize(payload?.size);
+
+    if (mime.startsWith('image/')) {
+        return `
+            <div class="file-msg-card image-msg-card">
+                <img src="${escapeAttr(payload.data)}" alt="${escapeAttr(name)}" loading="lazy">
+            </div>
+        `;
+    }
+
+    if (mime.startsWith('video/')) {
+        return `
+            <div class="file-msg-card video-msg-card">
+                <video src="${escapeAttr(payload.data)}" controls preload="metadata"></video>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="file-msg-card">
+            <span class="file-msg-icon">📎</span>
+            <div class="file-msg-info">
+                <div class="file-msg-name">${escapeHtml(name)}</div>
+                <div class="file-msg-size">${size}</div>
+            </div>
+            <a class="file-msg-download" href="${escapeAttr(payload.data)}" download="${escapeAttr(name)}">İndir</a>
+        </div>
+    `;
 
 }
 
@@ -3516,6 +3729,37 @@ const hubChatForm = document.getElementById('hub-chat-form');
 const hubMessageInput = document.getElementById('hub-message-input');
 const hubDictateBtn = document.getElementById('hub-dictate-btn');
 const hubVoiceBtn = document.getElementById('hub-voice-btn');
+const hubAttachBtn = document.getElementById('hub-attach-btn');
+const hubAttachInput = document.getElementById('hub-attach-input');
+
+hubAttachBtn.addEventListener('click', () => hubAttachInput.click());
+
+hubAttachInput.addEventListener('change', async () => {
+
+    const file = hubAttachInput.files?.[0];
+    hubAttachInput.value = '';
+
+    const fileData = await handleAttachedFile(file);
+    if (!fileData || !currentHub) return;
+
+    try {
+
+        const response = await fetch(`/api/hubs/${currentHub.id}/file`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ file: fileData })
+        });
+
+        const data = await response.json();
+        if (!data.success) showToast(data.error || 'Gönderilemedi.');
+
+    } catch (error) {
+        console.error('Hub dosyası gönderilemedi:', error);
+        showToast('Gönderilemedi.');
+    }
+
+});
 
 const hubMemberList = document.getElementById('hub-member-list');
 const hubMembersToggleBtn = document.getElementById('hub-members-toggle-btn');
@@ -3538,8 +3782,22 @@ const callOverlay = document.getElementById('call-overlay');
 const callHubName = document.getElementById('call-hub-name');
 const callFrameContainer = document.getElementById('call-frame-container');
 const callLeaveBtn = document.getElementById('call-leave-btn');
+const callScreenshareBtn = document.getElementById('call-screenshare-btn');
+const callRingingState = document.getElementById('call-ringing-state');
+const callRingingText = document.getElementById('call-ringing-text');
+const callRingingCancelBtn = document.getElementById('call-ringing-cancel-btn');
+
+const dmIncomingCallModal = document.getElementById('dm-incoming-call-modal');
+const dmIncomingCallUsername = document.getElementById('dm-incoming-call-username');
+const dmIncomingCallAcceptBtn = document.getElementById('dm-incoming-call-accept-btn');
+const dmIncomingCallDeclineBtn = document.getElementById('dm-incoming-call-decline-btn');
 
 let callFrame = null;
+let callMode = null; // 'hub' | 'dm'
+let incomingCallFromId = null;
+let incomingCallFromUsername = '';
+let outgoingCallToId = null;
+let outgoingCallToUsername = '';
 
 const pollCreateModal = document.getElementById('poll-create-modal');
 const pollCreateCloseBtn = document.getElementById('poll-create-close-btn');
@@ -4102,25 +4360,14 @@ hubCallBtn.addEventListener(
                 return;
             }
 
-            if (typeof DailyIframe === 'undefined') {
-                alert('Sesli sohbet bileşeni yüklenemedi.');
-                return;
-            }
-
+            callMode = 'hub';
             callHubName.textContent = `🎙️ ${currentHub.name}`;
-            callOverlay.style.display = 'flex';
+            callScreenshareBtn.style.display = 'inline-block';
 
-            callFrame = DailyIframe.createFrame(callFrameContainer, {
-                showLeaveButton: false,
-                iframeStyle: { width: '100%', height: '100%', border: 'none' }
-            });
-
-            await callFrame.join({ url: data.room_url, token: data.token });
+            await joinCallFrame(data.room_url, data.token);
 
             hubCallBtn.classList.add('in-call');
             hubCallBtn.textContent = '🔴 Aramadan Ayrıl';
-
-            callFrame.on('left-meeting', leaveCall);
 
         } catch (error) {
 
@@ -4138,10 +4385,178 @@ hubCallBtn.addEventListener(
 );
 
 
+// ─── DM SESLİ ARAMA (kamera / ekran paylaşımı yok) ───────────────────────
+
+dmCallBtn.addEventListener('click', () => {
+
+    if (callFrame) {
+        leaveCall();
+        return;
+    }
+
+    if (!activeDmUserId || !socket) return;
+
+    outgoingCallToId = activeDmUserId;
+    outgoingCallToUsername = activeDmUsername;
+
+    socket.emit('dm_call_invite', { to_user_id: activeDmUserId });
+
+    callMode = 'dm-ringing';
+    callHubName.textContent = `📞 ${activeDmUsername}`;
+    callScreenshareBtn.style.display = 'none';
+    callFrameContainer.style.display = 'none';
+    callRingingText.textContent = `${activeDmUsername} aranıyor...`;
+    callRingingState.style.display = 'flex';
+    callOverlay.style.display = 'flex';
+
+});
+
+callRingingCancelBtn.addEventListener('click', () => {
+    if (outgoingCallToId && socket) socket.emit('dm_call_cancel', { to_user_id: outgoingCallToId });
+    endDmCallUi();
+});
+
+function showIncomingCall(fromId, fromUsername) {
+
+    if (callFrame || callMode) return; // zaten görüşmedeyse gelen aramayı gösterme
+
+    incomingCallFromId = fromId;
+    incomingCallFromUsername = fromUsername;
+
+    dmIncomingCallUsername.textContent = fromUsername;
+    dmIncomingCallModal.style.display = 'flex';
+
+}
+
+function hideIncomingCall() {
+    dmIncomingCallModal.style.display = 'none';
+    incomingCallFromId = null;
+    incomingCallFromUsername = '';
+}
+
+dmIncomingCallDeclineBtn.addEventListener('click', () => {
+    if (incomingCallFromId && socket) socket.emit('dm_call_decline', { to_user_id: incomingCallFromId });
+    hideIncomingCall();
+});
+
+dmIncomingCallAcceptBtn.addEventListener('click', () => {
+    const fromId = incomingCallFromId;
+    const fromUsername = incomingCallFromUsername;
+    hideIncomingCall();
+    if (socket) socket.emit('dm_call_accept', { to_user_id: fromId });
+    joinDmCall(fromId, fromUsername);
+});
+
+async function joinDmCall(userId, username) {
+
+    outgoingCallToId = userId;
+    outgoingCallToUsername = username;
+
+    callHubName.textContent = `📞 ${username}`;
+    callScreenshareBtn.style.display = 'none';
+    callRingingState.style.display = 'none';
+    callFrameContainer.style.display = 'block';
+    callOverlay.style.display = 'flex';
+
+    try {
+
+        const response = await fetch(`/api/dm/${userId}/call/join`, {
+            method: 'POST',
+            credentials: 'include'
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            alert(data.error || 'Aramaya katılınamadı.');
+            leaveCall();
+            return;
+        }
+
+        callMode = 'dm';
+        await joinCallFrame(data.room_url, data.token);
+        dmCallBtn.classList.add('in-call');
+
+    } catch (error) {
+        console.error('DM araması başarısız:', error);
+        alert('Aramaya katılınamadı.');
+        leaveCall();
+    }
+
+}
+
+function endDmCallUi() {
+    callOverlay.style.display = 'none';
+    callRingingState.style.display = 'none';
+    callFrameContainer.style.display = 'block';
+    callMode = null;
+    outgoingCallToId = null;
+    outgoingCallToUsername = '';
+    dmCallBtn.classList.remove('in-call');
+}
+
+
+// ─── ORTAK: Daily.co çerçevesine katıl (kamera her zaman kapalı) ─────────
+
+async function joinCallFrame(roomUrl, token) {
+
+    if (typeof DailyIframe === 'undefined') {
+        alert('Sesli sohbet bileşeni yüklenemedi.');
+        throw new Error('DailyIframe yok');
+    }
+
+    callFrame = DailyIframe.createFrame(callFrameContainer, {
+        showLeaveButton: false,
+        iframeStyle: { width: '100%', height: '100%', border: 'none' }
+    });
+
+    await callFrame.join({ url: roomUrl, token, startVideoOff: true });
+
+    // Bu uygulamada görüntülü görüşme yok — kamera her zaman zorla kapalı tutulur.
+    callFrame.setLocalVideo(false);
+    callFrame.on('participant-updated', (event) => {
+        if (event?.participant?.local && event.participant.video) {
+            callFrame.setLocalVideo(false);
+        }
+    });
+
+    callFrame.on('left-meeting', leaveCall);
+
+}
+
+
+callScreenshareBtn.addEventListener('click', async () => {
+
+    if (!callFrame || callMode !== 'hub') return;
+
+    try {
+
+        const participants = callFrame.participants();
+        const isSharing = participants?.local?.screen;
+
+        if (isSharing) {
+            await callFrame.stopScreenShare();
+            callScreenshareBtn.classList.remove('active');
+        } else {
+            await callFrame.startScreenShare();
+            callScreenshareBtn.classList.add('active');
+        }
+
+    } catch (error) {
+        console.error('Ekran paylaşımı başarısız:', error);
+    }
+
+});
+
+
 callLeaveBtn.addEventListener('click', leaveCall);
 
 
 function leaveCall() {
+
+    if ((callMode === 'dm' || callMode === 'dm-ringing') && (outgoingCallToId || incomingCallFromId) && socket) {
+        socket.emit('dm_call_end', { to_user_id: outgoingCallToId || incomingCallFromId });
+    }
 
     if (callFrame) {
         callFrame.leave();
@@ -4150,8 +4565,19 @@ function leaveCall() {
     }
 
     callOverlay.style.display = 'none';
+    callRingingState.style.display = 'none';
+    callFrameContainer.style.display = 'block';
+    callScreenshareBtn.classList.remove('active');
+
     hubCallBtn.classList.remove('in-call');
     hubCallBtn.textContent = '🎙️ Sesli Sohbet';
+    dmCallBtn.classList.remove('in-call');
+
+    callMode = null;
+    outgoingCallToId = null;
+    outgoingCallToUsername = '';
+    incomingCallFromId = null;
+    incomingCallFromUsername = '';
 
 }
 
@@ -4459,11 +4885,12 @@ function renderHubMessageIntoWrap(wrap, msg) {
 
     const editedTag = msg.edited ? '<span class="edited-tag">(düzenlendi)</span>' : '';
 
+    const avatar = avatarButtonHtml(msg.user_id, msg.avatar_data, msg.username);
+
     const header = `
         <div class="header">
             <span class="username">${escapeHtml(msg.username)}</span>
-            <span class="time">${time}</span>
-            ${editedTag}
+            <span class="time">${time}${editedTag}</span>
         </div>
     `;
 
@@ -4502,15 +4929,20 @@ function renderHubMessageIntoWrap(wrap, msg) {
 
         body = buildVoiceCardHtml(msg.payload.audio, msg.payload.duration);
 
+    } else if ((msg.kind === 'image' || msg.kind === 'video' || msg.kind === 'file') && msg.payload) {
+
+        body = buildFileCardHtml(msg.payload);
+
     } else {
 
         body = `<div class="hub-msg-text">${escapeHtml(msg.content)}</div>`;
 
     }
 
-    wrap.innerHTML = header + actions + body;
+    wrap.innerHTML = `${avatar}<div class="hub-msg-body">${header}${actions}${body}</div>`;
 
     wireVoiceCards(wrap);
+    wireMsgAvatars(wrap);
     enableLongPress(wrap);
 
     wrap.querySelectorAll('.hub-poll-option').forEach((opt) => {

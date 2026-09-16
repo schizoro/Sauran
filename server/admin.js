@@ -33,6 +33,11 @@ function deleteUser(identifier) {
   });
 
   db.prepare(`DELETE FROM hub_invites WHERE created_by = ?`).run(user.id);
+  db.prepare(`DELETE FROM hub_members WHERE user_id = ?`).run(user.id);
+  db.prepare(`DELETE FROM friendships WHERE user_low = ? OR user_high = ?`).run(user.id, user.id);
+  db.prepare(`DELETE FROM blocked_users WHERE user_id = ? OR blocked_user_id = ?`).run(user.id, user.id);
+  db.prepare(`DELETE FROM notifications WHERE user_id = ?`).run(user.id);
+  db.prepare(`DELETE FROM messages WHERE user_id = ? OR to_user_id = ?`).run(user.id, user.id);
 
   const info = db.prepare(`DELETE FROM users WHERE id = ?`).run(user.id);
   console.log(info.changes ? `Silindi: ${identifier}` : `Bulunamadı: ${identifier}`);
