@@ -3215,13 +3215,7 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
 
     } else if (msg.kind === 'dm_voice' && msg.payload) {
 
-        body = `
-            <div class="voice-msg-card">
-                🎤
-                <audio controls src="${msg.payload.audio}"></audio>
-                <span class="voice-msg-duration">${formatDuration(msg.payload.duration)}</span>
-            </div>
-        `;
+        body = buildVoiceCardHtml(msg.payload.audio, msg.payload.duration);
 
     } else {
 
@@ -3230,6 +3224,9 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
     }
 
     wrap.innerHTML = `${actions}${body}<span class="dm-msg-time">${time}${editedTag}</span>`;
+
+    wireVoiceCards(wrap);
+    enableLongPress(wrap);
 
     wrap.querySelector('.msg-delete-btn')?.addEventListener('click', async () => {
 
@@ -3312,6 +3309,121 @@ function formatDuration(seconds) {
     return `${m}:${String(s).padStart(2, '0')}`;
 
 }
+
+
+function buildVoiceCardHtml(audioSrc, duration) {
+
+    return `
+        <div class="voice-msg-card">
+            <button class="voice-play-btn" type="button" data-audio-src="${escapeAttr(audioSrc)}">▶</button>
+            <div class="voice-progress"><div class="voice-progress-fill"></div></div>
+            <span class="voice-msg-duration">${formatDuration(duration)}</span>
+            <audio class="voice-audio-el" preload="none"></audio>
+        </div>
+    `;
+
+}
+
+
+function wireVoiceCards(container) {
+
+    container.querySelectorAll('.voice-play-btn').forEach((btn) => {
+
+        if (btn.dataset.wired) return;
+        btn.dataset.wired = '1';
+
+        const card = btn.closest('.voice-msg-card');
+        const audio = card.querySelector('.voice-audio-el');
+        const fill = card.querySelector('.voice-progress-fill');
+
+        btn.addEventListener('click', () => {
+
+            document.querySelectorAll('.voice-audio-el').forEach((el) => {
+
+                if (el !== audio && !el.paused) {
+
+                    el.pause();
+
+                    const otherBtn = el.closest('.voice-msg-card')?.querySelector('.voice-play-btn');
+                    if (otherBtn) otherBtn.textContent = '▶';
+
+                }
+
+            });
+
+            if (!audio.src) audio.src = btn.dataset.audioSrc;
+
+            if (audio.paused) {
+
+                audio.play().catch((error) => {
+                    console.error('Ses oynatılamadı:', error);
+                    btn.textContent = '⚠';
+                });
+
+                btn.textContent = '⏸';
+
+            } else {
+
+                audio.pause();
+                btn.textContent = '▶';
+
+            }
+
+        });
+
+        audio.addEventListener('timeupdate', () => {
+            if (audio.duration) fill.style.width = `${(audio.currentTime / audio.duration) * 100}%`;
+        });
+
+        audio.addEventListener('ended', () => {
+            btn.textContent = '▶';
+            fill.style.width = '0%';
+        });
+
+        audio.addEventListener('error', () => {
+            btn.textContent = '⚠';
+        });
+
+    });
+
+}
+
+
+function enableLongPress(el) {
+
+    if (el.dataset.longPressWired) return;
+    el.dataset.longPressWired = '1';
+
+    let timer = null;
+
+    el.addEventListener('touchstart', () => {
+
+        timer = setTimeout(() => {
+
+            document.querySelectorAll('.show-actions').forEach((other) => {
+                if (other !== el) other.classList.remove('show-actions');
+            });
+
+            el.classList.add('show-actions');
+
+        }, 450);
+
+    }, { passive: true });
+
+    el.addEventListener('touchmove', () => clearTimeout(timer), { passive: true });
+    el.addEventListener('touchend', () => clearTimeout(timer));
+    el.addEventListener('touchcancel', () => clearTimeout(timer));
+
+}
+
+
+document.addEventListener('touchstart', (event) => {
+
+    document.querySelectorAll('.show-actions').forEach((el) => {
+        if (!el.contains(event.target)) el.classList.remove('show-actions');
+    });
+
+}, { passive: true });
 
 
 dmForm.addEventListener(
@@ -3406,6 +3518,19 @@ const hubDictateBtn = document.getElementById('hub-dictate-btn');
 const hubVoiceBtn = document.getElementById('hub-voice-btn');
 
 const hubMemberList = document.getElementById('hub-member-list');
+const hubMembersToggleBtn = document.getElementById('hub-members-toggle-btn');
+const hubDetailSide = document.getElementById('hub-detail-side');
+const hubSideBackdrop = document.getElementById('hub-side-backdrop');
+
+hubMembersToggleBtn.addEventListener('click', () => {
+    hubDetailSide.classList.toggle('mobile-open');
+    hubSideBackdrop.classList.toggle('mobile-open');
+});
+
+hubSideBackdrop.addEventListener('click', () => {
+    hubDetailSide.classList.remove('mobile-open');
+    hubSideBackdrop.classList.remove('mobile-open');
+});
 const hubDeleteBtn = document.getElementById('hub-delete-btn');
 const hubCallBtn = document.getElementById('hub-call-btn');
 
@@ -4178,6 +4303,19 @@ setupDictation(dmDictateBtn, dmMessageInput);
 // SESLİ MESAJ KAYDI
 // =====================================================
 
+function pickSupportedAudioMimeType() {
+
+    const candidates = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg'];
+
+    for (const type of candidates) {
+        if (window.MediaRecorder?.isTypeSupported?.(type)) return type;
+    }
+
+    return '';
+
+}
+
+
 function setupVoiceRecorder(button, onRecorded) {
 
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
@@ -4202,7 +4340,13 @@ function setupVoiceRecorder(button, onRecorded) {
             stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             chunks = [];
 
-            mediaRecorder = new MediaRecorder(stream);
+            const mimeType = pickSupportedAudioMimeType();
+
+            mediaRecorder = mimeType
+                ? new MediaRecorder(stream, { mimeType })
+                : new MediaRecorder(stream);
+
+            const recordedType = (mediaRecorder.mimeType || mimeType || 'audio/webm').split(';')[0];
 
             mediaRecorder.ondataavailable = (event) => {
                 if (event.data.size > 0) chunks.push(event.data);
@@ -4216,7 +4360,7 @@ function setupVoiceRecorder(button, onRecorded) {
                 const duration = (Date.now() - startTime) / 1000;
                 if (duration < 0.5) return;
 
-                const blob = new Blob(chunks, { type: 'audio/webm' });
+                const blob = new Blob(chunks, { type: recordedType });
 
                 const reader = new FileReader();
                 reader.onload = () => onRecorded(reader.result, duration);
@@ -4231,7 +4375,7 @@ function setupVoiceRecorder(button, onRecorded) {
         } catch (error) {
 
             console.error('Mikrofona erişilemedi:', error);
-            showAuthError('Mikrofona erişim izni gerekiyor.');
+            alert('Mikrofona erişim izni gerekiyor.');
 
         }
 
@@ -4356,13 +4500,7 @@ function renderHubMessageIntoWrap(wrap, msg) {
 
     } else if (msg.kind === 'voice' && msg.payload) {
 
-        body = `
-            <div class="voice-msg-card">
-                🎤
-                <audio controls src="${msg.payload.audio}"></audio>
-                <span class="voice-msg-duration">${formatDuration(msg.payload.duration)}</span>
-            </div>
-        `;
+        body = buildVoiceCardHtml(msg.payload.audio, msg.payload.duration);
 
     } else {
 
@@ -4371,6 +4509,9 @@ function renderHubMessageIntoWrap(wrap, msg) {
     }
 
     wrap.innerHTML = header + actions + body;
+
+    wireVoiceCards(wrap);
+    enableLongPress(wrap);
 
     wrap.querySelectorAll('.hub-poll-option').forEach((opt) => {
 

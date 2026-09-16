@@ -1,5 +1,7 @@
-* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; -webkit-tap-highlight-color: transparent; }
+html, body { overflow-x: hidden; max-width: 100%; }
 body { background-color: #0b0c10; color: #c5c6c7; height: 100vh; display: flex; }
+img, iframe { max-width: 100%; }
 
 /* ─── v1.9: Açık Tema ─────────────────────────────────────────────────────── */
 body.theme-light { background-color: #e8eaed; color: #24292e; }
@@ -342,8 +344,8 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 
 .hub-title-pill { display: flex; align-items: center; gap: 8px; background: #12141a; border: 1px solid #1f2833; border-radius: 999px; padding: 8px 18px; flex: 1; min-width: 0; }
 .hub-detail-icon { font-size: 18px; flex-shrink: 0; }
-.hub-detail-header h2 { color: #fff; font-size: 14px; font-weight: bold; letter-spacing: 0.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hub-detail-count { color: #45a29e; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+.hub-detail-header h2 { color: #fff; font-size: 14px; font-weight: bold; letter-spacing: 0.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; min-width: 0; }
+.hub-detail-count { color: #45a29e; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; flex-shrink: 0; }
 
 .hub-feed { flex: 1; overflow-y: auto; padding: 20px 25px; display: flex; flex-direction: column; gap: 14px; }
 .hub-feed-empty { color: #4b5563; font-size: 13px; text-align: center; margin-top: 40px; }
@@ -412,7 +414,10 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 .hub-msg-deleted { color: #4b5563; font-size: 13px; font-style: italic; }
 
 .hub-msg-actions { position: absolute; top: -10px; right: 6px; display: none; gap: 4px; background: #1f2833; border: 1px solid #2a3644; border-radius: 6px; padding: 3px; }
-.hub-msg:hover .hub-msg-actions { display: flex; }
+@media (hover: hover) {
+  .hub-msg:hover .hub-msg-actions { display: flex; }
+}
+.hub-msg.show-actions .hub-msg-actions { display: flex; }
 .hub-msg-actions button { background: none; border: none; color: #8e9297; font-size: 12px; cursor: pointer; padding: 4px 6px; border-radius: 4px; }
 .hub-msg-actions button:hover { color: #66fcf1; background: #12141a; }
 .hub-msg-actions .msg-delete-btn:hover { color: #ff2e46; }
@@ -513,9 +518,80 @@ body.theme-light .profile-field-value { color: #1a1d21; }
 .dm-msg-theirs { align-self: flex-start; background: #12141a; border: 1px solid #1f2833; color: #c5c6c7; }
 .dm-msg-time { display: block; margin-top: 4px; font-size: 9px; color: #6b7280; }
 .dm-msg .hub-msg-actions { top: -12px; right: 4px; }
-.dm-msg:hover .hub-msg-actions { display: flex; }
+@media (hover: hover) {
+  .dm-msg:hover .hub-msg-actions { display: flex; }
+}
+.dm-msg.show-actions .hub-msg-actions { display: flex; }
 .dm-form { display: flex; gap: 10px; padding: 14px 18px; border-top: 1px solid #1f2833; background: #12141a; }
 .dm-form input { flex: 1; background: #0b0c10; border: 1px solid #1f2833; padding: 11px; color: #66fcf1; outline: none; font-size: 13px; }
 .dm-form input:focus { border-color: #45a29e; }
 .dm-form button { padding: 0 18px; background: transparent; border: 1px solid #66fcf1; color: #66fcf1; font-weight: bold; cursor: pointer; }
 .dm-form button:hover { background: #66fcf1; color: #0b0c10; }
+
+/* ─── v1.13: Özel Ses Oynatıcı ────────────────────────────────────────────── */
+.voice-play-btn { width: 30px; height: 30px; flex-shrink: 0; border-radius: 50%; background: rgba(102, 252, 241, 0.12); border: 1px solid #66fcf1; color: #66fcf1; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; padding: 0; }
+.voice-play-btn:hover { background: #66fcf1; color: #0b0c10; }
+.voice-msg-card { position: relative; }
+.voice-progress { flex: 1; height: 3px; background: #1f2833; border-radius: 2px; overflow: hidden; min-width: 40px; }
+.voice-progress-fill { height: 100%; width: 0%; background: #66fcf1; transition: width 0.1s linear; }
+
+/* ─── v1.13: Üye Paneli Aç/Kapa (Mobil) ───────────────────────────────────── */
+.hub-members-toggle-btn { display: none; padding: 7px 10px; background: transparent; border: 1px solid #2a3644; color: #8e9297; font-size: 13px; cursor: pointer; }
+.hub-side-backdrop { display: none; }
+
+/* ─── v1.13: MOBİL ────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  input, textarea, select { font-size: 16px !important; }
+
+  .modal-box { max-width: 92vw; }
+  .hub-create-box, .poll-create-box, .share-create-box, .dm-modal-box, .users-modal-box { width: 92vw; max-width: 360px; }
+  .dm-modal-box { height: 80vh; }
+
+  .topbar { padding: 10px 10px; gap: 6px; }
+  .topbar-logo { font-size: 12px; letter-spacing: 1px; flex-shrink: 0; }
+  .topbar-actions { gap: 4px; overflow-x: auto; max-width: 100%; }
+  .topbar-icon-btn { width: 30px; height: 30px; font-size: 12px; flex-shrink: 0; }
+  .topbar-profile-btn { padding: 4px 6px 4px 4px; flex-shrink: 0; }
+  .profile-username { display: none; }
+
+  .hub-list-view { padding: 18px 14px; }
+  .hub-list-header { flex-wrap: wrap; gap: 10px; }
+  .hub-list-header h2 { font-size: 13px; letter-spacing: 1px; }
+  .hub-create-btn { padding: 8px 12px; font-size: 12px; }
+  .hub-list-grid { max-width: 100%; }
+
+  .hub-detail-header { padding: 10px 12px; gap: 6px; flex-wrap: wrap; }
+  .hub-title-pill { flex: 1 1 140px; min-width: 140px; padding: 7px 12px; }
+  .hub-back-btn { flex-shrink: 0; padding: 7px 10px; font-size: 0; }
+  .hub-back-arrow { font-size: 14px; }
+  .hub-call-btn, .hub-delete-btn { flex-shrink: 0; padding: 7px 10px; font-size: 0; }
+  .hub-call-btn::before { content: '🎙️'; font-size: 14px; }
+  #hub-invite-friend-btn::before { content: '👥'; font-size: 14px; }
+  #hub-invite-btn::before { content: '🔑'; font-size: 14px; }
+  #hub-delete-btn::before { content: '🗑'; font-size: 14px; }
+
+  .hub-members-toggle-btn { display: block; flex-shrink: 0; }
+
+  .hub-detail-view { flex-direction: column; }
+  .hub-detail-side {
+    position: fixed; top: 0; right: 0; height: 100%; width: 82%; max-width: 300px;
+    transform: translateX(100%); transition: transform 0.22s ease; z-index: 60;
+    box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+  }
+  .hub-detail-side.mobile-open { transform: translateX(0); }
+  .hub-side-backdrop.mobile-open { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 55; }
+
+  .hub-feed { padding: 14px 14px; }
+  .hub-composer { padding: 12px 14px; }
+  #hub-chat-form, .dm-form { flex-wrap: nowrap; }
+  #hub-chat-form input, .dm-form input { min-width: 0; }
+
+  .side-panel { width: 88vw; max-width: 320px; }
+
+  .profile-modal-box, .profile-modal-box-minimal { width: 88vw; max-width: 320px; }
+
+  .call-header { padding: 10px 14px; }
+  .call-header span { font-size: 12px; }
+
+}
