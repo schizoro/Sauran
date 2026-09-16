@@ -3307,8 +3307,10 @@ function renderHubCard(hub) {
 
     card.innerHTML = `
         ${iconHtml}
-        <span class="hub-card-name">${escapeHtml(hub.name)}</span>
-        <span class="hub-card-meta">👥 ${hub.member_count} kişi</span>
+        <span class="hub-card-text">
+            <span class="hub-card-name">${escapeHtml(hub.name)}</span>
+            <span class="hub-card-meta">👥 ${hub.member_count} kişi</span>
+        </span>
     `;
 
     card.addEventListener('click', () => openHub(hub.id));
