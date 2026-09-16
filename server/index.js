@@ -16,6 +16,7 @@ const {
   updateStatus,
   updatePrivacy,
   updateAvatar,
+  updateBanner,
   createHub,
   updateHub,
   listHubs,
@@ -410,6 +411,28 @@ app.patch('/api/profile/avatar', (req, res) => {
 
   } catch (error) {
     console.error('Avatar güncelleme API hatası:', error);
+    return res.status(500).json({ success: false, error: 'Güncellenemedi.' });
+  }
+});
+
+app.patch('/api/profile/banner', (req, res) => {
+  try {
+    const user = getUserFromRequest(req);
+
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
+    }
+
+    const result = updateBanner(user.id, req.body.banner_data ?? null);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Banner güncelleme API hatası:', error);
     return res.status(500).json({ success: false, error: 'Güncellenemedi.' });
   }
 });

@@ -302,24 +302,13 @@ const dmDictateBtn =
 const dmVoiceBtn =
     document.getElementById('dm-voice-btn');
 
-const dmAttachBtn =
-    document.getElementById('dm-attach-btn');
-
-const dmAttachInput =
-    document.getElementById('dm-attach-input');
-
 const dmCallBtn =
     document.getElementById('dm-call-btn');
 
 let activeDmUserId = null;
 let activeDmUsername = '';
 
-dmAttachBtn.addEventListener('click', () => dmAttachInput.click());
-
-dmAttachInput.addEventListener('change', async () => {
-
-    const file = dmAttachInput.files?.[0];
-    dmAttachInput.value = '';
+wireAttachMenu('dm', async (file) => {
 
     const fileData = await handleAttachedFile(file);
     if (!fileData || !activeDmUserId || !socket) return;
@@ -1399,6 +1388,19 @@ function renderProfile() {
 
 
     // ------------------------------------------------
+    // Kapak fotoğrafı
+    // ------------------------------------------------
+
+    const bannerEl = document.getElementById('profile-modal-banner');
+    if (currentUser.banner_data) {
+        bannerEl.style.setProperty('--banner-img', `url(${currentUser.banner_data})`);
+        bannerEl.classList.add('has-image');
+    } else {
+        bannerEl.classList.remove('has-image');
+    }
+
+
+    // ------------------------------------------------
     // Durum
     // ------------------------------------------------
 
@@ -1750,6 +1752,86 @@ avatarFileInput.addEventListener(
 );
 
 
+function resizeImageToDataUrlWide(file, maxWidth) {
+
+    return new Promise((resolve, reject) => {
+
+        const reader = new FileReader();
+        reader.onerror = reject;
+
+        reader.onload = () => {
+
+            const img = new Image();
+            img.onerror = reject;
+
+            img.onload = () => {
+
+                const scale = Math.min(1, maxWidth / img.width);
+                const w = Math.round(img.width * scale);
+                const h = Math.round(img.height * scale);
+
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, w, h);
+
+                resolve(canvas.toDataURL('image/jpeg', 0.85));
+
+            };
+
+            img.src = reader.result;
+
+        };
+
+        reader.readAsDataURL(file);
+
+    });
+
+}
+
+
+const bannerChangeBtn = document.getElementById('banner-change-btn');
+const bannerFileInput = document.getElementById('banner-file-input');
+
+bannerChangeBtn.addEventListener('click', () => bannerFileInput.click());
+
+bannerFileInput.addEventListener('change', async () => {
+
+    const file = bannerFileInput.files?.[0];
+    bannerFileInput.value = '';
+    if (!file) return;
+
+    try {
+
+        const dataUrl = await resizeImageToDataUrlWide(file, 900);
+
+        const response = await fetch('/api/profile/banner', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ banner_data: dataUrl })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            showToast(data.error || 'Kapak fotoğrafı yüklenemedi.');
+            return;
+        }
+
+        if (currentUser) currentUser.banner_data = data.banner_data;
+        renderProfile();
+
+    } catch (error) {
+        console.error('Kapak fotoğrafı yüklenemedi:', error);
+        showToast('Kapak fotoğrafı yüklenemedi.');
+    }
+
+});
+
+
 function resizeImageToDataUrl(file, size) {
 
     return new Promise(
@@ -1954,8 +2036,81 @@ const TRANSLATIONS_PLACEHOLDER = {
     'hub-create-name-input': { tr: 'Hub adı', en: 'Hub name' },
     'friend-add-input': { tr: 'Kullanıcı adıyla arkadaş ekle...', en: 'Add friend by username...' },
     'hub-join-code-input': { tr: 'Davet kodunu gir...', en: 'Enter invite code...' },
-    'hub-message-input': { tr: 'Bir mesaj yaz...', en: 'Type a message...' }
+    'hub-message-input': { tr: 'Bir mesaj yaz...', en: 'Type a message...' },
+    'dm-message-input': { tr: 'Bir mesaj yaz...', en: 'Type a message...' },
+    'hub-settings-name-input': { tr: 'Hub adı', en: 'Hub name' }
 };
+
+// data-i18n / data-i18n-placeholder ile işaretlenmiş elemanlar + dinamik
+// JS metinleri için ortak sözlük. t(key) her yerde kullanılabilir.
+const I18N = {
+    'menu-join-code': { tr: 'Davet Koduyla Katıl', en: 'Join with Invite Code' },
+    'menu-notifications': { tr: 'Bildirimler', en: 'Notifications' },
+    'menu-friends': { tr: 'Arkadaşlar', en: 'Friends' },
+    'menu-add-friend': { tr: 'Arkadaş Ekle', en: 'Add Friend' },
+    'menu-settings': { tr: 'Ayarlar', en: 'Settings' },
+    'hubs-title': { tr: 'HUBLARIM', en: 'MY HUBS' },
+    'hubs-owned': { tr: 'OLUŞTURDUĞUM HUBLAR', en: 'HUBS I CREATED' },
+    'hubs-joined': { tr: 'KATILDIĞIM HUBLAR', en: 'HUBS I JOINED' },
+    'hubs-empty': { tr: "İlk Hub'ını oluştur", en: 'Create your first Hub' },
+    'modal-new-hub': { tr: 'Yeni Hub', en: 'New Hub' },
+    'add-image': { tr: 'Görsel Ekle', en: 'Add Image' },
+    'change-image': { tr: 'Görseli Değiştir', en: 'Change Image' },
+    'modal-hub-settings': { tr: '⚙️ Hub Ayarları', en: '⚙️ Hub Settings' },
+    'modal-invite-friend': { tr: '👥 Arkadaşını Davet Et', en: '👥 Invite a Friend' },
+    'modal-notifications': { tr: '🔔 Bildirimler', en: '🔔 Notifications' },
+    'modal-join-code': { tr: '🔑 Davet Koduyla Katıl', en: '🔑 Join with Invite Code' },
+    'modal-invite-code': { tr: '🔑 Davet Kodu', en: '🔑 Invite Code' },
+    'modal-poll': { tr: '📊 Oylama Başlat', en: '📊 Start a Poll' },
+    'modal-share': { tr: '📌 Paylaşım Yap', en: '📌 Share Something' },
+    'modal-add-friend': { tr: '➕ Arkadaş Ekle', en: '➕ Add Friend' },
+    'modal-settings': { tr: '⚙️ Ayarlar', en: '⚙️ Settings' },
+    'label-theme': { tr: 'Tema', en: 'Theme' },
+    'theme-dark': { tr: 'Kapalı Tema', en: 'Dark Theme' },
+    'theme-dark-desc': { tr: 'Siyah, karanlık arayüz', en: 'Black, dark interface' },
+    'theme-light': { tr: 'Açık Tema', en: 'Light Theme' },
+    'theme-light-desc': { tr: 'Açık gri arayüz', en: 'Light gray interface' },
+    'label-lang': { tr: 'Dil', en: 'Language' },
+    'label-change-password': { tr: 'Şifre Değiştir', en: 'Change Password' },
+    'attach-camera': { tr: 'Kamerayla Çek', en: 'Take Photo/Video' },
+    'attach-gallery': { tr: 'Galeriden Seç', en: 'Choose from Gallery' },
+    'attach-file': { tr: 'Dosya Seç', en: 'Choose File' },
+    'hub-settings-invite-friend': { tr: 'Arkadaşını Davet Et', en: 'Invite a Friend' },
+    'hub-settings-invite-code': { tr: 'Davet Kodu Oluştur', en: 'Create Invite Code' },
+    'hub-settings-delete': { tr: "Hub'ı Sil", en: 'Delete Hub' },
+    'call-ringing': { tr: 'Aranıyor...', en: 'Calling...' },
+    'call-cancel': { tr: 'İptal Et', en: 'Cancel' },
+    'call-decline': { tr: 'Reddet', en: 'Decline' },
+    'call-accept': { tr: 'Kabul Et', en: 'Accept' },
+    'call-incoming-sub': { tr: 'seni arıyor...', en: 'is calling you...' },
+    'call-leave': { tr: 'Ayrıl', en: 'Leave' },
+    'back-to-hubs': { tr: 'Hublar', en: 'Hubs' },
+    'start-something': { tr: 'Bir şey başlat', en: 'Start something' },
+    'start-poll': { tr: 'Oylama', en: 'Poll' },
+    'start-share': { tr: 'Paylaşım', en: 'Share' },
+    'member-count': { tr: 'kişi', en: 'members' },
+
+    // Dinamik JS metinleri (t() ile kullanılır)
+    'send': { tr: 'Gönder', en: 'Send' },
+    'save': { tr: 'Kaydet', en: 'Save' },
+    'cancel': { tr: 'Vazgeç', en: 'Cancel' },
+    'delete': { tr: 'Sil', en: 'Delete' },
+    'edit': { tr: 'Düzenle', en: 'Edit' },
+    'confirm-delete-message': { tr: 'Bu mesajı silmek istediğine emin misin?', en: 'Are you sure you want to delete this message?' },
+    'message-deleted': { tr: 'Bu mesaj silindi', en: 'This message was deleted' },
+    'edited-tag': { tr: '(düzenlendi)', en: '(edited)' },
+    'hub-feed-empty': { tr: 'Henüz bir şey olmadı. İlk hareketi sen yap.', en: "Nothing here yet. Make the first move." },
+    'connecting': { tr: 'Bağlanıyor...', en: 'Connecting...' },
+    'file-limit-toast': { tr: "Dosya limiti 10 MB'dir.", en: 'File limit is 10 MB.' },
+    'video-limit-toast': { tr: "Video limiti 10 MB'dir.", en: 'Video limit is 10 MB.' }
+};
+
+function t(key) {
+    const lang = localStorage.getItem('sauran_lang') || 'tr';
+    const entry = I18N[key];
+    if (!entry) return key;
+    return entry[lang] || entry.tr;
+}
 
 function applyLanguage(lang) {
 
@@ -1969,10 +2124,27 @@ function applyLanguage(lang) {
         if (el) el.placeholder = text[lang] || text.tr;
     });
 
+    document.querySelectorAll('[data-i18n]').forEach((el) => {
+        const entry = I18N[el.dataset.i18n];
+        if (entry) el.textContent = entry[lang] || entry.tr;
+    });
+
+    document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+        const entry = I18N[el.dataset.i18nPlaceholder];
+        if (entry) el.placeholder = entry[lang] || entry.tr;
+    });
+
+    document.documentElement.lang = lang;
+
+    // Açık olan sohbetlerdeki dinamik metinleri (saat, "silindi" vb.) tazele.
+    if (currentHub) loadHubMessages(currentHub.id);
+    if (activeDmUserId) openDm(activeDmUserId, activeDmUsername);
+
 }
 
 
-applyLanguage(localStorage.getItem('sauran_lang') || 'tr');
+// İlk uygulanış (currentHub/activeDmUserId henüz tanımlanmadığı için
+// dosyanın sonunda, tüm let/const bildirimleri tamamlandıktan sonra çağrılır).
 
 
 settingsPasswordBtn.addEventListener(
@@ -3066,6 +3238,14 @@ function renderOtherProfile() {
     const initial = profile.username.charAt(0).toUpperCase();
     const hasAvatar = Boolean(profile.avatar_data);
 
+    const otherBannerEl = document.getElementById('other-profile-banner');
+    if (profile.banner_data) {
+        otherBannerEl.style.setProperty('--banner-img', `url(${profile.banner_data})`);
+        otherBannerEl.classList.add('has-image');
+    } else {
+        otherBannerEl.classList.remove('has-image');
+    }
+
     otherProfileAvatar.textContent = initial;
     otherProfileAvatar.style.setProperty('--user-color', color);
     otherProfileAvatar.style.display = hasAvatar ? 'none' : 'flex';
@@ -3282,15 +3462,15 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
         ? new Date(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
         : '';
 
-    const editedTag = msg.edited ? ' <span class="edited-tag">(düzenlendi)</span>' : '';
+    const editedTag = msg.edited ? ` <span class="edited-tag">(${t('edited-tag')})</span>` : '';
 
     const canEdit = isMine && msg.kind === 'dm';
     const canDelete = isMine && msg.kind !== 'deleted';
 
     const actions = canDelete ? `
         <div class="hub-msg-actions">
-            ${canEdit ? '<button class="msg-edit-btn" type="button" title="Düzenle">✎</button>' : ''}
-            <button class="msg-delete-btn" type="button" title="Sil">🗑</button>
+            ${canEdit ? `<button class="msg-edit-btn" type="button" title="${t('edit')}">✎</button>` : ''}
+            <button class="msg-delete-btn" type="button" title="${t('delete')}">🗑</button>
         </div>
     ` : '';
 
@@ -3298,7 +3478,7 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
 
     if (msg.kind === 'deleted') {
 
-        body = `<span class="hub-msg-deleted">Bu mesaj silindi</span>`;
+        body = `<span class="hub-msg-deleted">${t('message-deleted')}</span>`;
 
     } else if (msg.kind === 'dm_voice' && msg.payload) {
 
@@ -3321,7 +3501,7 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
 
     wrap.querySelector('.msg-delete-btn')?.addEventListener('click', async () => {
 
-        if (!confirm('Bu mesajı silmek istediğine emin misin?')) return;
+        if (!confirm(t('confirm-delete-message'))) return;
 
         await fetch(`/api/messages/${msg.id}`, { method: 'DELETE', credentials: 'include' });
 
@@ -3335,8 +3515,8 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
         contentEl.outerHTML = `
             <span class="hub-msg-edit-box">
                 <input type="text" value="${escapeAttr(msg.content)}" maxlength="500">
-                <button class="msg-edit-save" type="button">Kaydet</button>
-                <button class="msg-edit-cancel" type="button">Vazgeç</button>
+                <button class="msg-edit-save" type="button">${t('save')}</button>
+                <button class="msg-edit-cancel" type="button">${t('cancel')}</button>
             </span>
         `;
 
@@ -3476,6 +3656,47 @@ function readFileAsDataUrl(file) {
     });
 }
 
+// prefix: 'hub' | 'dm' — bekler #{prefix}-attach-btn, #{prefix}-attach-menu,
+// #{prefix}-attach-input-camera/gallery/file elementlerinin var olduğunu.
+function wireAttachMenu(prefix, onFile) {
+
+    const btn = document.getElementById(`${prefix}-attach-btn`);
+    const menu = document.getElementById(`${prefix}-attach-menu`);
+    const inputs = {
+        camera: document.getElementById(`${prefix}-attach-input-camera`),
+        gallery: document.getElementById(`${prefix}-attach-input-gallery`),
+        file: document.getElementById(`${prefix}-attach-input-file`)
+    };
+
+    btn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
+    });
+
+    document.addEventListener('click', (event) => {
+        if (menu.style.display === 'flex' && !menu.contains(event.target) && event.target !== btn) {
+            menu.style.display = 'none';
+        }
+    });
+
+    menu.querySelectorAll('[data-attach]').forEach((item) => {
+        item.addEventListener('click', () => {
+            menu.style.display = 'none';
+            inputs[item.dataset.attach]?.click();
+        });
+    });
+
+    Object.values(inputs).forEach((input) => {
+        input.addEventListener('change', () => {
+            const file = input.files?.[0];
+            input.value = '';
+            if (file) onFile(file);
+        });
+    });
+
+}
+
+
 async function handleAttachedFile(file) {
 
     if (!file) return null;
@@ -3483,7 +3704,7 @@ async function handleAttachedFile(file) {
     const isVideo = file.type.startsWith('video/');
 
     if (file.size > FILE_MAX_BYTES) {
-        showToast(isVideo ? "Video limiti 10 MB'dir." : "Dosya limiti 10 MB'dir.");
+        showToast(isVideo ? t('video-limit-toast') : t('file-limit-toast'));
         return null;
     }
 
@@ -3759,15 +3980,7 @@ const hubChatForm = document.getElementById('hub-chat-form');
 const hubMessageInput = document.getElementById('hub-message-input');
 const hubDictateBtn = document.getElementById('hub-dictate-btn');
 const hubVoiceBtn = document.getElementById('hub-voice-btn');
-const hubAttachBtn = document.getElementById('hub-attach-btn');
-const hubAttachInput = document.getElementById('hub-attach-input');
-
-hubAttachBtn.addEventListener('click', () => hubAttachInput.click());
-
-hubAttachInput.addEventListener('change', async () => {
-
-    const file = hubAttachInput.files?.[0];
-    hubAttachInput.value = '';
+wireAttachMenu('hub', async (file) => {
 
     const fileData = await handleAttachedFile(file);
     if (!fileData || !currentHub) return;
@@ -4017,7 +4230,7 @@ function renderHubCard(hub) {
         ${iconHtml}
         <span class="hub-card-text">
             <span class="hub-card-name">${escapeHtml(hub.name)}</span>
-            <span class="hub-card-meta">👥 ${hub.member_count} kişi</span>
+            <span class="hub-card-meta">👥 ${hub.member_count} ${t('member-count')}</span>
         </span>
     `;
 
@@ -4452,7 +4665,7 @@ function renderHubDetail() {
     }
 
     hubDetailName.textContent = currentHub.name;
-    hubDetailCount.textContent = `👥 ${currentHub.members.length} kişi`;
+    hubDetailCount.textContent = `👥 ${currentHub.members.length} ${t('member-count')}`;
 
     hubDeleteBtn.style.display = currentHub.is_owner ? 'block' : 'none';
 
@@ -5107,7 +5320,7 @@ async function loadHubMessages(hubId) {
         hubFeed.innerHTML = '';
 
         if (data.messages.length === 0) {
-            hubFeed.innerHTML = '<div class="hub-feed-empty">Henüz bir şey olmadı. İlk hareketi sen yap.</div>';
+            hubFeed.innerHTML = `<div class="hub-feed-empty">${t('hub-feed-empty')}</div>`;
             return;
         }
 
@@ -5145,7 +5358,7 @@ function renderHubMessageIntoWrap(wrap, msg) {
         ? new Date(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
         : '';
 
-    const editedTag = msg.edited ? '<span class="edited-tag">(düzenlendi)</span>' : '';
+    const editedTag = msg.edited ? `<span class="edited-tag">(${t('edited-tag')})</span>` : '';
 
     const avatar = avatarButtonHtml(msg.user_id, msg.avatar_data, msg.username);
 
@@ -5162,8 +5375,8 @@ function renderHubMessageIntoWrap(wrap, msg) {
 
     const actions = canDelete ? `
         <div class="hub-msg-actions">
-            ${canEdit ? '<button class="msg-edit-btn" type="button" title="Düzenle">✎</button>' : ''}
-            <button class="msg-delete-btn" type="button" title="Sil">🗑</button>
+            ${canEdit ? `<button class="msg-edit-btn" type="button" title="${t('edit')}">✎</button>` : ''}
+            <button class="msg-delete-btn" type="button" title="${t('delete')}">🗑</button>
         </div>
     ` : '';
 
@@ -5171,7 +5384,7 @@ function renderHubMessageIntoWrap(wrap, msg) {
 
     if (msg.kind === 'deleted') {
 
-        body = `<div class="hub-msg-deleted">Bu mesaj silindi</div>`;
+        body = `<div class="hub-msg-deleted">${t('message-deleted')}</div>`;
 
     } else if (msg.kind === 'poll') {
 
@@ -5226,7 +5439,7 @@ function renderHubMessageIntoWrap(wrap, msg) {
 
     wrap.querySelector('.msg-delete-btn')?.addEventListener('click', async () => {
 
-        if (!confirm('Bu mesajı silmek istediğine emin misin?')) return;
+        if (!confirm(t('confirm-delete-message'))) return;
 
         await fetch(`/api/messages/${msg.id}`, { method: 'DELETE', credentials: 'include' });
 
@@ -5240,8 +5453,8 @@ function renderHubMessageIntoWrap(wrap, msg) {
         textEl.outerHTML = `
             <div class="hub-msg-edit-box">
                 <input type="text" value="${escapeAttr(msg.content)}" maxlength="500">
-                <button class="msg-edit-save" type="button">Kaydet</button>
-                <button class="msg-edit-cancel" type="button">Vazgeç</button>
+                <button class="msg-edit-save" type="button">${t('save')}</button>
+                <button class="msg-edit-cancel" type="button">${t('cancel')}</button>
             </div>
         `;
 
@@ -5492,4 +5705,5 @@ function escapeAttr(value) {
 // BAŞLAT
 // =====================================================
 
+applyLanguage(localStorage.getItem('sauran_lang') || 'tr');
 checkExistingSession();

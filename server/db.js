@@ -78,6 +78,9 @@ if (!userColumns.includes('avatar_visibility')) {
 if (!userColumns.includes('avatar_data')) {
   db.exec(`ALTER TABLE users ADD COLUMN avatar_data TEXT`);
 }
+if (!userColumns.includes('banner_data')) {
+  db.exec(`ALTER TABLE users ADD COLUMN banner_data TEXT`);
+}
 
 const VALID_STATUSES = ['active', 'idle', 'busy', 'invisible'];
 const VALID_VISIBILITIES = ['public', 'friends', 'private'];
@@ -402,7 +405,7 @@ function loginUser(username, password) {
 
     const user = db.prepare(`
       SELECT id, username, email, password_hash, password_salt,
-             about_me, status, avatar_visibility, avatar_data
+             about_me, status, avatar_visibility, avatar_data, banner_data
       FROM users WHERE LOWER(username) = LOWER(?)
     `).get(username);
 
@@ -428,7 +431,8 @@ function loginUser(username, password) {
       about_me: user.about_me,
       status: user.status || 'signal',
       avatar_visibility: user.avatar_visibility || 'public',
-      avatar_data: user.avatar_data
+      avatar_data: user.avatar_data,
+      banner_data: user.banner_data
     };
 
   } catch (error) {
@@ -505,6 +509,28 @@ function updateAvatar(userId, dataUrl) {
 
   } catch (error) {
     console.error('Avatar güncelleme hatası:', error);
+    return { success: false, error: 'Güncellenemedi.' };
+  }
+}
+
+function updateBanner(userId, dataUrl) {
+  try {
+    if (dataUrl !== null) {
+      if (typeof dataUrl !== 'string' || !/^data:image\/(png|jpe?g|webp|gif);base64,/.test(dataUrl)) {
+        return { success: false, error: 'Geçersiz görsel formatı.' };
+      }
+
+      if (dataUrl.length > 3_000_000) {
+        return { success: false, error: 'Görsel çok büyük.' };
+      }
+    }
+
+    db.prepare(`UPDATE users SET banner_data = ? WHERE id = ?`).run(dataUrl, userId);
+
+    return { success: true, banner_data: dataUrl };
+
+  } catch (error) {
+    console.error('Banner güncelleme hatası:', error);
     return { success: false, error: 'Güncellenemedi.' };
   }
 }
@@ -1189,7 +1215,7 @@ function confirmPasswordReset(email, code, newPassword) {
 
 function getUserPublicProfile(viewerId, targetId) {
   const user = db.prepare(`
-    SELECT id, username, status, avatar_data
+    SELECT id, username, status, avatar_data, banner_data
     FROM users WHERE id = ?
   `).get(targetId);
 
@@ -1204,6 +1230,7 @@ function getUserPublicProfile(viewerId, targetId) {
     username: user.username,
     status: user.status,
     avatar_data: user.avatar_data,
+    banner_data: user.banner_data,
     friendship_status: isSelf ? 'self' : friendship,
     blocked_by_me: blockedByMe
   };
@@ -1387,6 +1414,7 @@ module.exports = {
   updateStatus,
   updatePrivacy,
   updateAvatar,
+  updateBanner,
   createHub,
   updateHub,
   listHubs,

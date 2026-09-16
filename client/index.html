@@ -227,21 +227,21 @@
 
             <div id="topbar-menu-dropdown" class="topbar-menu-dropdown liquid-glass" style="display:none;">
 
-                <button id="hub-join-open-btn" class="topbar-menu-item" title="Davet koduyla katıl" type="button">🔑 <span>Davet Koduyla Katıl</span></button>
+                <button id="hub-join-open-btn" class="topbar-menu-item" title="Davet koduyla katıl" type="button">🔑 <span data-i18n="menu-join-code">Davet Koduyla Katıl</span></button>
 
                 <button id="notifications-btn" class="topbar-menu-item" title="Bildirimler" type="button">
-                    🔔 <span>Bildirimler</span>
+                    🔔 <span data-i18n="menu-notifications">Bildirimler</span>
                     <span id="notifications-badge" class="topbar-badge" style="display:none;">0</span>
                 </button>
 
                 <button id="online-btn" class="topbar-menu-item" title="Arkadaşlar">
-                    👥 <span>Arkadaşlar</span>
+                    👥 <span data-i18n="menu-friends">Arkadaşlar</span>
                     <span id="online-count" class="topbar-badge" style="display:none;">0</span>
                 </button>
 
-                <button id="friend-add-open-btn" class="topbar-menu-item" title="Arkadaş Ekle" type="button">➕ <span>Arkadaş Ekle</span></button>
+                <button id="friend-add-open-btn" class="topbar-menu-item" title="Arkadaş Ekle" type="button">➕ <span data-i18n="menu-add-friend">Arkadaş Ekle</span></button>
 
-                <button id="settings-btn" class="topbar-menu-item" title="Ayarlar" type="button">⚙️ <span>Ayarlar</span></button>
+                <button id="settings-btn" class="topbar-menu-item" title="Ayarlar" type="button">⚙️ <span data-i18n="menu-settings">Ayarlar</span></button>
 
             </div>
 
@@ -258,7 +258,7 @@
 
                 <div class="hub-list-header" id="hub-list-header" style="display:none;">
 
-                    <h2>HUBLARIM</h2>
+                    <h2 data-i18n="hubs-title">HUBLARIM</h2>
 
                     <button id="hub-create-open-btn" class="hub-create-btn">
                         + Yeni Hub
@@ -269,12 +269,12 @@
                 <div id="hub-list-content" style="display:none;">
 
                     <div class="hub-list-section">
-                        <div class="hub-list-subtitle">OLUŞTURDUĞUM HUBLAR</div>
+                        <div class="hub-list-subtitle" data-i18n="hubs-owned">OLUŞTURDUĞUM HUBLAR</div>
                         <div id="hub-list-grid-owned" class="hub-list-grid"></div>
                     </div>
 
                     <div class="hub-list-section">
-                        <div class="hub-list-subtitle">KATILDIĞIM HUBLAR</div>
+                        <div class="hub-list-subtitle" data-i18n="hubs-joined">KATILDIĞIM HUBLAR</div>
                         <div id="hub-list-grid-joined" class="hub-list-grid"></div>
                     </div>
 
@@ -283,7 +283,7 @@
                 <div id="hub-list-empty" class="hub-list-empty" style="display:none;">
 
                     <button id="hub-create-open-btn-big" class="hub-create-btn-big" type="button">+</button>
-                    <p>İlk Hub'ını oluştur</p>
+                    <p data-i18n="hubs-empty">İlk Hub'ını oluştur</p>
 
                 </div>
 
@@ -299,7 +299,7 @@
                     <div class="hub-detail-header">
 
                         <button id="hub-back-btn" class="hub-back-btn" type="button">
-                            <span class="hub-back-arrow">←</span> Hublar
+                            <span class="hub-back-arrow">←</span> <span data-i18n="back-to-hubs">Hublar</span>
                         </button>
 
                         <div class="hub-title-pill">
@@ -318,23 +318,32 @@
                     <div class="hub-composer">
 
                         <button id="hub-start-btn" class="hub-start-btn" type="button">
-                            ＋ Bir şey başlat
+                            ＋ <span data-i18n="start-something">Bir şey başlat</span>
                         </button>
 
                         <div id="hub-start-menu" class="hub-start-menu" style="display:none;">
-                            <button data-action="poll" type="button">📊 Oylama</button>
-                            <button data-action="share" type="button">📌 Paylaşım</button>
+                            <button data-action="poll" type="button">📊 <span data-i18n="start-poll">Oylama</span></button>
+                            <button data-action="share" type="button">📌 <span data-i18n="start-share">Paylaşım</span></button>
                         </div>
 
                         <form id="hub-chat-form" class="composer-form">
                             <div class="composer-input-box">
-                                <button type="button" id="hub-attach-btn" class="composer-attach-btn" title="Dosya / fotoğraf / video ekle">＋</button>
+                                <div class="composer-attach-wrap">
+                                    <button type="button" id="hub-attach-btn" class="composer-attach-btn" title="Dosya / fotoğraf / video ekle">＋</button>
+                                    <div id="hub-attach-menu" class="composer-attach-menu liquid-glass" style="display:none;">
+                                        <button type="button" data-attach="camera">📷 <span data-i18n="attach-camera">Kamerayla Çek</span></button>
+                                        <button type="button" data-attach="gallery">🖼️ <span data-i18n="attach-gallery">Galeriden Seç</span></button>
+                                        <button type="button" data-attach="file">📎 <span data-i18n="attach-file">Dosya Seç</span></button>
+                                    </div>
+                                </div>
                                 <input type="text" id="hub-message-input" autocomplete="off" placeholder="Bir mesaj yaz...">
                                 <button type="button" id="hub-dictate-btn" class="mic-btn composer-icon-btn" title="Dikte et">🎙️</button>
                                 <button type="button" id="hub-voice-btn" class="mic-btn composer-icon-btn" title="Sesli mesaj gönder">🎤</button>
                                 <button type="submit" id="hub-send-btn" class="composer-send-btn" title="Gönder">➤</button>
                             </div>
-                            <input type="file" id="hub-attach-input" hidden accept="image/*,video/*,.pdf,.zip,.rar,.txt,.doc,.docx,.xls,.xlsx">
+                            <input type="file" id="hub-attach-input-camera" hidden accept="image/*,video/*" capture="environment">
+                            <input type="file" id="hub-attach-input-gallery" hidden accept="image/*,video/*">
+                            <input type="file" id="hub-attach-input-file" hidden accept=".pdf,.zip,.rar,.txt,.doc,.docx,.xls,.xlsx">
                         </form>
 
                     </div>
@@ -375,7 +384,7 @@
         <div class="modal-box hub-create-box">
 
             <div class="modal-header">
-                <span>Yeni Hub</span>
+                <span data-i18n="modal-new-hub">Yeni Hub</span>
                 <button id="hub-create-close-btn">✕</button>
             </div>
 
@@ -409,7 +418,7 @@
         <div class="modal-box hub-settings-box">
 
             <div class="modal-header">
-                <span>⚙️ Hub Ayarları</span>
+                <span data-i18n="modal-hub-settings">⚙️ Hub Ayarları</span>
                 <button id="hub-settings-close-btn">✕</button>
             </div>
 
@@ -417,7 +426,7 @@
 
                 <div class="hub-create-image-wrap">
                     <span id="hub-settings-image-preview" class="hub-create-image-preview">🧩</span>
-                    <button id="hub-settings-image-btn" class="hub-create-image-btn" type="button">Görseli Değiştir</button>
+                    <button id="hub-settings-image-btn" class="hub-create-image-btn" type="button"><span data-i18n="change-image">Görseli Değiştir</span></button>
                     <input type="file" id="hub-settings-image-input" accept="image/png,image/jpeg,image/webp" hidden>
                 </div>
 
@@ -425,13 +434,13 @@
 
                 <div id="hub-settings-error" class="hub-create-error"></div>
 
-                <button id="hub-settings-save-btn" class="hub-create-submit" type="button">Kaydet</button>
+                <button id="hub-settings-save-btn" class="hub-create-submit" type="button" data-i18n="save">Kaydet</button>
 
                 <div class="hub-settings-divider"></div>
 
-                <button id="hub-invite-friend-btn" class="hub-settings-action-btn" type="button">👥 Arkadaşını Davet Et</button>
-                <button id="hub-invite-btn" class="hub-settings-action-btn" type="button">🔑 Davet Kodu Oluştur</button>
-                <button id="hub-delete-btn" class="hub-settings-action-btn hub-settings-danger" type="button" style="display:none;">🗑 Hub'ı Sil</button>
+                <button id="hub-invite-friend-btn" class="hub-settings-action-btn" type="button">👥 <span data-i18n="hub-settings-invite-friend">Arkadaşını Davet Et</span></button>
+                <button id="hub-invite-btn" class="hub-settings-action-btn" type="button">🔑 <span data-i18n="hub-settings-invite-code">Davet Kodu Oluştur</span></button>
+                <button id="hub-delete-btn" class="hub-settings-action-btn hub-settings-danger" type="button" style="display:none;">🗑 <span data-i18n="hub-settings-delete">Hub'ı Sil</span></button>
 
             </div>
 
@@ -449,7 +458,7 @@
         <div class="modal-box users-modal-box">
 
             <div class="modal-header">
-                <span>👥 Arkadaşını Davet Et</span>
+                <span data-i18n="modal-invite-friend">👥 Arkadaşını Davet Et</span>
                 <button id="hub-invite-friend-close-btn">✕</button>
             </div>
 
@@ -469,7 +478,7 @@
         <div class="modal-box users-modal-box">
 
             <div class="modal-header">
-                <span>🔔 Bildirimler</span>
+                <span data-i18n="modal-notifications">🔔 Bildirimler</span>
                 <button id="notifications-close-btn">✕</button>
             </div>
 
@@ -489,7 +498,7 @@
         <div class="modal-box poll-create-box">
 
             <div class="modal-header">
-                <span>🔑 Davet Koduyla Katıl</span>
+                <span data-i18n="modal-join-code">🔑 Davet Koduyla Katıl</span>
                 <button id="hub-join-close-btn">✕</button>
             </div>
 
@@ -515,7 +524,7 @@
         <div class="modal-box poll-create-box">
 
             <div class="modal-header">
-                <span>🔑 Davet Kodu</span>
+                <span data-i18n="modal-invite-code">🔑 Davet Kodu</span>
                 <button id="hub-invite-close-btn">✕</button>
             </div>
 
@@ -540,7 +549,7 @@
         <div class="modal-box poll-create-box">
 
             <div class="modal-header">
-                <span>📊 Oylama Başlat</span>
+                <span data-i18n="modal-poll">📊 Oylama Başlat</span>
                 <button id="poll-create-close-btn">✕</button>
             </div>
 
@@ -570,7 +579,7 @@
         <div class="modal-box share-create-box">
 
             <div class="modal-header">
-                <span>📌 Paylaşım Yap</span>
+                <span data-i18n="modal-share">📌 Paylaşım Yap</span>
                 <button id="share-create-close-btn">✕</button>
             </div>
 
@@ -649,7 +658,7 @@
         <div class="modal-box poll-create-box">
 
             <div class="modal-header">
-                <span>➕ Arkadaş Ekle</span>
+                <span data-i18n="modal-add-friend">➕ Arkadaş Ekle</span>
                 <button id="friend-add-close-btn">✕</button>
             </div>
 
@@ -675,7 +684,7 @@
 
         <div class="modal-box profile-modal-box">
 
-            <div class="profile-banner">
+            <div id="other-profile-banner" class="profile-banner">
 
                 <button id="close-other-profile-btn" class="profile-close-btn">✕</button>
 
@@ -719,13 +728,22 @@
 
             <form id="dm-form" class="composer-form">
                 <div class="composer-input-box">
-                    <button type="button" id="dm-attach-btn" class="composer-attach-btn" title="Dosya / fotoğraf / video ekle">＋</button>
+                    <div class="composer-attach-wrap">
+                        <button type="button" id="dm-attach-btn" class="composer-attach-btn" title="Dosya / fotoğraf / video ekle">＋</button>
+                        <div id="dm-attach-menu" class="composer-attach-menu liquid-glass" style="display:none;">
+                            <button type="button" data-attach="camera">📷 <span data-i18n="attach-camera">Kamerayla Çek</span></button>
+                            <button type="button" data-attach="gallery">🖼️ <span data-i18n="attach-gallery">Galeriden Seç</span></button>
+                            <button type="button" data-attach="file">📎 <span data-i18n="attach-file">Dosya Seç</span></button>
+                        </div>
+                    </div>
                     <input type="text" id="dm-message-input" autocomplete="off" placeholder="Bir mesaj yaz...">
                     <button type="button" id="dm-dictate-btn" class="mic-btn composer-icon-btn" title="Dikte et">🎙️</button>
                     <button type="button" id="dm-voice-btn" class="mic-btn composer-icon-btn" title="Sesli mesaj gönder">🎤</button>
                     <button type="submit" class="composer-send-btn" title="Gönder">➤</button>
                 </div>
-                <input type="file" id="dm-attach-input" hidden accept="image/*,video/*,.pdf,.zip,.rar,.txt,.doc,.docx,.xls,.xlsx">
+                <input type="file" id="dm-attach-input-camera" hidden accept="image/*,video/*" capture="environment">
+                <input type="file" id="dm-attach-input-gallery" hidden accept="image/*,video/*">
+                <input type="file" id="dm-attach-input-file" hidden accept=".pdf,.zip,.rar,.txt,.doc,.docx,.xls,.xlsx">
             </form>
 
         </div>
@@ -745,11 +763,14 @@
 
         <div class="modal-box profile-modal-box profile-modal-box-minimal">
 
-            <div class="profile-banner">
+            <div id="profile-modal-banner" class="profile-banner">
 
                 <button id="close-profile-modal-btn" class="profile-close-btn">
                     ✕
                 </button>
+
+                <button id="banner-change-btn" class="banner-change-btn liquid-glass" type="button" title="Kapak fotoğrafı değiştir">🖼️ Kapak Fotoğrafı</button>
+                <input type="file" id="banner-file-input" accept="image/png,image/jpeg,image/webp" hidden>
 
                 <div class="profile-avatar-wrap">
 
@@ -800,7 +821,7 @@
 
                 <div id="username-view" class="username-view">
                     <h3 id="profile-modal-username" class="profile-modal-username"></h3>
-                    <button id="username-edit-btn" class="username-edit-btn" type="button" title="Kullanıcı adını değiştir">✎</button>
+                    <button id="username-edit-btn" class="username-edit-btn liquid-glass" type="button" title="Kullanıcı adını değiştir">Düzenle</button>
                 </div>
 
                 <div id="username-edit" class="username-edit" style="display:none;">
@@ -837,25 +858,25 @@
         <div class="modal-box poll-create-box">
 
             <div class="modal-header">
-                <span>⚙️ Ayarlar</span>
+                <span data-i18n="modal-settings">⚙️ Ayarlar</span>
                 <button id="settings-close-btn">✕</button>
             </div>
 
             <div class="poll-create-body">
 
-                <span class="profile-field-label">Tema</span>
+                <span class="profile-field-label" data-i18n="label-theme">Tema</span>
                 <div class="privacy-options">
                     <button class="privacy-option" data-theme="dark" type="button">
-                        <span class="privacy-option-title">Kapalı Tema</span>
-                        <span class="privacy-option-desc">Siyah, karanlık arayüz</span>
+                        <span class="privacy-option-title" data-i18n="theme-dark">Kapalı Tema</span>
+                        <span class="privacy-option-desc" data-i18n="theme-dark-desc">Siyah, karanlık arayüz</span>
                     </button>
                     <button class="privacy-option" data-theme="light" type="button">
-                        <span class="privacy-option-title">Açık Tema</span>
-                        <span class="privacy-option-desc">Açık gri arayüz</span>
+                        <span class="privacy-option-title" data-i18n="theme-light">Açık Tema</span>
+                        <span class="privacy-option-desc" data-i18n="theme-light-desc">Açık gri arayüz</span>
                     </button>
                 </div>
 
-                <span class="profile-field-label">Dil</span>
+                <span class="profile-field-label" data-i18n="label-lang">Dil</span>
                 <div class="privacy-options">
                     <button class="privacy-option" data-lang="tr" type="button">
                         <span class="privacy-option-title">Türkçe</span>
@@ -867,7 +888,7 @@
 
                 <button id="lang-confirm-btn" class="about-btn about-btn-primary poll-submit-btn" type="button" style="display:none;">Dili Onayla</button>
 
-                <span class="profile-field-label">Şifre Değiştir</span>
+                <span class="profile-field-label" data-i18n="label-change-password">Şifre Değiştir</span>
                 <input type="password" id="settings-current-password" placeholder="Mevcut şifren">
                 <input type="password" id="settings-new-password" placeholder="Yeni şifre">
                 <div id="settings-password-error" class="friend-add-error"></div>
@@ -890,14 +911,14 @@
             <span id="call-hub-name">🎙️ Sesli Sohbet</span>
             <button id="call-screenshare-btn" type="button" style="display:none;">🖥️ Ekran Paylaş</button>
             <button id="call-minimize-btn" type="button" title="Ekranı alta al">▁</button>
-            <button id="call-leave-btn" type="button">Ayrıl</button>
+            <button id="call-leave-btn" type="button" data-i18n="call-leave">Ayrıl</button>
         </div>
 
         <div id="call-frame-container" class="call-frame-container"></div>
         <div id="call-ringing-state" class="call-ringing-state" style="display:none;">
             <div class="call-ringing-avatar">📞</div>
-            <div id="call-ringing-text" class="call-ringing-text">Aranıyor...</div>
-            <button id="call-ringing-cancel-btn" type="button" class="call-ringing-cancel-btn">İptal Et</button>
+            <div id="call-ringing-text" class="call-ringing-text" data-i18n="call-ringing">Aranıyor...</div>
+            <button id="call-ringing-cancel-btn" type="button" class="call-ringing-cancel-btn" data-i18n="call-cancel">İptal Et</button>
         </div>
 
     </div>
@@ -925,11 +946,11 @@
 
             <div class="call-ringing-avatar">📞</div>
             <div id="dm-incoming-call-username" class="dm-incoming-call-username"></div>
-            <div class="dm-incoming-call-sub">seni arıyor...</div>
+            <div class="dm-incoming-call-sub" data-i18n="call-incoming-sub">seni arıyor...</div>
 
             <div class="dm-incoming-call-actions">
-                <button id="dm-incoming-call-decline-btn" type="button" class="dm-incoming-decline-btn">Reddet</button>
-                <button id="dm-incoming-call-accept-btn" type="button" class="dm-incoming-accept-btn">Kabul Et</button>
+                <button id="dm-incoming-call-decline-btn" type="button" class="dm-incoming-decline-btn" data-i18n="call-decline">Reddet</button>
+                <button id="dm-incoming-call-accept-btn" type="button" class="dm-incoming-accept-btn" data-i18n="call-accept">Kabul Et</button>
             </div>
 
         </div>
