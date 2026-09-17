@@ -5252,6 +5252,11 @@ hubSettingsOpenBtn.addEventListener('click', () => {
 
     hubSettingsModal.style.display = 'flex';
 
+    const isOwner = !!currentHub.is_owner;
+    hubSettingsNameInput.disabled = !isOwner;
+    hubSettingsImageBtn.disabled = !isOwner;
+    hubSettingsSaveBtn.style.display = isOwner ? '' : 'none';
+
     const canModerate = currentHub.my_permission_tier === 'owner' || currentHub.my_permission_tier === 'moderator';
     const bansSection = document.getElementById('hub-settings-bans-section');
     bansSection.style.display = canModerate ? 'block' : 'none';
@@ -5935,6 +5940,7 @@ function renderHubDetail() {
     hubDetailCount.textContent = `👥 ${currentHub.members.length} ${t('member-count')}`;
 
     hubDeleteBtn.style.display = currentHub.is_owner ? 'block' : 'none';
+    if (hubSettingsOpenBtn) hubSettingsOpenBtn.style.display = currentHub.is_owner ? 'block' : 'none';
 
     // Hub sahibi kendi Hub'ını bildiremez (anlamsız) — backend de aynı
     // kontrolü ayrıca uyguluyor (bkz. server/db.js createReport).
