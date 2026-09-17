@@ -5897,6 +5897,30 @@ async function joinCallFrame(roomUrl, token) {
     // bunu kendimiz tespit edip düzeltebiliyoruz (bkz. aşağıdaki audio-unlock).
     callFrame = DailyIframe.createCallObject();
 
+    // ÖNEMLİ: Tüm olay dinleyicileri join()'den ÖNCE bağlanmalı. join()'in
+    // döndürdüğü promise çözülmesiyle 'joined-meeting' olayının ateşlenmesi
+    // neredeyse eş zamanlı olabiliyor — dinleyiciyi await'ten SONRA eklersek,
+    // olay çoktan geçmiş olabilir ve hiç yakalanmaz (ör. "Bağlandı" yazısının
+    // hiç görünmemesi, ses her şeye rağmen çalışsa bile).
+    callFrame.on('participant-updated', (event) => {
+        if (event?.participant?.local && event.participant.video) {
+            callFrame.setLocalVideo(false);
+        }
+    });
+
+    callFrame.on('joined-meeting', () => {
+        const dmStatusText = document.getElementById('call-dm-status-text');
+        if (dmStatusText) dmStatusText.textContent = t('call-connected');
+    });
+
+    callFrame.on('left-meeting', leaveCall);
+    callFrame.on('error', (event) => {
+        console.error('Daily.co çağrı hatası:', event);
+        leaveCall();
+    });
+
+    wireCallAudioUnlock();
+
     try {
 
         // Bazı ağ/cihaz kombinasyonlarında (özellikle iOS Safari'nin WebRTC
@@ -5921,30 +5945,17 @@ async function joinCallFrame(roomUrl, token) {
 
         await Promise.race([joinPromise, timeoutPromise]);
 
+        // 'joined-meeting' olayı kaçırılmış olsa bile (bkz. yukarıdaki not),
+        // join() hatasız tamamlandıysa gerçekten bağlanmışızdır — durumu
+        // doğrudan da güncelleyelim.
+        const dmStatusText = document.getElementById('call-dm-status-text');
+        if (dmStatusText) dmStatusText.textContent = t('call-connected');
+
     } catch (error) {
         callFrame.destroy();
         callFrame = null;
         throw error;
     }
-
-    callFrame.on('participant-updated', (event) => {
-        if (event?.participant?.local && event.participant.video) {
-            callFrame.setLocalVideo(false);
-        }
-    });
-
-    callFrame.on('joined-meeting', () => {
-        const dmStatusText = document.getElementById('call-dm-status-text');
-        if (dmStatusText) dmStatusText.textContent = t('call-connected');
-    });
-
-    callFrame.on('left-meeting', leaveCall);
-    callFrame.on('error', (event) => {
-        console.error('Daily.co çağrı hatası:', event);
-        leaveCall();
-    });
-
-    wireCallAudioUnlock();
 
 }
 
