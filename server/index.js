@@ -100,7 +100,12 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o
 
 function isOriginAllowed(origin) {
   if (!isProduction) return true; // yerel geliştirmede kısıtlama yok
-  if (!origin) return true; // aynı origin / sunucu-sunucu istekleri
+  if (!origin) return true; // Origin header'ı olmayan istekler (ör. sunucu-sunucu)
+  // Tarayıcılar aynı origin'den yapılan fetch/XHR/socket.io isteklerinde de
+  // Origin header'ı gönderir. ALLOWED_ORIGINS ayarlanmadıysa varsayılan
+  // olarak kısıtlama uygulanmaz — aksi halde canlıdaki kendi sitesi bile
+  // (kendi Origin'i beyaz listede olmadığı için) engellenmiş olur.
+  if (allowedOrigins.length === 0) return true;
   return allowedOrigins.includes(origin);
 }
 
