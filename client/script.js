@@ -2365,6 +2365,7 @@ const I18N = {
     'call-incoming-sub': { tr: 'seni arıyor...', en: 'is calling you...' },
     'call-leave': { tr: 'Ayrıl', en: 'Leave' },
     'call-connected': { tr: 'Bağlandı', en: 'Connected' },
+    'call-connecting': { tr: 'Bağlanıyor...', en: 'Connecting...' },
     'notif-friend-request': { tr: '1 arkadaşlık isteği', en: '1 friend request' },
     'notif-hub-invite': { tr: '1 hub daveti', en: '1 hub invite' },
     'friend-request-notif-text': { tr: 'sana arkadaşlık isteği gönderdi', en: 'sent you a friend request' },
@@ -5807,7 +5808,9 @@ async function joinDmCall(userId, username) {
     const dmAvatar = document.getElementById('call-dm-avatar');
     const dmAvatarImg = document.getElementById('call-dm-avatar-img');
     const dmUsernameEl = document.getElementById('call-dm-username');
+    const dmStatusText = document.getElementById('call-dm-status-text');
 
+    if (dmStatusText) dmStatusText.textContent = t('call-connecting');
     dmUsernameEl.textContent = username;
     dmAvatar.textContent = username.charAt(0).toUpperCase();
     dmAvatar.style.setProperty('--user-color', getUserColor(username));
@@ -5881,10 +5884,16 @@ async function joinCallFrame(roomUrl, token) {
         callFrame = null;
     }
 
-    callFrame = DailyIframe.createFrame(callFrameContainer, {
-        showLeaveButton: false,
-        iframeStyle: { width: '100%', height: '100%', border: 'none' }
-    });
+    // NOT: Bilerek createFrame (Daily'nin kendi arayüzünü gösteren iframe modu)
+    // DEĞİL, createCallObject (arayüzsüz/"headless" mod) kullanıyoruz. Tamamen
+    // kendi özel arayüzümüzü (DM profil kartı, Hub oda grid'i) gösterdiğimiz
+    // için Daily'nin iframe'i zaten hep gizli kalıyordu (display:none) — bu da
+    // iOS Safari otomatik oynatmayı (autoplay) engellediğinde Daily'nin kendi
+    // "sesi etkinleştir" kurtarma arayüzünün görünmez/dokunulmaz kalmasına ve
+    // "Bağlandı" yazmasına rağmen sesin hiç gelmemesine yol açıyordu. Headless
+    // modda ses elemanları sayfamızın kendi DOM'unda (aynı origin) olduğu için
+    // bunu kendimiz tespit edip düzeltebiliyoruz (bkz. aşağıdaki audio-unlock).
+    callFrame = DailyIframe.createCallObject();
 
     try {
 
@@ -5894,6 +5903,7 @@ async function joinCallFrame(roomUrl, token) {
             url: roomUrl,
             token,
             startVideoOff: true,
+            startAudioOff: false,
             userMediaVideoConstraints: false
         });
 
@@ -5909,10 +5919,45 @@ async function joinCallFrame(roomUrl, token) {
         }
     });
 
+    callFrame.on('joined-meeting', () => {
+        const dmStatusText = document.getElementById('call-dm-status-text');
+        if (dmStatusText) dmStatusText.textContent = t('call-connected');
+    });
+
     callFrame.on('left-meeting', leaveCall);
     callFrame.on('error', (event) => {
         console.error('Daily.co çağrı hatası:', event);
         leaveCall();
+    });
+
+    wireCallAudioUnlock();
+
+}
+
+
+// ─── iOS/Safari otomatik oynatma engeli için ses kurtarma ─────────────────
+// Headless modda Daily, uzak katılımcıların ses akışı için görünmez <audio>
+// elemanlarını doğrudan bizim sayfamıza ekler. iOS Safari, kullanıcı
+// etkileşiminden yeterince "taze" sayılmayan bir bağlamda (ör. aradaki async
+// fetch/join adımları yüzünden) bu elemanların otomatik oynatılmasını
+// engelleyebilir — ses akışı gerçekten geliyor ama duyulmuyor olur. Bunu
+// tespit edip kullanıcıya tek dokunuşla düzeltme imkanı veriyoruz.
+function tryPlayAllCallAudio() {
+    document.querySelectorAll('audio').forEach((el) => {
+        el.play().catch(() => {});
+    });
+}
+
+// Çağrı ekranındaki herhangi bir dokunuş/tıklama, tarayıcının engellemiş
+// olabileceği ses oynatmayı gerçek bir kullanıcı hareketiyle tekrar dener.
+// Tek seferlik global kurulum (her joinCallFrame çağrısında tekrar eklenmez).
+callOverlay.addEventListener('click', tryPlayAllCallAudio);
+
+function wireCallAudioUnlock() {
+
+    // Katılımcı sesi akışa başladığında bir kez dene.
+    callFrame.on('track-started', (event) => {
+        if (event?.track?.kind === 'audio') tryPlayAllCallAudio();
     });
 
 }
