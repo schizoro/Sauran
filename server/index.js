@@ -89,16 +89,42 @@ app.set('trust proxy', 1);
 
 const server = http.createServer(app);
 
+// Sauran, istemciyi de aynı origin üzerinden servis ediyor (bkz. express.static
+// aşağıda), bu yüzden tarayıcı istekleri için CORS'a normalde gerek yok.
+// Üretimde varsayılan olarak sadece aynı origin'e (Origin header'ı olmayan
+// istekler dahil) izin verilir; farklı bir origin'den erişim gerekiyorsa
+// (ör. ayrı bir mobil/istemci alan adı), ALLOWED_ORIGINS ortam değişkenine
+// virgülle ayrılmış origin listesi eklenmelidir.
+const isProduction = process.env.NODE_ENV === 'production';
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean);
+
+function isOriginAllowed(origin) {
+  if (!isProduction) return true; // yerel geliştirmede kısıtlama yok
+  if (!origin) return true; // aynı origin / sunucu-sunucu istekleri
+  return allowedOrigins.includes(origin);
+}
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (isOriginAllowed(origin)) return callback(null, true);
+    return callback(new Error('CORS: bu origin izinli değil.'));
+  },
+  credentials: true
+};
+
 const io = new Server(server, {
   cors: {
-    origin: true,
+    origin: (origin, callback) => {
+      if (isOriginAllowed(origin)) return callback(null, true);
+      return callback(new Error('CORS: bu origin izinli değil.'));
+    },
     credentials: true,
     methods: ['GET', 'POST']
   },
   maxHttpBufferSize: 15_000_000
 });
 
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '15mb' }));
 
 // =====================================================
@@ -135,6 +161,7 @@ const friendRequestLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyF
 const hubCreateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, keyFn: byIp, message: 'Çok fazla Hub oluşturuldu. Biraz sonra tekrar dene.' });
 const inviteCreateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla davet oluşturuldu. Biraz sonra tekrar dene.' });
 const reportLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, keyFn: byIp, message: 'Çok fazla bildirim gönderildi. Biraz sonra tekrar dene.' });
+const fileUploadLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla dosya gönderildi. Biraz sonra tekrar dene.' });
 
 // Socket üzerinden gönderilen mesajlar için basit hız sınırlama (spam koruması).
 function isSocketMessageRateLimited(socket) {
@@ -249,14 +276,16 @@ function getUserFromRequest(req) {
 }
 
 function setSessionCookie(res, token) {
+  const secureFlag = isProduction ? '; Secure' : '';
   res.setHeader(
     'Set-Cookie',
-    `sauran_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_DURATION / 1000}`
+    `sauran_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_DURATION / 1000}${secureFlag}`
   );
 }
 
 function clearSessionCookie(res) {
-  res.setHeader('Set-Cookie', 'sauran_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
+  const secureFlag = isProduction ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `sauran_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secureFlag}`);
 }
 
 // =====================================================
@@ -1040,7 +1069,7 @@ app.post('/api/hubs/:id/poll/:messageId/vote', (req, res) => {
   }
 });
 
-app.post('/api/hubs/:id/share', (req, res) => {
+app.post('/api/hubs/:id/share', fileUploadLimiter, (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
 
@@ -1067,7 +1096,7 @@ app.post('/api/hubs/:id/share', (req, res) => {
   }
 });
 
-app.post('/api/hubs/:id/voice', (req, res) => {
+app.post('/api/hubs/:id/voice', fileUploadLimiter, (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
 
@@ -1094,7 +1123,7 @@ app.post('/api/hubs/:id/voice', (req, res) => {
   }
 });
 
-app.post('/api/hubs/:id/file', (req, res) => {
+app.post('/api/hubs/:id/file', fileUploadLimiter, (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
 
@@ -1586,14 +1615,15 @@ app.post('/api/password-reset/request', passwordResetLimiter, async (req, res) =
   try {
     const result = requestPasswordReset(req.body?.email);
 
-    if (!result.success) {
-      return res.status(400).json(result);
+    // Hesabın var olup olmadığını istemciye sızdırmamak için (kullanıcı
+    // numaralandırma saldırısına karşı), bulunamasa bile aynı genel yanıt
+    // döndürülür — e-posta yalnızca hesap gerçekten varsa gönderilir.
+    if (result.success) {
+      const user = db.prepare(`SELECT email FROM users WHERE id = ?`).get(result.userId);
+      await sendPasswordResetEmail(user.email, result.code);
     }
 
-    const user = db.prepare(`SELECT email FROM users WHERE id = ?`).get(result.userId);
-    await sendPasswordResetEmail(user.email, result.code);
-
-    return res.json({ success: true });
+    return res.json({ success: true, error: null });
 
   } catch (error) {
     console.error('Şifre sıfırlama isteği hatası:', error);
@@ -1839,6 +1869,11 @@ io.on('connection', (socket) => {
         return;
       }
 
+      if (isSocketMessageRateLimited(socket)) {
+        socket.emit('message_error', 'Çok hızlı mesaj gönderiyorsun, biraz yavaşla.');
+        return;
+      }
+
       const toUserId = Number(data?.to_user_id);
       const result = saveDmVoiceMessage(socket.userId, socket.username, toUserId, data?.audio_data, data?.duration);
 
@@ -1859,6 +1894,11 @@ io.on('connection', (socket) => {
     try {
       if (!socket.userId || !socket.username) {
         socket.emit('message_error', 'Oturum doğrulanamadı.');
+        return;
+      }
+
+      if (isSocketMessageRateLimited(socket)) {
+        socket.emit('message_error', 'Çok hızlı mesaj gönderiyorsun, biraz yavaşla.');
         return;
       }
 
