@@ -1059,6 +1059,25 @@ body.theme-light .hub-voice-rooms-side { border-color: var(--border-soft); }
 @media (hover: hover) {
   .dm-msg:hover .hub-msg-actions { display: flex; }
 }
+
+.report-modal-box { width: 92vw; max-width: 380px; display: flex; flex-direction: column; gap: 12px; padding: 22px; }
+.report-modal-box h3 { margin: 0; font-size: 16px; color: #66fcf1; }
+.report-reason-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; }
+.report-reason-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+.report-reason-option {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 13px; color: #c5c6c7; cursor: pointer; transition: 0.2s;
+}
+.report-reason-option:hover { border-color: rgba(102, 252, 241, 0.3); }
+.report-reason-option input[type="radio"] { accent-color: #66fcf1; }
+.report-reason-option:has(input:checked) { background: rgba(102, 252, 241, 0.1); border-color: rgba(102, 252, 241, 0.4); color: #e2f8f6; }
+.report-description-input {
+  width: 100%; min-height: 70px; resize: vertical; padding: 10px 12px; border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); color: #e2f8f6;
+  font-size: 13px; font-family: inherit;
+}
+.msg-report-btn { color: #ff9f43; }
 .dm-msg.show-actions .hub-msg-actions { display: flex; }
 .dm-modal-box .composer-form { padding: 14px 18px; border-top: 1px solid #1f2833; background: #12141a; }
 .dm-call-btn { background: transparent; border: 1px solid #1f2833; color: #66fcf1; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 14px; margin-left: auto; transition: 0.2s; }

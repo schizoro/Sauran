@@ -66,6 +66,7 @@ const {
   blockUser,
   unblockUser,
   listBlockedUsers,
+  createReport,
   updateUsername,
   updatePassword,
   getTopFriends,
@@ -130,6 +131,7 @@ const passwordResetLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyFn
 const friendRequestLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla arkadaşlık isteği gönderildi. Biraz sonra tekrar dene.' });
 const hubCreateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, keyFn: byIp, message: 'Çok fazla Hub oluşturuldu. Biraz sonra tekrar dene.' });
 const inviteCreateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla davet oluşturuldu. Biraz sonra tekrar dene.' });
+const reportLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, keyFn: byIp, message: 'Çok fazla bildirim gönderildi. Biraz sonra tekrar dene.' });
 
 // Socket üzerinden gönderilen mesajlar için basit hız sınırlama (spam koruması).
 function isSocketMessageRateLimited(socket) {
@@ -641,6 +643,29 @@ app.patch('/api/profile/password', (req, res) => {
   } catch (error) {
     console.error('Şifre güncelleme API hatası:', error);
     return res.status(500).json({ success: false, error: 'Güncellenemedi.' });
+  }
+});
+
+// =====================================================
+// RAPORLAMA (REPORT)
+// =====================================================
+
+app.post('/api/reports', reportLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    const result = createReport(user.id, req.body || {});
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Bildirim oluşturma hatası:', error);
+    res.status(500).json({ success: false, error: 'Bildirim gönderilemedi.' });
   }
 });
 

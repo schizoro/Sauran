@@ -2261,7 +2261,24 @@ const I18N = {
     'hub-feed-empty': { tr: 'Henüz bir şey olmadı. İlk hareketi sen yap.', en: "Nothing here yet. Make the first move." },
     'connecting': { tr: 'Bağlanıyor...', en: 'Connecting...' },
     'file-limit-toast': { tr: "Dosya limiti 10 MB'dir.", en: 'File limit is 10 MB.' },
-    'video-limit-toast': { tr: "Video limiti 10 MB'dir.", en: 'Video limit is 10 MB.' }
+    'video-limit-toast': { tr: "Video limiti 10 MB'dir.", en: 'Video limit is 10 MB.' },
+
+    'report-user': { tr: 'Bildir', en: 'Report' },
+    'report-modal-title': { tr: 'Bildir', en: 'Report' },
+    'report-reason-label': { tr: 'Neden', en: 'Reason' },
+    'report-reason-harassment': { tr: 'Taciz', en: 'Harassment' },
+    'report-reason-threat': { tr: 'Tehdit', en: 'Threat' },
+    'report-reason-spam': { tr: 'Spam', en: 'Spam' },
+    'report-reason-scam': { tr: 'Dolandırıcılık', en: 'Scam' },
+    'report-reason-inappropriate': { tr: 'Uygunsuz içerik', en: 'Inappropriate content' },
+    'report-reason-child_safety': { tr: 'Çocuk güvenliği', en: 'Child safety' },
+    'report-reason-hate': { tr: 'Nefret / ayrımcılık', en: 'Hate / discrimination' },
+    'report-reason-other': { tr: 'Diğer', en: 'Other' },
+    'report-description-placeholder': { tr: 'Ek açıklama (opsiyonel)', en: 'Additional details (optional)' },
+    'report-submit': { tr: 'Bildir', en: 'Submit report' },
+    'report-success-toast': { tr: 'Bildirimin alındı, teşekkürler.', en: 'Your report was received, thank you.' },
+    'report-error-toast': { tr: 'Bildirim gönderilemedi.', en: 'Could not send report.' },
+    'hub-settings-report': { tr: "Hub'ı Bildir", en: 'Report Hub' }
 };
 
 function t(key) {
@@ -3652,8 +3669,15 @@ function renderOtherProfileActions(profile) {
 
     }
 
+    if (profile.friendship_status !== 'self') {
+        html += `<button class="profile-action-btn profile-action-disabled" id="report-user-btn">🚩 <span data-i18n="report-user">Bildir</span></button>`;
+    }
+
     otherProfileActions.innerHTML = html;
 
+    document.getElementById('report-user-btn')?.addEventListener('click', () => {
+        openReportModal('user', profile.id, profile.username);
+    });
 
     document.getElementById('dm-open-btn')?.addEventListener('click', () => {
         otherProfileModal.style.display = 'none';
@@ -3814,10 +3838,11 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
     const canEdit = isMine && msg.kind === 'dm';
     const canDelete = isMine && msg.kind !== 'deleted';
 
-    const actions = canDelete ? `
+    const actions = (canDelete || !isMine) ? `
         <div class="hub-msg-actions">
             ${canEdit ? `<button class="msg-edit-btn" type="button" title="${t('edit')}">✎</button>` : ''}
-            <button class="msg-delete-btn" type="button" title="${t('delete')}">🗑</button>
+            ${canDelete ? `<button class="msg-delete-btn" type="button" title="${t('delete')}">🗑</button>` : ''}
+            ${!isMine ? `<button class="msg-report-btn" type="button" title="${t('report-user')}">🚩</button>` : ''}
         </div>
     ` : '';
 
@@ -3852,6 +3877,10 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
 
         await fetch(`/api/messages/${msg.id}`, { method: 'DELETE', credentials: 'include' });
 
+    });
+
+    wrap.querySelector('.msg-report-btn')?.addEventListener('click', () => {
+        openReportModal('message', msg.id, msg.username);
     });
 
     wrap.querySelector('.msg-edit-btn')?.addEventListener('click', () => {
@@ -5473,6 +5502,80 @@ hubDeleteBtn.addEventListener(
     }
 );
 
+const hubReportBtn = document.getElementById('hub-report-btn');
+
+hubReportBtn?.addEventListener('click', () => {
+    if (!currentHub) return;
+    openReportModal('hub', currentHub.id, currentHub.name);
+});
+
+
+// =====================================================
+// BİLDİR (REPORT) SİSTEMİ
+// =====================================================
+
+const reportModal = document.getElementById('report-modal');
+const reportModalCloseBtn = document.getElementById('report-modal-close-btn');
+const reportDescriptionInput = document.getElementById('report-description-input');
+const reportModalError = document.getElementById('report-modal-error');
+const reportSubmitBtn = document.getElementById('report-submit-btn');
+
+let reportTarget = null;
+
+function openReportModal(targetType, targetId, label) {
+    reportTarget = { target_type: targetType, target_id: targetId };
+    reportDescriptionInput.value = '';
+    reportModalError.textContent = '';
+    const firstRadio = reportModal.querySelector('input[name="report-reason"]');
+    if (firstRadio) firstRadio.checked = true;
+    reportModal.style.display = 'flex';
+}
+
+reportModalCloseBtn?.addEventListener('click', () => {
+    reportModal.style.display = 'none';
+});
+
+reportModal?.addEventListener('click', (e) => {
+    if (e.target === reportModal) reportModal.style.display = 'none';
+});
+
+reportSubmitBtn?.addEventListener('click', async () => {
+
+    if (!reportTarget) return;
+
+    const reasonInput = reportModal.querySelector('input[name="report-reason"]:checked');
+    const reason = reasonInput ? reasonInput.value : 'other';
+    const description = reportDescriptionInput.value.trim();
+
+    try {
+
+        const response = await fetch('/api/reports', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                target_type: reportTarget.target_type,
+                target_id: reportTarget.target_id,
+                reason,
+                description
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            reportModal.style.display = 'none';
+            showCenterToast(t('report-success-toast'));
+        } else {
+            reportModalError.textContent = data.error || t('report-error-toast');
+        }
+
+    } catch {
+        reportModalError.textContent = t('report-error-toast');
+    }
+
+});
+
 
 // =====================================================
 // SESLİ SOHBET (DAILY.CO)
@@ -6172,10 +6275,11 @@ function renderHubMessageIntoWrap(wrap, msg) {
     const canEdit = isMine && msg.kind === 'text';
     const canDelete = isMine && msg.kind !== 'deleted';
 
-    const actions = canDelete ? `
+    const actions = (canDelete || !isMine) ? `
         <div class="hub-msg-actions">
             ${canEdit ? `<button class="msg-edit-btn" type="button" title="${t('edit')}">✎</button>` : ''}
-            <button class="msg-delete-btn" type="button" title="${t('delete')}">🗑</button>
+            ${canDelete ? `<button class="msg-delete-btn" type="button" title="${t('delete')}">🗑</button>` : ''}
+            ${!isMine ? `<button class="msg-report-btn" type="button" title="${t('report-user')}">🚩</button>` : ''}
         </div>
     ` : '';
 
@@ -6242,6 +6346,10 @@ function renderHubMessageIntoWrap(wrap, msg) {
 
         await fetch(`/api/messages/${msg.id}`, { method: 'DELETE', credentials: 'include' });
 
+    });
+
+    wrap.querySelector('.msg-report-btn')?.addEventListener('click', () => {
+        openReportModal('message', msg.id, msg.username);
     });
 
     wrap.querySelector('.msg-edit-btn')?.addEventListener('click', () => {

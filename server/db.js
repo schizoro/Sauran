@@ -269,6 +269,30 @@ db.exec(`
 const PERMISSION_RANK = { member: 0, moderator: 1, owner: 2 };
 
 // =====================================================
+// v1.20 MIGRATION — RAPORLAMA (REPORT) SİSTEMİ
+// =====================================================
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    reporter_user_id INTEGER NOT NULL,
+    target_type TEXT NOT NULL,
+    target_id INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL DEFAULT 'new',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    reviewed_by INTEGER,
+    reviewed_at DATETIME,
+    FOREIGN KEY (reporter_user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+`);
+
+const REPORT_TARGET_TYPES = ['message', 'user', 'hub', 'voice_room'];
+const REPORT_REASONS = ['harassment', 'threat', 'spam', 'scam', 'inappropriate', 'child_safety', 'hate', 'other'];
+const REPORT_STATUSES = ['new', 'under_review', 'action_taken', 'dismissed'];
+
+// =====================================================
 // v1.10 MIGRATION — BİLDİRİMLER / ŞİFRE SIFIRLAMA
 // =====================================================
 
@@ -1472,6 +1496,78 @@ function listBlockedUsers(userId) {
 }
 
 // =====================================================
+// RAPORLAMA (REPORT) SİSTEMİ
+// =====================================================
+
+function createReport(reporterId, { target_type, target_id, reason, description }) {
+  if (!REPORT_TARGET_TYPES.includes(target_type)) {
+    return { success: false, error: 'Geçersiz bildirim türü.' };
+  }
+  if (!REPORT_REASONS.includes(reason)) {
+    return { success: false, error: 'Geçersiz bildirim nedeni.' };
+  }
+
+  const targetId = Number(target_id);
+  if (!targetId) return { success: false, error: 'Geçersiz hedef.' };
+
+  const info = db.prepare(`
+    INSERT INTO reports (reporter_user_id, target_type, target_id, reason, description)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(reporterId, target_type, targetId, reason, String(description || '').trim().slice(0, 500));
+
+  return { success: true, id: info.lastInsertRowid };
+}
+
+function listReports(status) {
+  const rows = status
+    ? db.prepare(`
+        SELECT reports.*, users.username AS reporter_username
+        FROM reports INNER JOIN users ON users.id = reports.reporter_user_id
+        WHERE reports.status = ? ORDER BY reports.created_at DESC
+      `).all(status)
+    : db.prepare(`
+        SELECT reports.*, users.username AS reporter_username
+        FROM reports INNER JOIN users ON users.id = reports.reporter_user_id
+        ORDER BY reports.created_at DESC
+      `).all();
+
+  return rows.map(r => ({ ...r, target_label: describeReportTarget(r.target_type, r.target_id) }));
+}
+
+function describeReportTarget(targetType, targetId) {
+  try {
+    if (targetType === 'user') {
+      const u = db.prepare(`SELECT username FROM users WHERE id = ?`).get(targetId);
+      return u ? `Kullanıcı: ${u.username}` : 'Kullanıcı (silinmiş)';
+    }
+    if (targetType === 'hub') {
+      const h = db.prepare(`SELECT name FROM hubs WHERE id = ?`).get(targetId);
+      return h ? `Hub: ${h.name}` : 'Hub (silinmiş)';
+    }
+    if (targetType === 'message') {
+      const m = db.prepare(`SELECT username, content FROM messages WHERE id = ?`).get(targetId);
+      return m ? `Mesaj (${m.username}): ${String(m.content || '').slice(0, 60)}` : 'Mesaj (silinmiş)';
+    }
+    if (targetType === 'voice_room') {
+      const r = db.prepare(`SELECT name FROM hub_voice_rooms WHERE id = ?`).get(targetId);
+      return r ? `Sesli Oda: ${r.name}` : 'Sesli Oda (silinmiş)';
+    }
+  } catch (_) { /* yoksay */ }
+  return `${targetType} #${targetId}`;
+}
+
+function updateReportStatus(reportId, reviewerId, status) {
+  if (!REPORT_STATUSES.includes(status)) return { success: false, error: 'Geçersiz durum.' };
+
+  const info = db.prepare(`
+    UPDATE reports SET status = ?, reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP WHERE id = ?
+  `).run(status, reviewerId, reportId);
+
+  if (!info.changes) return { success: false, error: 'Rapor bulunamadı.' };
+  return { success: true };
+}
+
+// =====================================================
 // KULLANICI ADI / ŞİFRE DEĞİŞTİRME
 // =====================================================
 
@@ -1676,6 +1772,9 @@ module.exports = {
   blockUser,
   unblockUser,
   listBlockedUsers,
+  createReport,
+  listReports,
+  updateReportStatus,
   isBlocked,
   updateUsername,
   updatePassword,
