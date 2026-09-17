@@ -2037,9 +2037,31 @@ settingsBtn.addEventListener(
         loadSessions();
         updateBrowserNotifUI();
         loadNotificationPreferences();
+        switchSettingsTab('general');
 
     }
 );
+
+
+// =====================================================
+// AYARLAR — KATEGORİ SEKMELERİ
+// =====================================================
+
+function switchSettingsTab(tabName) {
+
+    document.querySelectorAll('.settings-tab-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.settingsTab === tabName);
+    });
+
+    document.querySelectorAll('.settings-panel').forEach((panel) => {
+        panel.style.display = panel.dataset.settingsPanel === tabName ? 'flex' : 'none';
+    });
+
+}
+
+document.querySelectorAll('.settings-tab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => switchSettingsTab(btn.dataset.settingsTab));
+});
 
 
 // =====================================================
@@ -2473,6 +2495,12 @@ const I18N = {
     'notif-pref-hub-event': { tr: 'Hub bildirimleri (davet, vb.)', en: 'Hub notifications (invites, etc.)' },
     'notif-pref-system': { tr: 'Sistem bildirimleri', en: 'System notifications' },
     'members-title': { tr: 'Üyeler', en: 'Members' },
+    'settings-tab-general': { tr: 'Genel', en: 'General' },
+    'settings-tab-notifications': { tr: 'Bildirimler', en: 'Notifications' },
+    'settings-tab-security': { tr: 'Güvenlik', en: 'Security' },
+    'settings-tab-privacy': { tr: 'Gizlilik', en: 'Privacy' },
+    'settings-tab-legal': { tr: 'Gizlilik ve Yasal', en: 'Privacy & Legal' },
+    'settings-tab-account': { tr: 'Hesap', en: 'Account' },
     'presence-online': { tr: 'Çevrimiçi', en: 'Online' },
     'presence-offline': { tr: 'Çevrimdışı', en: 'Offline' },
     'about-me-label': { tr: 'Hakkımda', en: 'About me' },

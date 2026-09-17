@@ -959,109 +959,134 @@
                 <button id="settings-close-btn">✕</button>
             </div>
 
+            <div class="settings-tabs" id="settings-tabs">
+                <button class="settings-tab-btn" data-settings-tab="general" type="button" data-i18n="settings-tab-general">Genel</button>
+                <button class="settings-tab-btn" data-settings-tab="notifications" type="button" data-i18n="settings-tab-notifications">Bildirimler</button>
+                <button class="settings-tab-btn" data-settings-tab="security" type="button" data-i18n="settings-tab-security">Güvenlik</button>
+                <button class="settings-tab-btn" data-settings-tab="privacy" type="button" data-i18n="settings-tab-privacy">Gizlilik</button>
+                <button class="settings-tab-btn" data-settings-tab="legal" type="button" data-i18n="settings-tab-legal">Gizlilik ve Yasal</button>
+                <button class="settings-tab-btn" data-settings-tab="account" type="button" data-i18n="settings-tab-account">Hesap</button>
+            </div>
+
             <div class="poll-create-body settings-modal-body">
 
-                <span class="profile-field-label" data-i18n="label-theme">Tema</span>
-                <div class="privacy-options">
-                    <button class="privacy-option" data-theme="dark" type="button">
-                        <span class="privacy-option-title" data-i18n="theme-dark">Kapalı Tema</span>
-                        <span class="privacy-option-desc" data-i18n="theme-dark-desc">Siyah, karanlık arayüz</span>
-                    </button>
-                    <button class="privacy-option" data-theme="light" type="button">
-                        <span class="privacy-option-title" data-i18n="theme-light">Açık Tema</span>
-                        <span class="privacy-option-desc" data-i18n="theme-light-desc">Açık gri arayüz</span>
-                    </button>
-                </div>
+                <div class="settings-panel" data-settings-panel="general">
 
-                <span class="profile-field-label" data-i18n="label-lang">Dil</span>
-                <div class="privacy-options">
-                    <button class="privacy-option" data-lang="tr" type="button">
-                        <span class="privacy-option-title">Türkçe</span>
-                    </button>
-                    <button class="privacy-option" data-lang="en" type="button">
-                        <span class="privacy-option-title">English</span>
-                    </button>
-                </div>
-
-                <button id="lang-confirm-btn" class="about-btn about-btn-primary poll-submit-btn" type="button" style="display:none;">Dili Onayla</button>
-
-                <div class="hub-settings-divider"></div>
-
-                <span class="profile-field-label" data-i18n="label-notifications">Bildirimler</span>
-                <div id="browser-notif-status" class="browser-notif-status">
-                    <div id="browser-notif-status-text" class="browser-notif-status-text"></div>
-                    <button id="browser-notif-permission-btn" class="hub-settings-action-btn" type="button" style="display:none;">
-                        🔔 <span data-i18n="notif-permission-btn">Masaüstü Bildirimlerine İzin Ver</span>
-                    </button>
-                </div>
-
-                <div id="notif-pref-groups" class="notif-pref-groups">
-
-                    <div class="notif-pref-group">
-                        <span class="notif-pref-group-title" data-i18n="notif-group-general">Genel</span>
-                        <label class="notif-pref-row"><input type="checkbox" data-pref="desktop_enabled"><span data-i18n="notif-pref-desktop">Masaüstü / tarayıcı bildirimleri</span></label>
-                        <label class="notif-pref-row"><input type="checkbox" data-pref="inapp_enabled"><span data-i18n="notif-pref-inapp">Uygulama içi bildirimler</span></label>
-                        <label class="notif-pref-row"><input type="checkbox" data-pref="sound_enabled"><span data-i18n="notif-pref-sound">Bildirim sesleri</span></label>
+                    <span class="profile-field-label" data-i18n="label-theme">Tema</span>
+                    <div class="privacy-options">
+                        <button class="privacy-option" data-theme="dark" type="button">
+                            <span class="privacy-option-title" data-i18n="theme-dark">Kapalı Tema</span>
+                            <span class="privacy-option-desc" data-i18n="theme-dark-desc">Siyah, karanlık arayüz</span>
+                        </button>
+                        <button class="privacy-option" data-theme="light" type="button">
+                            <span class="privacy-option-title" data-i18n="theme-light">Açık Tema</span>
+                            <span class="privacy-option-desc" data-i18n="theme-light-desc">Açık gri arayüz</span>
+                        </button>
                     </div>
 
-                    <div class="notif-pref-group">
-                        <span class="notif-pref-group-title" data-i18n="notif-group-messages">Mesajlar</span>
-                        <label class="notif-pref-row"><input type="checkbox" data-pref="notify_dm_message"><span data-i18n="notif-pref-dm">Yeni özel mesajlar</span></label>
-                        <label class="notif-pref-row"><input type="checkbox" data-pref="notify_hub_message"><span data-i18n="notif-pref-hub-message">Yeni Hub mesaj bildirimleri</span></label>
+                    <span class="profile-field-label" data-i18n="label-lang">Dil</span>
+                    <div class="privacy-options">
+                        <button class="privacy-option" data-lang="tr" type="button">
+                            <span class="privacy-option-title">Türkçe</span>
+                        </button>
+                        <button class="privacy-option" data-lang="en" type="button">
+                            <span class="privacy-option-title">English</span>
+                        </button>
                     </div>
 
-                    <div class="notif-pref-group">
-                        <span class="notif-pref-group-title" data-i18n="notif-group-friends">Arkadaşlar</span>
-                        <label class="notif-pref-row"><input type="checkbox" data-pref="notify_friend_request"><span data-i18n="notif-pref-friend-request">Arkadaşlık istekleri</span></label>
-                        <label class="notif-pref-row"><input type="checkbox" data-pref="notify_friend_accepted"><span data-i18n="notif-pref-friend-accepted">Arkadaşlık isteği kabul edildi</span></label>
-                    </div>
-
-                    <div class="notif-pref-group">
-                        <span class="notif-pref-group-title" data-i18n="notif-group-calls">Aramalar</span>
-                        <label class="notif-pref-row"><input type="checkbox" data-pref="notify_incoming_call"><span data-i18n="notif-pref-incoming-call">Gelen aramalar</span></label>
-                        <label class="notif-pref-row"><input type="checkbox" data-pref="notify_missed_call"><span data-i18n="notif-pref-missed-call">Cevapsız aramalar</span></label>
-                    </div>
-
-                    <div class="notif-pref-group">
-                        <span class="notif-pref-group-title" data-i18n="notif-group-hub">Hub</span>
-                        <label class="notif-pref-row"><input type="checkbox" data-pref="notify_hub_event"><span data-i18n="notif-pref-hub-event">Hub bildirimleri (davet, vb.)</span></label>
-                    </div>
-
-                    <div class="notif-pref-group">
-                        <span class="notif-pref-group-title" data-i18n="notif-group-other">Diğer</span>
-                        <label class="notif-pref-row"><input type="checkbox" data-pref="notify_system"><span data-i18n="notif-pref-system">Sistem bildirimleri</span></label>
-                    </div>
+                    <button id="lang-confirm-btn" class="about-btn about-btn-primary poll-submit-btn" type="button" style="display:none;">Dili Onayla</button>
 
                 </div>
 
-                <div class="hub-settings-divider"></div>
+                <div class="settings-panel" data-settings-panel="notifications" style="display:none;">
 
-                <span class="profile-field-label" data-i18n="label-change-password">Şifre Değiştir</span>
-                <input type="password" id="settings-current-password" placeholder="Mevcut şifren">
-                <input type="password" id="settings-new-password" placeholder="Yeni şifre">
-                <div id="settings-password-error" class="friend-add-error"></div>
-                <button id="settings-password-btn" type="button" class="about-btn about-btn-primary poll-submit-btn">Şifreyi Güncelle</button>
+                    <span class="profile-field-label" data-i18n="label-notifications">Bildirimler</span>
+                    <div id="browser-notif-status" class="browser-notif-status">
+                        <div id="browser-notif-status-text" class="browser-notif-status-text"></div>
+                        <button id="browser-notif-permission-btn" class="hub-settings-action-btn" type="button" style="display:none;">
+                            🔔 <span data-i18n="notif-permission-btn">Masaüstü Bildirimlerine İzin Ver</span>
+                        </button>
+                    </div>
 
-                <span class="profile-field-label" data-i18n="label-blocked-users">Engellenenler</span>
-                <div id="settings-blocked-list" class="settings-blocked-list"></div>
+                    <div id="notif-pref-groups" class="notif-pref-groups">
 
-                <div class="hub-settings-divider"></div>
+                        <div class="notif-pref-group">
+                            <span class="notif-pref-group-title" data-i18n="notif-group-general">Genel</span>
+                            <label class="notif-pref-row"><input type="checkbox" data-pref="desktop_enabled"><span data-i18n="notif-pref-desktop">Masaüstü / tarayıcı bildirimleri</span></label>
+                            <label class="notif-pref-row"><input type="checkbox" data-pref="inapp_enabled"><span data-i18n="notif-pref-inapp">Uygulama içi bildirimler</span></label>
+                            <label class="notif-pref-row"><input type="checkbox" data-pref="sound_enabled"><span data-i18n="notif-pref-sound">Bildirim sesleri</span></label>
+                        </div>
 
-                <span class="profile-field-label" data-i18n="label-sessions">Aktif Oturumlar</span>
-                <div id="settings-sessions-list" class="settings-blocked-list"></div>
-                <button id="settings-logout-all-btn" class="hub-settings-action-btn" type="button">🚪 <span data-i18n="logout-all">Tüm Cihazlardan Çıkış Yap</span></button>
+                        <div class="notif-pref-group">
+                            <span class="notif-pref-group-title" data-i18n="notif-group-messages">Mesajlar</span>
+                            <label class="notif-pref-row"><input type="checkbox" data-pref="notify_dm_message"><span data-i18n="notif-pref-dm">Yeni özel mesajlar</span></label>
+                            <label class="notif-pref-row"><input type="checkbox" data-pref="notify_hub_message"><span data-i18n="notif-pref-hub-message">Yeni Hub mesaj bildirimleri</span></label>
+                        </div>
 
-                <div class="hub-settings-divider"></div>
+                        <div class="notif-pref-group">
+                            <span class="notif-pref-group-title" data-i18n="notif-group-friends">Arkadaşlar</span>
+                            <label class="notif-pref-row"><input type="checkbox" data-pref="notify_friend_request"><span data-i18n="notif-pref-friend-request">Arkadaşlık istekleri</span></label>
+                            <label class="notif-pref-row"><input type="checkbox" data-pref="notify_friend_accepted"><span data-i18n="notif-pref-friend-accepted">Arkadaşlık isteği kabul edildi</span></label>
+                        </div>
 
-                <span class="profile-field-label" data-i18n="label-legal">Gizlilik ve Yasal</span>
-                <a href="gizlilik-politikasi.html" target="_blank" rel="noopener" class="hub-settings-action-btn" style="text-decoration:none; display:block; box-sizing:border-box;">📄 <span data-i18n="settings-privacy-policy">Gizlilik Politikası</span></a>
-                <a href="kullanim-sartlari.html" target="_blank" rel="noopener" class="hub-settings-action-btn" style="text-decoration:none; display:block; box-sizing:border-box;">📄 <span data-i18n="settings-terms">Kullanım Şartları</span></a>
-                <a href="destek.html" target="_blank" rel="noopener" class="hub-settings-action-btn" style="text-decoration:none; display:block; box-sizing:border-box;">💬 <span data-i18n="settings-support">Destek &amp; İletişim</span></a>
-                <button id="settings-export-data-btn" class="hub-settings-action-btn" type="button">📦 <span data-i18n="settings-export-data">Verilerimi İndir</span></button>
+                        <div class="notif-pref-group">
+                            <span class="notif-pref-group-title" data-i18n="notif-group-calls">Aramalar</span>
+                            <label class="notif-pref-row"><input type="checkbox" data-pref="notify_incoming_call"><span data-i18n="notif-pref-incoming-call">Gelen aramalar</span></label>
+                            <label class="notif-pref-row"><input type="checkbox" data-pref="notify_missed_call"><span data-i18n="notif-pref-missed-call">Cevapsız aramalar</span></label>
+                        </div>
 
-                <div class="hub-settings-divider"></div>
+                        <div class="notif-pref-group">
+                            <span class="notif-pref-group-title" data-i18n="notif-group-hub">Hub</span>
+                            <label class="notif-pref-row"><input type="checkbox" data-pref="notify_hub_event"><span data-i18n="notif-pref-hub-event">Hub bildirimleri (davet, vb.)</span></label>
+                        </div>
 
-                <button id="settings-delete-account-btn" class="hub-settings-action-btn hub-settings-danger" type="button">🗑 <span data-i18n="delete-account">Hesabı Sil</span></button>
+                        <div class="notif-pref-group">
+                            <span class="notif-pref-group-title" data-i18n="notif-group-other">Diğer</span>
+                            <label class="notif-pref-row"><input type="checkbox" data-pref="notify_system"><span data-i18n="notif-pref-system">Sistem bildirimleri</span></label>
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="settings-panel" data-settings-panel="security" style="display:none;">
+
+                    <span class="profile-field-label" data-i18n="label-change-password">Şifre Değiştir</span>
+                    <input type="password" id="settings-current-password" placeholder="Mevcut şifren">
+                    <input type="password" id="settings-new-password" placeholder="Yeni şifre">
+                    <div id="settings-password-error" class="friend-add-error"></div>
+                    <button id="settings-password-btn" type="button" class="about-btn about-btn-primary poll-submit-btn">Şifreyi Güncelle</button>
+
+                    <div class="hub-settings-divider"></div>
+
+                    <span class="profile-field-label" data-i18n="label-sessions">Aktif Oturumlar</span>
+                    <div id="settings-sessions-list" class="settings-blocked-list"></div>
+                    <button id="settings-logout-all-btn" class="hub-settings-action-btn" type="button">🚪 <span data-i18n="logout-all">Tüm Cihazlardan Çıkış Yap</span></button>
+
+                </div>
+
+                <div class="settings-panel" data-settings-panel="privacy" style="display:none;">
+
+                    <span class="profile-field-label" data-i18n="label-blocked-users">Engellenenler</span>
+                    <div id="settings-blocked-list" class="settings-blocked-list"></div>
+
+                </div>
+
+                <div class="settings-panel" data-settings-panel="legal" style="display:none;">
+
+                    <span class="profile-field-label" data-i18n="label-legal">Gizlilik ve Yasal</span>
+                    <a href="gizlilik-politikasi.html" target="_blank" rel="noopener" class="hub-settings-action-btn" style="text-decoration:none; display:block; box-sizing:border-box;">📄 <span data-i18n="settings-privacy-policy">Gizlilik Politikası</span></a>
+                    <a href="kullanim-sartlari.html" target="_blank" rel="noopener" class="hub-settings-action-btn" style="text-decoration:none; display:block; box-sizing:border-box;">📄 <span data-i18n="settings-terms">Kullanım Şartları</span></a>
+                    <a href="destek.html" target="_blank" rel="noopener" class="hub-settings-action-btn" style="text-decoration:none; display:block; box-sizing:border-box;">💬 <span data-i18n="settings-support">Destek &amp; İletişim</span></a>
+                    <button id="settings-export-data-btn" class="hub-settings-action-btn" type="button">📦 <span data-i18n="settings-export-data">Verilerimi İndir</span></button>
+
+                </div>
+
+                <div class="settings-panel" data-settings-panel="account" style="display:none;">
+
+                    <button id="settings-delete-account-btn" class="hub-settings-action-btn hub-settings-danger" type="button">🗑 <span data-i18n="delete-account">Hesabı Sil</span></button>
+
+                </div>
 
             </div>
 
