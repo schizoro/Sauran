@@ -102,6 +102,21 @@
             return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
 
+        // Backend'e/DB'ye giden gerçek değerler İngilizce kod olarak kalıyor
+        // (ör. "under_review") — burada sadece EKRANDA gösterilen etiketi
+        // Türkçeleştiriyoruz.
+        const STATUS_LABELS = { new: 'Yeni', under_review: 'İnceleniyor', action_taken: 'İşlem Yapıldı', dismissed: 'Reddedildi' };
+        const PRIORITY_LABELS = { normal: 'Normal', high: 'Yüksek', critical: 'Kritik' };
+        const REASON_LABELS = {
+            harassment: 'Taciz', threat: 'Tehdit', spam: 'Spam', scam: 'Dolandırıcılık',
+            inappropriate: 'Uygunsuz İçerik', child_safety: 'Çocuk Güvenliği', hate: 'Nefret / Ayrımcılık',
+            impersonation: 'Sahte Hesap / Taklit', other: 'Diğer'
+        };
+
+        function statusLabel(s) { return STATUS_LABELS[s] || s; }
+        function priorityLabel(p) { return PRIORITY_LABELS[p] || p; }
+        function reasonLabel(r) { return REASON_LABELS[r] || r; }
+
         async function boot() {
             try {
                 const metaRes = await fetch('/api/moderation/meta', { credentials: 'include' });
@@ -130,13 +145,13 @@
 
         function populateFilters() {
             const statusSel = document.getElementById('mod-filter-status');
-            META.statuses.forEach(s => statusSel.innerHTML += `<option value="${s}">${s}</option>`);
+            META.statuses.forEach(s => statusSel.innerHTML += `<option value="${s}">${esc(statusLabel(s))}</option>`);
 
             const prioSel = document.getElementById('mod-filter-priority');
-            META.priorities.forEach(p => prioSel.innerHTML += `<option value="${p}">${p}</option>`);
+            META.priorities.forEach(p => prioSel.innerHTML += `<option value="${p}">${esc(priorityLabel(p))}</option>`);
 
             const reasonSel = document.getElementById('mod-filter-reason');
-            META.reasons.forEach(r => reasonSel.innerHTML += `<option value="${r}">${r}</option>`);
+            META.reasons.forEach(r => reasonSel.innerHTML += `<option value="${r}">${esc(reasonLabel(r))}</option>`);
 
             [statusSel, prioSel, reasonSel].forEach(el => el.addEventListener('change', loadReports));
         }
@@ -172,12 +187,12 @@
 
             listEl.innerHTML = currentReports.map(r => `
                 <div class="mod-card" data-id="${r.id}">
-                    <span class="mod-priority ${esc(r.priority)}">${esc(r.priority)}</span>
+                    <span class="mod-priority ${esc(r.priority)}">${esc(priorityLabel(r.priority))}</span>
                     <div class="mod-card-main">
-                        <div class="mod-card-title">#${r.id} — ${esc(r.reason)} — ${esc(r.target_label)}</div>
+                        <div class="mod-card-title">#${r.id} — ${esc(reasonLabel(r.reason))} — ${esc(r.target_label)}</div>
                         <div class="mod-card-meta">Bildiren: ${esc(r.reporter_username)} · ${esc(r.created_at)}</div>
                     </div>
-                    <span class="mod-status-badge">${esc(r.status)}</span>
+                    <span class="mod-status-badge">${esc(statusLabel(r.status))}</span>
                 </div>
             `).join('');
 
@@ -208,17 +223,17 @@
             const r = data.report;
 
             const historyHtml = r.history.length
-                ? r.history.map(h => `<div class="mod-history-row">${esc(h.created_at)} — ${esc(h.moderator_username || 'CLI')} → <strong>${esc(h.action)}</strong>${h.reason ? ' (' + esc(h.reason) + ')' : ''}</div>`).join('')
+                ? r.history.map(h => `<div class="mod-history-row">${esc(h.created_at)} — ${esc(h.moderator_username || 'CLI')} → <strong>${esc(statusLabel(h.action))}</strong>${h.reason ? ' (' + esc(h.reason) + ')' : ''}</div>`).join('')
                 : '<div class="mod-history-row">Henüz işlem yok.</div>';
 
             document.getElementById('mod-detail-body').innerHTML = `
                 <h2>Rapor #${r.id}</h2>
-                <div class="mod-field"><span class="mod-field-label">Kategori</span><span class="mod-field-value">${esc(r.reason)} · ${esc(r.priority)}</span></div>
+                <div class="mod-field"><span class="mod-field-label">Kategori</span><span class="mod-field-value">${esc(reasonLabel(r.reason))} · ${esc(priorityLabel(r.priority))}</span></div>
                 <div class="mod-field"><span class="mod-field-label">Bildiren</span><span class="mod-field-value">${esc(r.reporter_username)}</span></div>
                 <div class="mod-field"><span class="mod-field-label">Bağlam</span><span class="mod-field-value">${describeContext(r)}</span></div>
                 <div class="mod-field"><span class="mod-field-label">Açıklama</span><span class="mod-field-value">${esc(r.description || '—')}</span></div>
                 <div class="mod-field"><span class="mod-field-label">Tarih</span><span class="mod-field-value">${esc(r.created_at)}</span></div>
-                <div class="mod-field"><span class="mod-field-label">Durum</span><span class="mod-field-value">${esc(r.status)}</span></div>
+                <div class="mod-field"><span class="mod-field-label">Durum</span><span class="mod-field-value">${esc(statusLabel(r.status))}</span></div>
 
                 <div class="mod-history">
                     <span class="mod-field-label">Moderasyon Geçmişi</span>
@@ -227,7 +242,7 @@
 
                 <div class="mod-actions">
                     <select id="mod-action-status">
-                        ${META.statuses.map(s => `<option value="${s}" ${s === r.status ? 'selected' : ''}>${s}</option>`).join('')}
+                        ${META.statuses.map(s => `<option value="${s}" ${s === r.status ? 'selected' : ''}>${esc(statusLabel(s))}</option>`).join('')}
                     </select>
                     <input id="mod-action-reason" type="text" placeholder="Not (opsiyonel)" maxlength="300">
                     <button id="mod-action-submit" type="button">Güncelle</button>
