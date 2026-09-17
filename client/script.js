@@ -1926,9 +1926,87 @@ settingsBtn.addEventListener(
         settingsPasswordError.textContent = '';
 
         loadBlockedUsers();
+        loadSessions();
 
     }
 );
+
+
+function describeUserAgent(ua) {
+
+    ua = ua || '';
+
+    if (/iphone|ipad/i.test(ua)) return '📱 iPhone / iPad';
+    if (/android/i.test(ua)) return '📱 Android';
+    if (/macintosh/i.test(ua)) return '💻 Mac';
+    if (/windows/i.test(ua)) return '💻 Windows';
+    if (/linux/i.test(ua)) return '💻 Linux';
+    return '🖥️ ' + t('unknown-device');
+
+}
+
+async function loadSessions() {
+
+    const container = document.getElementById('settings-sessions-list');
+
+    try {
+
+        const response = await fetch('/api/sessions', { credentials: 'include' });
+        const data = await response.json();
+        if (!data.success) return;
+
+        container.innerHTML = data.sessions.map((s) => {
+            const date = new Date(s.created_at).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            return `
+                <div class="settings-blocked-row">
+                    <span class="settings-blocked-name">
+                        ${describeUserAgent(s.user_agent)} — ${date}
+                        ${s.is_current ? ` <strong style="color:#57f287;">(${t('this-device')})</strong>` : ''}
+                    </span>
+                    ${!s.is_current ? `<button class="settings-unblock-btn" data-revoke-session="${s.id}" type="button">${t('revoke')}</button>` : ''}
+                </div>
+            `;
+        }).join('');
+
+        container.querySelectorAll('[data-revoke-session]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                await fetch(`/api/sessions/${btn.dataset.revokeSession}`, { method: 'DELETE', credentials: 'include' });
+                loadSessions();
+            });
+        });
+
+    } catch (error) {
+        console.error('Oturumlar alınamadı:', error);
+    }
+
+}
+
+document.getElementById('settings-logout-all-btn').addEventListener('click', async () => {
+    if (!confirm(t('confirm-logout-all'))) return;
+    await fetch('/api/sessions/logout-all', { method: 'POST', credentials: 'include' });
+    loadSessions();
+    showToast(t('logout-all-done'));
+});
+
+document.getElementById('settings-delete-account-btn').addEventListener('click', async () => {
+
+    const typed = prompt(t('delete-account-prompt').replace('{username}', currentUser.username));
+    if (typed !== currentUser.username) {
+        if (typed !== null) showToast(t('delete-account-mismatch'));
+        return;
+    }
+
+    const response = await fetch('/api/account', { method: 'DELETE', credentials: 'include' });
+    const data = await response.json();
+
+    if (!data.success) {
+        showToast(data.error || 'Hesap silinemedi.');
+        return;
+    }
+
+    location.reload();
+
+});
 
 
 async function loadBlockedUsers() {
@@ -2130,6 +2208,16 @@ const I18N = {
     'hub-bans-title': { tr: 'Yasaklılar', en: 'Banned Users' },
     'hub-bans-empty': { tr: 'Yasaklı kimse yok.', en: 'No one is banned.' },
     'unban': { tr: 'Yasağı Kaldır', en: 'Unban' },
+    'label-sessions': { tr: 'Aktif Oturumlar', en: 'Active Sessions' },
+    'logout-all': { tr: 'Tüm Cihazlardan Çıkış Yap', en: 'Log Out of All Devices' },
+    'delete-account': { tr: 'Hesabı Sil', en: 'Delete Account' },
+    'unknown-device': { tr: 'Bilinmeyen Cihaz', en: 'Unknown Device' },
+    'this-device': { tr: 'bu cihaz', en: 'this device' },
+    'revoke': { tr: 'Kapat', en: 'Revoke' },
+    'confirm-logout-all': { tr: 'Bu cihaz dışındaki tüm oturumlar kapatılacak. Emin misin?', en: 'All sessions except this device will be signed out. Are you sure?' },
+    'logout-all-done': { tr: 'Diğer tüm cihazlardan çıkış yapıldı.', en: 'Signed out of all other devices.' },
+    'delete-account-prompt': { tr: 'Hesabını kalıcı olarak silmek üzeresin. Onaylamak için kullanıcı adını yaz: {username}', en: 'You are about to permanently delete your account. Type your username to confirm: {username}' },
+    'delete-account-mismatch': { tr: 'Kullanıcı adı eşleşmedi, hesap silinmedi.', en: "Username didn't match, account not deleted." },
     'attach-camera': { tr: 'Kamerayla Çek', en: 'Take Photo/Video' },
     'attach-gallery': { tr: 'Galeriden Seç', en: 'Choose from Gallery' },
     'attach-file': { tr: 'Dosya Seç', en: 'Choose File' },

@@ -78,6 +78,11 @@ const {
 } = require('./db');
 
 const app = express();
+
+// Render bir ters proxy arkasında çalıştığı için gerçek istemci IP'sini
+// almak (rate limiting'in anlamlı olması) için buna ihtiyaç var.
+app.set('trust proxy', 1);
+
 const server = http.createServer(app);
 
 const io = new Server(server, {
@@ -91,6 +96,55 @@ const io = new Server(server, {
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '15mb' }));
+
+// =====================================================
+// RATE LIMITING (bellek içi, basit sabit pencere)
+// =====================================================
+
+function rateLimit({ windowMs, max, keyFn, message }) {
+  const hits = new Map();
+
+  return (req, res, next) => {
+    const key = keyFn(req);
+    const now = Date.now();
+
+    const existing = hits.get(key) || [];
+    const recent = existing.filter(t => now - t < windowMs);
+
+    if (recent.length >= max) {
+      return res.status(429).json({ success: false, error: message || 'Çok fazla istek gönderildi. Lütfen biraz sonra tekrar dene.' });
+    }
+
+    recent.push(now);
+    hits.set(key, recent);
+    next();
+  };
+}
+
+const byIp = (req) => req.ip;
+const byIpAndUser = (req) => `${req.ip}:${(req.body?.username || req.body?.email || '').toLowerCase()}`;
+
+const loginLimiter = rateLimit({ windowMs: 5 * 60 * 1000, max: 8, keyFn: byIpAndUser, message: 'Çok fazla giriş denemesi. 5 dakika sonra tekrar dene.' });
+const registerLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyFn: byIp, message: 'Çok fazla kayıt denemesi. Biraz sonra tekrar dene.' });
+const passwordResetLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyFn: byIp, message: 'Çok fazla istek. Biraz sonra tekrar dene.' });
+const friendRequestLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla arkadaşlık isteği gönderildi. Biraz sonra tekrar dene.' });
+const hubCreateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, keyFn: byIp, message: 'Çok fazla Hub oluşturuldu. Biraz sonra tekrar dene.' });
+const inviteCreateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla davet oluşturuldu. Biraz sonra tekrar dene.' });
+
+// Socket üzerinden gönderilen mesajlar için basit hız sınırlama (spam koruması).
+function isSocketMessageRateLimited(socket) {
+  const now = Date.now();
+  const windowMs = 10_000;
+  const max = 15;
+
+  if (!socket.data.msgTimestamps) socket.data.msgTimestamps = [];
+  socket.data.msgTimestamps = socket.data.msgTimestamps.filter(t => now - t < windowMs);
+
+  if (socket.data.msgTimestamps.length >= max) return true;
+
+  socket.data.msgTimestamps.push(now);
+  return false;
+}
 app.use(express.static(path.join(__dirname, '..', 'client'), {
   etag: false,
   lastModified: false,
@@ -110,21 +164,26 @@ db.exec(`
   );
 `);
 
+const sessionColumns = db.prepare(`PRAGMA table_info(sessions)`).all().map(c => c.name);
+if (!sessionColumns.includes('user_agent')) {
+  db.exec(`ALTER TABLE sessions ADD COLUMN user_agent TEXT`);
+}
+
 const SESSION_DURATION = 7 * 24 * 60 * 60 * 1000;
 
 function hashSessionToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-function createSession(userId) {
+function createSession(userId, userAgent) {
   const token = crypto.randomBytes(32).toString('hex');
   const tokenHash = hashSessionToken(token);
   const expiresAt = new Date(Date.now() + SESSION_DURATION).toISOString();
 
   db.prepare(`
-    INSERT INTO sessions (user_id, token_hash, expires_at)
-    VALUES (?, ?, ?)
-  `).run(userId, tokenHash, expiresAt);
+    INSERT INTO sessions (user_id, token_hash, expires_at, user_agent)
+    VALUES (?, ?, ?, ?)
+  `).run(userId, tokenHash, expiresAt, String(userAgent || '').slice(0, 200));
 
   return token;
 }
@@ -205,7 +264,7 @@ app.get('/', (req, res) => {
 // KAYIT (YENİ)
 // =====================================================
 
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', registerLimiter, async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
@@ -235,7 +294,7 @@ app.post('/api/verify', (req, res) => {
       return res.status(400).json(result);
     }
 
-    const sessionToken = createSession(result.id);
+    const sessionToken = createSession(result.id, req.headers['user-agent']);
     setSessionCookie(res, sessionToken);
 
     return res.json({
@@ -261,7 +320,7 @@ app.post('/api/verify', (req, res) => {
 // GİRİŞ
 // =====================================================
 
-app.post('/api/login', (req, res) => {
+app.post('/api/login', loginLimiter, (req, res) => {
   try {
     const { username, password } = req.body;
 
@@ -295,7 +354,7 @@ app.post('/api/login', (req, res) => {
       });
     }
 
-    const sessionToken = createSession(result.id);
+    const sessionToken = createSession(result.id, req.headers['user-agent']);
     setSessionCookie(res, sessionToken);
 
     return res.json({
@@ -334,6 +393,89 @@ app.get('/api/me', (req, res) => {
   } catch (error) {
     console.error('Session kontrol hatası:', error);
     return res.status(500).json({ success: false, error: 'Oturum kontrol edilemedi.' });
+  }
+});
+
+// =====================================================
+// OTURUM YÖNETİMİ (aktif cihazlar)
+// =====================================================
+
+app.get('/api/sessions', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const currentToken = getSessionTokenFromCookie(req.headers.cookie);
+  const currentHash = currentToken ? hashSessionToken(currentToken) : null;
+
+  const rows = db.prepare(`
+    SELECT id, token_hash, user_agent, created_at, expires_at
+    FROM sessions WHERE user_id = ? ORDER BY created_at DESC
+  `).all(user.id);
+
+  const sessions = rows.map(r => ({
+    id: r.id,
+    user_agent: r.user_agent,
+    created_at: r.created_at,
+    expires_at: r.expires_at,
+    is_current: r.token_hash === currentHash
+  }));
+
+  return res.json({ success: true, sessions });
+});
+
+app.delete('/api/sessions/:id', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const info = db.prepare(`DELETE FROM sessions WHERE id = ? AND user_id = ?`).run(Number(req.params.id), user.id);
+
+  if (!info.changes) return res.status(404).json({ success: false, error: 'Oturum bulunamadı.' });
+  return res.json({ success: true });
+});
+
+app.post('/api/sessions/logout-all', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const currentToken = getSessionTokenFromCookie(req.headers.cookie);
+  const currentHash = currentToken ? hashSessionToken(currentToken) : null;
+
+  if (currentHash) {
+    db.prepare(`DELETE FROM sessions WHERE user_id = ? AND token_hash != ?`).run(user.id, currentHash);
+  } else {
+    db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(user.id);
+  }
+
+  return res.json({ success: true });
+});
+
+// =====================================================
+// HESABI SİL
+// =====================================================
+
+app.delete('/api/account', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+
+    const ownedHubs = db.prepare(`SELECT id FROM hubs WHERE created_by = ?`).all(user.id);
+    ownedHubs.forEach(h => db.prepare(`DELETE FROM hubs WHERE id = ?`).run(h.id));
+
+    db.prepare(`DELETE FROM messages WHERE user_id = ? OR to_user_id = ?`).run(user.id, user.id);
+    db.prepare(`DELETE FROM friendships WHERE user_low = ? OR user_high = ?`).run(user.id, user.id);
+    db.prepare(`DELETE FROM blocked_users WHERE user_id = ? OR blocked_user_id = ?`).run(user.id, user.id);
+    db.prepare(`DELETE FROM notifications WHERE user_id = ?`).run(user.id);
+    db.prepare(`DELETE FROM hub_members WHERE user_id = ?`).run(user.id);
+    db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(user.id);
+    db.prepare(`DELETE FROM users WHERE id = ?`).run(user.id);
+
+    clearSessionCookie(res);
+    return res.json({ success: true });
+
+  } catch (error) {
+    console.error('Hesap silme hatası:', error);
+    return res.status(500).json({ success: false, error: 'Hesap silinemedi.' });
   }
 });
 
@@ -487,6 +629,13 @@ app.patch('/api/profile/password', (req, res) => {
       return res.status(400).json(result);
     }
 
+    // Şifre değiştiğinde diğer tüm cihazlardaki oturumları kapat — sadece bu oturum kalır.
+    const currentToken = getSessionTokenFromCookie(req.headers.cookie);
+    const currentHash = currentToken ? hashSessionToken(currentToken) : null;
+    if (currentHash) {
+      db.prepare(`DELETE FROM sessions WHERE user_id = ? AND token_hash != ?`).run(user.id, currentHash);
+    }
+
     return res.json(result);
 
   } catch (error) {
@@ -589,7 +738,7 @@ app.get('/api/hubs', (req, res) => {
   }
 });
 
-app.post('/api/hubs', (req, res) => {
+app.post('/api/hubs', hubCreateLimiter, (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
 
@@ -674,7 +823,7 @@ app.post('/api/hubs/:id/role', (req, res) => {
   }
 });
 
-app.post('/api/hubs/:id/invite', (req, res) => {
+app.post('/api/hubs/:id/invite', inviteCreateLimiter, (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
 
@@ -1381,7 +1530,7 @@ app.post('/api/notifications/:id/respond', (req, res) => {
 // ŞİFREMİ UNUTTUM
 // =====================================================
 
-app.post('/api/password-reset/request', async (req, res) => {
+app.post('/api/password-reset/request', passwordResetLimiter, async (req, res) => {
   try {
     const result = requestPasswordReset(req.body?.email);
 
@@ -1447,7 +1596,7 @@ app.get('/api/users/lookup', (req, res) => {
   }
 });
 
-app.post('/api/friends/request', (req, res) => {
+app.post('/api/friends/request', friendRequestLimiter, (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
 
@@ -1610,6 +1759,11 @@ io.on('connection', (socket) => {
         return;
       }
 
+      if (isSocketMessageRateLimited(socket)) {
+        socket.emit('message_error', 'Çok hızlı mesaj gönderiyorsun, biraz yavaşla.');
+        return;
+      }
+
       const toUserId = Number(data?.to_user_id);
       const result = saveDmMessage(socket.userId, socket.username, toUserId, data?.content);
 
@@ -1742,6 +1896,11 @@ io.on('connection', (socket) => {
     try {
       if (!socket.userId || !socket.username) {
         socket.emit('message_error', 'Oturum doğrulanamadı.');
+        return;
+      }
+
+      if (isSocketMessageRateLimited(socket)) {
+        socket.emit('message_error', 'Çok hızlı mesaj gönderiyorsun, biraz yavaşla.');
         return;
       }
 

@@ -1405,6 +1405,10 @@ function confirmPasswordReset(email, code, newPassword) {
   db.prepare(`UPDATE users SET password_hash = ?, password_salt = ? WHERE id = ?`).run(hash, salt, user.id);
   db.prepare(`DELETE FROM password_resets WHERE user_id = ?`).run(user.id);
 
+  // Şifre unutulup sıfırlandığında (başka biri erişmiş olabilir ihtimaline karşı)
+  // tüm cihazlardaki oturumlar kapatılır — kullanıcı yeniden giriş yapmalı.
+  db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(user.id);
+
   return { success: true };
 }
 
