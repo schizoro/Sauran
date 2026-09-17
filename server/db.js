@@ -530,6 +530,35 @@ function setPlatformRole(username, role) {
   return { success: true, username: user.username, old_role: user.platform_role, new_role: role };
 }
 
+// Moderatörlerin bir kullanıcı profili raporunu incelerken hesaba dair yeterli bilgiye
+// erişebilmesi için — normal /api/users/:id/profile herkese açık alanları döndürür,
+// bu ise sadece requirePlatformRole('moderator') arkasında kullanılan ayrı bir görünüm.
+function getModerationUserDetail(userId) {
+  const user = db.prepare(`
+    SELECT id, username, email, created_at, birth_date, platform_role, status, about_me, avatar_data
+    FROM users WHERE id = ?
+  `).get(userId);
+
+  if (!user) return null;
+
+  const reportsAgainst = db.prepare(`
+    SELECT COUNT(*) AS count FROM reports WHERE target_type = 'user' AND target_id = ?
+  `).get(userId).count;
+
+  const reportsFiled = db.prepare(`
+    SELECT COUNT(*) AS count FROM reports WHERE reporter_user_id = ?
+  `).get(userId).count;
+
+  const hubsOwned = db.prepare(`SELECT COUNT(*) AS count FROM hubs WHERE created_by = ?`).get(userId).count;
+  const hubsMember = db.prepare(`SELECT COUNT(*) AS count FROM hub_members WHERE user_id = ?`).get(userId).count;
+  const messageCount = db.prepare(`SELECT COUNT(*) AS count FROM messages WHERE user_id = ?`).get(userId).count;
+
+  return {
+    ...user,
+    stats: { reportsAgainst, reportsFiled, hubsOwned, hubsMember, messageCount }
+  };
+}
+
 function getReportTargetContext(targetType, targetId) {
   try {
     if (targetType === 'user') {
@@ -2227,6 +2256,7 @@ module.exports = {
   hasAtLeastPlatformRole,
   setPlatformRole,
   getReportDetail,
+  getModerationUserDetail,
   PLATFORM_ROLES,
   REPORT_REASONS,
   REPORT_STATUSES,

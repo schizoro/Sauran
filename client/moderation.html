@@ -48,7 +48,7 @@
             background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); color: #c5c6c7;
             border-radius: 8px; padding: 8px 10px; font-size: 12.5px; flex: 1; min-width: 120px;
         }
-        .mod-actions button {
+        .mod-actions button, #mod-view-account-btn {
             background: rgba(102,252,241,0.1); border: 1px solid rgba(102,252,241,0.4); color: #66fcf1;
             border-radius: 8px; padding: 8px 16px; font-size: 12.5px; cursor: pointer; font-weight: bold;
         }
@@ -206,6 +206,14 @@
             file: 'Dosya', poll: 'Anket', share: 'Paylaşım', deleted: 'Silinmiş Mesaj'
         };
 
+        const TARGET_TYPE_LABELS = {
+            user: '👤 Kullanıcı Profili', hub: '🧩 Hub', message: '💬 İleti', voice_room: '🎙️ Sesli Oda'
+        };
+
+        const PLATFORM_ROLE_LABELS = {
+            user: 'Normal Kullanıcı', moderator: 'Moderatör', admin: 'Admin', founder: 'Kurucu'
+        };
+
         function describeContext(report) {
             const ctx = report.target_context;
             if (!ctx || !ctx.exists) return 'Hedef bulunamadı (silinmiş olabilir).';
@@ -252,6 +260,53 @@
             return esc(ctx.content || '(boş)');
         }
 
+        // Kullanıcı profili raporlarında moderatörün hesabı doğrudan bu panelden
+        // inceleyebilmesi için — ayrı bir sayfaya gitmesine gerek kalmıyor.
+        async function loadAccountDetail(userId) {
+            const box = document.getElementById('mod-account-box');
+            box.innerHTML = '<div class="mod-field-value">Yükleniyor...</div>';
+
+            try {
+                const res = await fetch(`/api/moderation/users/${userId}`, { credentials: 'include' });
+                const data = await res.json();
+
+                if (!data.success) {
+                    box.innerHTML = `<div class="mod-field-value">Hesap bulunamadı (silinmiş olabilir).</div>`;
+                    return;
+                }
+
+                const u = data.user;
+                const avatarHtml = u.avatar_data
+                    ? `<img src="${esc(u.avatar_data)}" alt="" style="width:48px; height:48px; border-radius:50%; object-fit:cover;">`
+                    : `<div style="width:48px; height:48px; border-radius:50%; background:rgba(102,252,241,0.12); display:flex; align-items:center; justify-content:center; font-weight:bold; color:#66fcf1;">${esc((u.username || '?')[0].toUpperCase())}</div>`;
+
+                box.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:12px; margin:10px 0;">
+                        ${avatarHtml}
+                        <div>
+                            <div style="font-size:14px; font-weight:bold; color:#e2f8f6;">${esc(u.username)} (#${u.id})</div>
+                            <div style="font-size:11.5px; color:#6b7280;">${esc(PLATFORM_ROLE_LABELS[u.platform_role] || u.platform_role)}</div>
+                        </div>
+                    </div>
+                    <div class="mod-field"><span class="mod-field-label">E-posta</span><span class="mod-field-value">${esc(u.email || '—')}</span></div>
+                    <div class="mod-field"><span class="mod-field-label">Kayıt Tarihi</span><span class="mod-field-value">${esc(u.created_at)}</span></div>
+                    <div class="mod-field"><span class="mod-field-label">Doğum Tarihi</span><span class="mod-field-value">${esc(u.birth_date || '—')}</span></div>
+                    <div class="mod-field"><span class="mod-field-label">Hakkımda</span><span class="mod-field-value">${esc(u.about_me || '—')}</span></div>
+                    <div class="mod-field">
+                        <span class="mod-field-label">İstatistikler</span>
+                        <span class="mod-field-value">
+                            Bu kullanıcı hakkında ${u.stats.reportsAgainst} rapor var · Kendisi ${u.stats.reportsFiled} rapor açmış<br>
+                            ${u.stats.hubsOwned} Hub sahibi · ${u.stats.hubsMember} Hub üyesi · ${u.stats.messageCount} ileti göndermiş
+                        </span>
+                    </div>
+                `;
+
+            } catch (error) {
+                console.error(error);
+                box.innerHTML = `<div class="mod-field-value">Hesap bilgisi alınamadı.</div>`;
+            }
+        }
+
         async function openDetail(id) {
             const res = await fetch(`/api/moderation/reports/${id}`, { credentials: 'include' });
             const data = await res.json();
@@ -265,6 +320,7 @@
 
             document.getElementById('mod-detail-body').innerHTML = `
                 <h2>Rapor #${r.id}</h2>
+                <div class="mod-field"><span class="mod-field-label">Rapor Türü</span><span class="mod-field-value">${esc(TARGET_TYPE_LABELS[r.target_type] || r.target_type)}</span></div>
                 <div class="mod-field"><span class="mod-field-label">Kategori</span><span class="mod-field-value">${esc(reasonLabel(r.reason))} · ${esc(priorityLabel(r.priority))}</span></div>
                 <div class="mod-field"><span class="mod-field-label">Bildiren</span><span class="mod-field-value">${esc(r.reporter_username)}</span></div>
                 <div class="mod-field"><span class="mod-field-label">Bağlam</span><span class="mod-field-value">${describeContext(r)}</span></div>
@@ -272,6 +328,13 @@
                 <div class="mod-field"><span class="mod-field-label">Açıklama</span><span class="mod-field-value">${esc(r.description || '—')}</span></div>
                 <div class="mod-field"><span class="mod-field-label">Tarih</span><span class="mod-field-value">${esc(r.created_at)}</span></div>
                 <div class="mod-field"><span class="mod-field-label">Durum</span><span class="mod-field-value">${esc(statusLabel(r.status))}</span></div>
+
+                ${r.target_type === 'user' && r.target_context?.exists ? `
+                <div class="mod-field">
+                    <button id="mod-view-account-btn" type="button" data-user-id="${r.target_context.user_id}">🔍 Hesap Detaylarını Görüntüle</button>
+                </div>
+                <div id="mod-account-box"></div>
+                ` : ''}
 
                 <div class="mod-history">
                     <span class="mod-field-label">Moderasyon Geçmişi</span>
@@ -286,6 +349,11 @@
                     <button id="mod-action-submit" type="button">Güncelle</button>
                 </div>
             `;
+
+            const viewAccountBtn = document.getElementById('mod-view-account-btn');
+            if (viewAccountBtn) {
+                viewAccountBtn.addEventListener('click', () => loadAccountDetail(Number(viewAccountBtn.dataset.userId)));
+            }
 
             document.getElementById('mod-action-submit').addEventListener('click', async () => {
                 const status = document.getElementById('mod-action-status').value;

@@ -84,6 +84,7 @@ const {
   markNotificationRead,
   hasAtLeastPlatformRole,
   getReportDetail,
+  getModerationUserDetail,
   logModerationAction,
   updateReportStatus,
   listReports,
@@ -812,6 +813,25 @@ app.get('/api/moderation/reports/:id', (req, res) => {
   } catch (error) {
     console.error('Moderasyon rapor detay hatası:', error);
     res.status(500).json({ success: false, error: 'Rapor alınamadı.' });
+  }
+});
+
+app.get('/api/moderation/users/:id', (req, res) => {
+  const user = requirePlatformRole(req, res, 'moderator');
+  if (!user) return;
+
+  try {
+    const detail = getModerationUserDetail(Number(req.params.id));
+
+    if (!detail) {
+      return res.status(404).json({ success: false, error: 'Kullanıcı bulunamadı.' });
+    }
+
+    return res.json({ success: true, user: detail });
+
+  } catch (error) {
+    console.error('Moderasyon kullanıcı detay hatası:', error);
+    res.status(500).json({ success: false, error: 'Kullanıcı bilgisi alınamadı.' });
   }
 });
 
