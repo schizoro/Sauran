@@ -48,6 +48,23 @@ async function getRoom(roomName) {
   }
 }
 
+// İki kullanıcı (ör. arayan ve kabul eden) aynı anda aynı oda adına istek
+// atabilir — ikisi de odayı bulamayıp aynı anda oluşturmaya çalışırsa Daily
+// API'si ikinci isteği "oda zaten var" hatasıyla reddeder. Bu durumda
+// oluşturmayı başaran diğer isteğin odasını bulup onu kullanıyoruz.
+async function getOrCreateRoom(roomName, opts = {}) {
+  const existing = await getRoom(roomName);
+  if (existing) return existing;
+
+  try {
+    return await createRoom(roomName, opts);
+  } catch (error) {
+    const fallback = await getRoom(roomName);
+    if (fallback) return fallback;
+    throw error;
+  }
+}
+
 async function createMeetingToken(roomName, userName) {
   const data = await dailyFetch('/meeting-tokens', {
     method: 'POST',
@@ -63,4 +80,4 @@ async function createMeetingToken(roomName, userName) {
   return data.token;
 }
 
-module.exports = { createRoom, getRoom, createMeetingToken, isConfigured: () => Boolean(DAILY_API_KEY) };
+module.exports = { createRoom, getRoom, getOrCreateRoom, createMeetingToken, isConfigured: () => Boolean(DAILY_API_KEY) };

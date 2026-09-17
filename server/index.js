@@ -1174,21 +1174,11 @@ app.post('/api/hubs/:id/call/join', async (req, res) => {
   }
 
   try {
-    let roomName = getHubDailyRoomName(hubId);
-    let roomUrl = null;
+    const roomName = getHubDailyRoomName(hubId) || `sauran-hub-${hubId}`;
+    setHubDailyRoomName(hubId, roomName);
 
-    if (roomName) {
-      const existing = await daily.getRoom(roomName);
-      if (existing) roomUrl = existing.url;
-      else roomName = null;
-    }
-
-    if (!roomName) {
-      roomName = `sauran-hub-${hubId}-${crypto.randomBytes(3).toString('hex')}`;
-      const created = await daily.createRoom(roomName);
-      roomUrl = created.url;
-      setHubDailyRoomName(hubId, roomName);
-    }
+    const room = await daily.getOrCreateRoom(roomName);
+    const roomUrl = room.url;
 
     const token = await daily.createMeetingToken(roomName, user.username);
 
@@ -1277,21 +1267,11 @@ app.post('/api/hubs/:id/voice-rooms/:roomId/join', async (req, res) => {
   }
 
   try {
-    let roomName = getVoiceRoomDailyName(roomId);
-    let roomUrl = null;
+    const roomName = getVoiceRoomDailyName(roomId) || `sauran-vr-${roomId}`;
+    setVoiceRoomDailyName(roomId, roomName);
 
-    if (roomName) {
-      const existing = await daily.getRoom(roomName);
-      if (existing) roomUrl = existing.url;
-      else roomName = null;
-    }
-
-    if (!roomName) {
-      roomName = `sauran-vr-${roomId}-${crypto.randomBytes(3).toString('hex')}`;
-      const created = await daily.createRoom(roomName);
-      roomUrl = created.url;
-      setVoiceRoomDailyName(roomId, roomName);
-    }
+    const room = await daily.getOrCreateRoom(roomName);
+    const roomUrl = room.url;
 
     const token = await daily.createMeetingToken(roomName, user.username);
 
@@ -1322,15 +1302,8 @@ app.post('/api/dm/:userId/call/join', async (req, res) => {
     const [low, high] = [user.id, otherId].sort((a, b) => a - b);
     const roomName = `sauran-dm-${low}-${high}`;
 
-    let roomUrl = null;
-    const existing = await daily.getRoom(roomName);
-
-    if (existing) {
-      roomUrl = existing.url;
-    } else {
-      const created = await daily.createRoom(roomName, { screenshare: false });
-      roomUrl = created.url;
-    }
+    const room = await daily.getOrCreateRoom(roomName, { screenshare: false });
+    const roomUrl = room.url;
 
     const token = await daily.createMeetingToken(roomName, user.username);
 
