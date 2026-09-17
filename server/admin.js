@@ -1,10 +1,26 @@
-const { db, listReports, updateReportStatus } = require('./db');
+const { db, listReports, updateReportStatus, setPlatformRole, PLATFORM_ROLES } = require('./db');
 
 const [, , command, arg, arg2] = process.argv;
 
 function listUsers() {
-  const rows = db.prepare(`SELECT id, username, email, created_at FROM users ORDER BY id`).all();
+  const rows = db.prepare(`SELECT id, username, email, platform_role, created_at FROM users ORDER BY id`).all();
   console.table(rows);
+}
+
+function setRoleCli(username, role) {
+  if (!username || !role) {
+    console.log(`Kullanım: node admin.js set-role <kullaniciadi> <${PLATFORM_ROLES.join('|')}>`);
+    return;
+  }
+
+  const result = setPlatformRole(username, role);
+
+  if (!result.success) {
+    console.log(result.error);
+    return;
+  }
+
+  console.log(`${result.username}: ${result.old_role} → ${result.new_role}`);
 }
 
 function listPending() {
@@ -117,13 +133,17 @@ switch (command) {
   case 'resolve-report':
     resolveReportCli(arg, arg2);
     break;
+  case 'set-role':
+    setRoleCli(arg, arg2);
+    break;
   default:
     console.log(`Kullanım:
-  node admin.js list-users            Kayıtlı kullanıcıları listele
+  node admin.js list-users            Kayıtlı kullanıcıları listele (platform_role dahil)
   node admin.js list-pending          Doğrulama bekleyen kayıtları listele
   node admin.js delete <ad|mail>      Belirli bir kullanıcıyı sil
   node admin.js delete-all            Tüm kullanıcıları sil
   node admin.js clear-pending         Bekleyen doğrulama kayıtlarını temizle
   node admin.js list-reports [status] Bildirimleri listele (opsiyonel: new/under_review/action_taken/dismissed)
-  node admin.js resolve-report <id> <status>  Bir bildirimi durumla kapat`);
+  node admin.js resolve-report <id> <status>  Bir bildirimi durumla kapat
+  node admin.js set-role <ad> <${PLATFORM_ROLES.join('|')}>  Kullanıcının platform yetkisini değiştir (Hub rolleriyle ilgisi yok)`);
 }

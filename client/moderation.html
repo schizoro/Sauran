@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moderasyon Paneli — Sauran</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { margin: 0; padding: 24px; background: #0b0c10; color: #c5c6c7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        .mod-wrap { max-width: 960px; margin: 0 auto; }
+        .mod-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+        .mod-header h1 { font-size: 18px; color: #66fcf1; margin: 0; letter-spacing: 1px; }
+        .mod-state { text-align: center; padding: 60px 20px; color: #6b7280; font-size: 14px; }
+        .mod-filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+        .mod-filters select {
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); color: #c5c6c7;
+            border-radius: 8px; padding: 7px 10px; font-size: 12.5px;
+        }
+        .mod-list { display: flex; flex-direction: column; gap: 8px; }
+        .mod-card {
+            display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; cursor: pointer;
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); transition: 0.15s;
+        }
+        .mod-card:hover { border-color: rgba(102,252,241,0.35); }
+        .mod-priority { flex-shrink: 0; font-size: 10px; font-weight: bold; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; }
+        .mod-priority.critical { background: rgba(255,46,70,0.15); color: #ff6b7d; }
+        .mod-priority.high { background: rgba(255,159,67,0.15); color: #ffb066; }
+        .mod-priority.normal { background: rgba(255,255,255,0.06); color: #9ca3af; }
+        .mod-card-main { flex: 1; min-width: 0; }
+        .mod-card-title { font-size: 13px; color: #e2f8f6; margin-bottom: 2px; }
+        .mod-card-meta { font-size: 11px; color: #6b7280; }
+        .mod-status-badge { flex-shrink: 0; font-size: 10.5px; color: #66fcf1; border: 1px solid rgba(102,252,241,0.3); border-radius: 999px; padding: 3px 9px; }
+        .mod-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; padding: 20px; }
+        .mod-modal-overlay.open { display: flex; }
+        .mod-modal {
+            width: 100%; max-width: 520px; max-height: 86vh; overflow-y: auto; border-radius: 18px; padding: 24px;
+            background: rgba(20,22,28,0.7); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+        }
+        .mod-modal h2 { margin: 0 0 14px; font-size: 15px; color: #66fcf1; }
+        .mod-field { margin-bottom: 12px; }
+        .mod-field-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; display: block; margin-bottom: 3px; }
+        .mod-field-value { font-size: 13px; color: #c5c6c7; white-space: pre-wrap; word-break: break-word; }
+        .mod-history { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); }
+        .mod-history-row { font-size: 11.5px; color: #9ca3af; padding: 5px 0; }
+        .mod-actions { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+        .mod-actions select, .mod-actions input {
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); color: #c5c6c7;
+            border-radius: 8px; padding: 8px 10px; font-size: 12.5px; flex: 1; min-width: 120px;
+        }
+        .mod-actions button {
+            background: rgba(102,252,241,0.1); border: 1px solid rgba(102,252,241,0.4); color: #66fcf1;
+            border-radius: 8px; padding: 8px 16px; font-size: 12.5px; cursor: pointer; font-weight: bold;
+        }
+        .mod-close-btn { position: absolute; top: 16px; right: 16px; width: 26px; height: 26px; border-radius: 50%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #8e9297; cursor: pointer; }
+        .mod-modal { position: relative; }
+    </style>
+</head>
+<body>
+    <div class="mod-wrap">
+
+        <div class="mod-header">
+            <h1>🛡️ SAURAN MODERASYON PANELİ</h1>
+        </div>
+
+        <div id="mod-loading" class="mod-state">Yükleniyor…</div>
+        <div id="mod-denied" class="mod-state" style="display:none;">Bu sayfaya erişim yetkin yok.</div>
+
+        <div id="mod-content" style="display:none;">
+
+            <div class="mod-filters">
+                <select id="mod-filter-status">
+                    <option value="">Tüm durumlar</option>
+                </select>
+                <select id="mod-filter-priority">
+                    <option value="">Tüm öncelikler</option>
+                </select>
+                <select id="mod-filter-reason">
+                    <option value="">Tüm kategoriler</option>
+                </select>
+            </div>
+
+            <div id="mod-list" class="mod-list"></div>
+            <div id="mod-empty" class="mod-state" style="display:none;">Bu filtrelerle eşleşen rapor yok.</div>
+
+        </div>
+
+    </div>
+
+    <div id="mod-detail-overlay" class="mod-modal-overlay">
+        <div class="mod-modal">
+            <button id="mod-detail-close" class="mod-close-btn">✕</button>
+            <div id="mod-detail-body"></div>
+        </div>
+    </div>
+
+    <script>
+        let META = { reasons: [], statuses: [], priorities: [] };
+        let currentReports = [];
+
+        function esc(s) {
+            return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        async function boot() {
+            try {
+                const metaRes = await fetch('/api/moderation/meta', { credentials: 'include' });
+
+                if (metaRes.status === 401 || metaRes.status === 403) {
+                    document.getElementById('mod-loading').style.display = 'none';
+                    document.getElementById('mod-denied').style.display = 'block';
+                    return;
+                }
+
+                const metaData = await metaRes.json();
+                if (!metaData.success) throw new Error('meta');
+                META = metaData;
+
+                populateFilters();
+                document.getElementById('mod-loading').style.display = 'none';
+                document.getElementById('mod-content').style.display = 'block';
+
+                await loadReports();
+
+            } catch (error) {
+                console.error(error);
+                document.getElementById('mod-loading').textContent = 'Bağlantı hatası. Sayfayı yenile.';
+            }
+        }
+
+        function populateFilters() {
+            const statusSel = document.getElementById('mod-filter-status');
+            META.statuses.forEach(s => statusSel.innerHTML += `<option value="${s}">${s}</option>`);
+
+            const prioSel = document.getElementById('mod-filter-priority');
+            META.priorities.forEach(p => prioSel.innerHTML += `<option value="${p}">${p}</option>`);
+
+            const reasonSel = document.getElementById('mod-filter-reason');
+            META.reasons.forEach(r => reasonSel.innerHTML += `<option value="${r}">${r}</option>`);
+
+            [statusSel, prioSel, reasonSel].forEach(el => el.addEventListener('change', loadReports));
+        }
+
+        async function loadReports() {
+            const status = document.getElementById('mod-filter-status').value;
+            const priority = document.getElementById('mod-filter-priority').value;
+            const reason = document.getElementById('mod-filter-reason').value;
+
+            const params = new URLSearchParams();
+            if (status) params.set('status', status);
+            if (priority) params.set('priority', priority);
+            if (reason) params.set('reason', reason);
+
+            const res = await fetch(`/api/moderation/reports?${params}`, { credentials: 'include' });
+            const data = await res.json();
+            if (!data.success) return;
+
+            currentReports = data.reports;
+            renderList();
+        }
+
+        function renderList() {
+            const listEl = document.getElementById('mod-list');
+            const emptyEl = document.getElementById('mod-empty');
+
+            if (currentReports.length === 0) {
+                listEl.innerHTML = '';
+                emptyEl.style.display = 'block';
+                return;
+            }
+            emptyEl.style.display = 'none';
+
+            listEl.innerHTML = currentReports.map(r => `
+                <div class="mod-card" data-id="${r.id}">
+                    <span class="mod-priority ${esc(r.priority)}">${esc(r.priority)}</span>
+                    <div class="mod-card-main">
+                        <div class="mod-card-title">#${r.id} — ${esc(r.reason)} — ${esc(r.target_label)}</div>
+                        <div class="mod-card-meta">Bildiren: ${esc(r.reporter_username)} · ${esc(r.created_at)}</div>
+                    </div>
+                    <span class="mod-status-badge">${esc(r.status)}</span>
+                </div>
+            `).join('');
+
+            listEl.querySelectorAll('.mod-card').forEach(card => {
+                card.addEventListener('click', () => openDetail(Number(card.dataset.id)));
+            });
+        }
+
+        function describeContext(report) {
+            const ctx = report.target_context;
+            if (!ctx || !ctx.exists) return 'Hedef bulunamadı (silinmiş olabilir).';
+
+            if (report.target_type === 'user') return `Kullanıcı: ${esc(ctx.username)} (#${ctx.user_id})`;
+            if (report.target_type === 'hub') return `Hub: ${esc(ctx.hub_name)} — sahibi: ${esc(ctx.owner_username || 'bilinmiyor')}`;
+            if (report.target_type === 'voice_room') return `Sesli Oda: ${esc(ctx.room_name)} — Hub: ${esc(ctx.hub_name || 'bilinmiyor')}`;
+            if (report.target_type === 'message') {
+                const where = ctx.context?.type === 'hub' ? `Hub: ${esc(ctx.context.hub_name || 'bilinmiyor')}` : 'Özel Mesaj (DM)';
+                return `Gönderen: ${esc(ctx.sender_username)} — ${where}\nİçerik: ${esc(ctx.content || '')}`;
+            }
+            return `${esc(report.target_type)} #${report.target_id}`;
+        }
+
+        async function openDetail(id) {
+            const res = await fetch(`/api/moderation/reports/${id}`, { credentials: 'include' });
+            const data = await res.json();
+            if (!data.success) return;
+
+            const r = data.report;
+
+            const historyHtml = r.history.length
+                ? r.history.map(h => `<div class="mod-history-row">${esc(h.created_at)} — ${esc(h.moderator_username || 'CLI')} → <strong>${esc(h.action)}</strong>${h.reason ? ' (' + esc(h.reason) + ')' : ''}</div>`).join('')
+                : '<div class="mod-history-row">Henüz işlem yok.</div>';
+
+            document.getElementById('mod-detail-body').innerHTML = `
+                <h2>Rapor #${r.id}</h2>
+                <div class="mod-field"><span class="mod-field-label">Kategori</span><span class="mod-field-value">${esc(r.reason)} · ${esc(r.priority)}</span></div>
+                <div class="mod-field"><span class="mod-field-label">Bildiren</span><span class="mod-field-value">${esc(r.reporter_username)}</span></div>
+                <div class="mod-field"><span class="mod-field-label">Bağlam</span><span class="mod-field-value">${describeContext(r)}</span></div>
+                <div class="mod-field"><span class="mod-field-label">Açıklama</span><span class="mod-field-value">${esc(r.description || '—')}</span></div>
+                <div class="mod-field"><span class="mod-field-label">Tarih</span><span class="mod-field-value">${esc(r.created_at)}</span></div>
+                <div class="mod-field"><span class="mod-field-label">Durum</span><span class="mod-field-value">${esc(r.status)}</span></div>
+
+                <div class="mod-history">
+                    <span class="mod-field-label">Moderasyon Geçmişi</span>
+                    ${historyHtml}
+                </div>
+
+                <div class="mod-actions">
+                    <select id="mod-action-status">
+                        ${META.statuses.map(s => `<option value="${s}" ${s === r.status ? 'selected' : ''}>${s}</option>`).join('')}
+                    </select>
+                    <input id="mod-action-reason" type="text" placeholder="Not (opsiyonel)" maxlength="300">
+                    <button id="mod-action-submit" type="button">Güncelle</button>
+                </div>
+            `;
+
+            document.getElementById('mod-action-submit').addEventListener('click', async () => {
+                const status = document.getElementById('mod-action-status').value;
+                const reason = document.getElementById('mod-action-reason').value;
+
+                const updateRes = await fetch(`/api/moderation/reports/${id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ status, reason })
+                });
+                const updateData = await updateRes.json();
+
+                if (updateData.success) {
+                    closeDetail();
+                    loadReports();
+                } else {
+                    alert(updateData.error || 'Güncellenemedi.');
+                }
+            });
+
+            document.getElementById('mod-detail-overlay').classList.add('open');
+        }
+
+        function closeDetail() {
+            document.getElementById('mod-detail-overlay').classList.remove('open');
+        }
+
+        document.getElementById('mod-detail-close').addEventListener('click', closeDetail);
+        document.getElementById('mod-detail-overlay').addEventListener('click', (e) => {
+            if (e.target.id === 'mod-detail-overlay') closeDetail();
+        });
+
+        boot();
+    </script>
+</body>
+</html>

@@ -491,6 +491,111 @@ function listModerationHistory(reportId) {
 }
 
 // =====================================================
+// v1.25 MIGRATION — PLATFORM YETKİ SİSTEMİ (Hub rollerinden AYRI)
+// =====================================================
+// users.platform_role, Sauran platformu genelindeki yetkiyi tutar
+// (user/moderator/admin/founder). Bu, hub_members.permission_tier
+// (owner/moderator/member) ile KARIŞTIRILMAMALI — bir kullanıcı aynı anda
+// platform_role='user' VE bir Hub'da permission_tier='owner' olabilir; bu
+// ona platform moderasyon yetkisi VERMEZ. Web arayüzünden hiç kimse kendi
+// platform_role'ünü değiştiremez — bu kolon sadece CLI'den (admin.js
+// set-role) yazılabilir.
+
+const usersRoleColumns = db
+  .prepare(`PRAGMA table_info(users)`)
+  .all()
+  .map(col => col.name);
+
+if (!usersRoleColumns.includes('platform_role')) {
+  db.exec(`ALTER TABLE users ADD COLUMN platform_role TEXT NOT NULL DEFAULT 'user'`);
+}
+
+const PLATFORM_ROLES = ['user', 'moderator', 'admin', 'founder'];
+const PLATFORM_ROLE_RANK = { user: 0, moderator: 1, admin: 2, founder: 3 };
+
+function hasAtLeastPlatformRole(platformRole, minRole) {
+  return (PLATFORM_ROLE_RANK[platformRole] ?? 0) >= (PLATFORM_ROLE_RANK[minRole] ?? 0);
+}
+
+function setPlatformRole(username, role) {
+  if (!PLATFORM_ROLES.includes(role)) {
+    return { success: false, error: `Geçersiz rol. Geçerli roller: ${PLATFORM_ROLES.join(', ')}` };
+  }
+
+  const user = db.prepare(`SELECT id, username, platform_role FROM users WHERE LOWER(username) = LOWER(?)`).get(username);
+  if (!user) return { success: false, error: 'Kullanıcı bulunamadı.' };
+
+  db.prepare(`UPDATE users SET platform_role = ? WHERE id = ?`).run(role, user.id);
+
+  return { success: true, username: user.username, old_role: user.platform_role, new_role: role };
+}
+
+function getReportTargetContext(targetType, targetId) {
+  try {
+    if (targetType === 'user') {
+      const u = db.prepare(`SELECT id, username, avatar_data FROM users WHERE id = ?`).get(targetId);
+      return u ? { exists: true, username: u.username, user_id: u.id, avatar_data: u.avatar_data } : { exists: false };
+    }
+
+    if (targetType === 'hub') {
+      const h = db.prepare(`SELECT id, name, icon, created_by FROM hubs WHERE id = ?`).get(targetId);
+      if (!h) return { exists: false };
+      const owner = db.prepare(`SELECT username FROM users WHERE id = ?`).get(h.created_by);
+      return { exists: true, hub_id: h.id, hub_name: h.name, hub_icon: h.icon, owner_username: owner?.username || null };
+    }
+
+    if (targetType === 'message') {
+      const m = db.prepare(`
+        SELECT messages.id, messages.user_id, messages.username, messages.content, messages.kind,
+               messages.hub_id, messages.to_user_id, messages.created_at,
+               hubs.name AS hub_name
+        FROM messages LEFT JOIN hubs ON hubs.id = messages.hub_id
+        WHERE messages.id = ?
+      `).get(targetId);
+      if (!m) return { exists: false };
+      return {
+        exists: true,
+        message_id: m.id,
+        sender_id: m.user_id,
+        sender_username: m.username,
+        content: m.content,
+        kind: m.kind,
+        created_at: m.created_at,
+        context: m.hub_id ? { type: 'hub', hub_id: m.hub_id, hub_name: m.hub_name } : { type: 'dm', to_user_id: m.to_user_id }
+      };
+    }
+
+    if (targetType === 'voice_room') {
+      const r = db.prepare(`
+        SELECT hub_voice_rooms.id, hub_voice_rooms.name, hub_voice_rooms.hub_id, hubs.name AS hub_name
+        FROM hub_voice_rooms LEFT JOIN hubs ON hubs.id = hub_voice_rooms.hub_id
+        WHERE hub_voice_rooms.id = ?
+      `).get(targetId);
+      return r ? { exists: true, room_id: r.id, room_name: r.name, hub_id: r.hub_id, hub_name: r.hub_name } : { exists: false };
+    }
+  } catch (error) {
+    console.error('Rapor hedefi bağlamı alınamadı:', error);
+  }
+  return { exists: false };
+}
+
+function getReportDetail(reportId) {
+  const report = db.prepare(`
+    SELECT reports.*, users.username AS reporter_username
+    FROM reports INNER JOIN users ON users.id = reports.reporter_user_id
+    WHERE reports.id = ?
+  `).get(reportId);
+
+  if (!report) return null;
+
+  return {
+    ...report,
+    target_context: getReportTargetContext(report.target_type, report.target_id),
+    history: listModerationHistory(reportId)
+  };
+}
+
+// =====================================================
 // v1.10 MIGRATION — BİLDİRİMLER / ŞİFRE SIFIRLAMA
 // =====================================================
 
@@ -1760,18 +1865,31 @@ function createReport(reporterId, { target_type, target_id, reason, description 
   return { success: true, id: info.lastInsertRowid };
 }
 
-function listReports(status) {
-  const rows = status
-    ? db.prepare(`
-        SELECT reports.*, users.username AS reporter_username
-        FROM reports INNER JOIN users ON users.id = reports.reporter_user_id
-        WHERE reports.status = ? ORDER BY reports.created_at DESC
-      `).all(status)
-    : db.prepare(`
-        SELECT reports.*, users.username AS reporter_username
-        FROM reports INNER JOIN users ON users.id = reports.reporter_user_id
-        ORDER BY reports.created_at DESC
-      `).all();
+function listReports(status, filters) {
+  const conditions = [];
+  const params = [];
+
+  if (status) {
+    conditions.push('reports.status = ?');
+    params.push(status);
+  }
+  if (filters?.priority) {
+    conditions.push('reports.priority = ?');
+    params.push(filters.priority);
+  }
+  if (filters?.reason) {
+    conditions.push('reports.reason = ?');
+    params.push(filters.reason);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const rows = db.prepare(`
+    SELECT reports.*, users.username AS reporter_username
+    FROM reports INNER JOIN users ON users.id = reports.reporter_user_id
+    ${whereClause}
+    ORDER BY reports.created_at DESC
+  `).all(...params);
 
   return rows.map(r => ({ ...r, target_label: describeReportTarget(r.target_type, r.target_id) }));
 }
@@ -2079,6 +2197,13 @@ module.exports = {
   updateReportStatus,
   logModerationAction,
   listModerationHistory,
+  hasAtLeastPlatformRole,
+  setPlatformRole,
+  getReportDetail,
+  PLATFORM_ROLES,
+  REPORT_REASONS,
+  REPORT_STATUSES,
+  REPORT_PRIORITIES,
   calculateAge,
   isMinorAge,
   MIN_SIGNUP_AGE,

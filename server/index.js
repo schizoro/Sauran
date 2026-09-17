@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { sendVerificationEmail, sendPasswordResetEmail } = require('./mailer');
+const { sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail } = require('./mailer');
 const daily = require('./daily');
 const express = require('express');
 const http = require('http');
@@ -82,6 +82,14 @@ const {
   getNotificationPreferences,
   updateNotificationPreferences,
   markNotificationRead,
+  hasAtLeastPlatformRole,
+  getReportDetail,
+  logModerationAction,
+  updateReportStatus,
+  listReports,
+  REPORT_REASONS,
+  REPORT_STATUSES,
+  REPORT_PRIORITIES,
   db
 } = require('./db');
 
@@ -252,7 +260,7 @@ function getUserFromSessionToken(token) {
   const user = db.prepare(`
     SELECT users.id, users.username, users.email, users.about_me,
            users.status, users.avatar_visibility, users.avatar_data, users.banner_data,
-           users.birth_date,
+           users.birth_date, users.platform_role,
            sessions.expires_at
     FROM sessions
     INNER JOIN users ON users.id = sessions.user_id
@@ -275,7 +283,8 @@ function getUserFromSessionToken(token) {
     avatar_visibility: user.avatar_visibility || 'public',
     avatar_data: user.avatar_data,
     banner_data: user.banner_data,
-    is_minor: isMinorAge(calculateAge(user.birth_date))
+    is_minor: isMinorAge(calculateAge(user.birth_date)),
+    platform_role: user.platform_role || 'user'
   };
 }
 
@@ -726,11 +735,102 @@ app.post('/api/reports', reportLimiter, (req, res) => {
       return res.status(400).json(result);
     }
 
+    // Rapor DB'ye zaten yazıldı — ana kayıt bu. E-posta bildirimi sadece
+    // ek bir bilgilendirme kanalı; başarısız olsa bile raporu etkilemez,
+    // yanıtı geciktirmemek için arka planda (fire-and-forget) gönderilir.
+    try {
+      const detail = getReportDetail(result.id);
+      if (detail) {
+        sendReportNotificationEmail(detail).catch((error) => {
+          console.error(`Rapor #${result.id} e-posta bildirimi gönderilemedi:`, error);
+        });
+      }
+    } catch (error) {
+      console.error(`Rapor #${result.id} e-posta bildirimi hazırlanamadı:`, error);
+    }
+
     return res.json(result);
 
   } catch (error) {
     console.error('Bildirim oluşturma hatası:', error);
     res.status(500).json({ success: false, error: 'Bildirim gönderilemedi.' });
+  }
+});
+
+// =====================================================
+// MODERASYON PANELİ (yalnızca platform_role >= moderator)
+// =====================================================
+// Bu bölümdeki HER route requirePlatformRole ile başlar — normal bir
+// kullanıcı (Hub sahibi olsa bile) buraya asla erişemez. Frontend'de bir
+// buton gizlenmesi güvenlik değildir; asıl kontrol burada, server-side.
+
+app.get('/api/moderation/meta', (req, res) => {
+  const user = requirePlatformRole(req, res, 'moderator');
+  if (!user) return;
+
+  return res.json({
+    success: true,
+    reasons: REPORT_REASONS,
+    statuses: REPORT_STATUSES,
+    priorities: REPORT_PRIORITIES
+  });
+});
+
+app.get('/api/moderation/reports', (req, res) => {
+  const user = requirePlatformRole(req, res, 'moderator');
+  if (!user) return;
+
+  try {
+    const filters = {};
+    if (req.query.priority) filters.priority = String(req.query.priority);
+    if (req.query.reason) filters.reason = String(req.query.reason);
+
+    const status = req.query.status ? String(req.query.status) : null;
+    const reports = listReports(status, filters);
+
+    return res.json({ success: true, reports });
+
+  } catch (error) {
+    console.error('Moderasyon rapor listesi hatası:', error);
+    res.status(500).json({ success: false, error: 'Raporlar alınamadı.' });
+  }
+});
+
+app.get('/api/moderation/reports/:id', (req, res) => {
+  const user = requirePlatformRole(req, res, 'moderator');
+  if (!user) return;
+
+  try {
+    const detail = getReportDetail(Number(req.params.id));
+
+    if (!detail) {
+      return res.status(404).json({ success: false, error: 'Rapor bulunamadı.' });
+    }
+
+    return res.json({ success: true, report: detail });
+
+  } catch (error) {
+    console.error('Moderasyon rapor detay hatası:', error);
+    res.status(500).json({ success: false, error: 'Rapor alınamadı.' });
+  }
+});
+
+app.patch('/api/moderation/reports/:id', (req, res) => {
+  const user = requirePlatformRole(req, res, 'moderator');
+  if (!user) return;
+
+  try {
+    const result = updateReportStatus(Number(req.params.id), user.id, req.body?.status, req.body?.reason);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Moderasyon rapor güncelleme hatası:', error);
+    res.status(500).json({ success: false, error: 'Güncellenemedi.' });
   }
 });
 
@@ -813,6 +913,31 @@ function requireAuth(req, res) {
     res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
     return null;
   }
+  return user;
+}
+
+// =====================================================
+// PLATFORM YETKİ KONTROLÜ (Hub rollerinden tamamen ayrı)
+// =====================================================
+// ÖNEMLİ: Bu, hub_members.permission_tier (owner/moderator/member) ile
+// KARIŞTIRILMAMALI. Bir kullanıcı bir Hub'ın owner'ı olsa bile bu ona
+// platform moderasyon yetkisi vermez — sadece users.platform_role
+// (user/moderator/admin/founder) buradaki kararı belirler. Bu kolon
+// web üzerinden hiçbir endpoint'ten yazılamaz, sadece CLI'den
+// (node admin.js set-role) değiştirilebilir — bkz. server/admin.js.
+//
+// deny-by-default: requireAuth zaten başarısızsa 401 ile döner; burada
+// da rol yetersizse 403 ile döner, hiçbir moderasyon route'u bu kontrolü
+// atlayarak devam edemez.
+function requirePlatformRole(req, res, minRole) {
+  const user = requireAuth(req, res);
+  if (!user) return null;
+
+  if (!hasAtLeastPlatformRole(user.platform_role, minRole)) {
+    res.status(403).json({ success: false, error: 'Bu işlem için yetkin yok.' });
+    return null;
+  }
+
   return user;
 }
 
