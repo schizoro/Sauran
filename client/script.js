@@ -5850,7 +5850,9 @@ async function joinDmCall(userId, username) {
 
     } catch (error) {
         console.error('DM araması başarısız:', error);
-        alert('Aramaya katılınamadı.');
+        alert(error?.message === 'join-timeout'
+            ? 'Bağlantı kurulamadı (zaman aşımı). Ağ bağlantını kontrol edip tekrar dene.'
+            : 'Aramaya katılınamadı.');
         leaveCall();
     }
 
@@ -5897,15 +5899,27 @@ async function joinCallFrame(roomUrl, token) {
 
     try {
 
-        // Bu uygulamada görüntülü görüşme yok — kamerayı hiç istemiyoruz ki
-        // tarayıcı kamera izni bile sormasın (sadece mikrofon).
-        await callFrame.join({
+        // Bazı ağ/cihaz kombinasyonlarında (özellikle iOS Safari'nin WebRTC
+        // bağlantı kurma aşamasında) join() hiç sonuçlanmadan askıda
+        // kalabiliyor — kullanıcı sonsuza kadar "Bağlanıyor..." ekranında
+        // takılı kalmasın diye bir zaman aşımı koyuyoruz.
+        const JOIN_TIMEOUT_MS = 20_000;
+
+        const joinPromise = callFrame.join({
             url: roomUrl,
             token,
+            // Bu uygulamada görüntülü görüşme yok — kamerayı hiç istemiyoruz ki
+            // tarayıcı kamera izni bile sormasın (sadece mikrofon).
             startVideoOff: true,
             startAudioOff: false,
             userMediaVideoConstraints: false
         });
+
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('join-timeout')), JOIN_TIMEOUT_MS);
+        });
+
+        await Promise.race([joinPromise, timeoutPromise]);
 
     } catch (error) {
         callFrame.destroy();
