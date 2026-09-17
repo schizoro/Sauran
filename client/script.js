@@ -2472,6 +2472,7 @@ const I18N = {
     'notif-pref-missed-call': { tr: 'Cevapsız aramalar', en: 'Missed calls' },
     'notif-pref-hub-event': { tr: 'Hub bildirimleri (davet, vb.)', en: 'Hub notifications (invites, etc.)' },
     'notif-pref-system': { tr: 'Sistem bildirimleri', en: 'System notifications' },
+    'members-title': { tr: 'Üyeler', en: 'Members' },
     'presence-online': { tr: 'Çevrimiçi', en: 'Online' },
     'presence-offline': { tr: 'Çevrimdışı', en: 'Offline' },
     'about-me-label': { tr: 'Hakkımda', en: 'About me' },
@@ -6359,6 +6360,11 @@ function renderHubMembers() {
 
     const myTier = currentHub.my_permission_tier;
     const canModerate = myTier === 'owner' || myTier === 'moderator';
+
+    const membersPanelTitle = document.getElementById('hub-members-panel-title');
+    if (membersPanelTitle) {
+        membersPanelTitle.textContent = `${currentHub.name} — ${t('members-title')} - ${currentHub.members.length}`;
+    }
 
     hubMemberList.innerHTML = currentHub.members.map((m) => {
 
