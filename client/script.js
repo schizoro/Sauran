@@ -1925,8 +1925,52 @@ settingsBtn.addEventListener(
         settingsNewPassword.value = '';
         settingsPasswordError.textContent = '';
 
+        loadBlockedUsers();
+
     }
 );
+
+
+async function loadBlockedUsers() {
+
+    const container = document.getElementById('settings-blocked-list');
+
+    try {
+
+        const response = await fetch('/api/users/blocked', { credentials: 'include' });
+        const data = await response.json();
+        if (!data.success) return;
+
+        if (data.blocked.length === 0) {
+            container.innerHTML = `<div class="settings-blocked-empty">${t('blocked-empty')}</div>`;
+            return;
+        }
+
+        container.innerHTML = data.blocked.map((u) => {
+            const color = getUserColor(u.username);
+            const initial = u.username.charAt(0).toUpperCase();
+            const avatarInner = u.avatar_data ? `<img src="${escapeAttr(u.avatar_data)}" alt="">` : escapeHtml(initial);
+            return `
+                <div class="settings-blocked-row" data-user-id="${u.id}">
+                    <span class="settings-blocked-avatar" style="--user-color:${color};">${avatarInner}</span>
+                    <span class="settings-blocked-name">${escapeHtml(u.username)}</span>
+                    <button class="settings-unblock-btn" data-unblock="${u.id}" type="button">${t('unblock')}</button>
+                </div>
+            `;
+        }).join('');
+
+        container.querySelectorAll('[data-unblock]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                await fetch(`/api/users/${btn.dataset.unblock}/block`, { method: 'DELETE', credentials: 'include' });
+                loadBlockedUsers();
+            });
+        });
+
+    } catch (error) {
+        console.error('Engellenenler alınamadı:', error);
+    }
+
+}
 
 
 settingsCloseBtn.addEventListener(
@@ -2069,6 +2113,11 @@ const I18N = {
     'theme-light-desc': { tr: 'Açık gri arayüz', en: 'Light gray interface' },
     'label-lang': { tr: 'Dil', en: 'Language' },
     'label-change-password': { tr: 'Şifre Değiştir', en: 'Change Password' },
+    'label-blocked-users': { tr: 'Engellenenler', en: 'Blocked Users' },
+    'blocked-empty': { tr: 'Engellediğin kimse yok.', en: "You haven't blocked anyone." },
+    'unblock': { tr: 'Engeli Kaldır', en: 'Unblock' },
+    'watch': { tr: 'İzle', en: 'Watch' },
+    'screensharing-active': { tr: 'ekran paylaşıyor', en: 'is sharing their screen' },
     'attach-camera': { tr: 'Kamerayla Çek', en: 'Take Photo/Video' },
     'attach-gallery': { tr: 'Galeriden Seç', en: 'Choose from Gallery' },
     'attach-file': { tr: 'Dosya Seç', en: 'Choose File' },
@@ -2539,6 +2588,7 @@ function connectToChat() {
             room.participants = data.participants;
             if (currentHub) renderVoiceRoomsList();
             if (pendingVoiceRoomId === data.room_id) renderVoiceRoomPreviewList(room);
+            if (callMode === 'hub-room' && currentVoiceRoomId === data.room_id) renderHubRoomGrid(data.participants);
         }
     });
 
@@ -3432,7 +3482,11 @@ function renderOtherProfileActions(profile) {
 
     let html = '';
 
-    if (profile.blocked_by_me) {
+    if (profile.friendship_status === 'self') {
+
+        html = '';
+
+    } else if (profile.blocked_by_me) {
 
         html = `<button class="profile-action-btn profile-action-disabled" id="unblock-btn">Engeli Kaldır</button>`;
 
@@ -3600,9 +3654,9 @@ async function openDm(userId, username) {
 function appendDmMessage(msg) {
 
     const row = document.createElement('div');
-    row.className = 'dm-msg-row';
 
     const isMine = msg.user_id === currentUser.id;
+    row.className = `dm-msg-row ${isMine ? 'msg-mine' : ''}`;
 
     row.innerHTML = avatarButtonHtml(msg.user_id, msg.avatar_data, msg.username);
 
@@ -4274,6 +4328,7 @@ function renderVoiceRoomsList() {
                 </div>
                 ${currentHub?.is_owner ? `<button class="hub-voice-room-delete" data-delete-room="${room.id}" type="button" title="${t('delete')}">🗑</button>` : ''}
             </div>
+            ${isActive ? `<button class="hub-voice-room-leave-btn" data-leave-room="${room.id}" type="button">🚪 ${t('call-leave')}</button>` : ''}
         `;
     }).join('');
 
@@ -4298,6 +4353,13 @@ function renderVoiceRoomsList() {
             if (!confirm(t('voice-room-delete-confirm'))) return;
 
             await fetch(`/api/hubs/${currentHub.id}/voice-rooms/${roomId}`, { method: 'DELETE', credentials: 'include' });
+        });
+    });
+
+    hubVoiceRoomsList.querySelectorAll('[data-leave-room]').forEach((btn) => {
+        btn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            leaveCall();
         });
     });
 
@@ -4408,7 +4470,14 @@ async function joinVoiceRoom(room) {
         callHubName.textContent = `🎙️ ${room.name}`;
         callScreenshareBtn.style.display = 'inline-block';
 
+        callFrameContainer.style.display = 'none';
+        document.getElementById('call-hub-room-view').style.display = 'flex';
+        renderHubRoomGrid((room.participants || []).includes(currentUser.username)
+            ? room.participants
+            : [...(room.participants || []), currentUser.username]);
+
         await joinCallFrame(data.room_url, data.token);
+        wireHubRoomScreenshareEvents();
 
         socket?.emit('voice_room_join', { room_id: room.id, hub_id: currentHub.id });
 
@@ -4424,6 +4493,127 @@ async function joinVoiceRoom(room) {
     }
 
 }
+
+
+function renderHubRoomGrid(names) {
+
+    const grid = document.getElementById('call-hub-room-grid');
+
+    grid.innerHTML = (names || []).map((name) => {
+        const color = getUserColor(name);
+        const initial = name.charAt(0).toUpperCase();
+        return `
+            <div class="call-hub-room-person">
+                <span class="call-hub-room-avatar" style="--user-color:${color};">${escapeHtml(initial)}</span>
+                <span class="call-hub-room-name">${escapeHtml(name)}</span>
+            </div>
+        `;
+    }).join('');
+
+}
+
+
+// ─── Ekran paylaşımı: banner + "İzle" akışı (sadece hub sesli odalarında) ──
+
+let screensharingSessionId = null;
+let screensharingUsername = '';
+
+function wireHubRoomScreenshareEvents() {
+
+    if (!callFrame) return;
+
+    callFrame.on('participant-updated', (event) => {
+
+        const p = event?.participant;
+        if (!p || p.local) return;
+
+        const sharing = p.tracks?.screenVideo?.state === 'playable';
+
+        if (sharing && screensharingSessionId !== p.session_id) {
+            screensharingSessionId = p.session_id;
+            screensharingUsername = p.user_name || '';
+            showScreenshareBanner(screensharingUsername);
+        } else if (!sharing && screensharingSessionId === p.session_id) {
+            screensharingSessionId = null;
+            screensharingUsername = '';
+            hideScreenshareBanner();
+            closeScreenshareViewer();
+        }
+
+    });
+
+    callFrame.on('participant-left', (event) => {
+        if (event?.participant?.session_id === screensharingSessionId) {
+            screensharingSessionId = null;
+            screensharingUsername = '';
+            hideScreenshareBanner();
+            closeScreenshareViewer();
+        }
+    });
+
+}
+
+function showScreenshareBanner(username) {
+    const banner = document.getElementById('call-hub-room-screenshare-banner');
+    document.getElementById('call-hub-room-screenshare-text').textContent = `🖥️ ${username} ${t('screensharing-active')}`;
+    banner.style.display = 'flex';
+}
+
+function hideScreenshareBanner() {
+    document.getElementById('call-hub-room-screenshare-banner').style.display = 'none';
+}
+
+document.getElementById('call-hub-room-watch-btn').addEventListener('click', () => {
+
+    if (!callFrame || !screensharingSessionId) return;
+
+    const participants = callFrame.participants();
+    const participant = Object.values(participants).find(p => p.session_id === screensharingSessionId);
+    const track = participant?.tracks?.screenVideo?.persistentTrack;
+
+    if (!track) return;
+
+    const video = document.getElementById('call-screenshare-video');
+    video.srcObject = new MediaStream([track]);
+
+    const viewer = document.getElementById('call-screenshare-viewer');
+    viewer.className = 'call-screenshare-viewer corner-tr';
+    viewer.style.display = 'block';
+
+});
+
+function closeScreenshareViewer() {
+    const viewer = document.getElementById('call-screenshare-viewer');
+    const video = document.getElementById('call-screenshare-video');
+    if (document.fullscreenElement === viewer) document.exitFullscreen?.();
+    viewer.style.display = 'none';
+    video.srcObject = null;
+}
+
+document.getElementById('call-screenshare-close-btn').addEventListener('click', closeScreenshareViewer);
+
+document.querySelectorAll('.call-screenshare-viewer-controls [data-corner]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+        const viewer = document.getElementById('call-screenshare-viewer');
+        viewer.classList.remove('corner-tl', 'corner-tr', 'corner-bl', 'corner-br', 'fullscreen-mode');
+        viewer.classList.add(`corner-${btn.dataset.corner}`);
+    });
+});
+
+document.getElementById('call-screenshare-fullscreen-btn').addEventListener('click', () => {
+    const viewer = document.getElementById('call-screenshare-viewer');
+    if (document.fullscreenElement === viewer) {
+        document.exitFullscreen?.();
+    } else {
+        viewer.requestFullscreen?.().catch(() => {});
+    }
+});
+
+document.addEventListener('fullscreenchange', () => {
+    const viewer = document.getElementById('call-screenshare-viewer');
+    viewer.classList.toggle('fullscreen-mode', document.fullscreenElement === viewer);
+});
+
 
 const hubSettingsOpenBtn = document.getElementById('hub-settings-open-btn');
 const hubSettingsModal = document.getElementById('hub-settings-modal');
@@ -5188,6 +5378,7 @@ async function joinDmCall(userId, username) {
     callScreenshareBtn.style.display = 'none';
     callRingingState.style.display = 'none';
     callFrameContainer.style.display = 'none';
+    document.getElementById('call-hub-room-view').style.display = 'none';
     callOverlay.style.display = 'flex';
 
     const dmProfile = document.getElementById('call-dm-profile');
@@ -5353,6 +5544,11 @@ function leaveCall() {
     callRingingState.style.display = 'none';
     callFrameContainer.style.display = 'block';
     document.getElementById('call-dm-profile').style.display = 'none';
+    document.getElementById('call-hub-room-view').style.display = 'none';
+    hideScreenshareBanner();
+    closeScreenshareViewer();
+    screensharingSessionId = null;
+    screensharingUsername = '';
     callScreenshareBtn.classList.remove('active');
 
     dmCallBtn.classList.remove('in-call');
@@ -5374,21 +5570,31 @@ function leaveCall() {
 
 function renderHubMembers() {
 
-    hubMemberList.innerHTML = currentHub.members.map((m) => `
-        <div class="hub-member-row" data-user-id="${m.user_id}" style="cursor:pointer;">
-            <span class="hub-member-dot" style="background:${m.online ? '#57f287' : '#4b5563'};"></span>
-            <span class="hub-member-name">${escapeHtml(m.username)}</span>
-        </div>
-    `).join('');
+    hubMemberList.innerHTML = currentHub.members.map((m) => {
+
+        const avatar = avatarButtonHtml(m.user_id, m.avatar_data, m.username);
+
+        return `
+            <div class="hub-member-row" data-user-id="${m.user_id}">
+                <span class="hub-member-avatar-wrap">
+                    ${avatar}
+                    <span class="hub-member-dot" style="background:${m.online ? '#57f287' : '#4b5563'};"></span>
+                </span>
+                <span class="hub-member-name">${escapeHtml(m.username)}</span>
+            </div>
+        `;
+
+    }).join('');
 
     hubMemberList.querySelectorAll('.hub-member-row').forEach((row) => {
 
         const userId = Number(row.dataset.userId);
-        if (userId === currentUser.id) return;
 
-        row.addEventListener('click', () => openOtherProfile(userId));
+        row.querySelector('.hub-member-name').addEventListener('click', () => openOtherProfile(userId));
 
     });
+
+    wireMsgAvatars(hubMemberList);
 
 }
 
@@ -5707,6 +5913,7 @@ function renderHubMessageIntoWrap(wrap, msg) {
     `;
 
     const isMine = currentUser && msg.user_id === currentUser.id;
+    wrap.classList.toggle('msg-mine', Boolean(isMine));
     const canEdit = isMine && msg.kind === 'text';
     const canDelete = isMine && msg.kind !== 'deleted';
 

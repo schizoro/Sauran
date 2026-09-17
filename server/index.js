@@ -59,6 +59,7 @@ const {
   findUserByUsername,
   blockUser,
   unblockUser,
+  listBlockedUsers,
   updateUsername,
   updatePassword,
   getTopFriends,
@@ -144,7 +145,7 @@ function getUserFromSessionToken(token) {
 
   const user = db.prepare(`
     SELECT users.id, users.username, users.email, users.about_me,
-           users.status, users.avatar_visibility, users.avatar_data,
+           users.status, users.avatar_visibility, users.avatar_data, users.banner_data,
            sessions.expires_at
     FROM sessions
     INNER JOIN users ON users.id = sessions.user_id
@@ -165,7 +166,8 @@ function getUserFromSessionToken(token) {
     about_me: user.about_me,
     status: user.status || 'signal',
     avatar_visibility: user.avatar_visibility || 'public',
-    avatar_data: user.avatar_data
+    avatar_data: user.avatar_data,
+    banner_data: user.banner_data
   };
 }
 
@@ -519,6 +521,18 @@ app.delete('/api/users/:id/block', (req, res) => {
   } catch (error) {
     console.error('Engel kaldırma API hatası:', error);
     res.status(500).json({ success: false, error: 'Engel kaldırılamadı.' });
+  }
+});
+
+app.get('/api/users/blocked', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    return res.json({ success: true, blocked: listBlockedUsers(user.id) });
+  } catch (error) {
+    console.error('Engellenenler listesi hatası:', error);
+    res.status(500).json({ success: false, error: 'Liste alınamadı.' });
   }
 });
 

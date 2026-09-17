@@ -917,14 +917,14 @@
 
     <div id="settings-modal" class="modal-overlay" style="display:none;">
 
-        <div class="modal-box poll-create-box">
+        <div class="modal-box poll-create-box settings-modal-box">
 
             <div class="modal-header">
                 <span data-i18n="modal-settings">⚙️ Ayarlar</span>
                 <button id="settings-close-btn">✕</button>
             </div>
 
-            <div class="poll-create-body">
+            <div class="poll-create-body settings-modal-body">
 
                 <span class="profile-field-label" data-i18n="label-theme">Tema</span>
                 <div class="privacy-options">
@@ -956,6 +956,9 @@
                 <div id="settings-password-error" class="friend-add-error"></div>
                 <button id="settings-password-btn" type="button" class="about-btn about-btn-primary poll-submit-btn">Şifreyi Güncelle</button>
 
+                <span class="profile-field-label" data-i18n="label-blocked-users">Engellenenler</span>
+                <div id="settings-blocked-list" class="settings-blocked-list"></div>
+
             </div>
 
         </div>
@@ -977,6 +980,30 @@
         </div>
 
         <div id="call-frame-container" class="call-frame-container"></div>
+
+        <div id="call-hub-room-view" class="call-hub-room-view" style="display:none;">
+
+            <div id="call-hub-room-screenshare-banner" class="call-hub-room-screenshare-banner" style="display:none;">
+                <span id="call-hub-room-screenshare-text"></span>
+                <button id="call-hub-room-watch-btn" type="button" data-i18n="watch">İzle</button>
+            </div>
+
+            <div id="call-hub-room-grid" class="call-hub-room-grid"></div>
+
+        </div>
+
+        <div id="call-screenshare-viewer" class="call-screenshare-viewer" style="display:none;">
+            <video id="call-screenshare-video" autoplay playsinline></video>
+            <div class="call-screenshare-viewer-controls">
+                <button data-corner="tl" type="button" title="Sol üst">↖</button>
+                <button data-corner="tr" type="button" title="Sağ üst">↗</button>
+                <button id="call-screenshare-fullscreen-btn" type="button" title="Tam ekran">⛶</button>
+                <button data-corner="bl" type="button" title="Sol alt">↙</button>
+                <button data-corner="br" type="button" title="Sağ alt">↘</button>
+                <button id="call-screenshare-close-btn" type="button" title="Kapat">✕</button>
+            </div>
+        </div>
+
         <div id="call-dm-profile" class="call-dm-profile" style="display:none;">
             <div class="call-dm-avatar-wrap">
                 <span id="call-dm-avatar" class="call-dm-avatar"></span>

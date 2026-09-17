@@ -687,7 +687,7 @@ function getHubDetail(hubId, userId) {
   `).all(hubId);
 
   const members = db.prepare(`
-    SELECT hub_members.user_id, hub_members.role_id, users.username, users.status
+    SELECT hub_members.user_id, hub_members.role_id, users.username, users.status, users.avatar_data
     FROM hub_members
     INNER JOIN users ON users.id = hub_members.user_id
     WHERE hub_members.hub_id = ?
@@ -1333,6 +1333,16 @@ function isBlocked(userId, targetId) {
   return Boolean(db.prepare(`SELECT 1 FROM blocked_users WHERE user_id = ? AND blocked_user_id = ?`).get(userId, targetId));
 }
 
+function listBlockedUsers(userId) {
+  return db.prepare(`
+    SELECT users.id, users.username, users.avatar_data
+    FROM blocked_users
+    INNER JOIN users ON users.id = blocked_users.blocked_user_id
+    WHERE blocked_users.user_id = ?
+    ORDER BY users.username COLLATE NOCASE
+  `).all(userId);
+}
+
 // =====================================================
 // KULLANICI ADI / ŞİFRE DEĞİŞTİRME
 // =====================================================
@@ -1529,6 +1539,7 @@ module.exports = {
   findUserByUsername,
   blockUser,
   unblockUser,
+  listBlockedUsers,
   isBlocked,
   updateUsername,
   updatePassword,
