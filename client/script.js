@@ -2389,7 +2389,7 @@ langConfirmBtn.addEventListener('click', () => {
 
 function applyTheme(theme) {
 
-    document.body.classList.toggle('theme-light', theme === 'light');
+    document.body.classList.toggle('theme-purple', theme === 'purple');
 
 }
 
@@ -2468,8 +2468,8 @@ const I18N = {
     'label-theme': { tr: 'Tema', en: 'Theme' },
     'theme-dark': { tr: 'Kapalı Tema', en: 'Dark Theme' },
     'theme-dark-desc': { tr: 'Siyah, karanlık arayüz', en: 'Black, dark interface' },
-    'theme-light': { tr: 'Açık Tema', en: 'Light Theme' },
-    'theme-light-desc': { tr: 'Açık gri arayüz', en: 'Light gray interface' },
+    'theme-purple': { tr: 'Mor Tema', en: 'Purple Theme' },
+    'theme-purple-desc': { tr: 'Derin mor, karanlık arayüz', en: 'Deep purple, dark interface' },
     'label-lang': { tr: 'Dil', en: 'Language' },
     'label-notifications': { tr: 'Bildirimler', en: 'Notifications' },
     'notif-permission-btn': { tr: 'Masaüstü Bildirimlerine İzin Ver', en: 'Allow Desktop Notifications' },

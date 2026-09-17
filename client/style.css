@@ -15,20 +15,20 @@
   --glass-bg: rgba(255, 255, 255, 0.06);
 }
 
-body.theme-light {
-  --bg-app: #f3f4f7;
-  --bg-surface: #ffffff;
-  --bg-surface-2: #f7f8fa;
-  --bg-surface-3: #eef0f3;
-  --border-soft: rgba(15, 23, 42, 0.07);
-  --border-soft-strong: rgba(15, 23, 42, 0.12);
-  --text-primary: #1f2430;
-  --text-secondary: #5b6472;
-  --text-tertiary: #8891a0;
-  --accent: #0e9aa4;
-  --accent-soft: rgba(14, 154, 164, 0.1);
-  --shadow-surface: 0 2px 14px rgba(30, 41, 59, 0.08);
-  --glass-bg: rgba(255, 255, 255, 0.55);
+body.theme-purple {
+  --bg-app: #130a22;
+  --bg-surface: #1e1035;
+  --bg-surface-2: #26123f;
+  --bg-surface-3: #2f1850;
+  --border-soft: rgba(186, 130, 255, 0.14);
+  --border-soft-strong: rgba(186, 130, 255, 0.24);
+  --text-primary: #f1e9fb;
+  --text-secondary: #b6a3d9;
+  --text-tertiary: #8874ad;
+  --accent: #b366f5;
+  --accent-soft: rgba(179, 102, 245, 0.16);
+  --shadow-surface: 0 2px 16px rgba(0, 0, 0, 0.45);
+  --glass-bg: rgba(179, 102, 245, 0.08);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -37,71 +37,71 @@ body { background-color: var(--bg-app); color: var(--text-secondary); height: 10
 img, iframe { max-width: 100%; }
 
 /* ─── v1.9/v1.17: Açık Tema — yumuşak yüzeyler, sert siyah çerçeve yok ───── */
-body.theme-light #login-screen,
-body.theme-light .topbar,
-body.theme-light .chat-area,
-body.theme-light .hub-detail-side,
-body.theme-light .hub-voice-rooms-side,
-body.theme-light .friends-sidebar,
+body.theme-purple #login-screen,
+body.theme-purple .topbar,
+body.theme-purple .chat-area,
+body.theme-purple .hub-detail-side,
+body.theme-purple .hub-voice-rooms-side,
+body.theme-purple .friends-sidebar,
 
-body.theme-light .topbar { border-bottom: 1px solid var(--border-soft); box-shadow: var(--shadow-surface); }
-body.theme-light .composer-input-box,
-body.theme-light .dm-modal-box .composer-input-box { background-color: var(--bg-surface); border-color: var(--border-soft); box-shadow: var(--shadow-surface); }
+body.theme-purple .topbar { border-bottom: 1px solid var(--border-soft); box-shadow: var(--shadow-surface); }
+body.theme-purple .composer-input-box,
+body.theme-purple .dm-modal-box .composer-input-box { background-color: var(--bg-surface); border-color: var(--border-soft); box-shadow: var(--shadow-surface); }
 
-body.theme-light .login-box,
-body.theme-light .modal-box,
-body.theme-light .hub-card,
-body.theme-light .hub-msg-text,
-body.theme-light .hub-poll-card,
-body.theme-light .hub-share-card,
-body.theme-light .hub-role-row,
-body.theme-light .friend-request-row,
-body.theme-light .template-card,
-body.theme-light .role-builder-row,
-body.theme-light .privacy-option,
-body.theme-light .dm-msg-theirs { background-color: var(--bg-surface); border-color: var(--border-soft); box-shadow: var(--shadow-surface); }
+body.theme-purple .login-box,
+body.theme-purple .modal-box,
+body.theme-purple .hub-card,
+body.theme-purple .hub-msg-text,
+body.theme-purple .hub-poll-card,
+body.theme-purple .hub-share-card,
+body.theme-purple .hub-role-row,
+body.theme-purple .friend-request-row,
+body.theme-purple .template-card,
+body.theme-purple .role-builder-row,
+body.theme-purple .privacy-option,
+body.theme-purple .dm-msg-theirs { background-color: var(--bg-surface); border-color: var(--border-soft); box-shadow: var(--shadow-surface); }
 
-body.theme-light .dm-msg-mine { background-color: var(--accent-soft); border-color: rgba(14, 154, 164, 0.25); }
+body.theme-purple .dm-msg-mine { background-color: var(--accent-soft); border-color: rgba(179, 102, 245, 0.3); }
 
-body.theme-light .login-box h2,
-body.theme-light .profile-modal-username,
-body.theme-light .hub-detail-header h2,
-body.theme-light .hub-card-name { color: var(--text-primary); }
+body.theme-purple .login-box h2,
+body.theme-purple .profile-modal-username,
+body.theme-purple .hub-detail-header h2,
+body.theme-purple .hub-card-name { color: var(--text-primary); }
 
-body.theme-light #login-username-input,
-body.theme-light #login-password-input,
-body.theme-light .login-box input,
-body.theme-light #message-input,
-body.theme-light #hub-message-input,
-body.theme-light .hub-name-input,
-body.theme-light .poll-create-body input,
-body.theme-light .poll-create-body textarea,
-body.theme-light .friend-add-section input,
-body.theme-light #username-edit-input,
-body.theme-light #settings-current-password,
-body.theme-light #settings-new-password { background-color: var(--bg-surface-2); color: var(--text-primary); }
+body.theme-purple #login-username-input,
+body.theme-purple #login-password-input,
+body.theme-purple .login-box input,
+body.theme-purple #message-input,
+body.theme-purple #hub-message-input,
+body.theme-purple .hub-name-input,
+body.theme-purple .poll-create-body input,
+body.theme-purple .poll-create-body textarea,
+body.theme-purple .friend-add-section input,
+body.theme-purple #username-edit-input,
+body.theme-purple #settings-current-password,
+body.theme-purple #settings-new-password { background-color: var(--bg-surface-2); color: var(--text-primary); }
 
-body.theme-light .hub-msg-text,
-body.theme-light .hub-share-content,
-body.theme-light .friend-request-name,
-body.theme-light .profile-field-value { color: var(--text-primary); }
+body.theme-purple .hub-msg-text,
+body.theme-purple .hub-share-content,
+body.theme-purple .friend-request-name,
+body.theme-purple .profile-field-value { color: var(--text-primary); }
 
-body.theme-light .dm-side-panel .dm-modal-box,
-body.theme-light .dm-modal-box { background: var(--bg-surface); border-left: 1px solid var(--border-soft); box-shadow: -14px 0 40px rgba(30, 41, 59, 0.12); }
+body.theme-purple .dm-side-panel .dm-modal-box,
+body.theme-purple .dm-modal-box { background: var(--bg-surface); border-left: 1px solid var(--border-soft); box-shadow: -14px 0 40px rgba(0, 0, 0, 0.4); }
 
-body.theme-light .liquid-glass,
-body.theme-light .topbar-menu-dropdown,
-body.theme-light .friends-sidebar,
-body.theme-light .hub-title-pill,
-body.theme-light .hub-call-btn,
-body.theme-light .hub-icon-btn,
-body.theme-light .hub-back-btn,
-body.theme-light .composer-attach-btn,
-body.theme-light .composer-icon-btn { background: var(--glass-bg); border-color: var(--border-soft); }
+body.theme-purple .liquid-glass,
+body.theme-purple .topbar-menu-dropdown,
+body.theme-purple .friends-sidebar,
+body.theme-purple .hub-title-pill,
+body.theme-purple .hub-call-btn,
+body.theme-purple .hub-icon-btn,
+body.theme-purple .hub-back-btn,
+body.theme-purple .composer-attach-btn,
+body.theme-purple .composer-icon-btn { background: var(--glass-bg); border-color: var(--border-soft); }
 
-body.theme-light .hub-detail-header,
-body.theme-light .hub-detail-side,
-body.theme-light .hub-voice-rooms-side { border-color: var(--border-soft); }
+body.theme-purple .hub-detail-header,
+body.theme-purple .hub-detail-side,
+body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 8px; }
@@ -175,7 +175,7 @@ body.theme-light .hub-voice-rooms-side { border-color: var(--border-soft); }
 .topbar-menu-item .topbar-badge { position: static; margin-left: auto; }
 
 /* Sohbet Alanı */
-.chat-area { flex: 1; display: flex; flex-direction: column; background-color: #0b0c10; min-height: 0; }
+.chat-area { flex: 1; display: flex; flex-direction: column; background-color: var(--bg-app); min-height: 0; }
 #messages { flex: 1; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
 
 /* Mesaj */
