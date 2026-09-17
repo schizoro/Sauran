@@ -198,7 +198,14 @@ body.theme-light .hub-voice-rooms-side { border-color: var(--border-soft); }
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 100; }
 .modal-box { background: #1f2833; border: 1px solid #2a3644; border-radius: 2px; width: 280px; max-height: 400px; display: flex; flex-direction: column; box-shadow: 0 8px 30px rgba(0,0,0,0.6); }
 
-.settings-modal-box { max-height: 82vh; width: 520px; }
+/* Ayarlar penceresi: sağdan açılan sabit sürgü panel — hiçbir metin taşmaz/gizlenmez */
+#settings-modal { justify-content: flex-end; align-items: stretch; }
+#settings-modal .settings-modal-box {
+  max-height: 100vh; height: 100vh; width: 460px; max-width: 100vw;
+  border-radius: 16px 0 0 16px; box-shadow: -10px 0 40px rgba(0,0,0,0.6);
+  animation: settings-drawer-in 0.22s ease-out;
+}
+@keyframes settings-drawer-in { from { transform: translateX(100%); opacity: 0.4; } to { transform: translateX(0); opacity: 1; } }
 
 /* Masaüstü: sol tarafta dikey kategori listesi + sağda kaydırılabilir içerik */
 .settings-layout { display: flex; flex-direction: row; flex: 1; min-height: 0; }
@@ -222,7 +229,7 @@ body.theme-light .hub-voice-rooms-side { border-color: var(--border-soft); }
 
 /* Mobil: yatay kaydırılabilir şerit (zaten iyi çalışıyordu, korunuyor) */
 @media (max-width: 768px) {
-  .settings-modal-box { width: 92vw; max-width: 420px; }
+  #settings-modal .settings-modal-box { width: 100vw; max-width: 100vw; border-radius: 0; }
   .settings-layout { flex-direction: column; }
   .settings-tabs {
     flex-direction: row; width: auto; gap: 6px; padding: 12px 16px 0; overflow-x: auto; overflow-y: visible;
@@ -1095,7 +1102,7 @@ body.theme-light .hub-voice-rooms-side { border-color: var(--border-soft); }
 .notif-pref-row input[type="checkbox"] { accent-color: #66fcf1; width: 16px; height: 16px; flex-shrink: 0; }
 .settings-blocked-empty { color: #4b5563; font-size: 12px; text-align: center; padding: 8px 0; }
 .settings-blocked-row {
-  display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px;
+  display: flex; align-items: flex-start; gap: 8px; padding: 8px; border-radius: 10px;
   background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08);
 }
 .settings-blocked-avatar {
@@ -1103,7 +1110,7 @@ body.theme-light .hub-voice-rooms-side { border-color: var(--border-soft); }
   font-size: 11px; font-weight: bold; color: var(--user-color, #66fcf1); background: rgba(255, 255, 255, 0.06); overflow: hidden;
 }
 .settings-blocked-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.settings-blocked-name { flex: 1; min-width: 0; color: #c5c6c7; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-blocked-name { flex: 1; min-width: 0; color: #c5c6c7; font-size: 12px; white-space: normal; word-break: break-word; line-height: 1.4; }
 .settings-unblock-btn { flex-shrink: 0; padding: 5px 10px; border-radius: 999px; background: none; border: 1px solid rgba(102, 252, 241, 0.3); color: #66fcf1; font-size: 10px; font-weight: bold; cursor: pointer; }
 .settings-unblock-btn:hover { background: rgba(102, 252, 241, 0.15); }
 .friend-request-name { color: #c5c6c7; font-size: 12px; font-weight: bold; }
