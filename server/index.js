@@ -69,6 +69,7 @@ const {
   createReport,
   calculateAge,
   isMinorAge,
+  getAccountExport,
   updateUsername,
   updatePassword,
   getTopFriends,
@@ -272,9 +273,9 @@ app.get('/', (req, res) => {
 
 app.post('/api/register', registerLimiter, async (req, res) => {
   try {
-    const { username, email, password, birth_date } = req.body;
+    const { username, email, password, birth_date, terms_accepted } = req.body;
 
-    const result = createVerification(username, email, password, birth_date);
+    const result = createVerification(username, email, password, birth_date, terms_accepted);
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -459,6 +460,27 @@ app.post('/api/sessions/logout-all', (req, res) => {
 // =====================================================
 // HESABI SİL
 // =====================================================
+
+app.get('/api/account/export', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+
+    const data = getAccountExport(user.id);
+    if (!data) {
+      return res.status(404).json({ success: false, error: 'Kullanıcı bulunamadı.' });
+    }
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="sauran-verilerim-${user.username}.json"`);
+    return res.send(JSON.stringify(data, null, 2));
+
+  } catch (error) {
+    console.error('Veri ihracı hatası:', error);
+    return res.status(500).json({ success: false, error: 'Verilerin dışa aktarılamadı.' });
+  }
+});
 
 app.delete('/api/account', (req, res) => {
   const user = requireAuth(req, res);

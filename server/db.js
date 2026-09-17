@@ -340,6 +340,28 @@ function isMinorAge(age) {
 }
 
 // =====================================================
+// v1.22 MIGRATION — KVKK / KULLANIM ŞARTLARI ONAYI
+// =====================================================
+
+const pendingTermsColumns = db
+  .prepare(`PRAGMA table_info(pending_verifications)`)
+  .all()
+  .map(col => col.name);
+
+if (!pendingTermsColumns.includes('terms_accepted')) {
+  db.exec(`ALTER TABLE pending_verifications ADD COLUMN terms_accepted INTEGER NOT NULL DEFAULT 0`);
+}
+
+const usersTermsColumns = db
+  .prepare(`PRAGMA table_info(users)`)
+  .all()
+  .map(col => col.name);
+
+if (!usersTermsColumns.includes('terms_accepted_at')) {
+  db.exec(`ALTER TABLE users ADD COLUMN terms_accepted_at DATETIME`);
+}
+
+// =====================================================
 // v1.10 MIGRATION — BİLDİRİMLER / ŞİFRE SIFIRLAMA
 // =====================================================
 
@@ -407,7 +429,7 @@ function verifyPassword(password, storedHash, storedSalt) {
 // DOĞRULAMA KODU OLUŞTUR
 // =====================================================
 
-function createVerification(username, email, password, birthDate) {
+function createVerification(username, email, password, birthDate, termsAccepted) {
   try {
     username = String(username || '').trim();
     email = String(email || '').trim().toLowerCase();
@@ -416,6 +438,10 @@ function createVerification(username, email, password, birthDate) {
 
     if (!username || !email || !password || !birthDate) {
       return { success: false, error: 'Tüm alanları doldurmalısınız.' };
+    }
+
+    if (!termsAccepted) {
+      return { success: false, error: 'Kullanım Şartları ve Gizlilik Politikası\'nı kabul etmelisin.' };
     }
 
     const age = calculateAge(birthDate);
@@ -464,9 +490,9 @@ function createVerification(username, email, password, birthDate) {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
     db.prepare(`
-      INSERT INTO pending_verifications (username, email, password_hash, password_salt, code, expires_at, birth_date)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(username, email, hash, salt, code, expiresAt, birthDate);
+      INSERT INTO pending_verifications (username, email, password_hash, password_salt, code, expires_at, birth_date, terms_accepted)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(username, email, hash, salt, code, expiresAt, birthDate, termsAccepted ? 1 : 0);
 
     return { success: true, code };
 
@@ -503,8 +529,8 @@ function verifyAndCreateUser(email, code) {
     const minor = isMinorAge(age);
 
     const result = db.prepare(`
-      INSERT INTO users (username, email, password_hash, password_salt, birth_date, avatar_visibility)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO users (username, email, password_hash, password_salt, birth_date, avatar_visibility, terms_accepted_at)
+      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `).run(pending.username, pending.email, pending.password_hash, pending.password_salt, pending.birth_date, minor ? 'friends' : 'public');
 
     db.prepare(`DELETE FROM pending_verifications WHERE id = ?`).run(pending.id);
@@ -1630,6 +1656,63 @@ function updateReportStatus(reportId, reviewerId, status) {
 }
 
 // =====================================================
+// VERİ İHRACI (KVKK md. 11 — erişim / taşınabilirlik hakkı)
+// =====================================================
+
+function getAccountExport(userId) {
+  const profile = db.prepare(`
+    SELECT id, username, email, about_me, status, avatar_visibility, birth_date,
+           terms_accepted_at, created_at
+    FROM users WHERE id = ?
+  `).get(userId);
+
+  if (!profile) return null;
+
+  const messages = db.prepare(`
+    SELECT id, content, room, to_user_id, kind, created_at
+    FROM messages WHERE user_id = ? ORDER BY id
+  `).all(userId);
+
+  const hubs = db.prepare(`
+    SELECT hubs.id, hubs.name, hub_members.permission_tier, hub_members.joined_at
+    FROM hub_members INNER JOIN hubs ON hubs.id = hub_members.hub_id
+    WHERE hub_members.user_id = ?
+  `).all(userId);
+
+  const friendships = db.prepare(`
+    SELECT users.username, friendships.status, friendships.created_at
+    FROM friendships
+    INNER JOIN users ON users.id = (CASE WHEN friendships.user_low = ? THEN friendships.user_high ELSE friendships.user_low END)
+    WHERE friendships.user_low = ? OR friendships.user_high = ?
+  `).all(userId, userId, userId);
+
+  const blocked = db.prepare(`
+    SELECT users.username, blocked_users.created_at
+    FROM blocked_users INNER JOIN users ON users.id = blocked_users.blocked_user_id
+    WHERE blocked_users.user_id = ?
+  `).all(userId);
+
+  const sessions = db.prepare(`
+    SELECT user_agent, created_at, expires_at FROM sessions WHERE user_id = ?
+  `).all(userId);
+
+  const reportsFiled = db.prepare(`
+    SELECT target_type, target_id, reason, status, created_at FROM reports WHERE reporter_user_id = ?
+  `).all(userId);
+
+  return {
+    exported_at: new Date().toISOString(),
+    profile,
+    messages,
+    hub_memberships: hubs,
+    friendships,
+    blocked_users: blocked,
+    sessions,
+    reports_filed: reportsFiled
+  };
+}
+
+// =====================================================
 // KULLANICI ADI / ŞİFRE DEĞİŞTİRME
 // =====================================================
 
@@ -1840,6 +1923,7 @@ module.exports = {
   calculateAge,
   isMinorAge,
   MIN_SIGNUP_AGE,
+  getAccountExport,
   isBlocked,
   updateUsername,
   updatePassword,

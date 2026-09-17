@@ -50,6 +50,9 @@ const registerPasswordConfirmInput =
 const registerBirthdateInput =
     document.getElementById('register-birthdate-input');
 
+const registerTermsInput =
+    document.getElementById('register-terms-input');
+
 const registerBtn =
     document.getElementById('register-btn');
 
@@ -1087,6 +1090,17 @@ async function register() {
     }
 
 
+    if (!registerTermsInput.checked) {
+
+        showAuthError(
+            'Kullanım Şartları ve Gizlilik Politikası\'nı kabul etmelisin.'
+        );
+
+        return;
+
+    }
+
+
     registerBtn.disabled =
         true;
 
@@ -1113,7 +1127,8 @@ async function register() {
                         username,
                         email,
                         password,
-                        birth_date: birthDate
+                        birth_date: birthDate,
+                        terms_accepted: registerTermsInput.checked
                     })
                 }
             );
@@ -2006,6 +2021,30 @@ document.getElementById('settings-logout-all-btn').addEventListener('click', asy
     showToast(t('logout-all-done'));
 });
 
+document.getElementById('settings-export-data-btn').addEventListener('click', async () => {
+
+    try {
+
+        const response = await fetch('/api/account/export', { credentials: 'include' });
+        if (!response.ok) throw new Error('export failed');
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `sauran-verilerim-${currentUser.username}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+
+    } catch {
+        showToast(t('export-data-error'));
+    }
+
+});
+
 document.getElementById('settings-delete-account-btn').addEventListener('click', async () => {
 
     const typed = prompt(t('delete-account-prompt').replace('{username}', currentUser.username));
@@ -2297,7 +2336,12 @@ const I18N = {
     'report-submit': { tr: 'Bildir', en: 'Submit report' },
     'report-success-toast': { tr: 'Bildirimin alındı, teşekkürler.', en: 'Your report was received, thank you.' },
     'report-error-toast': { tr: 'Bildirim gönderilemedi.', en: 'Could not send report.' },
-    'hub-settings-report': { tr: "Hub'ı Bildir", en: 'Report Hub' }
+    'hub-settings-report': { tr: "Hub'ı Bildir", en: 'Report Hub' },
+    'label-legal': { tr: 'Gizlilik ve Yasal', en: 'Privacy & Legal' },
+    'settings-privacy-policy': { tr: 'Gizlilik Politikası', en: 'Privacy Policy' },
+    'settings-terms': { tr: 'Kullanım Şartları', en: 'Terms of Service' },
+    'settings-export-data': { tr: 'Verilerimi İndir', en: 'Export My Data' },
+    'export-data-error': { tr: 'Verilerin indirilemedi.', en: 'Could not export your data.' }
 };
 
 function t(key) {
