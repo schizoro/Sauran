@@ -690,8 +690,21 @@ body.theme-light .hub-voice-rooms-side { border-color: var(--border-soft); }
 .hub-feed-empty { color: #4b5563; font-size: 13px; text-align: center; margin-top: 40px; }
 
 .hub-composer { border-top: 1px solid var(--border-soft); background: var(--bg-surface); padding: 16px 25px; position: relative; }
-.hub-start-btn { padding: 9px 16px; background: transparent; border: 1px solid #2a3644; color: #8e9297; font-size: 12px; font-weight: bold; letter-spacing: 0.5px; cursor: pointer; transition: 0.2s; margin-bottom: 10px; }
-.hub-start-btn:hover { border-color: #66fcf1; color: #66fcf1; box-shadow: 0 0 8px rgba(102, 252, 241, 0.15); }
+.hub-scroll-bottom-btn {
+  position: absolute; top: -48px; left: 50%; transform: translateX(-50%);
+  width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  color: #66fcf1; cursor: pointer; z-index: 5; animation: dropdown-in 0.18s ease-out;
+}
+.hub-scroll-bottom-btn svg { width: 16px; height: 16px; }
+
+.hub-start-btn {
+  padding: 9px 16px; border-radius: 999px; color: #8e9297; font-size: 12px; font-weight: bold; letter-spacing: 0.5px;
+  cursor: pointer; transition: 0.2s; margin-bottom: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px) saturate(160%); -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.hub-start-btn:hover { border-color: rgba(102, 252, 241, 0.4); color: #66fcf1; box-shadow: 0 0 8px rgba(102, 252, 241, 0.15); }
 .hub-start-menu { position: absolute; bottom: 60px; left: 25px; background: #0d0f14; border: 1px solid rgba(102, 252, 241, 0.35); box-shadow: 0 0 20px rgba(102, 252, 241, 0.15), 0 10px 30px rgba(0,0,0,0.6); display: flex; flex-direction: column; padding: 6px; z-index: 10; animation: dropdown-in 0.18s ease-out; }
 .hub-start-menu button { background: none; border: none; color: #c5c6c7; font-size: 13px; padding: 9px 14px; text-align: left; cursor: pointer; transition: 0.15s; white-space: nowrap; }
 .hub-start-menu button:hover { background: #1f2833; color: #66fcf1; }
@@ -712,10 +725,9 @@ body.theme-light .hub-voice-rooms-side { border-color: var(--border-soft); }
 .composer-form { display: flex; gap: 10px; align-items: center; }
 .composer-input-box {
   flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px;
-  background-color: var(--bg-surface-2); border: 1px solid var(--border-soft); border-radius: 22px;
-  padding: 4px 6px 4px 4px; transition: border-color 0.2s, background-color 0.2s;
+  background-color: var(--bg-surface-2); border: none; border-radius: 22px;
+  padding: 4px 6px 4px 4px; transition: background-color 0.2s;
 }
-.composer-input-box:focus-within { border-color: var(--accent); }
 .composer-input-box input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; padding: 9px 6px; color: #66fcf1; font-size: 14px; }
 .composer-attach-btn {
   flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
@@ -746,11 +758,17 @@ body.theme-light .hub-voice-rooms-side { border-color: var(--border-soft); }
 .composer-send-btn:hover { background: rgba(102, 252, 241, 0.28); box-shadow: 0 2px 14px rgba(102, 252, 241, 0.3); }
 
 /* ─── v1.11: Mikrofon Butonları (Dikte / Sesli Mesaj) ────────────────────── */
-.mic-btn { padding: 0 !important; width: 42px; flex-shrink: 0; background: transparent; border: 1px solid #1f2833 !important; color: #8e9297; font-size: 15px; cursor: pointer; transition: 0.2s; text-transform: none !important; letter-spacing: normal !important; }
+.mic-btn {
+  padding: 0 !important; width: 34px !important; height: 34px; flex-shrink: 0; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent !important; border: 1px solid #1f2833 !important; color: #8e9297;
+  cursor: pointer; transition: 0.2s; text-transform: none !important; letter-spacing: normal !important;
+}
+.mic-btn svg { width: 16px; height: 16px; }
 .mic-btn:hover { border-color: #66fcf1 !important; color: #66fcf1; background: transparent !important; box-shadow: none !important; }
-.mic-btn.recording { border-color: #ff2e46 !important; color: #ff2e46; animation: mic-pulse 1.2s ease-in-out infinite; }
-.mic-btn.listening { border-color: #66fcf1 !important; color: #66fcf1; animation: mic-pulse-cyan 1.2s ease-in-out infinite; }
-.composer-icon-btn { width: 30px !important; height: 30px; border-radius: 50%; font-size: 13px; }
+.mic-btn.recording { border-color: #ff2e46 !important; color: #ff2e46; background: rgba(255, 46, 70, 0.1) !important; animation: mic-pulse 1.2s ease-in-out infinite; }
+.mic-btn.listening { border-color: #66fcf1 !important; color: #66fcf1; background: rgba(102, 252, 241, 0.1) !important; animation: mic-pulse-cyan 1.2s ease-in-out infinite; }
+.composer-icon-btn { border-radius: 50%; }
 
 @keyframes mic-pulse {
   0%, 100% { box-shadow: 0 0 0 rgba(255, 46, 70, 0.5); }
@@ -814,7 +832,7 @@ body.theme-light .hub-voice-rooms-side { border-color: var(--border-soft); }
 .hub-member-menu .hub-member-menu-danger:hover { background: rgba(255, 46, 70, 0.12); color: #ff2e46; }
 
 /* Hub Sohbet / Anket / Paylaşım Kartları */
-.hub-msg { align-self: flex-start; max-width: 78%; width: 100%; position: relative; padding: 4px 10px; border-radius: 6px; transition: background 0.12s; display: flex; gap: 10px; align-items: flex-start; }
+.hub-msg { align-self: flex-start; max-width: 78%; width: fit-content; position: relative; padding: 4px 10px; border-radius: 6px; transition: background 0.12s; display: flex; gap: 8px; align-items: flex-start; }
 .hub-msg.msg-mine { align-self: flex-end; flex-direction: row-reverse; }
 .hub-msg.msg-mine .header { flex-direction: row-reverse; }
 .hub-msg.msg-mine .hub-msg-body { text-align: right; }

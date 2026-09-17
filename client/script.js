@@ -4797,6 +4797,24 @@ const hubDetailName = document.getElementById('hub-detail-name');
 const hubDetailCount = document.getElementById('hub-detail-count');
 const hubFeed = document.getElementById('hub-feed');
 
+// ─── Sayfanın en altına in butonu ─────────────────────────────────────────
+const hubScrollBottomBtn = document.getElementById('hub-scroll-bottom-btn');
+
+function isHubFeedNearBottom() {
+    return hubFeed.scrollHeight - hubFeed.scrollTop - hubFeed.clientHeight < 80;
+}
+
+function updateHubScrollBottomBtn() {
+    hubScrollBottomBtn.style.display = isHubFeedNearBottom() ? 'none' : 'flex';
+}
+
+hubFeed.addEventListener('scroll', updateHubScrollBottomBtn);
+
+hubScrollBottomBtn.addEventListener('click', () => {
+    hubFeed.scrollTo({ top: hubFeed.scrollHeight, behavior: 'smooth' });
+    hubScrollBottomBtn.style.display = 'none';
+});
+
 const hubStartBtn = document.getElementById('hub-start-btn');
 const hubStartMenu = document.getElementById('hub-start-menu');
 const hubChatForm = document.getElementById('hub-chat-form');

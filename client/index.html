@@ -348,6 +348,10 @@
 
                     <div class="hub-composer">
 
+                        <button id="hub-scroll-bottom-btn" class="hub-scroll-bottom-btn liquid-glass" type="button" title="Sayfanın en altına in" style="display:none;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+
                         <button id="hub-start-btn" class="hub-start-btn" type="button">
                             ＋ <span data-i18n="start-something">Bir şey başlat</span>
                         </button>
@@ -368,7 +372,9 @@
                                     </div>
                                 </div>
                                 <input type="text" id="hub-message-input" autocomplete="off" placeholder="Bir mesaj yaz...">
-                                <button type="button" id="hub-voice-btn" class="mic-btn composer-icon-btn" title="Sesli mesaj gönder">🎤</button>
+                                <button type="button" id="hub-voice-btn" class="mic-btn composer-icon-btn" title="Sesli mesaj gönder">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                                </button>
                                 <button type="submit" id="hub-send-btn" class="composer-send-btn" title="Gönder">➤</button>
                             </div>
                             <input type="file" id="hub-attach-input-camera" hidden accept="image/*,video/*" capture="environment">
@@ -826,7 +832,9 @@
                         </div>
                     </div>
                     <input type="text" id="dm-message-input" autocomplete="off" placeholder="Bir mesaj yaz...">
-                    <button type="button" id="dm-voice-btn" class="mic-btn composer-icon-btn" title="Sesli mesaj gönder">🎤</button>
+                    <button type="button" id="dm-voice-btn" class="mic-btn composer-icon-btn" title="Sesli mesaj gönder">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                    </button>
                     <button type="submit" class="composer-send-btn" title="Gönder">➤</button>
                 </div>
                 <input type="file" id="dm-attach-input-camera" hidden accept="image/*,video/*" capture="environment">
