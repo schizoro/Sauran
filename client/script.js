@@ -6407,7 +6407,15 @@ function wireCallAudioUnlock() {
 
 callScreenshareBtn.addEventListener('click', async () => {
 
-    if (!callFrame || callMode !== 'hub') return;
+    // NOT: Sesli odalara katılırken callMode 'hub-room' olarak ayarlanıyor
+    // (bkz. joinVoiceRoom) — burada yanlışlıkla 'hub' bekleniyordu, bu yüzden
+    // buton hiçbir zaman çalışmıyordu (kod yolu asla tetiklenmiyordu).
+    if (!callFrame || callMode !== 'hub-room') return;
+
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+        alert('Bu cihaz/tarayıcı ekran paylaşımını desteklemiyor. Ekran paylaşımı şu an yalnızca masaüstü tarayıcılarda (Chrome, Edge, Firefox) çalışıyor.');
+        return;
+    }
 
     try {
 
@@ -6424,6 +6432,12 @@ callScreenshareBtn.addEventListener('click', async () => {
 
     } catch (error) {
         console.error('Ekran paylaşımı başarısız:', error);
+        // Kullanıcı izin penceresini iptal ettiğinde (NotAllowedError) sessizce
+        // çıkıyoruz — bu bir hata değil, bilinçli bir vazgeçme.
+        if (error?.name !== 'NotAllowedError') {
+            alert('Ekran paylaşımı başlatılamadı. Tarayıcı izinlerini kontrol edip tekrar dene.');
+        }
+        callScreenshareBtn.classList.remove('active');
     }
 
 });
