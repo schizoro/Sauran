@@ -141,13 +141,10 @@
                     autocomplete="bday"
                 >
 
-                <label class="auth-terms-check">
-                    <input type="checkbox" id="register-terms-input">
-                    <span>
-                        <a href="kullanim-sartlari.html" target="_blank" rel="noopener">Kullanım Şartları</a>'nı ve
-                        <a href="gizlilik-politikasi.html" target="_blank" rel="noopener">Gizlilik Politikası</a>'nı okudum, kabul ediyorum.
-                    </span>
-                </label>
+                <p class="auth-terms-note">
+                    Kayıt olarak <a href="kullanim-sartlari.html" target="_blank" rel="noopener">Kullanım Şartları</a>'nı ve
+                    <a href="gizlilik-politikasi.html" target="_blank" rel="noopener">Gizlilik Politikası</a>'nı onaylamış olacaksın.
+                </p>
 
                 <button id="register-btn">
                     Kayıt Ol
@@ -1114,6 +1111,28 @@
     <div id="image-lightbox" class="image-lightbox" style="display:none;">
         <button id="image-lightbox-close" class="image-lightbox-close" type="button">✕</button>
         <img id="image-lightbox-img" src="" alt="">
+    </div>
+
+
+    <!-- ================================================= -->
+    <!-- KULLANIM ŞARTLARI / GİZLİLİK ONAY MODALI -->
+    <!-- ================================================= -->
+
+    <div id="terms-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-box terms-modal-box">
+
+            <button id="terms-modal-close-btn" class="profile-close-btn">✕</button>
+
+            <h3>Kullanım Şartları ve Gizlilik Politikası</h3>
+            <p class="terms-modal-hint">Devam etmek için aşağıdaki metnin tamamını okuyup en alta kadar kaydırman gerekiyor.</p>
+
+            <div id="terms-modal-body" class="terms-modal-body">
+                <div id="terms-modal-content">Yükleniyor…</div>
+            </div>
+
+            <button id="terms-accept-btn" class="hub-create-submit" type="button" disabled>Kullanım Şartları'nı ve Gizlilik Politikası'nı okudum, kabul ediyorum.</button>
+
+        </div>
     </div>
 
 

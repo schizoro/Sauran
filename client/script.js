@@ -50,9 +50,6 @@ const registerPasswordConfirmInput =
 const registerBirthdateInput =
     document.getElementById('register-birthdate-input');
 
-const registerTermsInput =
-    document.getElementById('register-terms-input');
-
 const registerBtn =
     document.getElementById('register-btn');
 
@@ -1090,16 +1087,12 @@ async function register() {
     }
 
 
-    if (!registerTermsInput.checked) {
+    openTermsModal({ username, email, password, birthDate });
 
-        showAuthError(
-            'Kullanım Şartları ve Gizlilik Politikası\'nı kabul etmelisin.'
-        );
+}
 
-        return;
 
-    }
-
+async function submitRegistration({ username, email, password, birthDate }) {
 
     registerBtn.disabled =
         true;
@@ -1128,7 +1121,7 @@ async function register() {
                         email,
                         password,
                         birth_date: birthDate,
-                        terms_accepted: registerTermsInput.checked
+                        terms_accepted: true
                     })
                 }
             );
@@ -1180,6 +1173,88 @@ async function register() {
     }
 
 }
+
+
+// =====================================================
+// KULLANIM ŞARTLARI / GİZLİLİK ONAY MODALI
+// =====================================================
+
+const termsModal = document.getElementById('terms-modal');
+const termsModalBody = document.getElementById('terms-modal-body');
+const termsModalContent = document.getElementById('terms-modal-content');
+const termsModalCloseBtn = document.getElementById('terms-modal-close-btn');
+const termsAcceptBtn = document.getElementById('terms-accept-btn');
+
+let termsModalHtmlCache = null;
+let pendingRegistration = null;
+
+async function loadTermsModalContent() {
+
+    if (termsModalHtmlCache) return termsModalHtmlCache;
+
+    const [termsPage, privacyPage] = await Promise.all([
+        fetch('kullanim-sartlari.html').then(r => r.text()),
+        fetch('gizlilik-politikasi.html').then(r => r.text())
+    ]);
+
+    const extractWrap = (html) => {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const wrap = doc.querySelector('.legal-wrap');
+        if (!wrap) return '';
+        wrap.querySelector('.legal-back')?.remove();
+        return wrap.innerHTML;
+    };
+
+    termsModalHtmlCache = `${extractWrap(termsPage)}<hr>${extractWrap(privacyPage)}`;
+    return termsModalHtmlCache;
+
+}
+
+async function openTermsModal(formValues) {
+
+    pendingRegistration = formValues;
+
+    termsAcceptBtn.disabled = true;
+    termsModalContent.textContent = 'Yükleniyor…';
+    termsModal.style.display = 'flex';
+    termsModalBody.scrollTop = 0;
+
+    try {
+        termsModalContent.innerHTML = await loadTermsModalContent();
+    } catch {
+        termsModalContent.textContent = 'Metin yüklenemedi. Lütfen tekrar dene.';
+    }
+
+    checkTermsScrollPosition();
+
+}
+
+function checkTermsScrollPosition() {
+    const atBottom = termsModalBody.scrollTop + termsModalBody.clientHeight >= termsModalBody.scrollHeight - 8;
+    if (atBottom) termsAcceptBtn.disabled = false;
+}
+
+termsModalBody.addEventListener('scroll', checkTermsScrollPosition);
+
+termsModalCloseBtn.addEventListener('click', () => {
+    termsModal.style.display = 'none';
+    pendingRegistration = null;
+});
+
+termsModal.addEventListener('click', (event) => {
+    if (event.target === termsModal) {
+        termsModal.style.display = 'none';
+        pendingRegistration = null;
+    }
+});
+
+termsAcceptBtn.addEventListener('click', () => {
+    if (termsAcceptBtn.disabled || !pendingRegistration) return;
+    termsModal.style.display = 'none';
+    const formValues = pendingRegistration;
+    pendingRegistration = null;
+    submitRegistration(formValues);
+});
 
 
 // =====================================================
@@ -2224,6 +2299,7 @@ const I18N = {
     'menu-join-code': { tr: 'Davet Koduyla Katıl', en: 'Join with Invite Code' },
     'menu-notifications': { tr: 'Bildirimler', en: 'Notifications' },
     'menu-friends': { tr: 'Arkadaşlar', en: 'Friends' },
+    'menu-hub-members': { tr: 'Hub Üyeleri', en: 'Hub Members' },
     'menu-add-friend': { tr: 'Arkadaş Ekle', en: 'Add Friend' },
     'menu-settings': { tr: 'Ayarlar', en: 'Settings' },
     'hubs-title': { tr: 'HUBLARIM', en: 'MY HUBS' },
@@ -3152,15 +3228,19 @@ usersModal.addEventListener(
 
 function updateOnlineLabel() {
 
+    const label = onlineBtn.querySelector('span');
+
     if (currentHub) {
 
-        onlineBtn.title = 'Hub Üyeleri';
+        onlineBtn.title = t('menu-hub-members');
+        if (label) label.textContent = t('menu-hub-members');
         onlineCount.style.display = 'flex';
         onlineCount.textContent = currentHub.members.length;
 
     } else {
 
-        onlineBtn.title = 'Arkadaşlar';
+        onlineBtn.title = t('menu-friends');
+        if (label) label.textContent = t('menu-friends');
         onlineCount.style.display = 'none';
 
     }
