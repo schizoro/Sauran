@@ -2035,9 +2035,88 @@ settingsBtn.addEventListener(
 
         loadBlockedUsers();
         loadSessions();
+        updateBrowserNotifUI();
 
     }
 );
+
+
+// =====================================================
+// TARAYICI BİLDİRİM İZNİ
+// =====================================================
+// Sayfa açılır açılmaz izin isteme — yalnızca kullanıcı Ayarlar'daki
+// butona bastığında (açık bir kullanıcı etkileşimi) sorulur. Tarayıcı
+// zaten izin vermiş/reddetmişse tekrar sorulmaz, ilgili durum gösterilir.
+
+function getBrowserNotifState() {
+    if (!('Notification' in window)) return 'unsupported';
+    return Notification.permission; // 'default' | 'granted' | 'denied'
+}
+
+function updateBrowserNotifUI() {
+
+    const state = getBrowserNotifState();
+    const textEl = document.getElementById('browser-notif-status-text');
+    const btnEl = document.getElementById('browser-notif-permission-btn');
+    if (!textEl || !btnEl) return;
+
+    textEl.classList.remove('state-granted', 'state-denied');
+    btnEl.style.display = 'none';
+
+    if (state === 'unsupported') {
+        textEl.textContent = t('notif-permission-unsupported');
+    } else if (state === 'granted') {
+        textEl.textContent = t('notif-permission-granted');
+        textEl.classList.add('state-granted');
+    } else if (state === 'denied') {
+        textEl.textContent = t('notif-permission-denied');
+        textEl.classList.add('state-denied');
+    } else {
+        textEl.textContent = t('notif-permission-default');
+        btnEl.style.display = 'block';
+    }
+
+}
+
+document.getElementById('browser-notif-permission-btn')?.addEventListener('click', async () => {
+
+    if (!('Notification' in window)) return;
+
+    try {
+
+        const result = await Notification.requestPermission();
+        updateBrowserNotifUI();
+
+        if (result === 'granted') {
+            await fetch('/api/notifications/preferences', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ desktop_enabled: true })
+            });
+        }
+
+    } catch (error) {
+        console.error('Bildirim izni istenemedi:', error);
+    }
+
+});
+
+// Sekme arka plandaysa/odakta değilse (kullanıcı zaten uygulama içi toast'u
+// göremeyeceği için) tarayıcı bildirimi de göster. İzin yoksa hiçbir şey
+// yapma — burada asla izin İSTEMİYORUZ, sadece zaten verilmişse kullanıyoruz.
+function maybeShowBrowserNotification(type, label) {
+
+    if (getBrowserNotifState() !== 'granted') return;
+    if (document.hasFocus()) return;
+
+    try {
+        new Notification('Sauran', { body: label });
+    } catch (error) {
+        console.error('Tarayıcı bildirimi gösterilemedi:', error);
+    }
+
+}
 
 
 function describeUserAgent(ua) {
@@ -2324,6 +2403,12 @@ const I18N = {
     'theme-light': { tr: 'Açık Tema', en: 'Light Theme' },
     'theme-light-desc': { tr: 'Açık gri arayüz', en: 'Light gray interface' },
     'label-lang': { tr: 'Dil', en: 'Language' },
+    'label-notifications': { tr: 'Bildirimler', en: 'Notifications' },
+    'notif-permission-btn': { tr: 'Masaüstü Bildirimlerine İzin Ver', en: 'Allow Desktop Notifications' },
+    'notif-permission-unsupported': { tr: 'Tarayıcın masaüstü bildirimlerini desteklemiyor.', en: 'Your browser does not support desktop notifications.' },
+    'notif-permission-granted': { tr: '✓ Masaüstü bildirimleri açık.', en: '✓ Desktop notifications are on.' },
+    'notif-permission-denied': { tr: 'Masaüstü bildirimleri engellendi. Açmak için tarayıcı adres çubuğundaki site ayarlarından izin vermen gerekiyor.', en: 'Desktop notifications are blocked. To enable them, allow notifications from your browser\'s site settings.' },
+    'notif-permission-default': { tr: 'Sauran, önemli olaylarda (mesaj, arkadaşlık isteği, arama) masaüstünde bildirim gösterebilir.', en: 'Sauran can show desktop notifications for important events (messages, friend requests, calls).' },
     'label-change-password': { tr: 'Şifre Değiştir', en: 'Change Password' },
     'label-blocked-users': { tr: 'Engellenenler', en: 'Blocked Users' },
     'blocked-empty': { tr: 'Engellediğin kimse yok.', en: "You haven't blocked anyone." },
@@ -2801,7 +2886,9 @@ function connectToChat() {
                 friend_request_accepted: t('notif-friend-accepted'),
                 hub_invite: t('notif-hub-invite')
             };
-            showCenterToast(labelByType[data?.type] || t('notif-hub-invite'));
+            const label = labelByType[data?.type] || t('notif-hub-invite');
+            showCenterToast(label);
+            maybeShowBrowserNotification(data?.type, label);
         }
     );
 

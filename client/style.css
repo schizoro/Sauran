@@ -1009,6 +1009,14 @@ body.theme-light .hub-voice-rooms-side { border-color: var(--border-soft); }
 .friend-request-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; background: #12141a; border: 1px solid #1f2833; }
 
 .settings-blocked-list { display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto; }
+
+.browser-notif-status { display: flex; flex-direction: column; gap: 10px; margin-bottom: 4px; }
+.browser-notif-status-text {
+  font-size: 12.5px; line-height: 1.5; padding: 10px 12px; border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); color: #9ca3af;
+}
+.browser-notif-status-text.state-granted { color: #57f287; border-color: rgba(87, 242, 135, 0.3); background: rgba(87, 242, 135, 0.08); }
+.browser-notif-status-text.state-denied { color: #ff8a95; border-color: rgba(255, 46, 70, 0.3); background: rgba(255, 46, 70, 0.08); }
 .settings-blocked-empty { color: #4b5563; font-size: 12px; text-align: center; padding: 8px 0; }
 .settings-blocked-row {
   display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px;
