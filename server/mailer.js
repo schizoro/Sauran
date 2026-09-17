@@ -1,12 +1,22 @@
 require('dotenv').config();
-const sgMail = require('@sendgrid/mail');
+const nodemailer = require('nodemailer');
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+const transporter = nodemailer.createTransport({
+  host: 'smtp.zoho.com',
+  port: 465,
+  secure: true,
+  auth: {
+    user: 'destek@sauran.online',
+    pass: process.env.ZOHO_EMAIL_PASSWORD
+  }
+});
+
+const MAIL_FROM = '"Sauran" <destek@sauran.online>';
 
 async function sendVerificationEmail(toEmail, code) {
-  await sgMail.send({
+  await transporter.sendMail({
     to: toEmail,
-    from: process.env.MAIL_FROM,
+    from: MAIL_FROM,
     subject: 'Sauran — E-posta Doğrulama Kodun',
     html: `
       <div style="font-family: 'Segoe UI', sans-serif; background: #0b0c10; color: #c5c6c7; padding: 40px; max-width: 480px; margin: auto; border-radius: 4px;">
@@ -22,9 +32,9 @@ async function sendVerificationEmail(toEmail, code) {
 }
 
 async function sendPasswordResetEmail(toEmail, code) {
-  await sgMail.send({
+  await transporter.sendMail({
     to: toEmail,
-    from: process.env.MAIL_FROM,
+    from: MAIL_FROM,
     subject: 'Sauran — Şifre Sıfırlama Kodun',
     html: `
       <div style="font-family: 'Segoe UI', sans-serif; background: #0b0c10; color: #c5c6c7; padding: 40px; max-width: 480px; margin: auto; border-radius: 4px;">

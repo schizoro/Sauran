@@ -1,6 +1,6 @@
-const { db } = require('./db');
+const { db, listReports, updateReportStatus } = require('./db');
 
-const [, , command, arg] = process.argv;
+const [, , command, arg, arg2] = process.argv;
 
 function listUsers() {
   const rows = db.prepare(`SELECT id, username, email, created_at FROM users ORDER BY id`).all();
@@ -59,6 +59,37 @@ function clearPending() {
   console.log(`${info.changes} bekleyen kayıt silindi.`);
 }
 
+function listReportsCli(status) {
+  const reports = listReports(status || null);
+
+  if (reports.length === 0) {
+    console.log(status ? `"${status}" durumunda rapor yok.` : 'Hiç rapor yok.');
+    return;
+  }
+
+  console.table(reports.map(r => ({
+    id: r.id,
+    reporter: r.reporter_username,
+    type: r.target_type,
+    target: r.target_label,
+    reason: r.reason,
+    description: r.description ? r.description.slice(0, 40) : '',
+    status: r.status,
+    created_at: r.created_at
+  })));
+}
+
+function resolveReportCli(id, status) {
+  if (!id || !status) {
+    console.log('Kullanım: node admin.js resolve-report <id> <under_review|action_taken|dismissed>');
+    return;
+  }
+
+  // reviewed_by için sabit bir sistem kullanıcı id'si yerine 0 kullanıyoruz (CLI üzerinden inceleniyor).
+  const result = updateReportStatus(Number(id), 0, status);
+  console.log(result.success ? `Rapor #${id} → ${status}` : result.error);
+}
+
 switch (command) {
   case 'list-users':
     listUsers();
@@ -76,11 +107,19 @@ switch (command) {
   case 'clear-pending':
     clearPending();
     break;
+  case 'list-reports':
+    listReportsCli(arg);
+    break;
+  case 'resolve-report':
+    resolveReportCli(arg, arg2);
+    break;
   default:
     console.log(`Kullanım:
-  node admin.js list-users        Kayıtlı kullanıcıları listele
-  node admin.js list-pending      Doğrulama bekleyen kayıtları listele
-  node admin.js delete <ad|mail>  Belirli bir kullanıcıyı sil
-  node admin.js delete-all        Tüm kullanıcıları sil
-  node admin.js clear-pending     Bekleyen doğrulama kayıtlarını temizle`);
+  node admin.js list-users            Kayıtlı kullanıcıları listele
+  node admin.js list-pending          Doğrulama bekleyen kayıtları listele
+  node admin.js delete <ad|mail>      Belirli bir kullanıcıyı sil
+  node admin.js delete-all            Tüm kullanıcıları sil
+  node admin.js clear-pending         Bekleyen doğrulama kayıtlarını temizle
+  node admin.js list-reports [status] Bildirimleri listele (opsiyonel: new/under_review/action_taken/dismissed)
+  node admin.js resolve-report <id> <status>  Bir bildirimi durumla kapat`);
 }
