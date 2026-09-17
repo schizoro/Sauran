@@ -5430,6 +5430,17 @@ function switchToView(view) {
     friendsSidebar.style.display = showFriendsSidebar ? 'flex' : 'none';
     friendsSidebarToggleBtn.style.display = showFriendsSidebar ? 'flex' : 'none';
 
+    // Masaüstünde panel varsayılan olarak açık kalsın (yeterli yer var),
+    // ama mobilde (≤768px) sayfa açılır açılmaz Hub listesinin üzerine
+    // binmesin diye varsayılan olarak kapalı gelsin — kullanıcı istediğinde
+    // çentikten açabilir. Kullanıcının panel açıkken elle kapatması/açması
+    // bu mantığı ezmesin diye bu sadece görünüme geçişte bir kez uygulanır.
+    if (showFriendsSidebar) {
+        const isMobile = window.innerWidth <= 768;
+        friendsSidebar.classList.toggle('open', !isMobile);
+        friendsSidebarToggleBtn.classList.toggle('open', !isMobile);
+    }
+
     if (view !== 'hub-detail' && currentHub) {
 
         if (socket) {
