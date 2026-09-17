@@ -1226,6 +1226,10 @@ body.call-mini-active { padding-top: 42px; }
   .dm-side-panel { width: 100vw; max-width: 100vw; }
   .dm-modal-box { width: 100%; height: 100%; }
 
+  /* Ekran paylaşımı mobil tarayıcılarda (özellikle iOS Safari) desteklenmiyor —
+     çalışmayan bir butonu göstermek yerine sadece masaüstünde bırakıyoruz. */
+  #call-screenshare-btn { display: none !important; }
+
   .topbar { padding: 10px 10px; gap: 6px; }
   .topbar-logo { font-size: 12px; letter-spacing: 1px; flex-shrink: 0; }
   .topbar-profile-btn { padding: 4px 6px 4px 4px; flex-shrink: 0; }
