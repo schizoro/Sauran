@@ -5935,15 +5935,19 @@ async function joinCallFrame(roomUrl, token) {
 }
 
 
-// ─── iOS/Safari otomatik oynatma engeli için ses kurtarma ─────────────────
-// Headless modda Daily, uzak katılımcıların ses akışı için görünmez <audio>
-// elemanlarını doğrudan bizim sayfamıza ekler. iOS Safari, kullanıcı
-// etkileşiminden yeterince "taze" sayılmayan bir bağlamda (ör. aradaki async
-// fetch/join adımları yüzünden) bu elemanların otomatik oynatılmasını
-// engelleyebilir — ses akışı gerçekten geliyor ama duyulmuyor olur. Bunu
-// tespit edip kullanıcıya tek dokunuşla düzeltme imkanı veriyoruz.
+// ─── SES OYNATMA (headless modda elle bağlanmalı) ─────────────────────────
+// createFrame (Daily'nin kendi arayüzü) uzak sesi otomatik çalar, ama
+// headless call-object modunda bu garanti değil — bu yüzden gelen ses
+// track'lerini kendi <audio> elemanlarımıza elle bağlıyoruz. Ayrıca iOS
+// Safari, kullanıcı etkileşiminden yeterince "taze" sayılmayan bir bağlamda
+// (ör. aradaki async fetch/join adımları yüzünden) otomatik oynatmayı
+// engelleyebilir — bunun için de çağrı ekranındaki her dokunuşta tekrar
+// .play() deniyoruz.
+
+const remoteCallAudioEls = new Map(); // session_id -> <audio>
+
 function tryPlayAllCallAudio() {
-    document.querySelectorAll('audio').forEach((el) => {
+    document.querySelectorAll('audio[data-call-audio]').forEach((el) => {
         el.play().catch(() => {});
     });
 }
@@ -5953,11 +5957,45 @@ function tryPlayAllCallAudio() {
 // Tek seferlik global kurulum (her joinCallFrame çağrısında tekrar eklenmez).
 callOverlay.addEventListener('click', tryPlayAllCallAudio);
 
+function clearRemoteCallAudio() {
+    remoteCallAudioEls.forEach((el) => el.remove());
+    remoteCallAudioEls.clear();
+}
+
 function wireCallAudioUnlock() {
 
-    // Katılımcı sesi akışa başladığında bir kez dene.
     callFrame.on('track-started', (event) => {
-        if (event?.track?.kind === 'audio') tryPlayAllCallAudio();
+
+        if (event?.track?.kind !== 'audio' || event?.participant?.local) return;
+
+        const sessionId = event.participant?.session_id || `remote-${remoteCallAudioEls.size}`;
+
+        let audioEl = remoteCallAudioEls.get(sessionId);
+        if (!audioEl) {
+            audioEl = document.createElement('audio');
+            audioEl.autoplay = true;
+            audioEl.playsInline = true;
+            audioEl.setAttribute('data-call-audio', '1');
+            document.body.appendChild(audioEl);
+            remoteCallAudioEls.set(sessionId, audioEl);
+        }
+
+        audioEl.srcObject = new MediaStream([event.track]);
+        audioEl.play().catch(() => {});
+
+    });
+
+    callFrame.on('track-stopped', (event) => {
+
+        if (event?.track?.kind !== 'audio') return;
+
+        const sessionId = event.participant?.session_id;
+        const audioEl = sessionId && remoteCallAudioEls.get(sessionId);
+        if (audioEl) {
+            audioEl.remove();
+            remoteCallAudioEls.delete(sessionId);
+        }
+
     });
 
 }
@@ -6005,6 +6043,8 @@ function leaveCall() {
         callFrame.destroy();
         callFrame = null;
     }
+
+    clearRemoteCallAudio();
 
     callOverlay.style.display = 'none';
     callMiniBar.style.display = 'none';
