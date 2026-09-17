@@ -2594,6 +2594,7 @@ const I18N = {
     'report-reason-inappropriate': { tr: 'Uygunsuz içerik', en: 'Inappropriate content' },
     'report-reason-child_safety': { tr: 'Çocuk güvenliği', en: 'Child safety' },
     'report-reason-hate': { tr: 'Nefret / ayrımcılık', en: 'Hate / discrimination' },
+    'report-reason-impersonation': { tr: 'Sahte hesap / taklit', en: 'Fake account / impersonation' },
     'report-reason-other': { tr: 'Diğer', en: 'Other' },
     'report-description-placeholder': { tr: 'Ek açıklama (opsiyonel)', en: 'Additional details (optional)' },
     'report-submit': { tr: 'Bildir', en: 'Submit report' },
@@ -5903,6 +5904,11 @@ function renderHubDetail() {
     hubDetailCount.textContent = `👥 ${currentHub.members.length} ${t('member-count')}`;
 
     hubDeleteBtn.style.display = currentHub.is_owner ? 'block' : 'none';
+
+    // Hub sahibi kendi Hub'ını bildiremez (anlamsız) — backend de aynı
+    // kontrolü ayrıca uyguluyor (bkz. server/db.js createReport).
+    const hubReportBtnEl = document.getElementById('hub-report-btn');
+    if (hubReportBtnEl) hubReportBtnEl.style.display = currentHub.is_owner ? 'none' : 'block';
 
     renderHubMembers();
 

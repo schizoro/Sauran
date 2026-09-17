@@ -289,8 +289,24 @@ db.exec(`
 `);
 
 const REPORT_TARGET_TYPES = ['message', 'user', 'hub', 'voice_room'];
-const REPORT_REASONS = ['harassment', 'threat', 'spam', 'scam', 'inappropriate', 'child_safety', 'hate', 'other'];
+const REPORT_REASONS = ['harassment', 'threat', 'spam', 'scam', 'inappropriate', 'child_safety', 'hate', 'impersonation', 'other'];
 const REPORT_STATUSES = ['new', 'under_review', 'action_taken', 'dismissed'];
+const REPORT_PRIORITIES = ['normal', 'high', 'critical'];
+
+// Kategoriye göre otomatik öncelik — bu sadece moderasyon kuyruğunda
+// görünürlük sırası, kategori otomatik suçluluk/ceza anlamına gelmez
+// (rapor her zaman bir inceleme talebidir, moderatör karar verir).
+const REPORT_REASON_PRIORITY = {
+  child_safety: 'critical',
+  threat: 'critical',
+  harassment: 'high',
+  hate: 'high',
+  impersonation: 'high'
+};
+
+function priorityForReason(reason) {
+  return REPORT_REASON_PRIORITY[reason] || 'normal';
+}
 
 // =====================================================
 // v1.21 MIGRATION — YAŞ DOĞRULAMA / ÇOCUK GÜVENLİĞİ
@@ -431,6 +447,47 @@ function createNotification(userId, type, data) {
   `).run(userId, type, JSON.stringify(data || {}));
 
   return { id: info.lastInsertRowid, user_id: userId, type, data };
+}
+
+// =====================================================
+// v1.24 MIGRATION — RAPOR ÖNCELİĞİ + MODERASYON GEÇMİŞİ
+// =====================================================
+
+const reportsColumns = db
+  .prepare(`PRAGMA table_info(reports)`)
+  .all()
+  .map(col => col.name);
+
+if (!reportsColumns.includes('priority')) {
+  db.exec(`ALTER TABLE reports ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'`);
+}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS moderation_actions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    report_id INTEGER NOT NULL,
+    moderator_id INTEGER,
+    action TEXT NOT NULL,
+    reason TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE
+  );
+`);
+
+function logModerationAction(reportId, moderatorId, action, reason) {
+  db.prepare(`
+    INSERT INTO moderation_actions (report_id, moderator_id, action, reason) VALUES (?, ?, ?, ?)
+  `).run(reportId, moderatorId || null, action, reason || null);
+}
+
+function listModerationHistory(reportId) {
+  return db.prepare(`
+    SELECT moderation_actions.*, users.username AS moderator_username
+    FROM moderation_actions
+    LEFT JOIN users ON users.id = moderation_actions.moderator_id
+    WHERE moderation_actions.report_id = ?
+    ORDER BY moderation_actions.created_at ASC
+  `).all(reportId);
 }
 
 // =====================================================
@@ -1682,10 +1739,23 @@ function createReport(reporterId, { target_type, target_id, reason, description 
   const targetId = Number(target_id);
   if (!targetId) return { success: false, error: 'Geçersiz hedef.' };
 
+  // Kendi hesabını veya kendi sahibi olduğun Hub'ı bildiremezsin — sadece
+  // istemci tarafında buton gizlemekle yetinmiyoruz, API'ye doğrudan istek
+  // atılsa bile burada reddediliyor.
+  if (target_type === 'user' && targetId === reporterId) {
+    return { success: false, error: 'Kendini bildiremezsin.' };
+  }
+  if (target_type === 'hub') {
+    const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(targetId);
+    if (hub && hub.created_by === reporterId) {
+      return { success: false, error: 'Kendi Hub\'ını bildiremezsin.' };
+    }
+  }
+
   const info = db.prepare(`
-    INSERT INTO reports (reporter_user_id, target_type, target_id, reason, description)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(reporterId, target_type, targetId, reason, String(description || '').trim().slice(0, 500));
+    INSERT INTO reports (reporter_user_id, target_type, target_id, reason, description, priority)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(reporterId, target_type, targetId, reason, String(description || '').trim().slice(0, 500), priorityForReason(reason));
 
   return { success: true, id: info.lastInsertRowid };
 }
@@ -1728,7 +1798,7 @@ function describeReportTarget(targetType, targetId) {
   return `${targetType} #${targetId}`;
 }
 
-function updateReportStatus(reportId, reviewerId, status) {
+function updateReportStatus(reportId, reviewerId, status, reason) {
   if (!REPORT_STATUSES.includes(status)) return { success: false, error: 'Geçersiz durum.' };
 
   const info = db.prepare(`
@@ -1736,6 +1806,9 @@ function updateReportStatus(reportId, reviewerId, status) {
   `).run(status, reviewerId, reportId);
 
   if (!info.changes) return { success: false, error: 'Rapor bulunamadı.' };
+
+  logModerationAction(reportId, reviewerId, status, reason);
+
   return { success: true };
 }
 
@@ -2004,6 +2077,8 @@ module.exports = {
   createReport,
   listReports,
   updateReportStatus,
+  logModerationAction,
+  listModerationHistory,
   calculateAge,
   isMinorAge,
   MIN_SIGNUP_AGE,

@@ -67,8 +67,12 @@ function listReportsCli(status) {
     return;
   }
 
-  console.table(reports.map(r => ({
+  const priorityRank = { critical: 0, high: 1, normal: 2 };
+  const sorted = [...reports].sort((a, b) => (priorityRank[a.priority] ?? 2) - (priorityRank[b.priority] ?? 2));
+
+  console.table(sorted.map(r => ({
     id: r.id,
+    priority: r.priority,
     reporter: r.reporter_username,
     type: r.target_type,
     target: r.target_label,
