@@ -4064,7 +4064,7 @@ function renderOtherProfileActions(profile) {
     } else {
 
         html = `
-            <button class="profile-action-btn profile-action-primary" id="add-friend-btn">+ Arkadaş Ekle</button>
+            <button class="profile-action-btn profile-action-primary" id="add-friend-btn">👤＋ Arkadaş Ekle</button>
             <button class="profile-action-btn profile-action-disabled" id="block-btn">🚫 Engelle</button>
         `;
 
