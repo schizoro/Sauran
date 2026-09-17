@@ -293,6 +293,53 @@ const REPORT_REASONS = ['harassment', 'threat', 'spam', 'scam', 'inappropriate',
 const REPORT_STATUSES = ['new', 'under_review', 'action_taken', 'dismissed'];
 
 // =====================================================
+// v1.21 MIGRATION — YAŞ DOĞRULAMA / ÇOCUK GÜVENLİĞİ
+// =====================================================
+// NOT: Asgari yaş eşiği (13) yaygın bir sektör pratiğidir (ör. COPPA), ancak
+// Türkiye mevzuatı ve mağaza politikaları güncel olabilir — yayın öncesi
+// güncel resmi kaynaklarla doğrulanmalıdır. Bu eşik "kesin yasal sonuç" değildir.
+
+const MIN_SIGNUP_AGE = 13;
+const MINOR_AGE_THRESHOLD = 18;
+
+const pendingVerificationColumns = db
+  .prepare(`PRAGMA table_info(pending_verifications)`)
+  .all()
+  .map(col => col.name);
+
+if (!pendingVerificationColumns.includes('birth_date')) {
+  db.exec(`ALTER TABLE pending_verifications ADD COLUMN birth_date TEXT`);
+}
+
+const usersAgeColumns = db
+  .prepare(`PRAGMA table_info(users)`)
+  .all()
+  .map(col => col.name);
+
+if (!usersAgeColumns.includes('birth_date')) {
+  db.exec(`ALTER TABLE users ADD COLUMN birth_date TEXT`);
+}
+
+function calculateAge(birthDateStr) {
+  const birthDate = new Date(birthDateStr);
+  if (Number.isNaN(birthDate.getTime())) return null;
+
+  const now = new Date();
+  let age = now.getFullYear() - birthDate.getFullYear();
+  const monthDiff = now.getMonth() - birthDate.getMonth();
+
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birthDate.getDate())) {
+    age -= 1;
+  }
+
+  return age;
+}
+
+function isMinorAge(age) {
+  return typeof age === 'number' && age < MINOR_AGE_THRESHOLD;
+}
+
+// =====================================================
 // v1.10 MIGRATION — BİLDİRİMLER / ŞİFRE SIFIRLAMA
 // =====================================================
 
@@ -360,14 +407,25 @@ function verifyPassword(password, storedHash, storedSalt) {
 // DOĞRULAMA KODU OLUŞTUR
 // =====================================================
 
-function createVerification(username, email, password) {
+function createVerification(username, email, password, birthDate) {
   try {
     username = String(username || '').trim();
     email = String(email || '').trim().toLowerCase();
     password = String(password || '');
+    birthDate = String(birthDate || '').trim();
 
-    if (!username || !email || !password) {
+    if (!username || !email || !password || !birthDate) {
       return { success: false, error: 'Tüm alanları doldurmalısınız.' };
+    }
+
+    const age = calculateAge(birthDate);
+
+    if (age === null || age < 0 || age > 120) {
+      return { success: false, error: 'Geçerli bir doğum tarihi girin.' };
+    }
+
+    if (age < MIN_SIGNUP_AGE) {
+      return { success: false, error: `Sauran'a kayıt olmak için en az ${MIN_SIGNUP_AGE} yaşında olmalısın.` };
     }
 
     if (username.length < 3 || username.length > 20) {
@@ -406,9 +464,9 @@ function createVerification(username, email, password) {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
     db.prepare(`
-      INSERT INTO pending_verifications (username, email, password_hash, password_salt, code, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(username, email, hash, salt, code, expiresAt);
+      INSERT INTO pending_verifications (username, email, password_hash, password_salt, code, expires_at, birth_date)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(username, email, hash, salt, code, expiresAt, birthDate);
 
     return { success: true, code };
 
@@ -441,10 +499,13 @@ function verifyAndCreateUser(email, code) {
       return { success: false, error: 'Kodun süresi dolmuş. Tekrar kayıt ol.' };
     }
 
+    const age = calculateAge(pending.birth_date);
+    const minor = isMinorAge(age);
+
     const result = db.prepare(`
-      INSERT INTO users (username, email, password_hash, password_salt)
-      VALUES (?, ?, ?, ?)
-    `).run(pending.username, pending.email, pending.password_hash, pending.password_salt);
+      INSERT INTO users (username, email, password_hash, password_salt, birth_date, avatar_visibility)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(pending.username, pending.email, pending.password_hash, pending.password_salt, pending.birth_date, minor ? 'friends' : 'public');
 
     db.prepare(`DELETE FROM pending_verifications WHERE id = ?`).run(pending.id);
 
@@ -455,8 +516,9 @@ function verifyAndCreateUser(email, code) {
       email: pending.email,
       about_me: null,
       status: 'signal',
-      avatar_visibility: 'public',
-      avatar_data: null
+      avatar_visibility: minor ? 'friends' : 'public',
+      avatar_data: null,
+      is_minor: minor
     };
 
   } catch (error) {
@@ -1775,6 +1837,9 @@ module.exports = {
   createReport,
   listReports,
   updateReportStatus,
+  calculateAge,
+  isMinorAge,
+  MIN_SIGNUP_AGE,
   isBlocked,
   updateUsername,
   updatePassword,

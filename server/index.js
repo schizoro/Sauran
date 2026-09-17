@@ -67,6 +67,8 @@ const {
   unblockUser,
   listBlockedUsers,
   createReport,
+  calculateAge,
+  isMinorAge,
   updateUsername,
   updatePassword,
   getTopFriends,
@@ -213,6 +215,7 @@ function getUserFromSessionToken(token) {
   const user = db.prepare(`
     SELECT users.id, users.username, users.email, users.about_me,
            users.status, users.avatar_visibility, users.avatar_data, users.banner_data,
+           users.birth_date,
            sessions.expires_at
     FROM sessions
     INNER JOIN users ON users.id = sessions.user_id
@@ -234,7 +237,8 @@ function getUserFromSessionToken(token) {
     status: user.status || 'signal',
     avatar_visibility: user.avatar_visibility || 'public',
     avatar_data: user.avatar_data,
-    banner_data: user.banner_data
+    banner_data: user.banner_data,
+    is_minor: isMinorAge(calculateAge(user.birth_date))
   };
 }
 
@@ -268,9 +272,9 @@ app.get('/', (req, res) => {
 
 app.post('/api/register', registerLimiter, async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, birth_date } = req.body;
 
-    const result = createVerification(username, email, password);
+    const result = createVerification(username, email, password, birth_date);
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -308,7 +312,8 @@ app.post('/api/verify', (req, res) => {
         about_me: result.about_me,
         status: result.status,
         avatar_visibility: result.avatar_visibility,
-        avatar_data: result.avatar_data
+        avatar_data: result.avatar_data,
+        is_minor: result.is_minor
       }
     });
 

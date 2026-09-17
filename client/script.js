@@ -47,6 +47,9 @@ const registerPasswordInput =
 const registerPasswordConfirmInput =
     document.getElementById('register-password-confirm-input');
 
+const registerBirthdateInput =
+    document.getElementById('register-birthdate-input');
+
 const registerBtn =
     document.getElementById('register-btn');
 
@@ -1014,6 +1017,9 @@ async function register() {
     const passwordConfirm =
         registerPasswordConfirmInput.value;
 
+    const birthDate =
+        registerBirthdateInput.value;
+
 
     if (!username) {
 
@@ -1070,6 +1076,17 @@ async function register() {
     }
 
 
+    if (!birthDate) {
+
+        showAuthError(
+            'Doğum tarihini gir.'
+        );
+
+        return;
+
+    }
+
+
     registerBtn.disabled =
         true;
 
@@ -1095,7 +1112,8 @@ async function register() {
                     body: JSON.stringify({
                         username,
                         email,
-                        password
+                        password,
+                        birth_date: birthDate
                     })
                 }
             );
@@ -2133,6 +2151,7 @@ const TRANSLATIONS = {
     'back-to-register-btn': { tr: 'Geri Dön', en: 'Back' },
     'back-to-login-from-forgot-btn': { tr: 'Geri Dön', en: 'Back' },
     'back-to-login-from-reset-btn': { tr: 'Geri Dön', en: 'Back' },
+    'register-birthdate-label': { tr: 'Doğum Tarihin', en: 'Date of Birth' },
     'forgot-email-btn': { tr: 'Kod Gönder', en: 'Send Code' },
     'forgot-reset-btn': { tr: 'Şifreyi Sıfırla', en: 'Reset Password' },
     'hub-create-open-btn': { tr: '+ Yeni Hub', en: '+ New Hub' },
