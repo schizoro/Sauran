@@ -2341,6 +2341,7 @@ const I18N = {
     'settings-privacy-policy': { tr: 'Gizlilik Politikası', en: 'Privacy Policy' },
     'settings-terms': { tr: 'Kullanım Şartları', en: 'Terms of Service' },
     'settings-export-data': { tr: 'Verilerimi İndir', en: 'Export My Data' },
+    'settings-support': { tr: 'Destek & İletişim', en: 'Support & Contact' },
     'export-data-error': { tr: 'Verilerin indirilemedi.', en: 'Could not export your data.' }
 };
 
