@@ -1412,11 +1412,25 @@ function pushNotification(userId, type, data) {
   const categoryColumn = NOTIFICATION_CATEGORY_MAP[type];
   const categoryEnabled = !categoryColumn || prefs[categoryColumn] !== 0;
 
-  if (categoryEnabled && prefs.inapp_enabled !== 0) {
-    const targetSockets = activeUsers.get(userId);
-    if (targetSockets) {
-      targetSockets.forEach(sid => io.to(sid).emit('notification_received', { type, data }));
-    }
+  // Kategori tamamen kapalıysa gerçek zamanlı hiçbir kanala gönderme (yine de
+  // bildirim geçmişte DB'de duruyor — bkz. çağıran fonksiyonlardaki
+  // createNotification). Kategori açıksa hangi kanalların (uygulama içi /
+  // masaüstü / ses) kullanılacağına istemci, gelen 'channels' bilgisine göre
+  // karar verir — böylece "uygulama içi bildirimleri kapat ama masaüstü
+  // bildirimleri açık kalsın" gibi bağımsız tercihler çalışır.
+  if (!categoryEnabled) return;
+
+  const targetSockets = activeUsers.get(userId);
+  if (targetSockets) {
+    targetSockets.forEach(sid => io.to(sid).emit('notification_received', {
+      type,
+      data,
+      channels: {
+        inapp: prefs.inapp_enabled !== 0,
+        desktop: prefs.desktop_enabled !== 0,
+        sound: prefs.sound_enabled !== 0
+      }
+    }));
   }
 
 }

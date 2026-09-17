@@ -2036,9 +2036,55 @@ settingsBtn.addEventListener(
         loadBlockedUsers();
         loadSessions();
         updateBrowserNotifUI();
+        loadNotificationPreferences();
 
     }
 );
+
+
+// =====================================================
+// BİLDİRİM TERCİHLERİ (kategorilere ayrılmış checkbox'lar)
+// =====================================================
+
+async function loadNotificationPreferences() {
+
+    try {
+
+        const response = await fetch('/api/notifications/preferences', { credentials: 'include' });
+        const data = await response.json();
+        if (!data.success) return;
+
+        document.querySelectorAll('#notif-pref-groups input[data-pref]').forEach((input) => {
+            const key = input.dataset.pref;
+            input.checked = data.preferences[key] !== 0;
+        });
+
+    } catch (error) {
+        console.error('Bildirim tercihleri alınamadı:', error);
+    }
+
+}
+
+document.querySelectorAll('#notif-pref-groups input[data-pref]').forEach((input) => {
+
+    input.addEventListener('change', async () => {
+
+        const key = input.dataset.pref;
+
+        try {
+            await fetch('/api/notifications/preferences', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ [key]: input.checked })
+            });
+        } catch (error) {
+            console.error('Bildirim tercihi güncellenemedi:', error);
+        }
+
+    });
+
+});
 
 
 // =====================================================
@@ -2409,6 +2455,23 @@ const I18N = {
     'notif-permission-granted': { tr: '✓ Masaüstü bildirimleri açık.', en: '✓ Desktop notifications are on.' },
     'notif-permission-denied': { tr: 'Masaüstü bildirimleri engellendi. Açmak için tarayıcı adres çubuğundaki site ayarlarından izin vermen gerekiyor.', en: 'Desktop notifications are blocked. To enable them, allow notifications from your browser\'s site settings.' },
     'notif-permission-default': { tr: 'Sauran, önemli olaylarda (mesaj, arkadaşlık isteği, arama) masaüstünde bildirim gösterebilir.', en: 'Sauran can show desktop notifications for important events (messages, friend requests, calls).' },
+    'notif-group-general': { tr: 'Genel', en: 'General' },
+    'notif-group-messages': { tr: 'Mesajlar', en: 'Messages' },
+    'notif-group-friends': { tr: 'Arkadaşlar', en: 'Friends' },
+    'notif-group-calls': { tr: 'Aramalar', en: 'Calls' },
+    'notif-group-hub': { tr: 'Hub', en: 'Hub' },
+    'notif-group-other': { tr: 'Diğer', en: 'Other' },
+    'notif-pref-desktop': { tr: 'Masaüstü / tarayıcı bildirimleri', en: 'Desktop / browser notifications' },
+    'notif-pref-inapp': { tr: 'Uygulama içi bildirimler', en: 'In-app notifications' },
+    'notif-pref-sound': { tr: 'Bildirim sesleri', en: 'Notification sounds' },
+    'notif-pref-dm': { tr: 'Yeni özel mesajlar', en: 'New private messages' },
+    'notif-pref-hub-message': { tr: 'Yeni Hub mesaj bildirimleri', en: 'New Hub message notifications' },
+    'notif-pref-friend-request': { tr: 'Arkadaşlık istekleri', en: 'Friend requests' },
+    'notif-pref-friend-accepted': { tr: 'Arkadaşlık isteği kabul edildi', en: 'Friend request accepted' },
+    'notif-pref-incoming-call': { tr: 'Gelen aramalar', en: 'Incoming calls' },
+    'notif-pref-missed-call': { tr: 'Cevapsız aramalar', en: 'Missed calls' },
+    'notif-pref-hub-event': { tr: 'Hub bildirimleri (davet, vb.)', en: 'Hub notifications (invites, etc.)' },
+    'notif-pref-system': { tr: 'Sistem bildirimleri', en: 'System notifications' },
     'label-change-password': { tr: 'Şifre Değiştir', en: 'Change Password' },
     'label-blocked-users': { tr: 'Engellenenler', en: 'Blocked Users' },
     'blocked-empty': { tr: 'Engellediğin kimse yok.', en: "You haven't blocked anyone." },
@@ -2879,16 +2942,18 @@ function connectToChat() {
 
     socket.on(
         'notification_received',
-        (data) => {
+        (payload) => {
             refreshNotificationsBadge();
             const labelByType = {
                 friend_request: t('notif-friend-request'),
                 friend_request_accepted: t('notif-friend-accepted'),
                 hub_invite: t('notif-hub-invite')
             };
-            const label = labelByType[data?.type] || t('notif-hub-invite');
-            showCenterToast(label);
-            maybeShowBrowserNotification(data?.type, label);
+            const label = labelByType[payload?.type] || t('notif-hub-invite');
+            const channels = payload?.channels || {};
+
+            if (channels.inapp !== false) showCenterToast(label);
+            if (channels.desktop !== false) maybeShowBrowserNotification(payload?.type, label);
         }
     );
 
