@@ -4886,6 +4886,7 @@ hubVoiceRoomsBackdrop.addEventListener('click', () => {
 hubInRoomPill.addEventListener('click', () => {
     if (callFrame) {
         callMiniBar.style.display = 'none';
+        document.body.classList.remove('call-mini-active');
         callOverlay.style.display = 'flex';
     }
 });
@@ -5384,23 +5385,72 @@ const callRingingCancelBtn = document.getElementById('call-ringing-cancel-btn');
 const callMinimizeBtn = document.getElementById('call-minimize-btn');
 const callMiniBar = document.getElementById('call-mini-bar');
 const callMiniName = document.getElementById('call-mini-name');
+const callMiniDuration = document.getElementById('call-mini-duration');
 const callMiniExpandBtn = document.getElementById('call-mini-expand-btn');
 const callMiniLeaveBtn = document.getElementById('call-mini-leave-btn');
+const callHeaderDuration = document.getElementById('call-header-duration');
+const callDmDuration = document.getElementById('call-dm-duration');
+
+// ─── Arama süresi sayacı — bağlantı kurulduğunda başlar (joined-meeting),
+// hem üst panelde hem küçültülmüş çubukta hem DM bekleme ekranında aynı
+// anda güncellenir, "Ayrıl"/leaveCall() ile durur.
+let callStartTime = null;
+let callTimerInterval = null;
+
+function formatCallDuration(ms) {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function updateCallDurationDisplays() {
+    if (!callStartTime) return;
+    const text = formatCallDuration(Date.now() - callStartTime);
+    [callHeaderDuration, callDmDuration, callMiniDuration].forEach((el) => {
+        if (!el) return;
+        el.textContent = text;
+        el.style.display = '';
+    });
+}
+
+function startCallTimer() {
+    if (callTimerInterval) return;
+    callStartTime = Date.now();
+    updateCallDurationDisplays();
+    callTimerInterval = setInterval(updateCallDurationDisplays, 1000);
+}
+
+function stopCallTimer() {
+    if (callTimerInterval) {
+        clearInterval(callTimerInterval);
+        callTimerInterval = null;
+    }
+    callStartTime = null;
+    [callHeaderDuration, callDmDuration, callMiniDuration].forEach((el) => {
+        if (!el) return;
+        el.textContent = '';
+        el.style.display = 'none';
+    });
+}
 
 callMinimizeBtn.addEventListener('click', () => {
     if (!callFrame && callMode !== 'dm-ringing') return;
     callMiniName.textContent = callHubName.textContent;
     callOverlay.style.display = 'none';
     callMiniBar.style.display = 'flex';
+    document.body.classList.add('call-mini-active');
 });
 
 callMiniExpandBtn.addEventListener('click', () => {
     callMiniBar.style.display = 'none';
+    document.body.classList.remove('call-mini-active');
     callOverlay.style.display = 'flex';
 });
 
 callMiniLeaveBtn.addEventListener('click', () => {
     callMiniBar.style.display = 'none';
+    document.body.classList.remove('call-mini-active');
     leaveCall();
 });
 
@@ -6238,6 +6288,7 @@ async function joinCallFrame(roomUrl, token) {
     callFrame.on('joined-meeting', () => {
         const dmStatusText = document.getElementById('call-dm-status-text');
         if (dmStatusText) dmStatusText.textContent = t('call-connected');
+        startCallTimer();
     });
 
     callFrame.on('left-meeting', leaveCall);
@@ -6277,6 +6328,7 @@ async function joinCallFrame(roomUrl, token) {
         // doğrudan da güncelleyelim.
         const dmStatusText = document.getElementById('call-dm-status-text');
         if (dmStatusText) dmStatusText.textContent = t('call-connected');
+        startCallTimer();
 
     } catch (error) {
         callFrame.destroy();
@@ -6397,9 +6449,11 @@ function leaveCall() {
     }
 
     clearRemoteCallAudio();
+    stopCallTimer();
 
     callOverlay.style.display = 'none';
     callMiniBar.style.display = 'none';
+    document.body.classList.remove('call-mini-active');
     callRingingState.style.display = 'none';
     callFrameContainer.style.display = 'block';
     document.getElementById('call-dm-profile').style.display = 'none';
