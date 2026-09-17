@@ -78,6 +78,10 @@ const {
   respondHubInviteNotification,
   requestPasswordReset,
   confirmPasswordReset,
+  createNotification,
+  getNotificationPreferences,
+  updateNotificationPreferences,
+  markNotificationRead,
   db
 } = require('./db');
 
@@ -939,10 +943,7 @@ app.post('/api/hubs/:id/invite-friend', (req, res) => {
       return res.status(400).json(result);
     }
 
-    const targetSockets = activeUsers.get(Number(req.body?.to_user_id));
-    if (targetSockets) {
-      targetSockets.forEach(sid => io.to(sid).emit('notification_received', { type: 'hub_invite' }));
-    }
+    pushNotification(Number(req.body?.to_user_id), 'hub_invite', { from_username: user.username });
 
     return res.json(result);
 
@@ -1383,6 +1384,44 @@ function isUserOnline(userId) {
 }
 
 // =====================================================
+// MERKEZİ BİLDİRİM SERVİSİ
+// =====================================================
+// Tüm özellikler (arkadaşlık, Hub daveti, aramalar, vb.) kullanıcıya bildirim
+// göndermek için BUNU kullanmalı — kendi socket.emit + tercih kontrolünü
+// yazmamalı. AŞAMA 3/4'te buraya tarayıcı bildirimi ve ses dağıtımı eklenecek.
+
+const NOTIFICATION_CATEGORY_MAP = {
+  friend_request: 'notify_friend_request',
+  friend_request_accepted: 'notify_friend_accepted',
+  hub_invite: 'notify_hub_event',
+  dm_message: 'notify_dm_message',
+  hub_message: 'notify_hub_message',
+  incoming_call: 'notify_incoming_call',
+  missed_call: 'notify_missed_call',
+  system: 'notify_system'
+};
+
+// NOT: Bildirimin veritabanına yazılması bu fonksiyonun işi DEĞİL — o iş
+// ilgili db.js fonksiyonuna (ör. sendFriendRequest, sendHubInviteNotification)
+// ait ve her zaman gerçekleşir (kullanıcı bildirimi kapatmış olsa bile
+// Bildirimler panelinde geçmişte görünsün diye). Bu fonksiyon SADECE gerçek
+// zamanlı (socket) dağıtımı, kullanıcının tercihine göre kontrollü yapar.
+function pushNotification(userId, type, data) {
+
+  const prefs = getNotificationPreferences(userId);
+  const categoryColumn = NOTIFICATION_CATEGORY_MAP[type];
+  const categoryEnabled = !categoryColumn || prefs[categoryColumn] !== 0;
+
+  if (categoryEnabled && prefs.inapp_enabled !== 0) {
+    const targetSockets = activeUsers.get(userId);
+    if (targetSockets) {
+      targetSockets.forEach(sid => io.to(sid).emit('notification_received', { type, data }));
+    }
+  }
+
+}
+
+// =====================================================
 // SESLİ ODA KATILIMCILARI (bellek içi, gerçek zamanlı)
 // roomId -> Set(userId)
 // =====================================================
@@ -1585,6 +1624,45 @@ app.post('/api/notifications/:id/respond', (req, res) => {
   }
 });
 
+app.get('/api/notifications/preferences', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    return res.json({ success: true, preferences: getNotificationPreferences(user.id) });
+  } catch (error) {
+    console.error('Bildirim tercihleri alınamadı:', error);
+    res.status(500).json({ success: false, error: 'Alınamadı.' });
+  }
+});
+
+app.patch('/api/notifications/preferences', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    const result = updateNotificationPreferences(user.id, req.body || {});
+    return res.json(result);
+  } catch (error) {
+    console.error('Bildirim tercihleri güncellenemedi:', error);
+    res.status(500).json({ success: false, error: 'Güncellenemedi.' });
+  }
+});
+
+app.post('/api/notifications/:id/read', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    const result = markNotificationRead(Number(req.params.id), user.id);
+    if (!result.success) return res.status(404).json(result);
+    return res.json(result);
+  } catch (error) {
+    console.error('Bildirim okundu işaretleme hatası:', error);
+    res.status(500).json({ success: false, error: 'İşaretlenemedi.' });
+  }
+});
+
 // =====================================================
 // ŞİFREMİ UNUTTUM
 // =====================================================
@@ -1669,11 +1747,9 @@ app.post('/api/friends/request', friendRequestLimiter, (req, res) => {
 
     const targetSockets = activeUsers.get(Number(req.body?.to_user_id));
     if (targetSockets) {
-      targetSockets.forEach(sid => {
-        io.to(sid).emit('friend_request_received', { from_username: user.username });
-        io.to(sid).emit('notification_received', { type: 'friend_request' });
-      });
+      targetSockets.forEach(sid => io.to(sid).emit('friend_request_received', { from_username: user.username }));
     }
+    pushNotification(Number(req.body?.to_user_id), 'friend_request', { from_username: user.username });
 
     return res.json(result);
 
@@ -1688,10 +1764,16 @@ app.post('/api/friends/respond', (req, res) => {
   if (!user) return;
 
   try {
-    const result = respondFriendRequest(user.id, Number(req.body?.user_id), Boolean(req.body?.accept));
+    const otherUserId = Number(req.body?.user_id);
+    const accept = Boolean(req.body?.accept);
+    const result = respondFriendRequest(user.id, otherUserId, accept);
 
     if (!result.success) {
       return res.status(400).json(result);
+    }
+
+    if (accept) {
+      pushNotification(otherUserId, 'friend_request_accepted', { from_username: user.username });
     }
 
     return res.json(result);

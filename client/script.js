@@ -2368,7 +2368,10 @@ const I18N = {
     'call-connecting': { tr: 'Bağlanıyor...', en: 'Connecting...' },
     'notif-friend-request': { tr: '1 arkadaşlık isteği', en: '1 friend request' },
     'notif-hub-invite': { tr: '1 hub daveti', en: '1 hub invite' },
+    'notif-friend-accepted': { tr: 'Arkadaşlık isteğin kabul edildi', en: 'Your friend request was accepted' },
     'friend-request-notif-text': { tr: 'sana arkadaşlık isteği gönderdi', en: 'sent you a friend request' },
+    'friend-accepted-notif-text': { tr: 'arkadaşlık isteğini kabul etti', en: 'accepted your friend request' },
+    'ok-got-it': { tr: 'Tamam', en: 'Got it' },
     'friends-empty': { tr: 'Henüz arkadaşın yok.', en: "You don't have any friends yet." },
     'back-to-hubs': { tr: 'Hublar', en: 'Hubs' },
     'start-something': { tr: 'Bir şey başlat', en: 'Start something' },
@@ -2793,8 +2796,12 @@ function connectToChat() {
         'notification_received',
         (data) => {
             refreshNotificationsBadge();
-            const label = data?.type === 'friend_request' ? t('notif-friend-request') : t('notif-hub-invite');
-            showCenterToast(label);
+            const labelByType = {
+                friend_request: t('notif-friend-request'),
+                friend_request_accepted: t('notif-friend-accepted'),
+                hub_invite: t('notif-hub-invite')
+            };
+            showCenterToast(labelByType[data?.type] || t('notif-hub-invite'));
         }
     );
 
@@ -3632,9 +3639,35 @@ function renderNotifications(notifications) {
 
         }
 
+        if (n.type === 'friend_request_accepted') {
+
+            return `
+                <div class="notification-card" data-notif-id="${n.id}" data-notif-type="friend_request_accepted">
+                    <div class="notification-text">
+                        <strong>${escapeHtml(n.data.from_username)}</strong> ${t('friend-accepted-notif-text')}.
+                    </div>
+                    <div class="notification-actions">
+                        <button class="notification-accept" data-dismiss type="button">${t('ok-got-it')}</button>
+                    </div>
+                </div>
+            `;
+
+        }
+
         return '';
 
     }).join('');
+
+    notificationsList.querySelectorAll('[data-notif-type="friend_request_accepted"]').forEach((card) => {
+
+        card.querySelector('[data-dismiss]').addEventListener('click', async () => {
+            const notifId = card.dataset.notifId;
+            await fetch(`/api/notifications/${notifId}/read`, { method: 'POST', credentials: 'include' });
+            refreshNotificationsBadge();
+            card.remove();
+        });
+
+    });
 
     notificationsList.querySelectorAll('[data-notif-type="friend_request"]').forEach((card) => {
 

@@ -362,6 +362,78 @@ if (!usersTermsColumns.includes('terms_accepted_at')) {
 }
 
 // =====================================================
+// v1.23 MIGRATION — MERKEZİ BİLDİRİM SİSTEMİ / TERCİHLER
+// =====================================================
+// NOT: Bu tablo, hangi bildirim türünün hangi tercih sütununa karşılık
+// geldiğini eşleştiren NOTIFICATION_CATEGORY_MAP ile birlikte kullanılır
+// (bkz. index.js). Yeni bir bildirim türü eklerken önce bu eşleştirmeye
+// bakılmalı — her özellik kendi bildirim mantığını yazmamalı.
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS notification_preferences (
+    user_id INTEGER PRIMARY KEY,
+    desktop_enabled INTEGER NOT NULL DEFAULT 1,
+    inapp_enabled INTEGER NOT NULL DEFAULT 1,
+    sound_enabled INTEGER NOT NULL DEFAULT 1,
+    notify_dm_message INTEGER NOT NULL DEFAULT 1,
+    notify_hub_message INTEGER NOT NULL DEFAULT 1,
+    notify_friend_request INTEGER NOT NULL DEFAULT 1,
+    notify_friend_accepted INTEGER NOT NULL DEFAULT 1,
+    notify_incoming_call INTEGER NOT NULL DEFAULT 1,
+    notify_missed_call INTEGER NOT NULL DEFAULT 1,
+    notify_hub_event INTEGER NOT NULL DEFAULT 1,
+    notify_system INTEGER NOT NULL DEFAULT 1,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+`);
+
+const NOTIFICATION_PREF_COLUMNS = [
+  'desktop_enabled', 'inapp_enabled', 'sound_enabled',
+  'notify_dm_message', 'notify_hub_message',
+  'notify_friend_request', 'notify_friend_accepted',
+  'notify_incoming_call', 'notify_missed_call',
+  'notify_hub_event', 'notify_system'
+];
+
+function getNotificationPreferences(userId) {
+  db.prepare(`INSERT OR IGNORE INTO notification_preferences (user_id) VALUES (?)`).run(userId);
+  return db.prepare(`SELECT * FROM notification_preferences WHERE user_id = ?`).get(userId);
+}
+
+function updateNotificationPreferences(userId, patch) {
+  getNotificationPreferences(userId); // satırın var olduğundan emin ol
+
+  const updates = [];
+  const values = [];
+
+  for (const key of NOTIFICATION_PREF_COLUMNS) {
+    if (Object.prototype.hasOwnProperty.call(patch || {}, key)) {
+      updates.push(`${key} = ?`);
+      values.push(patch[key] ? 1 : 0);
+    }
+  }
+
+  if (updates.length === 0) return { success: true, preferences: getNotificationPreferences(userId) };
+
+  values.push(userId);
+  db.prepare(`UPDATE notification_preferences SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?`).run(...values);
+
+  return { success: true, preferences: getNotificationPreferences(userId) };
+}
+
+// Tek merkezi bildirim yazma noktası — tüm özellikler (arkadaşlık, Hub
+// daveti, aramalar, vb.) bildirim oluşturmak için bunu kullanmalı, kendi
+// INSERT'ini yazmamalı.
+function createNotification(userId, type, data) {
+  const info = db.prepare(`
+    INSERT INTO notifications (user_id, type, data) VALUES (?, ?, ?)
+  `).run(userId, type, JSON.stringify(data || {}));
+
+  return { id: info.lastInsertRowid, user_id: userId, type, data };
+}
+
+// =====================================================
 // v1.10 MIGRATION — BİLDİRİMLER / ŞİFRE SIFIRLAMA
 // =====================================================
 
@@ -1318,8 +1390,7 @@ function sendFriendRequest(fromId, toId) {
   `).run(low, high, fromId);
 
   const fromUser = db.prepare(`SELECT username FROM users WHERE id = ?`).get(fromId);
-  const data = JSON.stringify({ from_user_id: fromId, from_username: fromUser?.username || '' });
-  db.prepare(`INSERT INTO notifications (user_id, type, data) VALUES (?, 'friend_request', ?)`).run(toId, data);
+  createNotification(toId, 'friend_request', { from_user_id: fromId, from_username: fromUser?.username || '' });
 
   return { success: true };
 }
@@ -1341,6 +1412,11 @@ function respondFriendRequest(userId, otherUserId, accept) {
     UPDATE notifications SET status = ? WHERE user_id = ? AND type = 'friend_request' AND status = 'pending'
     AND json_extract(data, '$.from_user_id') = ?
   `).run(accept ? 'accepted' : 'declined', userId, otherUserId);
+
+  if (accept) {
+    const accepter = db.prepare(`SELECT username FROM users WHERE id = ?`).get(userId);
+    createNotification(otherUserId, 'friend_request_accepted', { from_user_id: userId, from_username: accepter?.username || '' });
+  }
 
   return { success: true };
 }
@@ -1431,7 +1507,7 @@ function sendHubInviteNotification(hubId, fromUserId, fromUsername, toUserId) {
 
   if (existing) return { success: false, error: 'Zaten bekleyen bir davetin var.' };
 
-  const data = JSON.stringify({
+  const notification = createNotification(toUserId, 'hub_invite', {
     hub_id: hub.id,
     hub_name: hub.name,
     hub_icon: hub.icon,
@@ -1439,11 +1515,7 @@ function sendHubInviteNotification(hubId, fromUserId, fromUsername, toUserId) {
     from_username: fromUsername
   });
 
-  const info = db.prepare(`
-    INSERT INTO notifications (user_id, type, data) VALUES (?, 'hub_invite', ?)
-  `).run(toUserId, data);
-
-  return { success: true, id: info.lastInsertRowid };
+  return { success: true, id: notification.id };
 }
 
 function listNotifications(userId) {
@@ -1471,6 +1543,17 @@ function respondHubInviteNotification(notificationId, userId, accept) {
   }
 
   db.prepare(`UPDATE notifications SET status = 'declined' WHERE id = ?`).run(notificationId);
+  return { success: true };
+}
+
+// Aksiyon gerektirmeyen (salt bilgilendirici, ör. "isteğin kabul edildi")
+// bildirimleri listeden düşürmek için genel amaçlı okundu işaretleme.
+function markNotificationRead(notificationId, userId) {
+  const info = db.prepare(`
+    UPDATE notifications SET status = 'read' WHERE id = ? AND user_id = ? AND status = 'pending'
+  `).run(notificationId, userId);
+
+  if (!info.changes) return { success: false, error: 'Bildirim bulunamadı.' };
   return { success: true };
 }
 
@@ -1933,5 +2016,9 @@ module.exports = {
   respondHubInviteNotification,
   requestPasswordReset,
   confirmPasswordReset,
+  createNotification,
+  getNotificationPreferences,
+  updateNotificationPreferences,
+  markNotificationRead,
   db
 };
