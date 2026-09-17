@@ -201,6 +201,11 @@
             });
         }
 
+        const MESSAGE_KIND_LABELS = {
+            text: 'Metin', voice: 'Sesli Mesaj', image: 'Görsel', video: 'Video',
+            file: 'Dosya', poll: 'Anket', share: 'Paylaşım', deleted: 'Silinmiş Mesaj'
+        };
+
         function describeContext(report) {
             const ctx = report.target_context;
             if (!ctx || !ctx.exists) return 'Hedef bulunamadı (silinmiş olabilir).';
@@ -210,9 +215,41 @@
             if (report.target_type === 'voice_room') return `Sesli Oda: ${esc(ctx.room_name)} — Hub: ${esc(ctx.hub_name || 'bilinmiyor')}`;
             if (report.target_type === 'message') {
                 const where = ctx.context?.type === 'hub' ? `Hub: ${esc(ctx.context.hub_name || 'bilinmiyor')}` : 'Özel Mesaj (DM)';
-                return `Gönderen: ${esc(ctx.sender_username)} — ${where}\nİçerik: ${esc(ctx.content || '')}`;
+                const kindLabel = MESSAGE_KIND_LABELS[ctx.kind] || ctx.kind;
+                return `Gönderen: ${esc(ctx.sender_username)} — ${where}\nİleti Türü: ${esc(kindLabel)}`;
             }
             return `${esc(report.target_type)} #${report.target_id}`;
+        }
+
+        // Rapor edilen iletinin türüne göre gerçek içeriği (metin/ses/görsel/video/dosya/anket/paylaşım)
+        // moderatöre gösterir — sadece metin mesajlarını değil, tüm ileti türlerini kapsar.
+        function renderMessageContent(ctx) {
+            if (!ctx || !ctx.exists) return '';
+            const kind = ctx.kind;
+            const payload = ctx.payload || {};
+
+            if (kind === 'voice' && payload.audio) {
+                return `<audio controls src="${esc(payload.audio)}" style="width:100%; margin-top:4px;"></audio>`;
+            }
+            if (kind === 'image' && payload.data) {
+                return `<img src="${esc(payload.data)}" alt="${esc(payload.name || 'görsel')}" style="max-width:100%; max-height:320px; border-radius:8px; margin-top:4px; display:block;">`;
+            }
+            if (kind === 'video' && payload.data) {
+                return `<video controls src="${esc(payload.data)}" style="max-width:100%; max-height:320px; border-radius:8px; margin-top:4px; display:block;"></video>`;
+            }
+            if (kind === 'file' && payload.data) {
+                return `<a href="${esc(payload.data)}" download="${esc(payload.name || 'dosya')}" style="color:#66fcf1;">📎 ${esc(payload.name || 'dosya')}</a> <span style="color:#6b7280;">(${Math.round((payload.size || 0) / 1024)} KB)</span>`;
+            }
+            if (kind === 'poll') {
+                const options = Array.isArray(payload.options) ? payload.options : [];
+                const optionsHtml = options.map(o => `<div>• ${esc(o.text ?? o)}${o.votes !== undefined ? ` — ${o.votes} oy` : ''}</div>`).join('');
+                return `<div><strong>${esc(ctx.content || payload.question || '')}</strong></div>${optionsHtml}`;
+            }
+            if (kind === 'share') {
+                return `${esc(ctx.content || '')}${payload.url ? `<br><a href="${esc(payload.url)}" target="_blank" rel="noopener noreferrer" style="color:#66fcf1;">${esc(payload.url)}</a>` : ''}`;
+            }
+            if (kind === 'deleted') return '(bu mesaj kullanıcı tarafından silinmiş)';
+            return esc(ctx.content || '(boş)');
         }
 
         async function openDetail(id) {
@@ -231,6 +268,7 @@
                 <div class="mod-field"><span class="mod-field-label">Kategori</span><span class="mod-field-value">${esc(reasonLabel(r.reason))} · ${esc(priorityLabel(r.priority))}</span></div>
                 <div class="mod-field"><span class="mod-field-label">Bildiren</span><span class="mod-field-value">${esc(r.reporter_username)}</span></div>
                 <div class="mod-field"><span class="mod-field-label">Bağlam</span><span class="mod-field-value">${describeContext(r)}</span></div>
+                ${r.target_type === 'message' ? `<div class="mod-field"><span class="mod-field-label">İleti İçeriği</span><span class="mod-field-value">${renderMessageContent(r.target_context)}</span></div>` : ''}
                 <div class="mod-field"><span class="mod-field-label">Açıklama</span><span class="mod-field-value">${esc(r.description || '—')}</span></div>
                 <div class="mod-field"><span class="mod-field-label">Tarih</span><span class="mod-field-value">${esc(r.created_at)}</span></div>
                 <div class="mod-field"><span class="mod-field-label">Durum</span><span class="mod-field-value">${esc(statusLabel(r.status))}</span></div>

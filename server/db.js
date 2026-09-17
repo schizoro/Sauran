@@ -546,20 +546,29 @@ function getReportTargetContext(targetType, targetId) {
 
     if (targetType === 'message') {
       const m = db.prepare(`
-        SELECT messages.id, messages.user_id, messages.username, messages.content, messages.kind,
+        SELECT messages.id, messages.user_id, messages.username, messages.content, messages.kind, messages.payload,
                messages.hub_id, messages.to_user_id, messages.created_at,
                hubs.name AS hub_name
         FROM messages LEFT JOIN hubs ON hubs.id = messages.hub_id
         WHERE messages.id = ?
       `).get(targetId);
       if (!m) return { exists: false };
+
+      let payload = null;
+      if (m.payload) {
+        try { payload = JSON.parse(m.payload); } catch (_) { payload = null; }
+      }
+      // Ses/görsel/video/dosya payload'ı ham base64 veri içerir — moderasyon panelinde
+      // önizleme için gerekli, bu yüzden diğer rapor context'lerinden farklı olarak aynen iletiliyor.
+
       return {
         exists: true,
         message_id: m.id,
         sender_id: m.user_id,
         sender_username: m.username,
         content: m.content,
-        kind: m.kind,
+        kind: m.kind || 'text',
+        payload,
         created_at: m.created_at,
         context: m.hub_id ? { type: 'hub', hub_id: m.hub_id, hub_name: m.hub_name } : { type: 'dm', to_user_id: m.to_user_id }
       };
@@ -1894,6 +1903,22 @@ function listReports(status, filters) {
   return rows.map(r => ({ ...r, target_label: describeReportTarget(r.target_type, r.target_id) }));
 }
 
+function describeMessageKindLabel(kind, content, rawPayload) {
+  let payload = null;
+  if (rawPayload) {
+    try { payload = JSON.parse(rawPayload); } catch (_) { payload = null; }
+  }
+
+  if (kind === 'voice') return `🎙️ Sesli mesaj (${payload?.duration || 0} sn)`;
+  if (kind === 'image') return `🖼️ Görsel: ${payload?.name || 'görsel'}`;
+  if (kind === 'video') return `🎬 Video: ${payload?.name || 'video'}`;
+  if (kind === 'file') return `📎 Dosya: ${payload?.name || 'dosya'}`;
+  if (kind === 'poll') return `📊 Anket: ${String(content || payload?.question || '').slice(0, 60)}`;
+  if (kind === 'share') return `🔗 Paylaşım: ${String(content || '').slice(0, 60)}${payload?.url ? ' — ' + payload.url.slice(0, 60) : ''}`;
+  if (kind === 'deleted') return '(silinmiş mesaj)';
+  return String(content || '').slice(0, 60);
+}
+
 function describeReportTarget(targetType, targetId) {
   try {
     if (targetType === 'user') {
@@ -1905,8 +1930,10 @@ function describeReportTarget(targetType, targetId) {
       return h ? `Hub: ${h.name}` : 'Hub (silinmiş)';
     }
     if (targetType === 'message') {
-      const m = db.prepare(`SELECT username, content FROM messages WHERE id = ?`).get(targetId);
-      return m ? `Mesaj (${m.username}): ${String(m.content || '').slice(0, 60)}` : 'Mesaj (silinmiş)';
+      const m = db.prepare(`SELECT username, content, kind, payload FROM messages WHERE id = ?`).get(targetId);
+      if (!m) return 'Mesaj (silinmiş)';
+      const kindLabel = describeMessageKindLabel(m.kind, m.content, m.payload);
+      return `Mesaj (${m.username}): ${kindLabel}`;
     }
     if (targetType === 'voice_room') {
       const r = db.prepare(`SELECT name FROM hub_voice_rooms WHERE id = ?`).get(targetId);
