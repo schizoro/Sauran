@@ -785,6 +785,11 @@
 
             <div class="profile-tab-panel" data-panel="info">
 
+                <div class="profile-about-section">
+                    <span class="profile-field-label" data-i18n="about-me-label">Hakkımda</span>
+                    <p id="other-profile-about-me" class="profile-about-text"></p>
+                </div>
+
                 <div id="other-profile-actions" class="other-profile-actions"></div>
 
             </div>
@@ -920,6 +925,15 @@
             </div>
 
             <div class="profile-tab-panel">
+
+                <div class="profile-about-section">
+                    <span class="profile-field-label" data-i18n="about-me-label">Hakkımda</span>
+                    <textarea id="about-me-input" class="about-me-input" maxlength="300" data-i18n-placeholder="about-me-placeholder" placeholder="Kendinden bahset..."></textarea>
+                    <div class="profile-about-actions">
+                        <span id="about-me-count" class="about-me-count">0/300</span>
+                        <button id="about-me-save-btn" class="about-btn about-btn-primary" type="button" data-i18n="save">Kaydet</button>
+                    </div>
+                </div>
 
                 <button id="logout-btn" class="logout-btn">
                     Çıkış Yap

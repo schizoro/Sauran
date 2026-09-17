@@ -884,7 +884,7 @@ app.get('/api/hubs/:id', (req, res) => {
       return res.status(404).json({ success: false, error: 'Hub bulunamadı.' });
     }
 
-    hub.members = hub.members.map(m => ({ ...m, online: isUserOnline(m.user_id) }));
+    hub.members = hub.members.map(m => ({ ...m, online: isVisiblyOnline(m.user_id, m.status) }));
 
     return res.json({ success: true, hub });
 
@@ -1383,6 +1383,14 @@ function isUserOnline(userId) {
   return Boolean(sockets && sockets.size > 0);
 }
 
+// "Görünmez" (invisible) durumunu seçen kullanıcı gerçekten bağlı olsa bile
+// başkalarına çevrimdışı görünmeli — presence (gerçek bağlantı) ile
+// kullanıcının seçtiği manuel durum kavramsal olarak ayrı ama "invisible"
+// özel olarak presence'ı maskeler (Discord/Slack'teki standart anlamıyla).
+function isVisiblyOnline(userId, status) {
+  return isUserOnline(userId) && status !== 'invisible';
+}
+
 // =====================================================
 // MERKEZİ BİLDİRİM SERVİSİ
 // =====================================================
@@ -1582,7 +1590,7 @@ app.get('/api/friends', (req, res) => {
   if (!user) return;
 
   try {
-    const friends = listFriends(user.id).map(f => ({ ...f, online: isUserOnline(f.id) }));
+    const friends = listFriends(user.id).map(f => ({ ...f, online: isVisiblyOnline(f.id, f.status) }));
     return res.json({ success: true, friends });
   } catch (error) {
     console.error('Arkadaş listesi hatası:', error);
@@ -1595,7 +1603,7 @@ app.get('/api/friends/top', (req, res) => {
   if (!user) return;
 
   try {
-    const friends = getTopFriends(user.id, 5).map(f => ({ ...f, online: isUserOnline(f.id) }));
+    const friends = getTopFriends(user.id, 5).map(f => ({ ...f, online: isVisiblyOnline(f.id, f.status) }));
     return res.json({ success: true, friends });
   } catch (error) {
     console.error('Sık tercihler hatası:', error);
@@ -1824,7 +1832,7 @@ app.get('/api/users/:id/profile', (req, res) => {
       return res.status(404).json({ success: false, error: 'Kullanıcı bulunamadı.' });
     }
 
-    return res.json({ success: true, profile: { ...profile, online: isUserOnline(profile.id) } });
+    return res.json({ success: true, profile: { ...profile, online: isVisiblyOnline(profile.id, profile.status) } });
 
   } catch (error) {
     console.error('Profil hatası:', error);

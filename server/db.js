@@ -1609,7 +1609,7 @@ function confirmPasswordReset(email, code, newPassword) {
 
 function getUserPublicProfile(viewerId, targetId) {
   const user = db.prepare(`
-    SELECT id, username, status, avatar_data, banner_data
+    SELECT id, username, status, about_me, avatar_data, banner_data
     FROM users WHERE id = ?
   `).get(targetId);
 
@@ -1623,6 +1623,7 @@ function getUserPublicProfile(viewerId, targetId) {
     id: user.id,
     username: user.username,
     status: user.status,
+    about_me: user.about_me,
     avatar_data: user.avatar_data,
     banner_data: user.banner_data,
     friendship_status: isSelf ? 'self' : friendship,

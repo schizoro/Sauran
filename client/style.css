@@ -241,6 +241,18 @@ body.theme-light .hub-voice-rooms-side { border-color: var(--border-soft); }
 .status-idle { background: #ffd93d; box-shadow: 0 0 6px rgba(255, 217, 61, 0.8); }
 .status-busy { background: #ff2e46; box-shadow: 0 0 6px rgba(255, 46, 70, 0.8); }
 .status-invisible { background: #6b7280; }
+.status-offline { background: #4b5563; box-shadow: none; }
+
+.profile-about-section { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 14px; text-align: left; }
+.profile-about-text { margin: 0; font-size: 13px; line-height: 1.5; color: #c5c6c7; white-space: pre-wrap; word-break: break-word; }
+.profile-about-text.is-empty { color: #6b7280; font-style: italic; }
+.about-me-input {
+  width: 100%; min-height: 70px; resize: vertical; padding: 10px 12px; border-radius: 12px; box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); color: #e2f8f6;
+  font-size: 13px; font-family: inherit;
+}
+.profile-about-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.about-me-count { font-size: 11px; color: #6b7280; }
 
 .status-option-dot { position: static; width: 22px; height: 22px; font-size: 12px; flex-shrink: 0; }
 

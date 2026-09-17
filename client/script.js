@@ -2472,6 +2472,12 @@ const I18N = {
     'notif-pref-missed-call': { tr: 'Cevapsız aramalar', en: 'Missed calls' },
     'notif-pref-hub-event': { tr: 'Hub bildirimleri (davet, vb.)', en: 'Hub notifications (invites, etc.)' },
     'notif-pref-system': { tr: 'Sistem bildirimleri', en: 'System notifications' },
+    'presence-online': { tr: 'Çevrimiçi', en: 'Online' },
+    'presence-offline': { tr: 'Çevrimdışı', en: 'Offline' },
+    'about-me-label': { tr: 'Hakkımda', en: 'About me' },
+    'about-me-empty': { tr: 'Henüz bir şey yazmamış.', en: 'Hasn\'t written anything yet.' },
+    'about-me-placeholder': { tr: 'Kendinden bahset...', en: 'Tell us about yourself...' },
+    'about-me-saved': { tr: 'Hakkımda güncellendi.', en: 'About me updated.' },
     'label-change-password': { tr: 'Şifre Değiştir', en: 'Change Password' },
     'label-blocked-users': { tr: 'Engellenenler', en: 'Blocked Users' },
     'blocked-empty': { tr: 'Engellediğin kimse yok.', en: "You haven't blocked anyone." },
@@ -2678,8 +2684,55 @@ profileBtn.addEventListener(
         profileModal.style.display =
             'flex';
 
+        const aboutInput = document.getElementById('about-me-input');
+        const aboutCount = document.getElementById('about-me-count');
+        if (aboutInput) {
+            aboutInput.value = currentUser?.about_me || '';
+            if (aboutCount) aboutCount.textContent = `${aboutInput.value.length}/300`;
+        }
+
     }
 );
+
+
+// =====================================================
+// HAKKIMDA (kendi profilim)
+// =====================================================
+
+document.getElementById('about-me-input')?.addEventListener('input', (event) => {
+    const count = document.getElementById('about-me-count');
+    if (count) count.textContent = `${event.target.value.length}/300`;
+});
+
+document.getElementById('about-me-save-btn')?.addEventListener('click', async () => {
+
+    const input = document.getElementById('about-me-input');
+    if (!input) return;
+
+    try {
+
+        const response = await fetch('/api/profile/about', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ about_me: input.value })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            if (currentUser) currentUser.about_me = data.about_me;
+            showToast(t('about-me-saved'));
+        } else {
+            showToast(data.error || 'Güncellenemedi.');
+        }
+
+    } catch (error) {
+        console.error('Hakkımda güncelleme hatası:', error);
+        showToast('Güncellenemedi.');
+    }
+
+});
 
 
 closeProfileModalBtn.addEventListener(
@@ -3942,11 +3995,28 @@ function renderOtherProfile() {
 
     otherProfileUsername.textContent = profile.username;
 
-    const info = STATUS_INFO[profile.status] || STATUS_INFO.active;
-    otherProfileStatusDot.classList.remove(...STATUS_CLASS_NAMES);
-    otherProfileStatusDot.classList.add(info.className);
-    otherProfileStatusDot.textContent = profile.status === 'invisible' ? '👻' : '';
-    otherProfileStatusLabel.textContent = info.label;
+    // ÖNEMLİ: presence (gerçek bağlantı durumu) ile kullanıcının seçtiği
+    // manuel durum birbirinden ayrı. Kullanıcı "Müsait" seçmiş olsa bile
+    // uygulamada değilse (profile.online === false) burada "Çevrimdışı"
+    // gösterilir — sunucudan gelen gerçek presence bilgisine güveniyoruz.
+    otherProfileStatusDot.classList.remove(...STATUS_CLASS_NAMES, 'status-offline');
+
+    if (profile.online) {
+        const info = STATUS_INFO[profile.status] || STATUS_INFO.active;
+        otherProfileStatusDot.classList.add(info.className);
+        otherProfileStatusDot.textContent = '';
+        otherProfileStatusLabel.textContent = `${t('presence-online')} · ${info.label}`;
+    } else {
+        otherProfileStatusDot.classList.add('status-offline');
+        otherProfileStatusDot.textContent = '';
+        otherProfileStatusLabel.textContent = t('presence-offline');
+    }
+
+    const otherAboutMeEl = document.getElementById('other-profile-about-me');
+    if (otherAboutMeEl) {
+        otherAboutMeEl.textContent = profile.about_me?.trim() ? profile.about_me : t('about-me-empty');
+        otherAboutMeEl.classList.toggle('is-empty', !profile.about_me?.trim());
+    }
 
     renderOtherProfileActions(profile);
 
