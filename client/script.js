@@ -3421,7 +3421,7 @@ function renderFriendsSidebar(friends) {
 
         return `
             <div class="friends-sidebar-row ${f.online ? 'online' : ''}" data-friend-id="${f.id}" data-friend-name="${escapeAttr(f.username)}">
-                <span class="friends-sidebar-avatar" style="--user-color:${color};">${avatarInner}</span>
+                <span class="friends-sidebar-avatar" style="--user-color:${color};">${avatarInner}<span class="friends-sidebar-dot"></span></span>
                 <span class="friends-sidebar-name">${escapeHtml(f.username)}</span>
                 ${unread > 0 ? `<span class="friends-sidebar-unread">${unread}</span>` : ''}
             </div>
@@ -3429,14 +3429,25 @@ function renderFriendsSidebar(friends) {
 
     }).join('');
 
+    // Avatara tıklama → profil penceresi (mesaj gönder seçeneği olmadan, çünkü
+    // buradan zaten tek tıkla sohbete geçilebiliyor). Satırın geri kalanına
+    // tıklama → doğrudan sohbet penceresi. stopPropagation ile ikisi ayrılıyor.
     friendsSidebarList.querySelectorAll('.friends-sidebar-row').forEach((row) => {
+
+        const userId = Number(row.dataset.friendId);
+        const username = row.dataset.friendName;
+
+        row.querySelector('.friends-sidebar-avatar').addEventListener('click', (event) => {
+            event.stopPropagation();
+            openOtherProfile(userId, { hideMessageAction: true });
+        });
+
         row.addEventListener('click', () => {
-            const userId = Number(row.dataset.friendId);
-            const username = row.dataset.friendName;
             unreadDmCounts.delete(userId);
             renderFriendsSidebar(friends);
             openDm(userId, username);
         });
+
     });
 
 }
@@ -3979,8 +3990,9 @@ function renderNotifications(notifications) {
 // =====================================================
 
 let otherProfileCache = null;
+let otherProfileHideMessageAction = false;
 
-async function openOtherProfile(userId) {
+async function openOtherProfile(userId, options = {}) {
 
     try {
 
@@ -3990,6 +4002,7 @@ async function openOtherProfile(userId) {
         if (!data.success) return;
 
         otherProfileCache = data.profile;
+        otherProfileHideMessageAction = !!options.hideMessageAction;
         renderOtherProfile();
 
         otherProfileModal.style.display = 'flex';
@@ -4070,7 +4083,7 @@ function renderOtherProfileActions(profile) {
     } else if (profile.friendship_status === 'friends') {
 
         html = `
-            <button class="profile-action-btn profile-action-primary" id="dm-open-btn">💬 Mesaj Gönder</button>
+            ${otherProfileHideMessageAction ? '' : '<button class="profile-action-btn profile-action-primary" id="dm-open-btn">💬 Mesaj Gönder</button>'}
             <button class="profile-action-btn profile-action-danger" id="unfriend-btn">Arkadaşlıktan Çıkar</button>
             <button class="profile-action-btn profile-action-disabled" id="block-btn">🚫 Engelle</button>
         `;
