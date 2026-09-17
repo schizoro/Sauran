@@ -2118,6 +2118,18 @@ const I18N = {
     'unblock': { tr: 'Engeli Kaldır', en: 'Unblock' },
     'watch': { tr: 'İzle', en: 'Watch' },
     'screensharing-active': { tr: 'ekran paylaşıyor', en: 'is sharing their screen' },
+    'make-moderator': { tr: 'Moderatör Yap', en: 'Make Moderator' },
+    'remove-moderator': { tr: 'Moderatörlükten Al', en: 'Remove Moderator' },
+    'mute': { tr: 'Sustur', en: 'Mute' },
+    'kick': { tr: 'At', en: 'Kick' },
+    'ban': { tr: 'Yasakla', en: 'Ban' },
+    'confirm-kick': { tr: 'Bu kullanıcıyı Hub\'dan atmak istediğine emin misin?', en: 'Are you sure you want to kick this user from the Hub?' },
+    'confirm-ban': { tr: 'Bu kullanıcıyı Hub\'dan yasaklamak istediğine emin misin?', en: 'Are you sure you want to ban this user from the Hub?' },
+    'kicked-from-hub': { tr: 'Bu Hub\'dan atıldın.', en: "You've been kicked from this Hub." },
+    'banned-from-hub': { tr: 'Bu Hub\'dan yasaklandın.', en: "You've been banned from this Hub." },
+    'hub-bans-title': { tr: 'Yasaklılar', en: 'Banned Users' },
+    'hub-bans-empty': { tr: 'Yasaklı kimse yok.', en: 'No one is banned.' },
+    'unban': { tr: 'Yasağı Kaldır', en: 'Unban' },
     'attach-camera': { tr: 'Kamerayla Çek', en: 'Take Photo/Video' },
     'attach-gallery': { tr: 'Galeriden Seç', en: 'Choose from Gallery' },
     'attach-file': { tr: 'Dosya Seç', en: 'Choose File' },
@@ -2568,6 +2580,34 @@ function connectToChat() {
     // -------------------------------------------------
     // Sesli oda değişiklikleri
     // -------------------------------------------------
+
+    socket.on('hub_members_changed', (data) => {
+        if (currentHub && data.hub_id === currentHub.id) {
+            openHub(currentHub.id);
+        }
+    });
+
+    socket.on('hub_kicked', (data) => {
+        if (currentHub && data.hub_id === currentHub.id) {
+            showToast(t('kicked-from-hub'));
+            switchToView('hubs');
+            loadHubList();
+        }
+    });
+
+    socket.on('hub_banned', (data) => {
+        if (currentHub && data.hub_id === currentHub.id) {
+            showToast(t('banned-from-hub'));
+            switchToView('hubs');
+            loadHubList();
+        }
+    });
+
+    socket.on('hub_force_muted', () => {
+        if (callFrame) {
+            callFrame.setLocalAudio(false);
+        }
+    });
 
     socket.on('voice_room_created', (room) => {
         if (currentHub && room.hub_id === currentHub.id) {
@@ -4645,7 +4685,54 @@ hubSettingsOpenBtn.addEventListener('click', () => {
 
     hubSettingsModal.style.display = 'flex';
 
+    const canModerate = currentHub.my_permission_tier === 'owner' || currentHub.my_permission_tier === 'moderator';
+    const bansSection = document.getElementById('hub-settings-bans-section');
+    bansSection.style.display = canModerate ? 'block' : 'none';
+    if (canModerate) loadHubBans();
+
 });
+
+async function loadHubBans() {
+
+    if (!currentHub) return;
+    const container = document.getElementById('hub-settings-bans-list');
+
+    try {
+
+        const response = await fetch(`/api/hubs/${currentHub.id}/bans`, { credentials: 'include' });
+        const data = await response.json();
+        if (!data.success) return;
+
+        if (data.bans.length === 0) {
+            container.innerHTML = `<div class="settings-blocked-empty">${t('hub-bans-empty')}</div>`;
+            return;
+        }
+
+        container.innerHTML = data.bans.map((u) => {
+            const color = getUserColor(u.username);
+            const initial = u.username.charAt(0).toUpperCase();
+            const avatarInner = u.avatar_data ? `<img src="${escapeAttr(u.avatar_data)}" alt="">` : escapeHtml(initial);
+            return `
+                <div class="settings-blocked-row">
+                    <span class="settings-blocked-avatar" style="--user-color:${color};">${avatarInner}</span>
+                    <span class="settings-blocked-name">${escapeHtml(u.username)}</span>
+                    <button class="settings-unblock-btn" data-unban="${u.id}" type="button">${t('unban')}</button>
+                </div>
+            `;
+        }).join('');
+
+        container.querySelectorAll('[data-unban]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                await fetch(`/api/hubs/${currentHub.id}/members/${btn.dataset.unban}/unban`, { method: 'POST', credentials: 'include' });
+                loadHubBans();
+            });
+        });
+
+    } catch (error) {
+        console.error('Yasaklılar alınamadı:', error);
+    }
+
+}
 
 hubSettingsCloseBtn.addEventListener('click', () => hubSettingsModal.style.display = 'none');
 hubSettingsModal.addEventListener('click', (event) => {
@@ -5570,17 +5657,35 @@ function leaveCall() {
 
 function renderHubMembers() {
 
+    const myTier = currentHub.my_permission_tier;
+    const canModerate = myTier === 'owner' || myTier === 'moderator';
+
     hubMemberList.innerHTML = currentHub.members.map((m) => {
 
         const avatar = avatarButtonHtml(m.user_id, m.avatar_data, m.username);
+        const isSelf = m.user_id === currentUser.id;
+        const tierBadge = m.permission_tier === 'owner' ? ' 👑' : m.permission_tier === 'moderator' ? ' 🛡️' : '';
+
+        const showMenu = canModerate && !isSelf && m.permission_tier !== 'owner';
 
         return `
-            <div class="hub-member-row" data-user-id="${m.user_id}">
+            <div class="hub-member-row" data-user-id="${m.user_id}" data-tier="${m.permission_tier}">
                 <span class="hub-member-avatar-wrap">
                     ${avatar}
                     <span class="hub-member-dot" style="background:${m.online ? '#57f287' : '#4b5563'};"></span>
                 </span>
-                <span class="hub-member-name">${escapeHtml(m.username)}</span>
+                <span class="hub-member-name">${escapeHtml(m.username)}${tierBadge}</span>
+                ${showMenu ? `
+                    <div class="hub-member-menu-wrap">
+                        <button class="hub-member-menu-btn" type="button">⋯</button>
+                        <div class="hub-member-menu liquid-glass" style="display:none;">
+                            ${myTier === 'owner' ? `<button data-action="moderator">${m.permission_tier === 'moderator' ? t('remove-moderator') : t('make-moderator')}</button>` : ''}
+                            <button data-action="mute">🔇 ${t('mute')}</button>
+                            <button data-action="kick">👢 ${t('kick')}</button>
+                            <button data-action="ban" class="hub-member-menu-danger">🚫 ${t('ban')}</button>
+                        </div>
+                    </div>
+                ` : ''}
             </div>
         `;
 
@@ -5592,9 +5697,71 @@ function renderHubMembers() {
 
         row.querySelector('.hub-member-name').addEventListener('click', () => openOtherProfile(userId));
 
+        const menuBtn = row.querySelector('.hub-member-menu-btn');
+        const menu = row.querySelector('.hub-member-menu');
+        if (!menuBtn) return;
+
+        menuBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            document.querySelectorAll('.hub-member-menu').forEach(m => { if (m !== menu) m.style.display = 'none'; });
+            menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
+        });
+
+        menu.querySelectorAll('[data-action]').forEach((btn) => {
+            btn.addEventListener('click', async (event) => {
+                event.stopPropagation();
+                menu.style.display = 'none';
+                await handleMemberModerationAction(btn.dataset.action, userId, row.dataset.tier);
+            });
+        });
+
     });
 
+    document.addEventListener('click', () => {
+        document.querySelectorAll('.hub-member-menu').forEach(m => m.style.display = 'none');
+    }, { once: true });
+
     wireMsgAvatars(hubMemberList);
+
+}
+
+async function handleMemberModerationAction(action, targetId, targetTier) {
+
+    if (!currentHub) return;
+
+    if (action === 'moderator') {
+
+        const makeModerator = targetTier !== 'moderator';
+        const response = await fetch(`/api/hubs/${currentHub.id}/members/${targetId}/moderator`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+            body: JSON.stringify({ moderator: makeModerator })
+        });
+        const data = await response.json();
+        if (!data.success) showToast(data.error || 'İşlem başarısız.');
+        return;
+
+    }
+
+    if (action === 'mute') {
+        await fetch(`/api/hubs/${currentHub.id}/members/${targetId}/mute`, { method: 'POST', credentials: 'include' });
+        return;
+    }
+
+    if (action === 'kick') {
+        if (!confirm(t('confirm-kick'))) return;
+        const response = await fetch(`/api/hubs/${currentHub.id}/members/${targetId}/kick`, { method: 'POST', credentials: 'include' });
+        const data = await response.json();
+        if (!data.success) showToast(data.error || 'İşlem başarısız.');
+        return;
+    }
+
+    if (action === 'ban') {
+        if (!confirm(t('confirm-ban'))) return;
+        const response = await fetch(`/api/hubs/${currentHub.id}/members/${targetId}/ban`, { method: 'POST', credentials: 'include' });
+        const data = await response.json();
+        if (!data.success) showToast(data.error || 'İşlem başarısız.');
+        return;
+    }
 
 }
 

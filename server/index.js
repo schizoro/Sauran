@@ -25,6 +25,12 @@ const {
   leaveHub,
   addHubRole,
   isHubMember,
+  getMemberTier,
+  setModerator,
+  kickMember,
+  banMember,
+  unbanMember,
+  listHubBans,
   getHubMessages,
   saveHubMessage,
   deleteMessage,
@@ -1200,6 +1206,110 @@ app.delete('/api/hubs/:id', (req, res) => {
     console.error('Hub silme API hatası:', error);
     res.status(500).json({ success: false, error: 'Hub silinemedi.' });
   }
+});
+
+// =====================================================
+// HUB YETKİ / MODERASYON (owner / moderator / member)
+// =====================================================
+
+function kickUserFromHubSockets(hubId, userId, eventName) {
+  const sockets = activeUsers.get(userId);
+  if (sockets) {
+    sockets.forEach(sid => io.to(sid).emit(eventName, { hub_id: hubId }));
+  }
+  // Aktif sesli oda bağlantısı varsa da kes.
+  for (const [roomId, participantIds] of voiceRoomParticipants.entries()) {
+    if (participantIds.has(userId)) {
+      participantIds.delete(userId);
+      io.to(`hub:${hubId}`).emit('voice_room_participants_updated', {
+        room_id: roomId,
+        participants: getVoiceRoomParticipantIds(roomId).map(uid => activeUserNames.get(uid) || '').filter(Boolean)
+      });
+    }
+  }
+}
+
+app.post('/api/hubs/:id/members/:userId/moderator', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const hubId = Number(req.params.id);
+  const targetId = Number(req.params.userId);
+  const result = setModerator(hubId, user.id, targetId, Boolean(req.body?.moderator));
+
+  if (!result.success) return res.status(400).json(result);
+
+  io.to(`hub:${hubId}`).emit('hub_members_changed', { hub_id: hubId });
+  return res.json(result);
+});
+
+app.post('/api/hubs/:id/members/:userId/kick', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const hubId = Number(req.params.id);
+  const targetId = Number(req.params.userId);
+  const result = kickMember(hubId, user.id, targetId);
+
+  if (!result.success) return res.status(400).json(result);
+
+  kickUserFromHubSockets(hubId, targetId, 'hub_kicked');
+  io.to(`hub:${hubId}`).emit('hub_members_changed', { hub_id: hubId });
+  return res.json(result);
+});
+
+app.post('/api/hubs/:id/members/:userId/ban', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const hubId = Number(req.params.id);
+  const targetId = Number(req.params.userId);
+  const result = banMember(hubId, user.id, targetId);
+
+  if (!result.success) return res.status(400).json(result);
+
+  kickUserFromHubSockets(hubId, targetId, 'hub_banned');
+  io.to(`hub:${hubId}`).emit('hub_members_changed', { hub_id: hubId });
+  return res.json(result);
+});
+
+app.post('/api/hubs/:id/members/:userId/unban', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const result = unbanMember(Number(req.params.id), user.id, Number(req.params.userId));
+  if (!result.success) return res.status(400).json(result);
+  return res.json(result);
+});
+
+app.post('/api/hubs/:id/members/:userId/mute', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const hubId = Number(req.params.id);
+  const targetId = Number(req.params.userId);
+
+  const actorTier = getMemberTier(hubId, user.id);
+  if (actorTier !== 'owner' && actorTier !== 'moderator') {
+    return res.status(403).json({ success: false, error: 'Bu işlem için yetkin yok.' });
+  }
+
+  const sockets = activeUsers.get(targetId);
+  if (sockets) sockets.forEach(sid => io.to(sid).emit('hub_force_muted', { hub_id: hubId }));
+
+  return res.json({ success: true });
+});
+
+app.get('/api/hubs/:id/bans', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const hubId = Number(req.params.id);
+  if (getMemberTier(hubId, user.id) !== 'owner' && getMemberTier(hubId, user.id) !== 'moderator') {
+    return res.status(403).json({ success: false, error: 'Bu işlem için yetkin yok.' });
+  }
+
+  return res.json({ success: true, bans: listHubBans(hubId) });
 });
 
 // =====================================================

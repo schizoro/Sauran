@@ -235,6 +235,40 @@ db.exec(`
 `);
 
 // =====================================================
+// v1.19 MIGRATION — HUB YETKİ KATMANLARI (owner/moderator/member) + BAN
+// =====================================================
+
+const hubMembersColumns = db
+  .prepare(`PRAGMA table_info(hub_members)`)
+  .all()
+  .map(col => col.name);
+
+if (!hubMembersColumns.includes('permission_tier')) {
+  db.exec(`ALTER TABLE hub_members ADD COLUMN permission_tier TEXT NOT NULL DEFAULT 'member'`);
+
+  // Mevcut Hub sahiplerini geriye dönük olarak 'owner' yap.
+  db.exec(`
+    UPDATE hub_members SET permission_tier = 'owner'
+    WHERE user_id = (SELECT created_by FROM hubs WHERE hubs.id = hub_members.hub_id)
+  `);
+}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS hub_bans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hub_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    banned_by INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(hub_id, user_id),
+    FOREIGN KEY (hub_id) REFERENCES hubs(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+`);
+
+const PERMISSION_RANK = { member: 0, moderator: 1, owner: 2 };
+
+// =====================================================
 // v1.10 MIGRATION — BİLDİRİMLER / ŞİFRE SIFIRLAMA
 // =====================================================
 
@@ -596,7 +630,7 @@ function createHub(userId, { name, image_data }) {
     const hubResult = insertHub.run(name, image_data || null, userId);
     const hubId = hubResult.lastInsertRowid;
 
-    db.prepare(`INSERT INTO hub_members (hub_id, user_id) VALUES (?, ?)`).run(hubId, userId);
+    db.prepare(`INSERT INTO hub_members (hub_id, user_id, permission_tier) VALUES (?, ?, 'owner')`).run(hubId, userId);
 
     return { success: true, id: hubId };
 
@@ -671,6 +705,10 @@ function joinHubByCode(code, userId) {
     return { success: false, error: 'Bu Hub\'a zaten üyesin.' };
   }
 
+  if (db.prepare(`SELECT 1 FROM hub_bans WHERE hub_id = ? AND user_id = ?`).get(invite.hub_id, userId)) {
+    return { success: false, error: 'Bu Hub\'dan banlandın.' };
+  }
+
   db.prepare(`INSERT INTO hub_members (hub_id, user_id) VALUES (?, ?)`).run(invite.hub_id, userId);
   db.prepare(`UPDATE hub_invites SET uses = uses + 1 WHERE id = ?`).run(invite.id);
 
@@ -687,14 +725,14 @@ function getHubDetail(hubId, userId) {
   `).all(hubId);
 
   const members = db.prepare(`
-    SELECT hub_members.user_id, hub_members.role_id, users.username, users.status, users.avatar_data
+    SELECT hub_members.user_id, hub_members.role_id, hub_members.permission_tier, users.username, users.status, users.avatar_data
     FROM hub_members
     INNER JOIN users ON users.id = hub_members.user_id
     WHERE hub_members.hub_id = ?
   `).all(hubId);
 
   const membership = userId
-    ? db.prepare(`SELECT role_id FROM hub_members WHERE hub_id = ? AND user_id = ?`).get(hubId, userId)
+    ? db.prepare(`SELECT role_id, permission_tier FROM hub_members WHERE hub_id = ? AND user_id = ?`).get(hubId, userId)
     : null;
 
   return {
@@ -703,7 +741,8 @@ function getHubDetail(hubId, userId) {
     members,
     is_member: Boolean(membership),
     is_owner: hub.created_by === userId,
-    my_role_id: membership ? membership.role_id : null
+    my_role_id: membership ? membership.role_id : null,
+    my_permission_tier: membership ? membership.permission_tier : null
   };
 }
 
@@ -769,6 +808,91 @@ function addHubRole(hubId, userId, { name, icon, slot_limit }) {
 
 function isHubMember(hubId, userId) {
   return Boolean(db.prepare(`SELECT 1 FROM hub_members WHERE hub_id = ? AND user_id = ?`).get(hubId, userId));
+}
+
+// =====================================================
+// HUB YETKİ KATMANLARI (owner / moderator / member)
+// =====================================================
+
+function getMemberTier(hubId, userId) {
+  const row = db.prepare(`SELECT permission_tier FROM hub_members WHERE hub_id = ? AND user_id = ?`).get(hubId, userId);
+  return row ? row.permission_tier : null;
+}
+
+function hasAtLeastTier(hubId, userId, minTier) {
+  const tier = getMemberTier(hubId, userId);
+  if (!tier) return false;
+  return PERMISSION_RANK[tier] >= PERMISSION_RANK[minTier];
+}
+
+function setModerator(hubId, actorId, targetId, isModerator) {
+  if (!hasAtLeastTier(hubId, actorId, 'owner')) {
+    return { success: false, error: 'Yalnızca Hub sahibi moderatör atayabilir.' };
+  }
+
+  const targetTier = getMemberTier(hubId, targetId);
+  if (!targetTier) return { success: false, error: 'Kullanıcı bu Hub\'ın üyesi değil.' };
+  if (targetTier === 'owner') return { success: false, error: 'Hub sahibinin yetkisi değiştirilemez.' };
+
+  db.prepare(`UPDATE hub_members SET permission_tier = ? WHERE hub_id = ? AND user_id = ?`)
+    .run(isModerator ? 'moderator' : 'member', hubId, targetId);
+
+  return { success: true };
+}
+
+function kickMember(hubId, actorId, targetId) {
+  if (actorId === targetId) return { success: false, error: 'Kendini atamazsın.' };
+  if (!hasAtLeastTier(hubId, actorId, 'moderator')) {
+    return { success: false, error: 'Bu işlem için yetkin yok.' };
+  }
+
+  const actorTier = getMemberTier(hubId, actorId);
+  const targetTier = getMemberTier(hubId, targetId);
+  if (!targetTier) return { success: false, error: 'Kullanıcı bu Hub\'ın üyesi değil.' };
+  if (targetTier === 'owner') return { success: false, error: 'Hub sahibi atılamaz.' };
+  if (targetTier === 'moderator' && actorTier !== 'owner') {
+    return { success: false, error: 'Yalnızca Hub sahibi bir moderatörü atabilir.' };
+  }
+
+  db.prepare(`DELETE FROM hub_members WHERE hub_id = ? AND user_id = ?`).run(hubId, targetId);
+
+  return { success: true };
+}
+
+function banMember(hubId, actorId, targetId) {
+  const result = kickMember(hubId, actorId, targetId);
+  if (!result.success) return result;
+
+  db.prepare(`
+    INSERT INTO hub_bans (hub_id, user_id, banned_by) VALUES (?, ?, ?)
+    ON CONFLICT(hub_id, user_id) DO UPDATE SET banned_by = excluded.banned_by, created_at = CURRENT_TIMESTAMP
+  `).run(hubId, targetId, actorId);
+
+  return { success: true };
+}
+
+function unbanMember(hubId, actorId, targetId) {
+  if (!hasAtLeastTier(hubId, actorId, 'moderator')) {
+    return { success: false, error: 'Bu işlem için yetkin yok.' };
+  }
+
+  db.prepare(`DELETE FROM hub_bans WHERE hub_id = ? AND user_id = ?`).run(hubId, targetId);
+
+  return { success: true };
+}
+
+function isHubBanned(hubId, userId) {
+  return Boolean(db.prepare(`SELECT 1 FROM hub_bans WHERE hub_id = ? AND user_id = ?`).get(hubId, userId));
+}
+
+function listHubBans(hubId) {
+  return db.prepare(`
+    SELECT users.id, users.username, users.avatar_data, hub_bans.created_at
+    FROM hub_bans
+    INNER JOIN users ON users.id = hub_bans.user_id
+    WHERE hub_bans.hub_id = ?
+    ORDER BY hub_bans.created_at DESC
+  `).all(hubId);
 }
 
 function getHubMessages(hubId, limit = 50) {
@@ -1504,6 +1628,14 @@ module.exports = {
   leaveHub,
   addHubRole,
   isHubMember,
+  getMemberTier,
+  hasAtLeastTier,
+  setModerator,
+  kickMember,
+  banMember,
+  unbanMember,
+  isHubBanned,
+  listHubBans,
   getHubMessages,
   saveHubMessage,
   deleteMessage,

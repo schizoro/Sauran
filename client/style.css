@@ -728,6 +728,20 @@ body.theme-light .hub-voice-rooms-side { border-color: var(--border-soft); }
 .hub-member-name { color: #c5c6c7; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .hub-member-name:hover { color: #66fcf1; }
 
+.hub-member-menu-wrap { position: relative; margin-left: auto; flex-shrink: 0; }
+.hub-member-menu-btn { background: none; border: none; color: #6b7280; font-size: 14px; cursor: pointer; padding: 2px 6px; }
+.hub-member-menu-btn:hover { color: #c5c6c7; }
+.hub-member-menu {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 30; min-width: 150px;
+  display: flex; flex-direction: column; padding: 6px; border-radius: 12px; animation: dropdown-in 0.15s ease-out;
+}
+.hub-member-menu button {
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; background: none; border: none;
+  color: #c5c6c7; font-size: 12px; cursor: pointer; text-align: left; white-space: nowrap; transition: 0.15s;
+}
+.hub-member-menu button:hover { background: rgba(102, 252, 241, 0.1); color: #66fcf1; }
+.hub-member-menu .hub-member-menu-danger:hover { background: rgba(255, 46, 70, 0.12); color: #ff2e46; }
+
 /* Hub Sohbet / Anket / Paylaşım Kartları */
 .hub-msg { align-self: flex-start; max-width: 78%; width: 100%; position: relative; padding: 4px 10px; border-radius: 6px; transition: background 0.12s; display: flex; gap: 10px; align-items: flex-start; }
 .hub-msg.msg-mine { align-self: flex-end; flex-direction: row-reverse; }
@@ -793,7 +807,8 @@ body.theme-light .hub-voice-rooms-side { border-color: var(--border-soft); }
 .poll-submit-btn { width: 100%; padding: 11px; margin-top: 4px; }
 
 /* ─── v1.15: Hub Ayarları Modalı ──────────────────────────────────────────── */
-.hub-settings-box { width: 380px; max-width: 92vw; }
+.hub-settings-box { width: 380px; max-width: 92vw; max-height: 82vh; }
+.hub-settings-body { overflow-y: auto; }
 .hub-settings-body { padding: 20px 22px 24px; display: flex; flex-direction: column; gap: 12px; }
 .hub-settings-divider { height: 1px; background: #1f2833; margin: 8px 0; }
 .hub-settings-action-btn {
