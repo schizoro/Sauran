@@ -35,6 +35,11 @@ const {
   saveHubMessage,
   deleteMessage,
   editMessage,
+  addReaction,
+  removeReaction,
+  pinMessage,
+  unpinMessage,
+  forwardMessageToDm,
   createHubVoiceMessage,
   createHubFileMessage,
   createHubPoll,
@@ -1159,7 +1164,7 @@ app.get('/api/hubs/:id/messages', (req, res) => {
   }
 
   try {
-    res.json({ success: true, messages: getHubMessages(hubId, 50) });
+    res.json({ success: true, messages: getHubMessages(hubId, 50, user.id) });
   } catch (error) {
     console.error('Hub mesaj hatası:', error);
     res.status(500).json({ success: false, error: 'Mesajlar alınamadı.' });
@@ -1512,6 +1517,119 @@ app.patch('/api/messages/:id', (req, res) => {
   } catch (error) {
     console.error('Mesaj düzenleme hatası:', error);
     res.status(500).json({ success: false, error: 'Düzenlenemedi.' });
+  }
+});
+
+// =====================================================
+// MESAJ AKSİYONLARI — Tepki / Sabitleme / İletme
+// =====================================================
+// NOT: Edit/Delete yukarıda zaten mevcuttu, dokunulmadı. Bunlar AŞAMA D'de
+// eklenen yeni aksiyonlar — hepsi requireAuth + kendi fonksiyonu içindeki
+// erişim/yetki kontrolüyle korunuyor (bkz. server/db.js).
+
+app.post('/api/messages/:id/reactions', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    const result = addReaction(Number(req.params.id), user.id, String(req.body?.emoji || ''));
+
+    if (!result.success) return res.status(400).json(result);
+
+    const payload = { id: Number(req.params.id), reactions: result.reactions };
+    if (result.hub_id) {
+      io.to(`hub:${result.hub_id}`).emit('hub_message_reaction', payload);
+    } else if (result.to_user_id) {
+      io.to(`user:${user.id}`).to(`user:${result.to_user_id}`).emit('dm_message_reaction', payload);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Tepki eklenirken hata:', error);
+    res.status(500).json({ success: false, error: 'Tepki eklenemedi.' });
+  }
+});
+
+app.delete('/api/messages/:id/reactions/:emoji', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    const result = removeReaction(Number(req.params.id), user.id, decodeURIComponent(req.params.emoji));
+
+    if (!result.success) return res.status(400).json(result);
+
+    const payload = { id: Number(req.params.id), reactions: result.reactions };
+    if (result.hub_id) {
+      io.to(`hub:${result.hub_id}`).emit('hub_message_reaction', payload);
+    } else if (result.to_user_id) {
+      io.to(`user:${user.id}`).to(`user:${result.to_user_id}`).emit('dm_message_reaction', payload);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Tepki kaldırılırken hata:', error);
+    res.status(500).json({ success: false, error: 'Tepki kaldırılamadı.' });
+  }
+});
+
+app.post('/api/messages/:id/pin', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    const result = pinMessage(Number(req.params.id), user.id);
+
+    if (!result.success) return res.status(403).json(result);
+
+    io.to(`hub:${result.hub_id}`).emit('hub_message_pinned', result.message);
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Mesaj sabitlenirken hata:', error);
+    res.status(500).json({ success: false, error: 'Sabitlenemedi.' });
+  }
+});
+
+app.delete('/api/messages/:id/pin', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    const result = unpinMessage(Number(req.params.id), user.id);
+
+    if (!result.success) return res.status(403).json(result);
+
+    io.to(`hub:${result.hub_id}`).emit('hub_message_unpinned', result.message);
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Sabitleme kaldırılırken hata:', error);
+    res.status(500).json({ success: false, error: 'Kaldırılamadı.' });
+  }
+});
+
+app.post('/api/messages/:id/forward', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    const toUserId = Number(req.body?.to_user_id);
+    const result = forwardMessageToDm(Number(req.params.id), user.id, user.username, toUserId);
+
+    if (!result.success) return res.status(400).json(result);
+
+    io.to(`user:${user.id}`).to(`user:${toUserId}`).emit('dm_message', result.message);
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Mesaj iletilirken hata:', error);
+    res.status(500).json({ success: false, error: 'İletilemedi.' });
   }
 });
 
@@ -2074,7 +2192,8 @@ io.on('connection', (socket) => {
       }
 
       const toUserId = Number(data?.to_user_id);
-      const result = saveDmMessage(socket.userId, socket.username, toUserId, data?.content);
+      const replyToMessageId = data?.reply_to_message_id ? Number(data.reply_to_message_id) : null;
+      const result = saveDmMessage(socket.userId, socket.username, toUserId, data?.content, replyToMessageId);
 
       if (!result.success) {
         socket.emit('message_error', result.error);
@@ -2238,7 +2357,8 @@ io.on('connection', (socket) => {
         return;
       }
 
-      const message = saveHubMessage(hubId, socket.userId, socket.username, content);
+      const replyToMessageId = data?.reply_to_message_id ? Number(data.reply_to_message_id) : null;
+      const message = saveHubMessage(hubId, socket.userId, socket.username, content, replyToMessageId);
 
       io.to(`hub:${hubId}`).emit('hub_message', message);
 

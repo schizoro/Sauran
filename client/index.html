@@ -361,6 +361,14 @@
                             <button data-action="share" type="button">📌 <span data-i18n="start-share">Paylaşım</span></button>
                         </div>
 
+                        <div id="hub-reply-preview" class="composer-reply-preview liquid-glass" style="display:none;">
+                            <span class="composer-reply-preview-text">
+                                <span data-i18n="message-replying">↩ Yanıtlanıyor</span>
+                                <span id="hub-reply-preview-content" class="composer-reply-preview-content"></span>
+                            </span>
+                            <button type="button" id="hub-reply-cancel-btn" title="Yanıtı iptal et">✕</button>
+                        </div>
+
                         <form id="hub-chat-form" class="composer-form">
                             <div class="composer-input-box">
                                 <div class="composer-attach-wrap">
@@ -821,6 +829,14 @@
 
             <div id="dm-feed" class="dm-feed"></div>
 
+            <div id="dm-reply-preview" class="composer-reply-preview liquid-glass" style="display:none;">
+                <span class="composer-reply-preview-text">
+                    <span data-i18n="message-replying">↩ Yanıtlanıyor</span>
+                    <span id="dm-reply-preview-content" class="composer-reply-preview-content"></span>
+                </span>
+                <button type="button" id="dm-reply-cancel-btn" title="Yanıtı iptal et">✕</button>
+            </div>
+
             <form id="dm-form" class="composer-form">
                 <div class="composer-input-box">
                     <div class="composer-attach-wrap">
@@ -1272,6 +1288,19 @@
             <div id="report-modal-error" class="hub-create-error"></div>
 
             <button id="report-submit-btn" class="hub-create-submit" type="button" data-i18n="report-submit">Bildir</button>
+
+        </div>
+    </div>
+
+    <div id="forward-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-box report-modal-box">
+
+            <button id="forward-modal-close-btn" class="profile-close-btn">✕</button>
+
+            <h3 data-i18n="message-forward">↗ İlet</h3>
+
+            <div id="forward-friend-list" class="report-reason-list"></div>
+            <div id="forward-modal-empty" class="friends-sidebar-empty" style="display:none;" data-i18n="forward-no-friends">İletebileceğin arkadaşın yok.</div>
 
         </div>
     </div>

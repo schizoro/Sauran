@@ -509,6 +509,10 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
   from { transform: translateX(100%); }
   to { transform: translateX(0); }
 }
+@keyframes slide-in-bottom {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
 .side-panel-scroll { flex: 1; overflow-y: auto; padding-bottom: 20px; }
 
 .top-friends-list { display: flex; gap: 12px; padding: 0 16px 16px; overflow-x: auto; }
@@ -863,25 +867,89 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 .hub-msg-text { color: #c5c6c7; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
 .hub-msg-deleted { color: #4b5563; font-size: 13px; font-style: italic; }
 
-.hub-msg-actions { position: absolute; top: -10px; right: 6px; display: none; gap: 4px; background: #1f2833; border: 1px solid #2a3644; border-radius: 6px; padding: 3px; }
+.hub-msg-actions {
+  position: absolute; top: -10px; right: 6px; display: none; gap: 2px;
+  background: rgba(20, 22, 28, 0.75); backdrop-filter: blur(12px) saturate(160%); -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 999px; padding: 3px;
+}
 @media (hover: hover) {
   .hub-msg:hover .hub-msg-actions { display: flex; }
 }
 .hub-msg.show-actions .hub-msg-actions { display: flex; }
-.hub-msg-actions button { background: none; border: none; color: #8e9297; font-size: 12px; cursor: pointer; padding: 4px 6px; border-radius: 4px; }
-.hub-msg-actions button:hover { color: #66fcf1; background: #12141a; }
-.hub-msg-actions .msg-delete-btn:hover { color: #ff2e46; }
+.hub-msg-actions button { background: none; border: none; color: #8e9297; font-size: 12px; cursor: pointer; padding: 4px 6px; border-radius: 999px; }
+.hub-msg-actions button:hover { color: #66fcf1; background: rgba(102, 252, 241, 0.12); }
+
+/* ─── AŞAMA D: Mesaj Aksiyonları Menüsü (⋯) — liquid glass, kompakt ────────── */
+.msg-actions-bar { position: absolute; }
+.msg-actions-menu, .msg-reaction-picker {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 30;
+  animation: dropdown-in 0.15s ease-out;
+}
+.msg-actions-menu {
+  display: none; flex-direction: column; min-width: 190px; padding: 6px; border-radius: 14px;
+}
+.msg-actions-menu button {
+  display: flex; align-items: center; gap: 10px; padding: 8px 11px; border-radius: 10px; width: 100%;
+  background: none; border: none; color: #c5c6c7; font-size: 12.5px; cursor: pointer; text-align: left; white-space: nowrap; transition: 0.15s;
+}
+.msg-actions-menu button:hover { background: rgba(102, 252, 241, 0.1); color: #66fcf1; }
+.msg-actions-menu button.hub-member-menu-danger:hover { background: rgba(255, 46, 70, 0.12); color: #ff2e46; }
+.msg-actions-menu-divider { height: 1px; background: rgba(255, 255, 255, 0.08); margin: 4px 6px; }
+
+.msg-reaction-picker { display: none; gap: 2px; padding: 6px 8px; border-radius: 999px; }
+.msg-reaction-picker button { background: none; border: none; font-size: 17px; cursor: pointer; padding: 3px 5px; border-radius: 999px; transition: 0.15s; line-height: 1; }
+.msg-reaction-picker button:hover { background: rgba(102, 252, 241, 0.15); transform: scale(1.15); }
+
+/* ─── Tepki (reaction) rozetleri ────────────────────────────────────────────── */
+.msg-reactions-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.msg-reaction-pill {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); color: #c5c6c7; transition: 0.15s;
+}
+.msg-reaction-pill:hover { background: rgba(102, 252, 241, 0.12); }
+.msg-reaction-pill.mine { background: rgba(102, 252, 241, 0.16); border-color: rgba(102, 252, 241, 0.4); color: #66fcf1; }
+.msg-reaction-pill span { font-weight: bold; }
+
+/* ─── Yanıt (reply) önizlemesi — composer üstü + mesaj içi alıntı ──────────── */
+.composer-reply-preview {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 14px; margin: 0 25px 8px; border-radius: 14px; font-size: 12px; color: #c5c6c7;
+}
+.dm-modal-box .composer-reply-preview { margin: 0 18px 8px; }
+.composer-reply-preview-text { display: flex; flex-direction: column; gap: 2px; color: #66fcf1; font-weight: bold; }
+.composer-reply-preview-content { color: #9ca3af; font-weight: normal; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60vw; }
+.composer-reply-preview button { background: none; border: none; color: #8e9297; font-size: 13px; cursor: pointer; padding: 4px; }
+.composer-reply-preview button:hover { color: #ff2e46; }
+
+.msg-reply-quote {
+  display: flex; flex-direction: column; gap: 1px; padding: 5px 10px; margin-bottom: 4px; border-radius: 10px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.05); border-left: 2px solid #66fcf1; font-size: 11.5px; transition: 0.15s;
+}
+.msg-reply-quote:hover { background: rgba(102, 252, 241, 0.1); }
+.msg-reply-quote-user { color: #66fcf1; font-weight: bold; }
+.msg-reply-quote-text { color: #9ca3af; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+
+.msg-pinned-tag { color: #66fcf1; font-size: 10px; font-weight: bold; }
+
+@keyframes msg-jump-flash {
+  0%, 100% { background: transparent; }
+  30% { background: rgba(102, 252, 241, 0.18); }
+}
+.msg-jump-highlight { animation: msg-jump-flash 1.4s ease-out; border-radius: 8px; }
 
 .hub-msg-edit-box { display: flex; gap: 8px; align-items: center; }
 .hub-msg-edit-box input { flex: 1; background: #0b0c10; border: 1px solid #66fcf1; color: #c5c6c7; padding: 7px 10px; font-size: 13px; outline: none; }
 .hub-msg-edit-box button { padding: 6px 10px; font-size: 11px; font-weight: bold; cursor: pointer; border: 1px solid #66fcf1; background: transparent; color: #66fcf1; }
 .hub-msg-edit-box button:hover { background: #66fcf1; color: #0b0c10; }
 
-.hub-poll-card, .hub-share-card { background: #12141a; border: 1px solid #1f2833; border-left: 3px solid #66fcf1; padding: 14px 16px; min-width: 260px; }
+.hub-poll-card, .hub-share-card {
+  background: rgba(255, 255, 255, 0.06); backdrop-filter: blur(14px) saturate(160%); -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border: none; border-radius: 16px; padding: 14px 16px; min-width: 260px;
+}
 .hub-poll-question { color: #fff; font-size: 13px; font-weight: bold; margin-bottom: 12px; }
-.hub-poll-option { position: relative; margin-bottom: 8px; padding: 9px 12px; background: #0b0c10; border: 1px solid #1f2833; cursor: pointer; overflow: hidden; transition: 0.2s; }
-.hub-poll-option:hover { border-color: rgba(102, 252, 241, 0.5); }
-.hub-poll-option.voted { border-color: #66fcf1; }
+.hub-poll-option { position: relative; margin-bottom: 8px; padding: 9px 12px; background: rgba(255, 255, 255, 0.04); border: none; border-radius: 12px; cursor: pointer; overflow: hidden; transition: 0.2s; }
+.hub-poll-option:hover { background: rgba(102, 252, 241, 0.08); }
+.hub-poll-option.voted { background: rgba(102, 252, 241, 0.12); }
 .hub-poll-option-fill { position: absolute; inset: 0; background: rgba(102, 252, 241, 0.12); z-index: 0; transition: width 0.3s ease; }
 .hub-poll-option-row { position: relative; z-index: 1; display: flex; justify-content: space-between; color: #c5c6c7; font-size: 12px; }
 .hub-poll-total { color: #6b7280; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
@@ -1180,8 +1248,8 @@ body.call-mini-active { padding-top: 42px; }
   position: relative; max-width: 80%; width: fit-content; padding: 9px 15px; font-size: 13px; line-height: 1.5; border-radius: 18px;
   backdrop-filter: blur(12px) saturate(160%); -webkit-backdrop-filter: blur(12px) saturate(160%);
 }
-.dm-msg-mine { background: rgba(102, 252, 241, 0.1); border: 1px solid rgba(102, 252, 241, 0.28); color: #e2f8f6; }
-.dm-msg-theirs { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #c5c6c7; }
+.dm-msg-mine { background: rgba(102, 252, 241, 0.1); border: none; color: #e2f8f6; }
+.dm-msg-theirs { background: rgba(255, 255, 255, 0.05); border: none; color: #c5c6c7; }
 .dm-msg-line { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
 .dm-msg-time { flex-shrink: 0; font-size: 9px; color: #6b7280; }
 .dm-msg .hub-msg-actions { top: -12px; right: 4px; }
@@ -1233,6 +1301,19 @@ body.call-mini-active { padding-top: 42px; }
   /* Ekran paylaşımı mobil tarayıcılarda (özellikle iOS Safari) desteklenmiyor —
      çalışmayan bir butonu göstermek yerine sadece masaüstünde bırakıyoruz. */
   #call-screenshare-btn { display: none !important; }
+
+  /* AŞAMA D: mobilde "⋯" menüsü ekranın altından taşan bir dropdown yerine
+     alttan açılan sabit bir sheet olsun — uzun mesaj listelerinde ekran dışına
+     taşmaz, her zaman parmakla ulaşılabilir kalır. */
+  .msg-actions-menu {
+    position: fixed; top: auto; bottom: 0; left: 0; right: 0; width: 100%;
+    border-radius: 18px 18px 0 0; padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+    min-width: 0; max-height: 70vh; overflow-y: auto; animation: slide-in-bottom 0.2s ease-out;
+  }
+  .msg-actions-menu button { font-size: 14px; padding: 11px 14px; }
+  .msg-reaction-picker { position: fixed; top: auto; bottom: 0; left: 50%; right: auto; transform: translateX(-50%); border-radius: 999px; }
+
+  .composer-reply-preview { margin-left: 14px; margin-right: 14px; }
 
   .topbar { padding: 10px 10px; gap: 6px; }
   .topbar-logo { font-size: 12px; letter-spacing: 1px; flex-shrink: 0; }

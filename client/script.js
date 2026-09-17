@@ -2584,6 +2584,29 @@ const I18N = {
     'file-limit-toast': { tr: "Dosya limiti 10 MB'dir.", en: 'File limit is 10 MB.' },
     'video-limit-toast': { tr: "Video limiti 10 MB'dir.", en: 'Video limit is 10 MB.' },
 
+    'message-reply': { tr: 'Yanıtla', en: 'Reply' },
+    'message-react': { tr: 'Tepki ekle', en: 'Add reaction' },
+    'message-copy': { tr: 'Kopyala', en: 'Copy' },
+    'message-copy-link': { tr: 'Bağlantıyı kopyala', en: 'Copy link' },
+    'message-forward': { tr: 'İlet', en: 'Forward' },
+    'message-edit': { tr: 'Düzenle', en: 'Edit' },
+    'message-delete': { tr: 'Sil', en: 'Delete' },
+    'message-pin': { tr: 'Sabitle', en: 'Pin' },
+    'message-unpin': { tr: 'Sabitlemeyi kaldır', en: 'Unpin' },
+    'message-report': { tr: 'Bildir', en: 'Report' },
+    'message-copied': { tr: 'Kopyalandı', en: 'Copied' },
+    'message-link-copied': { tr: 'Bağlantı kopyalandı', en: 'Link copied' },
+    'message-edited': { tr: 'Mesaj düzenlendi', en: 'Message edited' },
+    'message-forwarded': { tr: 'İletildi', en: 'Forwarded' },
+    'message-pinned': { tr: '📌 Sabitlendi', en: '📌 Pinned' },
+    'message-unpinned': { tr: 'Sabitleme kaldırıldı', en: 'Unpinned' },
+    'message-replying': { tr: '↩ Yanıtlanıyor', en: '↩ Replying' },
+    'message-cancel-reply': { tr: 'Yanıtı iptal et', en: 'Cancel reply' },
+    'message-more-actions': { tr: 'Diğer aksiyonlar', en: 'More actions' },
+    'message-reply-deleted': { tr: 'Silinmiş mesaj', en: 'Deleted message' },
+    'forward-no-friends': { tr: 'İletebileceğin arkadaşın yok.', en: "You don't have friends to forward to." },
+    'reply-select-quick-emoji': { tr: 'Hızlı tepkiler', en: 'Quick reactions' },
+
     'report-user': { tr: 'Bildir', en: 'Report' },
     'report-modal-title': { tr: 'Bildir', en: 'Report' },
     'report-reason-label': { tr: 'Neden', en: 'Reason' },
@@ -2958,6 +2981,16 @@ function connectToChat() {
 
         }
     );
+
+
+    // -------------------------------------------------
+    // Mesaj aksiyonları — tepki / sabitleme (AŞAMA D)
+    // -------------------------------------------------
+
+    socket.on('hub_message_reaction', (data) => patchMessageReactionsUI(hubFeed, data.id, data.reactions));
+    socket.on('dm_message_reaction', (data) => patchMessageReactionsUI(dmFeed, data.id, data.reactions));
+    socket.on('hub_message_pinned', (msg) => updateHubMessage(msg));
+    socket.on('hub_message_unpinned', (msg) => updateHubMessage(msg));
 
 
     // -------------------------------------------------
@@ -4279,17 +4312,10 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
         : '';
 
     const editedTag = msg.edited ? ` <span class="edited-tag">(${t('edited-tag')})</span>` : '';
-
-    const canEdit = isMine && msg.kind === 'dm';
-    const canDelete = isMine && msg.kind !== 'deleted';
-
-    const actions = (canDelete || !isMine) ? `
-        <div class="hub-msg-actions">
-            ${canEdit ? `<button class="msg-edit-btn" type="button" title="${t('edit')}">✎</button>` : ''}
-            ${canDelete ? `<button class="msg-delete-btn" type="button" title="${t('delete')}">🗑</button>` : ''}
-            ${!isMine ? `<button class="msg-report-btn" type="button" title="${t('report-user')}">🚩</button>` : ''}
-        </div>
-    ` : '';
+    const opts = { context: 'dm' };
+    const actions = buildMsgActionsBarHtml(msg, opts);
+    const replyQuote = buildMsgReplyQuoteHtml(msg);
+    const reactionsRow = buildMsgReactionsRowHtml(msg);
 
     let body;
 
@@ -4311,63 +4337,11 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
 
     }
 
-    wrap.innerHTML = `${actions}<div class="dm-msg-line">${body}<span class="dm-msg-time">${time}${editedTag}</span></div>`;
+    wrap.innerHTML = `${actions}${replyQuote}<div class="dm-msg-line">${body}<span class="dm-msg-time">${time}${editedTag}</span></div>${reactionsRow}`;
 
     wireVoiceCards(wrap);
     enableLongPress(wrap);
-
-    wrap.querySelector('.msg-delete-btn')?.addEventListener('click', async () => {
-
-        if (!confirm(t('confirm-delete-message'))) return;
-
-        await fetch(`/api/messages/${msg.id}`, { method: 'DELETE', credentials: 'include' });
-
-    });
-
-    wrap.querySelector('.msg-report-btn')?.addEventListener('click', () => {
-        openReportModal('message', msg.id, msg.username);
-    });
-
-    wrap.querySelector('.msg-edit-btn')?.addEventListener('click', () => {
-
-        const contentEl = wrap.querySelector('.dm-msg-content');
-        if (!contentEl) return;
-
-        contentEl.outerHTML = `
-            <span class="hub-msg-edit-box">
-                <input type="text" value="${escapeAttr(msg.content)}" maxlength="500">
-                <button class="msg-edit-save" type="button">${t('save')}</button>
-                <button class="msg-edit-cancel" type="button">${t('cancel')}</button>
-            </span>
-        `;
-
-        const box = wrap.querySelector('.hub-msg-edit-box');
-        const input = box.querySelector('input');
-        input.focus();
-
-        box.querySelector('.msg-edit-save').addEventListener('click', async () => {
-
-            const newContent = input.value.trim();
-            if (!newContent) return;
-
-            await fetch(`/api/messages/${msg.id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ content: newContent })
-            });
-
-        });
-
-        box.querySelector('.msg-edit-cancel').addEventListener('click', () => {
-            renderDmMessageIntoWrap(wrap, msg, isMine);
-        });
-
-        input.addEventListener('keypress', (event) => {
-            if (event.key === 'Enter') box.querySelector('.msg-edit-save').click();
-        });
-
-    });
+    wireMessageActions(wrap, msg, opts);
 
 }
 
@@ -4468,6 +4442,488 @@ function showCenterToast(message) {
     }, 2000);
 
 }
+
+
+// =====================================================
+// MESSAGE ACTIONS — ORTAK MODÜL (AŞAMA D)
+// =====================================================
+// Reply / Reaction / Copy / CopyLink / Forward / Pin — Edit/Delete/Report
+// zaten vardı (yukarıda), burada yeniden yazılmadı, sadece aynı modül
+// üzerinden çağrılıyor. Hem renderHubMessageIntoWrap hem renderDmMessageIntoWrap
+// TEK bu modülü kullanıyor — Hub/DM için ayrı ayrı tekrar eden kod yok.
+
+const QUICK_REACTION_EMOJIS = ['❤️', '😂', '👍', '🔥', '😮'];
+const ALL_REACTION_EMOJIS = ['❤️', '😂', '👍', '👎', '😮', '😢', '🔥'];
+const FORWARDABLE_KINDS = ['text', 'dm', 'voice', 'dm_voice', 'image', 'dm_image', 'video', 'dm_video', 'file', 'dm_file'];
+
+let hubReplyTarget = null;
+let dmReplyTarget = null;
+let forwardMessageId = null;
+
+function getMessagePermissions(msg, opts) {
+
+    const isMine = Boolean(currentUser && msg.user_id === currentUser.id);
+    const isDeleted = msg.kind === 'deleted';
+    const isPinned = Boolean(msg.pinned_at);
+
+    // ÖNEMLİ: Pin yetkisi SADECE Hub izin sistemi (hasAtLeastTier) üzerinden —
+    // platform_role (moderator/admin/founder) burada hiç kontrol edilmiyor.
+    // Bu görsel kontrol sadece UX içindir; asıl güvenlik server'da (bkz. pinMessage).
+    const canPin = opts.context === 'hub' && !isDeleted && currentHub &&
+        (currentHub.my_permission_tier === 'owner' || currentHub.my_permission_tier === 'moderator');
+
+    return {
+        isMine, isDeleted, isPinned,
+        canReply: !isDeleted,
+        canReact: !isDeleted,
+        canCopy: !isDeleted && Boolean(msg.content),
+        canCopyLink: !isDeleted && Boolean(msg.payload?.url),
+        canForward: !isDeleted && FORWARDABLE_KINDS.includes(msg.kind),
+        canEdit: isMine && !isDeleted && (msg.kind === 'text' || msg.kind === 'dm'),
+        canDelete: isMine && !isDeleted,
+        canPin,
+        canReport: !isMine
+    };
+
+}
+
+function buildMsgActionsBarHtml(msg, opts) {
+
+    const p = getMessagePermissions(msg, opts);
+    const hasAnything = p.canReply || p.canReact || p.canCopy || p.canCopyLink || p.canForward || p.canEdit || p.canDelete || p.canPin || p.canReport;
+    if (!hasAnything) return '';
+
+    const menuRowsPrimary = [];
+    if (p.canReply) menuRowsPrimary.push(`<button data-action="reply" type="button">↩ ${t('message-reply')}</button>`);
+    if (p.canReact) menuRowsPrimary.push(`<button data-action="react" type="button">😊 ${t('message-react')}</button>`);
+    if (p.canCopy) menuRowsPrimary.push(`<button data-action="copy" type="button">📋 ${t('message-copy')}</button>`);
+    if (p.canCopyLink) menuRowsPrimary.push(`<button data-action="copy-link" type="button">🔗 ${t('message-copy-link')}</button>`);
+    if (p.canForward) menuRowsPrimary.push(`<button data-action="forward" type="button">↗ ${t('message-forward')}</button>`);
+
+    const menuRowsOwn = [];
+    if (p.canEdit) menuRowsOwn.push(`<button data-action="edit" type="button">✏ ${t('message-edit')}</button>`);
+    if (p.canDelete) menuRowsOwn.push(`<button data-action="delete" type="button" class="hub-member-menu-danger">🗑 ${t('message-delete')}</button>`);
+
+    const menuRowsMod = [];
+    if (p.canPin) menuRowsMod.push(`<button data-action="pin" type="button">${p.isPinned ? `📌 ${t('message-unpin')}` : `📌 ${t('message-pin')}`}</button>`);
+
+    const menuRowsReport = [];
+    if (p.canReport) menuRowsReport.push(`<button data-action="report" type="button">⚠ ${t('message-report')}</button>`);
+
+    const menuHtml = [menuRowsPrimary, menuRowsOwn, menuRowsMod, menuRowsReport]
+        .filter(group => group.length)
+        .map(group => group.join(''))
+        .join('<div class="msg-actions-menu-divider"></div>');
+
+    return `
+        <div class="hub-msg-actions msg-actions-bar">
+            ${p.canReact ? `<button class="msg-action-quick" data-quick="react" type="button" title="${t('message-react')}" aria-label="${t('message-react')}">😊</button>` : ''}
+            ${p.canReply ? `<button class="msg-action-quick" data-quick="reply" type="button" title="${t('message-reply')}" aria-label="${t('message-reply')}">↩</button>` : ''}
+            <button class="msg-action-quick" data-quick="more" type="button" title="${t('message-more-actions')}" aria-label="${t('message-more-actions')}">⋯</button>
+            <div class="msg-reaction-picker liquid-glass" style="display:none;">
+                ${ALL_REACTION_EMOJIS.map(e => `<button type="button" data-emoji="${e}">${e}</button>`).join('')}
+            </div>
+            <div class="msg-actions-menu liquid-glass" style="display:none;">${menuHtml}</div>
+        </div>
+    `;
+
+}
+
+function buildMsgReactionsRowHtml(msg) {
+
+    if (!msg.reactions || !msg.reactions.length) return '';
+
+    return `
+        <div class="msg-reactions-row">
+            ${msg.reactions.map(r => `
+                <button type="button" class="msg-reaction-pill ${r.reactedByMe ? 'mine' : ''}" data-emoji="${escapeAttr(r.emoji)}">${r.emoji} <span>${r.count}</span></button>
+            `).join('')}
+        </div>
+    `;
+
+}
+
+function describeClientMessageKind(msg) {
+    const map = {
+        voice: '🎙️ Sesli mesaj', dm_voice: '🎙️ Sesli mesaj',
+        image: '🖼️ Görsel', dm_image: '🖼️ Görsel',
+        video: '🎬 Video', dm_video: '🎬 Video',
+        file: '📎 Dosya', dm_file: '📎 Dosya',
+        poll: '📊 Anket', share: '🔗 Paylaşım',
+        deleted: t('message-reply-deleted')
+    };
+    return map[msg.kind] || '';
+}
+
+function buildMsgReplyQuoteHtml(msg) {
+
+    if (!msg.reply_to) return '';
+
+    const rt = msg.reply_to;
+    const previewText = (rt.kind === 'deleted' || !rt.preview) ? t('message-reply-deleted') : escapeHtml(rt.preview);
+
+    return `
+        <div class="msg-reply-quote" data-jump-to="${rt.id}">
+            <span class="msg-reply-quote-user">↩ ${escapeHtml(rt.username || '')}</span>
+            <span class="msg-reply-quote-text">${previewText}</span>
+        </div>
+    `;
+
+}
+
+function wireMessageActions(wrap, msg, opts) {
+
+    const bar = wrap.querySelector('.msg-actions-bar');
+
+    if (bar) {
+
+        const reactBtn = bar.querySelector('[data-quick="react"]');
+        const replyBtn = bar.querySelector('[data-quick="reply"]');
+        const moreBtn = bar.querySelector('[data-quick="more"]');
+        const picker = bar.querySelector('.msg-reaction-picker');
+        const menu = bar.querySelector('.msg-actions-menu');
+
+        reactBtn?.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const willOpen = picker.style.display !== 'flex';
+            closeAllMessageMenus();
+            if (willOpen) openPortalPanel(picker, bar);
+        });
+
+        picker?.querySelectorAll('[data-emoji]').forEach((btn) => {
+            btn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                picker.style.display = 'none';
+                sendReactionRequest(msg.id, btn.dataset.emoji, false);
+            });
+        });
+
+        replyBtn?.addEventListener('click', (event) => {
+            event.stopPropagation();
+            startMessageReply(msg, opts);
+        });
+
+        moreBtn?.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const willOpen = menu.style.display !== 'flex';
+            closeAllMessageMenus();
+            if (willOpen) openPortalPanel(menu, bar);
+        });
+
+        menu?.querySelectorAll('[data-action]').forEach((btn) => {
+            btn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                menu.style.display = 'none';
+                runMessageAction(btn.dataset.action, msg, opts, wrap, picker);
+            });
+        });
+
+    }
+
+    wireReactionPills(wrap, msg.id);
+
+    wrap.querySelector('.msg-reply-quote')?.addEventListener('click', (event) => {
+        scrollToMessage(event.currentTarget.dataset.jumpTo);
+    });
+
+}
+
+function wireReactionPills(wrap, messageId) {
+    wrap.querySelectorAll('.msg-reaction-pill').forEach((pill) => {
+        if (pill.dataset.wired) return;
+        pill.dataset.wired = '1';
+        pill.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const mine = pill.classList.contains('mine');
+            sendReactionRequest(messageId, pill.dataset.emoji, mine);
+        });
+    });
+}
+
+// .hub-msg-actions'ın backdrop-filter'ı (liquid glass) CSS spesifikasyonu gereği
+// position:fixed alt öğeler için yeni bir konumlandırma bağlamı oluşturuyor — bu
+// yüzden mobil alt-sheet menüsü gerçek viewport'a değil o küçük çubuğa göre
+// sabitleniyordu. Çözüm: panel açılırken document.body'ye taşınıyor (portal),
+// kapanınca ait olduğu çubuğa geri dönüyor.
+function openPortalPanel(panel, homeParent) {
+    panel._homeParent = homeParent;
+    panel.dataset.reparented = '1';
+
+    const isMobile = window.innerWidth <= 768;
+
+    if (isMobile) {
+        // Mobilde CSS zaten alt-sheet konumlandırmasını (bottom:0) yapıyor —
+        // inline stil bırakmıyoruz ki stylesheet kuralıyla çakışmasın.
+        panel.style.position = '';
+        panel.style.top = '';
+        panel.style.left = '';
+        panel.style.right = '';
+        panel.style.bottom = '';
+    } else {
+        // Masaüstünde body'ye taşındığı için artık DOM konumundan bağımsız —
+        // orijinal çubuğun ekran konumuna göre elle hizalıyoruz.
+        const rect = homeParent.getBoundingClientRect();
+        panel.style.position = 'fixed';
+        panel.style.top = `${rect.bottom + 6}px`;
+        panel.style.bottom = 'auto';
+        panel.style.left = 'auto';
+        panel.style.right = `${Math.max(8, window.innerWidth - rect.right)}px`;
+    }
+
+    document.body.appendChild(panel);
+    panel.style.display = 'flex';
+}
+
+function closeAllMessageMenus() {
+    document.querySelectorAll('.msg-actions-menu, .msg-reaction-picker').forEach((el) => {
+        el.style.display = 'none';
+        el.style.position = '';
+        el.style.top = '';
+        el.style.left = '';
+        el.style.right = '';
+        el.style.bottom = '';
+        if (el.dataset.reparented && el._homeParent) {
+            el._homeParent.appendChild(el);
+            delete el.dataset.reparented;
+        }
+    });
+}
+
+document.addEventListener('click', closeAllMessageMenus);
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeAllMessageMenus();
+});
+
+async function sendReactionRequest(messageId, emoji, remove) {
+    try {
+        if (remove) {
+            await fetch(`/api/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, { method: 'DELETE', credentials: 'include' });
+        } else {
+            await fetch(`/api/messages/${messageId}/reactions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ emoji })
+            });
+        }
+    } catch (error) {
+        console.error('Tepki gönderilemedi:', error);
+    }
+}
+
+// Diğer kullanıcılarda anlık güncelleme — tüm mesajı yeniden çizmek yerine
+// (edit-box gibi geçici UI durumlarını bozmamak için) sadece tepki satırını
+// güncelliyoruz.
+function patchMessageReactionsUI(feedEl, messageId, reactions) {
+
+    const wrap = feedEl.querySelector(`[data-message-id="${messageId}"]`);
+    if (!wrap) return;
+
+    const existingRow = wrap.querySelector('.msg-reactions-row');
+    if (existingRow) existingRow.remove();
+
+    const html = buildMsgReactionsRowHtml({ reactions });
+    if (html) {
+        const container = wrap.querySelector('.hub-msg-body') || wrap;
+        container.insertAdjacentHTML('beforeend', html);
+    }
+
+    wireReactionPills(wrap, messageId);
+
+}
+
+function runMessageAction(action, msg, opts, wrap, picker) {
+    if (action === 'reply') return startMessageReply(msg, opts);
+    if (action === 'react') { if (picker) picker.style.display = 'flex'; return; }
+    if (action === 'copy') return copyMessageText(msg);
+    if (action === 'copy-link') return copyMessageLink(msg);
+    if (action === 'forward') return openForwardModal(msg.id);
+    if (action === 'edit') return startInlineEdit(wrap, msg, opts);
+    if (action === 'delete') return deleteMessageWithConfirm(msg.id);
+    if (action === 'pin') return toggleMessagePin(msg);
+    if (action === 'report') return openReportModal('message', msg.id, msg.username);
+}
+
+async function copyMessageText(msg) {
+    try {
+        await navigator.clipboard.writeText(msg.content || '');
+        showToast(t('message-copied'));
+    } catch (error) {
+        console.error('Kopyalanamadı:', error);
+    }
+}
+
+async function copyMessageLink(msg) {
+    const url = msg.payload?.url;
+    if (!url) return;
+    try {
+        await navigator.clipboard.writeText(url);
+        showToast(t('message-link-copied'));
+    } catch (error) {
+        console.error('Bağlantı kopyalanamadı:', error);
+    }
+}
+
+function deleteMessageWithConfirm(messageId) {
+    if (!confirm(t('confirm-delete-message'))) return;
+    fetch(`/api/messages/${messageId}`, { method: 'DELETE', credentials: 'include' });
+}
+
+async function toggleMessagePin(msg) {
+    const method = msg.pinned_at ? 'DELETE' : 'POST';
+    try {
+        const res = await fetch(`/api/messages/${msg.id}/pin`, { method, credentials: 'include' });
+        const data = await res.json();
+        if (!data.success) showToast(data.error || 'İşlem başarısız.');
+    } catch (error) {
+        console.error('Sabitleme hatası:', error);
+    }
+}
+
+function startMessageReply(msg, opts) {
+
+    const label = msg.content ? msg.content.slice(0, 60) : describeClientMessageKind(msg);
+    const html = `<strong>${escapeHtml(msg.username)}</strong>: ${escapeHtml(label)}`;
+
+    if (opts.context === 'hub') {
+        hubReplyTarget = msg.id;
+        document.getElementById('hub-reply-preview-content').innerHTML = html;
+        document.getElementById('hub-reply-preview').style.display = 'flex';
+        hubMessageInput.focus();
+    } else {
+        dmReplyTarget = msg.id;
+        document.getElementById('dm-reply-preview-content').innerHTML = html;
+        document.getElementById('dm-reply-preview').style.display = 'flex';
+        dmMessageInput.focus();
+    }
+
+}
+
+function cancelMessageReply(context) {
+    if (context === 'hub') {
+        hubReplyTarget = null;
+        document.getElementById('hub-reply-preview').style.display = 'none';
+    } else {
+        dmReplyTarget = null;
+        document.getElementById('dm-reply-preview').style.display = 'none';
+    }
+}
+
+document.getElementById('hub-reply-cancel-btn').addEventListener('click', () => cancelMessageReply('hub'));
+document.getElementById('dm-reply-cancel-btn').addEventListener('click', () => cancelMessageReply('dm'));
+
+function scrollToMessage(id) {
+    const wrap = document.querySelector(`[data-message-id="${id}"]`);
+    if (!wrap) return;
+    wrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    wrap.classList.add('msg-jump-highlight');
+    setTimeout(() => wrap.classList.remove('msg-jump-highlight'), 1500);
+}
+
+function startInlineEdit(wrap, msg, opts) {
+
+    const isHub = opts.context === 'hub';
+    const textSelector = isHub ? '.hub-msg-text' : '.dm-msg-content';
+    const textEl = wrap.querySelector(textSelector);
+    if (!textEl) return;
+
+    textEl.outerHTML = `
+        <${isHub ? 'div' : 'span'} class="hub-msg-edit-box" data-edit-box>
+            <input type="text" value="${escapeAttr(msg.content)}" maxlength="500">
+            <button class="msg-edit-save" type="button">${t('save')}</button>
+            <button class="msg-edit-cancel" type="button">${t('cancel')}</button>
+        </${isHub ? 'div' : 'span'}>
+    `;
+
+    const box = wrap.querySelector('[data-edit-box]');
+    const input = box.querySelector('input');
+    input.focus();
+
+    box.querySelector('.msg-edit-save').addEventListener('click', async () => {
+
+        const newContent = input.value.trim();
+        if (!newContent) return;
+
+        const res = await fetch(`/api/messages/${msg.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ content: newContent })
+        });
+
+        const data = await res.json();
+        if (!data.success) alert(data.error || 'Düzenlenemedi.');
+        // Başarılıysa UI güncellemesi socket (hub_message_update/dm_message_update) üzerinden gelir.
+
+    });
+
+    box.querySelector('.msg-edit-cancel').addEventListener('click', () => {
+        box.outerHTML = `<${isHub ? 'div' : 'span'} class="${isHub ? 'hub-msg-text' : 'dm-msg-content'}">${escapeHtml(msg.content)}</${isHub ? 'div' : 'span'}>`;
+    });
+
+}
+
+async function openForwardModal(messageId) {
+
+    forwardMessageId = messageId;
+    const listEl = document.getElementById('forward-friend-list');
+    const emptyEl = document.getElementById('forward-modal-empty');
+    listEl.innerHTML = '';
+    emptyEl.style.display = 'none';
+
+    try {
+
+        const res = await fetch('/api/friends', { credentials: 'include' });
+        const data = await res.json();
+        const friends = data.success ? data.friends : [];
+
+        if (!friends.length) {
+            emptyEl.style.display = 'block';
+        } else {
+
+            listEl.innerHTML = friends.map(f => `
+                <label class="report-reason-option" data-user-id="${f.id}" style="cursor:pointer;">
+                    <span>${escapeHtml(f.username)}</span>
+                </label>
+            `).join('');
+
+            listEl.querySelectorAll('[data-user-id]').forEach((row) => {
+                row.addEventListener('click', async () => {
+
+                    const toUserId = Number(row.dataset.userId);
+
+                    const res2 = await fetch(`/api/messages/${forwardMessageId}/forward`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ to_user_id: toUserId })
+                    });
+
+                    const data2 = await res2.json();
+
+                    if (data2.success) {
+                        showToast(t('message-forwarded'));
+                        document.getElementById('forward-modal').style.display = 'none';
+                    } else {
+                        showToast(data2.error || 'İletilemedi.');
+                    }
+
+                });
+            });
+
+        }
+
+    } catch (error) {
+        console.error('Arkadaş listesi alınamadı:', error);
+    }
+
+    document.getElementById('forward-modal').style.display = 'flex';
+
+}
+
+document.getElementById('forward-modal-close-btn').addEventListener('click', () => {
+    document.getElementById('forward-modal').style.display = 'none';
+});
 
 
 // =====================================================
@@ -4735,9 +5191,10 @@ dmForm.addEventListener(
         const content = dmMessageInput.value.trim();
         if (!content || !activeDmUserId || !socket) return;
 
-        socket.emit('dm_message', { to_user_id: activeDmUserId, content });
+        socket.emit('dm_message', { to_user_id: activeDmUserId, content, reply_to_message_id: dmReplyTarget });
 
         dmMessageInput.value = '';
+        cancelMessageReply('dm');
 
     }
 );
@@ -6680,9 +7137,10 @@ hubChatForm.addEventListener(
         const content = hubMessageInput.value.trim();
         if (!content || !currentHub || !socket) return;
 
-        socket.emit('hub_chat_message', { hub_id: currentHub.id, content });
+        socket.emit('hub_chat_message', { hub_id: currentHub.id, content, reply_to_message_id: hubReplyTarget });
 
         hubMessageInput.value = '';
+        cancelMessageReply('hub');
 
     }
 );
@@ -6927,6 +7385,7 @@ function renderHubMessageIntoWrap(wrap, msg) {
         : '';
 
     const editedTag = msg.edited ? `<span class="edited-tag">(${t('edited-tag')})</span>` : '';
+    const pinnedTag = msg.pinned_at ? `<span class="msg-pinned-tag">${t('message-pinned')}</span>` : '';
 
     const avatar = avatarButtonHtml(msg.user_id, msg.avatar_data, msg.username);
 
@@ -6934,21 +7393,16 @@ function renderHubMessageIntoWrap(wrap, msg) {
         <div class="header">
             <span class="username">${escapeHtml(msg.username)}</span>
             <span class="time">${time}${editedTag}</span>
+            ${pinnedTag}
         </div>
     `;
 
     const isMine = currentUser && msg.user_id === currentUser.id;
     wrap.classList.toggle('msg-mine', Boolean(isMine));
-    const canEdit = isMine && msg.kind === 'text';
-    const canDelete = isMine && msg.kind !== 'deleted';
-
-    const actions = (canDelete || !isMine) ? `
-        <div class="hub-msg-actions">
-            ${canEdit ? `<button class="msg-edit-btn" type="button" title="${t('edit')}">✎</button>` : ''}
-            ${canDelete ? `<button class="msg-delete-btn" type="button" title="${t('delete')}">🗑</button>` : ''}
-            ${!isMine ? `<button class="msg-report-btn" type="button" title="${t('report-user')}">🚩</button>` : ''}
-        </div>
-    ` : '';
+    const opts = { context: 'hub' };
+    const actions = buildMsgActionsBarHtml(msg, opts);
+    const replyQuote = buildMsgReplyQuoteHtml(msg);
+    const reactionsRow = buildMsgReactionsRowHtml(msg);
 
     let body;
 
@@ -6984,11 +7438,12 @@ function renderHubMessageIntoWrap(wrap, msg) {
 
     }
 
-    wrap.innerHTML = `${avatar}<div class="hub-msg-body">${header}${actions}${body}</div>`;
+    wrap.innerHTML = `${avatar}<div class="hub-msg-body">${header}${actions}${replyQuote}${body}${reactionsRow}</div>`;
 
     wireVoiceCards(wrap);
     wireMsgAvatars(wrap);
     enableLongPress(wrap);
+    wireMessageActions(wrap, msg, opts);
 
     wrap.querySelectorAll('.hub-poll-option').forEach((opt) => {
 
@@ -7003,59 +7458,6 @@ function renderHubMessageIntoWrap(wrap, msg) {
                 body: JSON.stringify({ option_index: optionIndex })
             });
 
-        });
-
-    });
-
-    wrap.querySelector('.msg-delete-btn')?.addEventListener('click', async () => {
-
-        if (!confirm(t('confirm-delete-message'))) return;
-
-        await fetch(`/api/messages/${msg.id}`, { method: 'DELETE', credentials: 'include' });
-
-    });
-
-    wrap.querySelector('.msg-report-btn')?.addEventListener('click', () => {
-        openReportModal('message', msg.id, msg.username);
-    });
-
-    wrap.querySelector('.msg-edit-btn')?.addEventListener('click', () => {
-
-        const textEl = wrap.querySelector('.hub-msg-text');
-        if (!textEl) return;
-
-        textEl.outerHTML = `
-            <div class="hub-msg-edit-box">
-                <input type="text" value="${escapeAttr(msg.content)}" maxlength="500">
-                <button class="msg-edit-save" type="button">${t('save')}</button>
-                <button class="msg-edit-cancel" type="button">${t('cancel')}</button>
-            </div>
-        `;
-
-        const box = wrap.querySelector('.hub-msg-edit-box');
-        const input = box.querySelector('input');
-        input.focus();
-
-        box.querySelector('.msg-edit-save').addEventListener('click', async () => {
-
-            const newContent = input.value.trim();
-            if (!newContent) return;
-
-            await fetch(`/api/messages/${msg.id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ content: newContent })
-            });
-
-        });
-
-        box.querySelector('.msg-edit-cancel').addEventListener('click', () => {
-            renderHubMessageIntoWrap(wrap, msg);
-        });
-
-        input.addEventListener('keypress', (event) => {
-            if (event.key === 'Enter') box.querySelector('.msg-edit-save').click();
         });
 
     });

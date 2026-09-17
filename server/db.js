@@ -1279,28 +1279,52 @@ function listHubBans(hubId) {
   `).all(hubId);
 }
 
-function getHubMessages(hubId, limit = 50) {
+function getHubMessages(hubId, limit = 50, viewerId = null) {
   const rows = db.prepare(`
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.kind,
-           messages.payload, messages.edited, messages.created_at, users.avatar_data
+           messages.payload, messages.edited, messages.created_at, users.avatar_data,
+           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE hub_id = ?
     ORDER BY messages.id DESC LIMIT ?
   `).all(hubId, limit);
 
-  return rows.reverse().map(hydrateMessage);
+  return rows.reverse().map((row) => hydrateMessage(row, viewerId));
 }
 
-function getMessageById(id) {
+function getMessageById(id, viewerId = null) {
   return hydrateMessage(db.prepare(`
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
-           messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data
+           messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
+           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE messages.id = ?
-  `).get(id));
+  `).get(id), viewerId);
 }
 
-function hydrateMessage(row) {
+// Yanıtlanan mesajın küçük bir önizlemesini (gönderen + kısa metin) döndürür —
+// tam mesaj metnini kopyalayıp sahte alıntı oluşturmak yerine gerçek message ID
+// ilişkisi (reply_to_message_id) üzerinden anlık okunuyor.
+function getReplyPreview(messageId) {
+  const parent = db.prepare(`SELECT id, username, content, kind FROM messages WHERE id = ?`).get(messageId);
+  if (!parent) return null;
+
+  if (parent.kind === 'deleted') {
+    return { id: parent.id, username: parent.username, preview: null, kind: 'deleted' };
+  }
+
+  const preview = parent.content
+    ? parent.content.slice(0, 80)
+    : describeMessageKindLabel(parent.kind, parent.content, null);
+
+  return { id: parent.id, username: parent.username, preview, kind: parent.kind };
+}
+
+function hydrateMessage(row, viewerId = null) {
+  if (!row) return row;
+
+  let result = row;
+
   if (row.kind === 'poll' && row.payload) {
     const payload = JSON.parse(row.payload);
     const votes = db.prepare(`
@@ -1312,14 +1336,18 @@ function hydrateMessage(row) {
       return found ? found.c : 0;
     });
 
-    return { ...row, payload: { ...payload, counts } };
+    result = { ...row, payload: { ...payload, counts } };
+  } else if (row.payload) {
+    result = { ...row, payload: JSON.parse(row.payload) };
   }
 
-  if (row.payload) {
-    return { ...row, payload: JSON.parse(row.payload) };
+  if (result.reply_to_message_id) {
+    result = { ...result, reply_to: getReplyPreview(result.reply_to_message_id) };
   }
 
-  return row;
+  result = { ...result, reactions: getMessageReactions(result.id, viewerId) };
+
+  return result;
 }
 
 function deleteMessage(messageId, userId) {
@@ -1352,11 +1380,19 @@ function editMessage(messageId, userId, newContent) {
   };
 }
 
-function saveHubMessage(hubId, userId, username, content) {
+function saveHubMessage(hubId, userId, username, content, replyToMessageId = null) {
+  // Yanıtlanan mesaj aynı Hub'a ait değilse (ör. silinmiş/başka Hub) sessizce
+  // yok sayılır — mesaj yine de gönderilir, sadece yanıt bağlantısı kurulmaz.
+  let validReplyId = null;
+  if (replyToMessageId) {
+    const parent = db.prepare(`SELECT id FROM messages WHERE id = ? AND hub_id = ?`).get(replyToMessageId, hubId);
+    if (parent) validReplyId = parent.id;
+  }
+
   const info = db.prepare(`
-    INSERT INTO messages (user_id, username, content, room, hub_id, kind)
-    VALUES (?, ?, ?, ?, ?, 'text')
-  `).run(userId, username, content, `hub_${hubId}`, hubId);
+    INSERT INTO messages (user_id, username, content, room, hub_id, kind, reply_to_message_id)
+    VALUES (?, ?, ?, ?, ?, 'text', ?)
+  `).run(userId, username, content, `hub_${hubId}`, hubId, validReplyId);
 
   return getMessageById(info.lastInsertRowid);
 }
@@ -2089,7 +2125,7 @@ function dmRoom(a, b) {
   return `dm_${low}_${high}`;
 }
 
-function saveDmMessage(fromId, fromUsername, toId, content) {
+function saveDmMessage(fromId, fromUsername, toId, content, replyToMessageId = null) {
   if (!areFriends(fromId, toId)) {
     return { success: false, error: 'Sadece arkadaşlarınla mesajlaşabilirsin.' };
   }
@@ -2097,10 +2133,18 @@ function saveDmMessage(fromId, fromUsername, toId, content) {
   content = String(content || '').trim().slice(0, 500);
   if (!content) return { success: false, error: 'Boş mesaj gönderilemez.' };
 
+  // Yanıtlanan mesaj bu iki kullanıcı arasındaki DM'e ait değilse (başka bir
+  // konuşmadan sızdırılmış bir ID olabilir) sessizce yok sayılır.
+  let validReplyId = null;
+  if (replyToMessageId) {
+    const parent = db.prepare(`SELECT id FROM messages WHERE id = ? AND room = ?`).get(replyToMessageId, dmRoom(fromId, toId));
+    if (parent) validReplyId = parent.id;
+  }
+
   const info = db.prepare(`
-    INSERT INTO messages (user_id, username, content, room, to_user_id, kind)
-    VALUES (?, ?, ?, ?, ?, 'dm')
-  `).run(fromId, fromUsername, content, dmRoom(fromId, toId), toId);
+    INSERT INTO messages (user_id, username, content, room, to_user_id, kind, reply_to_message_id)
+    VALUES (?, ?, ?, ?, ?, 'dm', ?)
+  `).run(fromId, fromUsername, content, dmRoom(fromId, toId), toId, validReplyId);
 
   return {
     success: true,
@@ -2166,13 +2210,161 @@ function createDmFileMessage(fromId, fromUsername, toId, file) {
 function getDmMessages(userId, otherUserId, limit = 50) {
   const rows = db.prepare(`
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
-           messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data
+           messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
+           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE room = ?
     ORDER BY messages.id DESC LIMIT ?
   `).all(dmRoom(userId, otherUserId), limit);
 
-  return rows.reverse().map(hydrateMessage);
+  return rows.reverse().map((row) => hydrateMessage(row, userId));
+}
+
+// =====================================================
+// v1.26 MIGRATION — MESAJ AKSİYONLARI (Reply / Reaction / Pin / Forward)
+// =====================================================
+// NOT: Edit/Delete/Report zaten mevcuttu (bkz. editMessage/deleteMessage,
+// yukarıda), burada yeniden yazılmadı — sadece bu 4 yeni yeteneğin altyapısı
+// ekleniyor. platform_role ile hub permission_tier burada da birbirine
+// KARIŞTIRILMIYOR: pinMessage() sadece hasAtLeastTier() kullanıyor.
+
+const messageColumnsV126 = db.prepare(`PRAGMA table_info(messages)`).all().map(c => c.name);
+
+if (!messageColumnsV126.includes('reply_to_message_id')) {
+  db.exec(`ALTER TABLE messages ADD COLUMN reply_to_message_id INTEGER`);
+}
+if (!messageColumnsV126.includes('pinned_at')) {
+  db.exec(`ALTER TABLE messages ADD COLUMN pinned_at DATETIME`);
+}
+if (!messageColumnsV126.includes('pinned_by')) {
+  db.exec(`ALTER TABLE messages ADD COLUMN pinned_by INTEGER`);
+}
+if (!messageColumnsV126.includes('forwarded_from_message_id')) {
+  db.exec(`ALTER TABLE messages ADD COLUMN forwarded_from_message_id INTEGER`);
+}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS message_reactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    emoji TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(message_id, user_id, emoji),
+    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+`);
+
+const ALLOWED_REACTION_EMOJIS = ['❤️', '😂', '👍', '👎', '😮', '😢', '🔥'];
+
+function getMessageReactions(messageId, viewerId) {
+  const rows = db.prepare(`
+    SELECT emoji, COUNT(*) AS count, SUM(CASE WHEN user_id = ? THEN 1 ELSE 0 END) AS mine
+    FROM message_reactions WHERE message_id = ? GROUP BY emoji
+  `).all(viewerId || 0, messageId);
+
+  return rows.map(r => ({ emoji: r.emoji, count: r.count, reactedByMe: r.mine > 0 }));
+}
+
+// Bir mesaja erişimi olup olmadığını doğrular — Hub üyesi mi, ya da DM'in
+// göndereni/alıcısı mı. Reaction/pin/forward hepsi bunu kullanıyor; başka bir
+// kullanıcının hiç erişemediği bir message ID'sine işlem yapılamaz.
+function getMessageAccessInfo(messageId, actorId) {
+  const msg = db.prepare(`SELECT id, user_id, hub_id, to_user_id, kind FROM messages WHERE id = ?`).get(messageId);
+  if (!msg) return { msg: null, hasAccess: false };
+
+  if (msg.hub_id) {
+    return { msg, hasAccess: isHubMember(msg.hub_id, actorId) };
+  }
+  if (msg.to_user_id) {
+    return { msg, hasAccess: msg.user_id === actorId || msg.to_user_id === actorId };
+  }
+  return { msg, hasAccess: false };
+}
+
+function addReaction(messageId, userId, emoji) {
+  if (!ALLOWED_REACTION_EMOJIS.includes(emoji)) return { success: false, error: 'Geçersiz emoji.' };
+
+  const { msg, hasAccess } = getMessageAccessInfo(messageId, userId);
+  if (!msg) return { success: false, error: 'Mesaj bulunamadı.' };
+  if (!hasAccess) return { success: false, error: 'Bu mesaja erişimin yok.' };
+  if (msg.kind === 'deleted') return { success: false, error: 'Silinmiş mesaja tepki eklenemez.' };
+
+  db.prepare(`
+    INSERT INTO message_reactions (message_id, user_id, emoji) VALUES (?, ?, ?)
+    ON CONFLICT(message_id, user_id, emoji) DO NOTHING
+  `).run(messageId, userId, emoji);
+
+  return { success: true, hub_id: msg.hub_id, to_user_id: msg.to_user_id, reactions: getMessageReactions(messageId, userId) };
+}
+
+function removeReaction(messageId, userId, emoji) {
+  const { msg, hasAccess } = getMessageAccessInfo(messageId, userId);
+  if (!msg) return { success: false, error: 'Mesaj bulunamadı.' };
+  if (!hasAccess) return { success: false, error: 'Bu mesaja erişimin yok.' };
+
+  db.prepare(`DELETE FROM message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?`).run(messageId, userId, emoji);
+
+  return { success: true, hub_id: msg.hub_id, to_user_id: msg.to_user_id, reactions: getMessageReactions(messageId, userId) };
+}
+
+// Sabitleme SADECE Hub yetkisi (hasAtLeastTier) üzerinden çalışır — platform_role
+// (moderator/admin/founder) burada hiç kontrol edilmiyor, bilerek. Bir Hub'ın
+// sahibi/moderatörü olmayan platform admini bile normal bir üye gibi davranır.
+function pinMessage(messageId, userId) {
+  const msg = db.prepare(`SELECT id, hub_id, kind FROM messages WHERE id = ?`).get(messageId);
+  if (!msg) return { success: false, error: 'Mesaj bulunamadı.' };
+  if (!msg.hub_id) return { success: false, error: 'Sadece Hub mesajları sabitlenebilir.' };
+  if (!hasAtLeastTier(msg.hub_id, userId, 'moderator')) return { success: false, error: 'Bu işlem için Hub yetkin yok.' };
+  if (msg.kind === 'deleted') return { success: false, error: 'Silinmiş mesaj sabitlenemez.' };
+
+  db.prepare(`UPDATE messages SET pinned_at = CURRENT_TIMESTAMP, pinned_by = ? WHERE id = ?`).run(userId, messageId);
+
+  return { success: true, hub_id: msg.hub_id, message: getMessageById(messageId, userId) };
+}
+
+function unpinMessage(messageId, userId) {
+  const msg = db.prepare(`SELECT id, hub_id FROM messages WHERE id = ?`).get(messageId);
+  if (!msg) return { success: false, error: 'Mesaj bulunamadı.' };
+  if (!msg.hub_id) return { success: false, error: 'Sadece Hub mesajları sabitlenebilir.' };
+  if (!hasAtLeastTier(msg.hub_id, userId, 'moderator')) return { success: false, error: 'Bu işlem için Hub yetkin yok.' };
+
+  db.prepare(`UPDATE messages SET pinned_at = NULL, pinned_by = NULL WHERE id = ?`).run(messageId);
+
+  return { success: true, hub_id: msg.hub_id, message: getMessageById(messageId, userId) };
+}
+
+// Forward v1: yalnızca arkadaşlar arasındaki DM'lere. Hub->Hub veya Hub->DM
+// forwarding bilerek desteklenmiyor (bkz. AŞAMA D analiz notu) — ayrı bir
+// sonraki aşamaya bırakıldı.
+const FORWARD_KIND_MAP = {
+  text: 'dm', dm: 'dm',
+  voice: 'dm_voice', dm_voice: 'dm_voice',
+  image: 'dm_image', dm_image: 'dm_image',
+  video: 'dm_video', dm_video: 'dm_video',
+  file: 'dm_file', dm_file: 'dm_file'
+};
+
+function forwardMessageToDm(messageId, fromUserId, fromUsername, toUserId) {
+  const { msg: original, hasAccess } = getMessageAccessInfo(messageId, fromUserId);
+  if (!original) return { success: false, error: 'Mesaj bulunamadı.' };
+  if (!hasAccess) return { success: false, error: 'Bu mesaja erişimin yok.' };
+  if (original.kind === 'deleted') return { success: false, error: 'Silinmiş mesaj iletilemez.' };
+
+  const targetKind = FORWARD_KIND_MAP[original.kind];
+  if (!targetKind) return { success: false, error: 'Bu mesaj türü iletilemez.' };
+
+  if (!areFriends(fromUserId, toUserId)) return { success: false, error: 'Sadece arkadaşlarına iletebilirsin.' };
+
+  const fullOriginal = db.prepare(`SELECT content, payload FROM messages WHERE id = ?`).get(messageId);
+
+  const info = db.prepare(`
+    INSERT INTO messages (user_id, username, content, room, to_user_id, kind, payload, forwarded_from_message_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(fromUserId, fromUsername, fullOriginal.content || '', dmRoom(fromUserId, toUserId), toUserId, targetKind, fullOriginal.payload, messageId);
+
+  return { success: true, message: getMessageById(info.lastInsertRowid, fromUserId) };
 }
 
 function createUser(username) {
@@ -2244,6 +2436,12 @@ module.exports = {
   saveDmVoiceMessage,
   createDmFileMessage,
   getDmMessages,
+  addReaction,
+  removeReaction,
+  pinMessage,
+  unpinMessage,
+  forwardMessageToDm,
+  getMessageById,
   findUserByUsername,
   blockUser,
   unblockUser,
