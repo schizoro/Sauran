@@ -57,3 +57,67 @@ body {
   text-decoration: none;
   font-size: 13px;
 }
+
+.legal-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.legal-lang-switch {
+  display: flex;
+  gap: 6px;
+}
+
+.legal-lang-switch button {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #9ca3af;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.legal-lang-switch button.active {
+  background: rgba(102, 252, 241, 0.12);
+  border-color: rgba(102, 252, 241, 0.4);
+  color: #66fcf1;
+  font-weight: bold;
+}
+
+.legal-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px 0 32px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.legal-nav a {
+  font-size: 12px;
+  color: #9ca3af;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 6px 12px;
+  text-decoration: none;
+  transition: 0.2s;
+}
+
+.legal-nav a:hover, .legal-nav a.current {
+  color: #66fcf1;
+  border-color: rgba(102, 252, 241, 0.35);
+}
+
+@media (max-width: 600px) {
+  body { padding: 20px 16px 60px; }
+  .legal-wrap h1 { font-size: 20px; }
+  .legal-nav { gap: 6px; }
+  .legal-nav a { font-size: 11px; padding: 5px 10px; }
+}

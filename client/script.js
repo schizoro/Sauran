@@ -2606,6 +2606,8 @@ const I18N = {
     'settings-terms': { tr: 'Kullanım Şartları', en: 'Terms of Service' },
     'settings-export-data': { tr: 'Verilerimi İndir', en: 'Export My Data' },
     'settings-support': { tr: 'Destek & İletişim', en: 'Support & Contact' },
+    'settings-community': { tr: 'Topluluk Kuralları', en: 'Community Guidelines' },
+    'settings-child-safety': { tr: 'Çocuk Güvenliği', en: 'Child Safety' },
     'export-data-error': { tr: 'Verilerin indirilemedi.', en: 'Could not export your data.' }
 };
 
