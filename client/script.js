@@ -2807,6 +2807,8 @@ const I18N = {
     'banned-from-hub': { tr: 'Bu lobiden yasaklandın.', en: "You've been banned from this lobby." },
     'hub-bans-title': { tr: 'Yasaklılar', en: 'Banned Users' },
     'hub-bans-empty': { tr: 'Yasaklı kimse yok.', en: 'No one is banned.' },
+    'hub-ban-member': { tr: 'Katılımcı Yasakla', en: 'Ban a Member' },
+    'hub-ban-picker-empty': { tr: 'Yasaklanabilecek katılımcı yok.', en: 'No members available to ban.' },
     'unban': { tr: 'Yasağı Kaldır', en: 'Unban' },
     'label-sessions': { tr: 'Aktif Oturumlar', en: 'Active Sessions' },
     'logout-all': { tr: 'Tüm Cihazlardan Çıkış Yap', en: 'Log Out of All Devices' },
@@ -6240,7 +6242,62 @@ hubSettingsOpenBtn.addEventListener('click', () => {
     bansSection.style.display = canModerate ? 'block' : 'none';
     if (canModerate) loadHubBans();
 
+    document.getElementById('hub-ban-member-btn').style.display = canModerate ? 'flex' : 'none';
+    document.getElementById('hub-ban-picker').style.display = 'none';
+
 });
+
+document.getElementById('hub-ban-member-btn').addEventListener('click', () => {
+    const picker = document.getElementById('hub-ban-picker');
+    if (picker.style.display !== 'none') {
+        picker.style.display = 'none';
+        return;
+    }
+    renderHubBanPicker();
+    picker.style.display = 'flex';
+});
+
+function renderHubBanPicker() {
+
+    const picker = document.getElementById('hub-ban-picker');
+    if (!currentHub) return;
+
+    const myTier = currentHub.my_permission_tier;
+    const candidates = currentHub.members.filter((m) =>
+        m.user_id !== currentUser.id &&
+        m.permission_tier !== 'owner' &&
+        !(m.permission_tier === 'moderator' && myTier !== 'owner')
+    );
+
+    if (candidates.length === 0) {
+        picker.innerHTML = `<div class="settings-blocked-empty">${t('hub-ban-picker-empty')}</div>`;
+        return;
+    }
+
+    picker.innerHTML = candidates.map((m) => {
+        const color = getUserColor(m.username);
+        const avatarInner = m.avatar_data ? `<img src="${escapeAttr(m.avatar_data)}" alt="">` : escapeHtml(m.username.charAt(0).toUpperCase());
+        return `
+            <div class="settings-blocked-row">
+                <span class="settings-blocked-avatar" style="--user-color:${color};">${avatarInner}</span>
+                <span class="settings-blocked-name">${escapeHtml(m.username)}</span>
+                <button class="settings-unblock-btn" data-ban="${m.user_id}" type="button">${t('ban')}</button>
+            </div>
+        `;
+    }).join('');
+
+    picker.querySelectorAll('[data-ban]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            await handleMemberModerationAction('ban', Number(btn.dataset.ban), null);
+            if (currentHub) {
+                currentHub.members = currentHub.members.filter((m) => m.user_id !== Number(btn.dataset.ban));
+                renderHubBanPicker();
+                loadHubBans();
+            }
+        });
+    });
+
+}
 
 async function loadHubBans() {
 
@@ -6978,7 +7035,10 @@ function renderHubDetail() {
     hubDetailCount.textContent = `👥 ${currentHub.members.length} ${t('member-count')}`;
 
     hubDeleteBtn.style.display = currentHub.is_owner ? 'block' : 'none';
-    if (hubSettingsOpenBtn) hubSettingsOpenBtn.style.display = currentHub.is_owner ? 'block' : 'none';
+    if (hubSettingsOpenBtn) {
+        const canOpenSettings = currentHub.is_owner || currentHub.my_permission_tier === 'moderator';
+        hubSettingsOpenBtn.style.display = canOpenSettings ? 'block' : 'none';
+    }
 
     // Hub sahibi kendi Hub'ını bildiremez (anlamsız) — backend de aynı
     // kontrolü ayrıca uyguluyor (bkz. server/db.js createReport).
