@@ -536,6 +536,9 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 .hub-card { background: transparent; border: none; border-radius: 10px; padding: 10px 14px; cursor: pointer; transition: 0.15s; display: flex; flex-direction: row; align-items: center; gap: 14px; }
 .hub-card:hover { background: #12141a; }
 .hub-card-icon { font-size: 22px; width: 42px; height: 42px; flex-shrink: 0; border-radius: 10px; object-fit: cover; display: flex; align-items: center; justify-content: center; background: #12141a; }
+.hub-card-icon.hub-icon-initial, .hub-detail-icon.hub-icon-initial, .hub-create-image-preview.hub-icon-initial {
+  font-weight: bold; color: var(--user-color, #66fcf1); background: rgba(255, 255, 255, 0.06);
+}
 .hub-card:hover .hub-card-icon { background: #171a21; }
 .hub-card-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .hub-card-name { color: #c5c6c7; font-weight: bold; font-size: 14px; letter-spacing: 0.3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

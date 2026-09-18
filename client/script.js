@@ -24,6 +24,79 @@ function stickerEmoji(id) {
 }
 
 // =====================================================
+// UYGULAMAYA ÖZEL BİLDİRİM SESLERİ (Web Audio ile sentezlenir,
+// dış ses dosyası gerekmez — mobil + masaüstü aynı şekilde çalışır)
+// =====================================================
+
+let notifSoundEnabled = true;
+let appAudioCtx = null;
+
+function getAppAudioCtx() {
+    if (!appAudioCtx) {
+        try {
+            appAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (error) {
+            return null;
+        }
+    }
+    if (appAudioCtx.state === 'suspended') appAudioCtx.resume().catch(() => {});
+    return appAudioCtx;
+}
+
+function playAppTone(ctx, freq, startTime, duration, type = 'sine', gainPeak = 0.18) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, startTime);
+    gain.gain.linearRampToValueAtTime(gainPeak, startTime + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(startTime);
+    osc.stop(startTime + duration + 0.03);
+}
+
+// Bildirim (arkadaşlık isteği, lobi daveti vb.) için iki notalı yükselen "ding".
+function playNotifSound() {
+    if (!notifSoundEnabled) return;
+    const ctx = getAppAudioCtx();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    playAppTone(ctx, 880, now, 0.14, 'sine', 0.2);
+    playAppTone(ctx, 1318.5, now + 0.09, 0.18, 'sine', 0.2);
+}
+
+// Gelen DM mesajı için tek, yumuşak "pop".
+function playMessageSound() {
+    if (!notifSoundEnabled) return;
+    const ctx = getAppAudioCtx();
+    if (!ctx) return;
+    playAppTone(ctx, 660, ctx.currentTime, 0.1, 'sine', 0.15);
+}
+
+// Gelen arama için tekrar eden zil sesi (kabul/red/iptal edilene kadar).
+let ringtoneIntervalId = null;
+function startRingtone() {
+    if (!notifSoundEnabled || ringtoneIntervalId) return;
+    const ring = () => {
+        const ctx = getAppAudioCtx();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        playAppTone(ctx, 740, now, 0.22, 'sine', 0.22);
+        playAppTone(ctx, 740, now + 0.32, 0.22, 'sine', 0.22);
+    };
+    ring();
+    ringtoneIntervalId = setInterval(ring, 1600);
+}
+function stopRingtone() {
+    if (ringtoneIntervalId) {
+        clearInterval(ringtoneIntervalId);
+        ringtoneIntervalId = null;
+    }
+}
+
+// =====================================================
 // DOM
 // =====================================================
 
@@ -2123,6 +2196,7 @@ async function loadNotificationPreferences() {
         document.querySelectorAll('#notif-pref-groups input[data-pref]').forEach((input) => {
             const key = input.dataset.pref;
             input.checked = data.preferences[key] !== 0;
+            if (key === 'sound_enabled') notifSoundEnabled = input.checked;
         });
 
     } catch (error) {
@@ -2136,6 +2210,7 @@ document.querySelectorAll('#notif-pref-groups input[data-pref]').forEach((input)
     input.addEventListener('change', async () => {
 
         const key = input.dataset.pref;
+        if (key === 'sound_enabled') notifSoundEnabled = input.checked;
 
         try {
             await fetch('/api/notifications/preferences', {
@@ -3115,6 +3190,7 @@ function connectToChat() {
 
                 unreadDmCounts.set(otherId, (unreadDmCounts.get(otherId) || 0) + 1);
                 refreshFriendsSidebar();
+                playMessageSound();
 
             }
 
@@ -3140,6 +3216,7 @@ function connectToChat() {
 
             if (channels.inapp !== false) showCenterToast(label);
             if (channels.desktop !== false) maybeShowBrowserNotification(payload?.type, label);
+            if (channels.sound !== false) playNotifSound();
         }
     );
 
@@ -5818,10 +5895,12 @@ hubSettingsOpenBtn.addEventListener('click', () => {
 
     if (currentHub.image_data) {
         hubSettingsImagePreview.style.backgroundImage = `url(${currentHub.image_data})`;
-        hubSettingsImagePreview.textContent = '';
+        hubSettingsImagePreview.classList.remove('hub-icon-initial');
+        hubSettingsImagePreview.innerHTML = '';
     } else {
         hubSettingsImagePreview.style.backgroundImage = '';
-        hubSettingsImagePreview.textContent = currentHub.icon || '🧩';
+        hubSettingsImagePreview.classList.add('hub-icon-initial');
+        hubSettingsImagePreview.innerHTML = hubInitialHtml(currentHub.name);
     }
 
     hubSettingsModal.style.display = 'flex';
@@ -6115,6 +6194,13 @@ function switchToView(view) {
 // HUB LİSTESİ
 // =====================================================
 
+// image_data yoksa lobi isminin baş harfi, kullanıcı renkli, varsayılan ikon olarak gösterilir (eski 🧩 yerine).
+function hubInitialHtml(name) {
+    const initial = String(name || '?').trim().charAt(0).toUpperCase() || '?';
+    const color = getUserColor(name || '');
+    return `<span class="hub-icon-initial" style="--user-color:${color};">${escapeHtml(initial)}</span>`;
+}
+
 function renderHubCard(hub) {
 
     const card = document.createElement('div');
@@ -6122,7 +6208,7 @@ function renderHubCard(hub) {
 
     const iconHtml = hub.image_data
         ? `<img src="${hub.image_data}" class="hub-card-icon" alt="">`
-        : `<span class="hub-card-icon">${hub.icon}</span>`;
+        : `<span class="hub-card-icon">${hubInitialHtml(hub.name)}</span>`;
 
     card.innerHTML = `
         ${iconHtml}
@@ -6560,7 +6646,7 @@ function renderHubDetail() {
     if (currentHub.image_data) {
         hubDetailIcon.innerHTML = `<img src="${currentHub.image_data}" alt="" style="width:22px;height:22px;border-radius:6px;object-fit:cover;">`;
     } else {
-        hubDetailIcon.textContent = currentHub.icon;
+        hubDetailIcon.innerHTML = hubInitialHtml(currentHub.name);
     }
 
     hubDetailName.textContent = currentHub.name;
@@ -6807,6 +6893,7 @@ function showIncomingCall(fromId, fromUsername) {
 
     dmIncomingCallUsername.textContent = fromUsername;
     dmIncomingCallModal.style.display = 'flex';
+    startRingtone();
 
 }
 
@@ -6814,6 +6901,7 @@ function hideIncomingCall() {
     dmIncomingCallModal.style.display = 'none';
     incomingCallFromId = null;
     incomingCallFromUsername = '';
+    stopRingtone();
 }
 
 dmIncomingCallDeclineBtn.addEventListener('click', () => {
