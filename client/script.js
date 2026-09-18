@@ -345,6 +345,43 @@ const notificationsList =
 
 
 // =====================================================
+// ÖNERİ & GÖRÜŞ
+// =====================================================
+
+const feedbackOpenBtn =
+    document.getElementById('feedback-open-btn');
+
+const feedbackModal =
+    document.getElementById('feedback-modal');
+
+const feedbackCloseBtn =
+    document.getElementById('feedback-close-btn');
+
+const feedbackTitleInput =
+    document.getElementById('feedback-title-input');
+
+const feedbackBodyInput =
+    document.getElementById('feedback-body-input');
+
+const feedbackFormError =
+    document.getElementById('feedback-form-error');
+
+const feedbackSubmitBtn =
+    document.getElementById('feedback-submit-btn');
+
+const feedbackSortTopBtn =
+    document.getElementById('feedback-sort-top');
+
+const feedbackSortNewBtn =
+    document.getElementById('feedback-sort-new');
+
+const feedbackList =
+    document.getElementById('feedback-list');
+
+let feedbackCurrentSort = 'top';
+
+
+// =====================================================
 // BAŞKASININ PROFİLİ
 // =====================================================
 
@@ -655,12 +692,36 @@ function clearAuthError() {
 // GİRİŞ / KAYIT EKRANI
 // =====================================================
 
+// Başlığı harf harf, dalga gibi sırayla beliren <span>'lara böler.
+// prefers-reduced-motion'da düz metin olarak kalır.
+const authTitlePrefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function setAuthTitle(text) {
+
+    if (authTitlePrefersReducedMotion) {
+        authTitle.textContent = text;
+        return;
+    }
+
+    authTitle.innerHTML = '';
+
+    [...text].forEach((char, i) => {
+        const span = document.createElement('span');
+        span.className = 'title-char';
+        span.textContent = char === ' ' ? ' ' : char;
+        span.style.animationDelay = `${0.15 + i * 0.032}s`;
+        authTitle.appendChild(span);
+    });
+
+}
+
 function showLoginForm() {
 
     clearAuthError();
 
-    authTitle.textContent =
-        "Sauran'a Hoş Geldin";
+    setAuthTitle(
+        "Sauran'a Hoş Geldin"
+    );
 
     loginForm.style.display =
         'block';
@@ -689,8 +750,9 @@ function showRegisterForm() {
 
     clearAuthError();
 
-    authTitle.textContent =
-        "Sauran'a Katıl";
+    setAuthTitle(
+        "Sauran'a Katıl"
+    );
 
     loginForm.style.display =
         'none';
@@ -716,8 +778,9 @@ function showForgotEmailForm() {
 
     clearAuthError();
 
-    authTitle.textContent =
-        'Şifremi Unuttum';
+    setAuthTitle(
+        'Şifremi Unuttum'
+    );
 
     loginForm.style.display =
         'none';
@@ -748,8 +811,9 @@ function showForgotResetForm(email) {
 
     pendingResetEmail = email;
 
-    authTitle.textContent =
-        'Şifreyi Sıfırla';
+    setAuthTitle(
+        'Şifreyi Sıfırla'
+    );
 
     forgotEmailForm.style.display =
         'none';
@@ -892,8 +956,9 @@ function showVerifyForm(email) {
     pendingVerifyEmail =
         email;
 
-    authTitle.textContent =
-        'E-postanı Doğrula';
+    setAuthTitle(
+        'E-postanı Doğrula'
+    );
 
     verifyEmailLabel.textContent =
         email;
@@ -4224,6 +4289,173 @@ function renderNotifications(notifications) {
 
             card.remove();
             refreshNotificationsBadge();
+
+        });
+
+    });
+
+}
+
+
+// =====================================================
+// ÖNERİ & GÖRÜŞ
+// =====================================================
+
+feedbackOpenBtn.addEventListener(
+    'click',
+    async () => {
+        feedbackFormError.textContent = '';
+        feedbackModal.style.display = 'flex';
+        await loadFeedback();
+    }
+);
+
+
+feedbackCloseBtn.addEventListener(
+    'click',
+    () => feedbackModal.style.display = 'none'
+);
+
+
+feedbackModal.addEventListener(
+    'click',
+    (event) => {
+        if (event.target === feedbackModal) feedbackModal.style.display = 'none';
+    }
+);
+
+
+feedbackSortTopBtn.addEventListener('click', () => {
+    if (feedbackCurrentSort === 'top') return;
+    feedbackCurrentSort = 'top';
+    feedbackSortTopBtn.classList.add('feedback-sort-active');
+    feedbackSortNewBtn.classList.remove('feedback-sort-active');
+    loadFeedback();
+});
+
+
+feedbackSortNewBtn.addEventListener('click', () => {
+    if (feedbackCurrentSort === 'new') return;
+    feedbackCurrentSort = 'new';
+    feedbackSortNewBtn.classList.add('feedback-sort-active');
+    feedbackSortTopBtn.classList.remove('feedback-sort-active');
+    loadFeedback();
+});
+
+
+feedbackSubmitBtn.addEventListener('click', async () => {
+
+    const title = feedbackTitleInput.value.trim();
+    const body = feedbackBodyInput.value.trim();
+
+    if (!title || !body) {
+        feedbackFormError.textContent = 'Başlık ve açıklama boş olamaz.';
+        return;
+    }
+
+    feedbackFormError.textContent = '';
+    feedbackSubmitBtn.disabled = true;
+
+    try {
+
+        const response = await fetch('/api/feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ title, body })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            feedbackFormError.textContent = data.error || 'Öneri gönderilemedi.';
+            return;
+        }
+
+        feedbackTitleInput.value = '';
+        feedbackBodyInput.value = '';
+        await loadFeedback();
+
+    } catch (error) {
+
+        console.error('Öneri gönderilemedi:', error);
+        feedbackFormError.textContent = 'Öneri gönderilemedi.';
+
+    } finally {
+
+        feedbackSubmitBtn.disabled = false;
+
+    }
+
+});
+
+
+async function loadFeedback() {
+
+    try {
+
+        const response = await fetch(`/api/feedback?sort=${feedbackCurrentSort}`, { credentials: 'include' });
+        const data = await response.json();
+
+        if (!data.success) return;
+
+        renderFeedback(data.feedback);
+
+    } catch (error) {
+
+        console.error('Öneriler alınamadı:', error);
+
+    }
+
+}
+
+
+function renderFeedback(items) {
+
+    if (items.length === 0) {
+        feedbackList.innerHTML = '<div class="feedback-empty">Henüz öneri yok. İlk öneriyi sen paylaş!</div>';
+        return;
+    }
+
+    feedbackList.innerHTML = items.map((item) => `
+        <div class="feedback-card" data-feedback-id="${item.id}">
+            <button class="feedback-vote-btn${item.has_voted ? ' feedback-voted' : ''}" type="button" data-vote>
+                <span class="feedback-vote-arrow">▲</span>
+                <span class="feedback-vote-count">${item.vote_count}</span>
+            </button>
+            <div class="feedback-content">
+                <div class="feedback-title">${escapeHtml(item.title)}</div>
+                <div class="feedback-body">${escapeHtml(item.body)}</div>
+                <div class="feedback-meta">@${escapeHtml(item.username)} · ${new Date(item.created_at).toLocaleDateString('tr-TR')}</div>
+            </div>
+        </div>
+    `).join('');
+
+    feedbackList.querySelectorAll('[data-feedback-id]').forEach((card) => {
+
+        const feedbackId = card.dataset.feedbackId;
+
+        card.querySelector('[data-vote]').addEventListener('click', async () => {
+
+            try {
+
+                const response = await fetch(`/api/feedback/${feedbackId}/vote`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+                if (!data.success) return;
+
+                const voteBtn = card.querySelector('[data-vote]');
+                voteBtn.classList.toggle('feedback-voted', data.voted);
+                voteBtn.querySelector('.feedback-vote-count').textContent = data.vote_count;
+
+            } catch (error) {
+
+                console.error('Oy verilemedi:', error);
+
+            }
 
         });
 
