@@ -802,6 +802,26 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 }
 .composer-attach-menu button:hover { background: rgba(102, 252, 241, 0.1); color: #66fcf1; }
 
+.sticker-picker {
+  position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 30;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 10px;
+  border-radius: 16px; width: 220px; animation: dropdown-in 0.18s ease-out;
+}
+.sticker-picker button {
+  background: none; border: none; cursor: pointer; font-size: 26px; line-height: 1;
+  padding: 8px; border-radius: 10px; transition: 0.15s;
+}
+.sticker-picker button:hover { background: rgba(102, 252, 241, 0.12); transform: scale(1.1); }
+
+.hub-msg-sticker, .dm-msg-sticker {
+  font-size: 64px; line-height: 1; background: none !important; border: none !important;
+  box-shadow: none !important; padding: 0 !important;
+}
+.dm-msg:has(.dm-msg-sticker) {
+  background: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+  padding: 0 !important;
+}
+
 .composer-send-btn {
   flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
   margin-left: 2px; font-size: 15px; color: #66fcf1; cursor: pointer; transform: rotate(0deg);

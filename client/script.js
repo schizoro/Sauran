@@ -1,5 +1,28 @@
 let socket = null;
 
+const STICKERS = [
+    { id: 'wave', emoji: '👋' },
+    { id: 'thumbsup', emoji: '👍' },
+    { id: 'heart', emoji: '❤️' },
+    { id: 'laugh', emoji: '😂' },
+    { id: 'cry', emoji: '😭' },
+    { id: 'fire', emoji: '🔥' },
+    { id: 'clap', emoji: '👏' },
+    { id: 'party', emoji: '🎉' },
+    { id: 'shock', emoji: '😱' },
+    { id: 'love-eyes', emoji: '😍' },
+    { id: 'thinking', emoji: '🤔' },
+    { id: 'sleep', emoji: '😴' },
+    { id: 'cool', emoji: '😎' },
+    { id: 'wink', emoji: '😉' },
+    { id: 'ok', emoji: '👌' },
+    { id: 'pray', emoji: '🙏' }
+];
+
+function stickerEmoji(id) {
+    return STICKERS.find((s) => s.id === id)?.emoji || '❔';
+}
+
 // =====================================================
 // DOM
 // =====================================================
@@ -315,6 +338,11 @@ wireAttachMenu('dm', async (file) => {
 
     socket.emit('dm_file_message', { to_user_id: activeDmUserId, file: fileData });
 
+});
+
+wireStickerPicker('dm', (stickerId) => {
+    if (!activeDmUserId || !socket) return;
+    socket.emit('dm_sticker_message', { to_user_id: activeDmUserId, sticker_id: stickerId });
 });
 
 
@@ -2567,6 +2595,7 @@ const I18N = {
     'attach-camera': { tr: 'Kamerayla Çek', en: 'Take Photo/Video' },
     'attach-gallery': { tr: 'Galeriden Seç', en: 'Choose from Gallery' },
     'attach-file': { tr: 'Dosya Seç', en: 'Choose File' },
+    'attach-sticker': { tr: 'Çıkartma', en: 'Sticker' },
     'hub-settings-invite-friend': { tr: 'Arkadaşını Davet Et', en: 'Invite a Friend' },
     'hub-settings-invite-code': { tr: 'Davet Kodu Oluştur', en: 'Create Invite Code' },
     'hub-settings-delete': { tr: 'Lobiyi Sil', en: 'Delete Lobby' },
@@ -4347,6 +4376,10 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
 
         body = buildFileCardHtml(msg.payload);
 
+    } else if (msg.kind === 'dm_sticker' && msg.payload) {
+
+        body = `<span class="dm-msg-sticker">${stickerEmoji(msg.payload.id)}</span>`;
+
     } else {
 
         body = `<span class="dm-msg-content">${escapeHtml(msg.content)}</span>`;
@@ -4964,6 +4997,32 @@ function readFileAsDataUrl(file) {
     });
 }
 
+// prefix: 'hub' | 'dm' — bekler #{prefix}-sticker-picker elementinin var olduğunu.
+function wireStickerPicker(prefix, onPick) {
+
+    const picker = document.getElementById(`${prefix}-sticker-picker`);
+    if (!picker) return;
+
+    STICKERS.forEach((sticker) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = sticker.emoji;
+        btn.title = sticker.id;
+        btn.addEventListener('click', () => {
+            picker.style.display = 'none';
+            onPick(sticker.id);
+        });
+        picker.appendChild(btn);
+    });
+
+    document.addEventListener('click', (event) => {
+        if (picker.style.display === 'grid' && !picker.contains(event.target)) {
+            picker.style.display = 'none';
+        }
+    });
+
+}
+
 // prefix: 'hub' | 'dm' — bekler #{prefix}-attach-btn, #{prefix}-attach-menu,
 // #{prefix}-attach-input-camera/gallery/file elementlerinin var olduğunu.
 function wireAttachMenu(prefix, onFile) {
@@ -4988,8 +5047,14 @@ function wireAttachMenu(prefix, onFile) {
     });
 
     menu.querySelectorAll('[data-attach]').forEach((item) => {
-        item.addEventListener('click', () => {
+        item.addEventListener('click', (event) => {
             menu.style.display = 'none';
+            if (item.dataset.attach === 'sticker') {
+                event.stopPropagation();
+                const picker = document.getElementById(`${prefix}-sticker-picker`);
+                if (picker) picker.style.display = 'grid';
+                return;
+            }
             inputs[item.dataset.attach]?.click();
         });
     });
@@ -5325,6 +5390,28 @@ wireAttachMenu('hub', async (file) => {
 
     } catch (error) {
         console.error('Hub dosyası gönderilemedi:', error);
+        showToast('Gönderilemedi.');
+    }
+
+});
+
+wireStickerPicker('hub', async (stickerId) => {
+    if (!currentHub) return;
+
+    try {
+
+        const response = await fetch(`/api/hubs/${currentHub.id}/sticker`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ sticker_id: stickerId })
+        });
+
+        const data = await response.json();
+        if (!data.success) showToast(data.error || 'Gönderilemedi.');
+
+    } catch (error) {
+        console.error('Hub çıkartması gönderilemedi:', error);
         showToast('Gönderilemedi.');
     }
 
@@ -7534,6 +7621,10 @@ function renderHubMessageIntoWrap(wrap, msg) {
     } else if ((msg.kind === 'image' || msg.kind === 'video' || msg.kind === 'file') && msg.payload) {
 
         body = buildFileCardHtml(msg.payload);
+
+    } else if (msg.kind === 'sticker' && msg.payload) {
+
+        body = `<div class="hub-msg-sticker">${stickerEmoji(msg.payload.id)}</div>`;
 
     } else {
 

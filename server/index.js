@@ -43,6 +43,8 @@ const {
   forwardMessageToDm,
   createHubVoiceMessage,
   createHubFileMessage,
+  createHubSticker,
+  STICKERS,
   createHubPoll,
   voteHubPoll,
   createHubShare,
@@ -67,6 +69,7 @@ const {
   saveDmMessage,
   saveDmVoiceMessage,
   createDmFileMessage,
+  saveDmSticker,
   getDmMessages,
   findUserByUsername,
   blockUser,
@@ -1321,6 +1324,33 @@ app.post('/api/hubs/:id/file', fileUploadLimiter, (req, res) => {
   }
 });
 
+app.post('/api/hubs/:id/sticker', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const hubId = Number(req.params.id);
+
+  if (!isHubMember(hubId, user.id)) {
+    return res.status(403).json({ success: false, error: 'Bu Hub\'a üye değilsin.' });
+  }
+
+  try {
+    const result = createHubSticker(hubId, user.id, user.username, req.body?.sticker_id);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    io.to(`hub:${hubId}`).emit('hub_message', result.message);
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Çıkartma mesajı hatası:', error);
+    res.status(500).json({ success: false, error: 'Gönderilemedi.' });
+  }
+});
+
 // =====================================================
 // SESLİ SOHBET (DAILY.CO)
 // =====================================================
@@ -2276,6 +2306,34 @@ io.on('connection', (socket) => {
     } catch (error) {
       console.error('Dosyalı DM kaydedilirken hata:', error);
       socket.emit('message_error', 'Dosya gönderilemedi.');
+    }
+  });
+
+  socket.on('dm_sticker_message', (data) => {
+    try {
+      if (!socket.userId || !socket.username) {
+        socket.emit('message_error', 'Oturum doğrulanamadı.');
+        return;
+      }
+
+      if (isSocketMessageRateLimited(socket)) {
+        socket.emit('message_error', 'Çok hızlı mesaj gönderiyorsun, biraz yavaşla.');
+        return;
+      }
+
+      const toUserId = Number(data?.to_user_id);
+      const result = saveDmSticker(socket.userId, socket.username, toUserId, data?.sticker_id);
+
+      if (!result.success) {
+        socket.emit('message_error', result.error);
+        return;
+      }
+
+      io.to(`user:${socket.userId}`).to(`user:${toUserId}`).emit('dm_message', result.message);
+
+    } catch (error) {
+      console.error('Çıkartmalı DM kaydedilirken hata:', error);
+      socket.emit('message_error', 'Çıkartma gönderilemedi.');
     }
   });
 

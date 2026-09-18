@@ -1533,6 +1533,55 @@ function createHubFileMessage(hubId, userId, username, file) {
   return { success: true, message: getMessageById(info.lastInsertRowid) };
 }
 
+const STICKERS = [
+  'wave', 'thumbsup', 'heart', 'laugh', 'cry', 'fire', 'clap', 'party',
+  'shock', 'love-eyes', 'thinking', 'sleep', 'cool', 'wink', 'ok', 'pray'
+];
+
+const STICKER_EMOJIS = {
+  wave: '👋', thumbsup: '👍', heart: '❤️', laugh: '😂', cry: '😭', fire: '🔥',
+  clap: '👏', party: '🎉', shock: '😱', 'love-eyes': '😍', thinking: '🤔',
+  sleep: '😴', cool: '😎', wink: '😉', ok: '👌', pray: '🙏'
+};
+
+function stickerEmoji(id) {
+  return STICKER_EMOJIS[id] || '❔';
+}
+
+function createHubSticker(hubId, userId, username, stickerId) {
+  if (!STICKERS.includes(stickerId)) {
+    return { success: false, error: 'Geçersiz çıkartma.' };
+  }
+
+  const payload = JSON.stringify({ id: stickerId });
+
+  const info = db.prepare(`
+    INSERT INTO messages (user_id, username, content, room, hub_id, kind, payload)
+    VALUES (?, ?, '', ?, ?, 'sticker', ?)
+  `).run(userId, username, `hub_${hubId}`, hubId, payload);
+
+  return { success: true, message: getMessageById(info.lastInsertRowid) };
+}
+
+function saveDmSticker(fromId, fromUsername, toId, stickerId) {
+  if (!areFriends(fromId, toId)) {
+    return { success: false, error: 'Sadece arkadaşlarınla mesajlaşabilirsin.' };
+  }
+
+  if (!STICKERS.includes(stickerId)) {
+    return { success: false, error: 'Geçersiz çıkartma.' };
+  }
+
+  const payload = JSON.stringify({ id: stickerId });
+
+  const info = db.prepare(`
+    INSERT INTO messages (user_id, username, content, room, to_user_id, kind, payload)
+    VALUES (?, ?, '', ?, ?, 'dm_sticker', ?)
+  `).run(fromId, fromUsername, dmRoom(fromId, toId), toId, payload);
+
+  return { success: true, message: getMessageById(info.lastInsertRowid) };
+}
+
 function getHubDailyRoomName(hubId) {
   const hub = db.prepare(`SELECT daily_room_name FROM hubs WHERE id = ?`).get(hubId);
   return hub ? hub.daily_room_name : null;
@@ -1991,6 +2040,7 @@ function describeMessageKindLabel(kind, content, rawPayload) {
   if (kind === 'image') return `🖼️ Görsel: ${payload?.name || 'görsel'}`;
   if (kind === 'video') return `🎬 Video: ${payload?.name || 'video'}`;
   if (kind === 'file') return `📎 Dosya: ${payload?.name || 'dosya'}`;
+  if (kind === 'sticker' || kind === 'dm_sticker') return `${stickerEmoji(payload?.id)} Çıkartma`;
   if (kind === 'poll') return `📊 Anket: ${String(content || payload?.question || '').slice(0, 60)}`;
   if (kind === 'share') return `🔗 Paylaşım: ${String(content || '').slice(0, 60)}${payload?.url ? ' — ' + payload.url.slice(0, 60) : ''}`;
   if (kind === 'deleted') return '(silinmiş mesaj)';
@@ -2424,6 +2474,8 @@ module.exports = {
   editMessage,
   createHubVoiceMessage,
   createHubFileMessage,
+  createHubSticker,
+  STICKERS,
   createHubPoll,
   voteHubPoll,
   createHubShare,
@@ -2449,6 +2501,7 @@ module.exports = {
   saveDmMessage,
   saveDmVoiceMessage,
   createDmFileMessage,
+  saveDmSticker,
   getDmMessages,
   addReaction,
   removeReaction,
