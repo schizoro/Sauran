@@ -446,7 +446,12 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 .view-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
 /* Hub Listesi */
-.hub-list-view { padding: 28px 32px; overflow-y: auto; }
+.hub-list-view {
+  padding: 28px 32px; overflow-y: auto;
+}
+#hub-list-view {
+  background-image: url('img/hub-bg.svg'); background-size: cover; background-position: center; background-repeat: no-repeat;
+}
 .hub-list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
 .hub-list-header h2 {
   color: #fff; font-size: 14px; letter-spacing: 2px; padding: 10px 20px; border-radius: 999px;
