@@ -76,6 +76,7 @@ const {
   unblockUser,
   listBlockedUsers,
   createReport,
+  MAX_VOICE_ROOM_PARTICIPANTS,
   createFeedback,
   listFeedback,
   voteFeedback,
@@ -1602,6 +1603,10 @@ app.post('/api/hubs/:id/voice-rooms/:roomId/join', async (req, res) => {
     return res.status(404).json({ success: false, error: 'Oda bulunamadı.' });
   }
 
+  if (isVoiceRoomFull(roomId, user.id)) {
+    return res.status(409).json({ success: false, error: `Bu oda dolu (en fazla ${MAX_VOICE_ROOM_PARTICIPANTS} kişi).` });
+  }
+
   if (!daily.isConfigured()) {
     return res.status(503).json({ success: false, error: 'Sesli sohbet henüz yapılandırılmadı.' });
   }
@@ -1925,6 +1930,13 @@ function broadcastVoiceRoom(hubId, roomId, change) {
     participants: serializeVoiceParticipants(roomId),
     change: change || null
   });
+}
+
+// Zaten odada olan kullanıcı (yeniden bağlanma / cihaz devri) kapasiteye takılmaz.
+function isVoiceRoomFull(roomId, userId) {
+  const members = voiceRoomParticipants.get(roomId);
+  if (!members || members.has(userId)) return false;
+  return members.size >= MAX_VOICE_ROOM_PARTICIPANTS;
 }
 
 function findUserVoiceRoom(userId) {
@@ -2658,6 +2670,10 @@ io.on('connection', (socket) => {
       const room = getVoiceRoom(roomId);
       if (!room || room.hub_id !== hubId) {
         return reply({ success: false, error: 'Oda bulunamadı.' });
+      }
+
+      if (isVoiceRoomFull(roomId, socket.userId)) {
+        return reply({ success: false, error: `Bu oda dolu (en fazla ${MAX_VOICE_ROOM_PARTICIPANTS} kişi).` });
       }
 
       const previous = findUserVoiceRoom(socket.userId);

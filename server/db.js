@@ -1637,6 +1637,10 @@ function listVoiceRooms(hubId) {
   return db.prepare(`SELECT id, hub_id, name, created_by, created_at FROM hub_voice_rooms WHERE hub_id = ? ORDER BY id ASC`).all(hubId);
 }
 
+// Sesli oda limitleri — ileride değiştirmek için tek yer burası.
+const MAX_VOICE_ROOM_PARTICIPANTS = 25;
+const MAX_VOICE_ROOMS_PER_HUB = 5;
+
 function createVoiceRoom(hubId, userId, name) {
   const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
   if (!hub) return { success: false, error: 'Hub bulunamadı.' };
@@ -1644,6 +1648,11 @@ function createVoiceRoom(hubId, userId, name) {
 
   name = String(name || '').trim().slice(0, 40);
   if (!name) return { success: false, error: 'Oda adı gerekli.' };
+
+  const roomCount = db.prepare(`SELECT COUNT(*) AS count FROM hub_voice_rooms WHERE hub_id = ?`).get(hubId).count;
+  if (roomCount >= MAX_VOICE_ROOMS_PER_HUB) {
+    return { success: false, error: `Bir lobide en fazla ${MAX_VOICE_ROOMS_PER_HUB} sesli oda olabilir.` };
+  }
 
   const info = db.prepare(`INSERT INTO hub_voice_rooms (hub_id, name, created_by) VALUES (?, ?, ?)`).run(hubId, name, userId);
 
@@ -2844,6 +2853,8 @@ module.exports = {
   getNotificationPreferences,
   updateNotificationPreferences,
   markNotificationRead,
+  MAX_VOICE_ROOM_PARTICIPANTS,
+  MAX_VOICE_ROOMS_PER_HUB,
   createFeedback,
   listFeedback,
   voteFeedback,
