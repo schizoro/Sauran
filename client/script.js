@@ -2471,7 +2471,7 @@ const I18N = {
     'menu-hub-members': { tr: 'Lobi Üyeleri', en: 'Lobby Members' },
     'menu-add-friend': { tr: 'Arkadaş Ekle', en: 'Add Friend' },
     'menu-settings': { tr: 'Ayarlar', en: 'Settings' },
-    'hubs-title': { tr: 'ANA MENÜ', en: 'HOME' },
+    'hubs-title': { tr: 'Ana Menü', en: 'Home' },
     'hubs-owned': { tr: 'OLUŞTURDUĞUM LOBİLER', en: 'LOBBIES I CREATED' },
     'hubs-joined': { tr: 'KATILDIĞIM LOBİLER', en: 'LOBBIES I JOINED' },
     'hubs-empty': { tr: 'İlk Lobini oluştur', en: 'Create your first lobby' },
@@ -6006,6 +6006,10 @@ function switchToView(view) {
 
     hubListView.style.display = view === 'hubs' ? 'flex' : 'none';
     hubDetailView.style.display = view === 'hub-detail' ? 'flex' : 'none';
+
+    // "Ana Menü" başlığı üst çubukta sadece Ana Menü (Lobi listesi) ekranındayken görünür.
+    const topbarContextTitle = document.getElementById('topbar-context-title');
+    if (topbarContextTitle) topbarContextTitle.style.display = view === 'hubs' ? 'block' : 'none';
 
     const friendsSidebar = document.getElementById('friends-sidebar');
     const friendsSidebarToggleBtn = document.getElementById('friends-sidebar-toggle-btn');
