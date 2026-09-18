@@ -2808,6 +2808,7 @@ const I18N = {
     'banned-from-hub': { tr: 'Bu lobiden yasaklandın.', en: "You've been banned from this lobby." },
     'hub-bans-title': { tr: 'Yasaklılar', en: 'Banned Users' },
     'hub-bans-empty': { tr: 'Yasaklı kimse yok.', en: 'No one is banned.' },
+    'bans-back': { tr: 'Geri', en: 'Back' },
     'hub-ban-member': { tr: 'Katılımcı Yasakla', en: 'Ban a Member' },
     'hub-ban-picker-empty': { tr: 'Yasaklanabilecek katılımcı yok.', en: 'No members available to ban.' },
     'unban': { tr: 'Yasağı Kaldır', en: 'Unban' },
@@ -6241,12 +6242,25 @@ hubSettingsOpenBtn.addEventListener('click', () => {
     const canModerate = currentHub.my_permission_tier === 'owner' || currentHub.my_permission_tier === 'moderator';
     const bansSection = document.getElementById('hub-settings-bans-section');
     bansSection.style.display = canModerate ? 'block' : 'none';
-    if (canModerate) loadHubBans();
+
 
     document.getElementById('hub-ban-member-btn').style.display = canModerate ? 'flex' : 'none';
     document.getElementById('hub-ban-picker').style.display = 'none';
+    showHubSettingsView('main');
 
 });
+
+function showHubSettingsView(view) {
+    document.getElementById('hub-settings-main-view').style.display = view === 'main' ? 'flex' : 'none';
+    document.getElementById('hub-settings-bans-view').style.display = view === 'bans' ? 'flex' : 'none';
+}
+
+document.getElementById('hub-bans-open-btn').addEventListener('click', () => {
+    showHubSettingsView('bans');
+    loadHubBans();
+});
+
+document.getElementById('hub-bans-back-btn').addEventListener('click', () => showHubSettingsView('main'));
 
 document.getElementById('hub-ban-member-btn').addEventListener('click', () => {
     const picker = document.getElementById('hub-ban-picker');

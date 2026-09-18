@@ -551,14 +551,14 @@
 
     <div id="hub-settings-modal" class="modal-overlay" style="display:none;">
 
-        <div class="modal-box hub-settings-box">
+        <div class="modal-box hub-settings-box hub-settings-panel">
 
             <div class="modal-header">
                 <span data-i18n="modal-hub-settings">⚙️ Hub Ayarları</span>
                 <button id="hub-settings-close-btn">✕</button>
             </div>
 
-            <div class="hub-settings-body">
+            <div class="hub-settings-body" id="hub-settings-main-view">
 
                 <div class="hub-create-image-wrap">
                     <span id="hub-settings-image-preview" class="hub-create-image-preview">🧩</span>
@@ -581,15 +581,19 @@
                 <div id="hub-ban-picker" class="settings-blocked-list" style="display:none;"></div>
 
                 <div id="hub-settings-bans-section" style="display:none;">
-                    <div class="hub-settings-divider"></div>
-                    <span class="profile-field-label" data-i18n="hub-bans-title">Yasaklılar</span>
-                    <div id="hub-settings-bans-list" class="settings-blocked-list"></div>
+                    <button id="hub-bans-open-btn" class="hub-settings-action-btn" type="button">⛔ <span data-i18n="hub-bans-title">Yasaklılar</span></button>
                 </div>
 
                 <button id="hub-report-btn" class="hub-settings-action-btn hub-settings-danger" type="button">🚩 <span data-i18n="hub-settings-report">Hub'ı Bildir</span></button>
 
                 <button id="hub-delete-btn" class="hub-settings-action-btn hub-settings-danger" type="button" style="display:none;">🗑 <span data-i18n="hub-settings-delete">Hub'ı Sil</span></button>
 
+            </div>
+
+            <div class="hub-settings-body" id="hub-settings-bans-view" style="display:none;">
+                <button id="hub-bans-back-btn" class="hub-settings-back-btn" type="button">← <span data-i18n="bans-back">Geri</span></button>
+                <span class="profile-field-label" data-i18n="hub-bans-title">Yasaklılar</span>
+                <div id="hub-settings-bans-list" class="settings-blocked-list"></div>
             </div>
 
         </div>
