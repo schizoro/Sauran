@@ -65,13 +65,14 @@ async function getOrCreateRoom(roomName, opts = {}) {
   }
 }
 
-async function createMeetingToken(roomName, userName) {
+async function createMeetingToken(roomName, userName, userId) {
   const data = await dailyFetch('/meeting-tokens', {
     method: 'POST',
     body: JSON.stringify({
       properties: {
         room_name: roomName,
         user_name: userName,
+        ...(userId ? { user_id: String(userId) } : {}),
         exp: Math.floor(Date.now() / 1000) + 60 * 60 * 4
       }
     })

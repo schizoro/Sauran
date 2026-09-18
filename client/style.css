@@ -458,6 +458,24 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 .liquid-modal-hero h3 { color: #fff; font-size: 16px; font-weight: bold; }
 .liquid-modal-hero p { color: #8e9297; font-size: 12px; line-height: 1.5; max-width: 260px; }
 
+/* Fotoğraf kırpma penceresi */
+.cropper-overlay { z-index: 300; }
+.cropper-box { width: 360px; max-width: 92vw; max-height: 92vh; padding-bottom: 20px; align-items: stretch; }
+.cropper-hero { padding: 26px 24px 12px; }
+.cropper-stage-wrap { display: flex; justify-content: center; padding: 0 20px; }
+.cropper-stage { position: relative; overflow: hidden; border-radius: 14px; background: #000; touch-action: none; cursor: grab; user-select: none; }
+.cropper-stage:active { cursor: grabbing; }
+.cropper-stage canvas { display: block; }
+.cropper-guide { position: absolute; inset: 0; pointer-events: none; border: 2px solid rgba(102, 252, 241, 0.7); border-radius: 14px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4); }
+.cropper-guide.round { border-radius: 50%; box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.55); }
+.cropper-zoom { margin: 16px 28px 4px; accent-color: #66fcf1; }
+.cropper-actions { display: flex; gap: 10px; padding: 12px 20px 0; }
+.cropper-btn { flex: 1; padding: 11px; border-radius: 999px; font-size: 12px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+.cropper-btn-ghost { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); color: #c5c6c7; }
+.cropper-btn-ghost:hover { border-color: rgba(255, 255, 255, 0.3); }
+.cropper-btn-primary { background: #66fcf1; border: none; color: #0b0c10; }
+.cropper-btn-primary:hover { box-shadow: 0 0 14px rgba(102, 252, 241, 0.4); transform: translateY(-1px); }
+
 /* Arkadaşını Hub'a Davet Et — liquid glass liste */
 .hub-invite-friend-box { width: 320px; max-height: 80vh; }
 .liquid-friend-list { list-style: none; overflow-y: auto; max-height: 320px; padding: 4px 14px 20px; display: flex; flex-direction: column; gap: 8px; }
@@ -881,7 +899,68 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
   display: flex; align-items: center; gap: 7px; padding: 6px 14px; border-radius: 999px; cursor: pointer;
   background: rgba(87, 242, 135, 0.12); border: 1px solid rgba(87, 242, 135, 0.4); color: #57f287; font-size: 11px; font-weight: bold;
 }
+.hub-in-room-count { color: #c5c6c7; font-weight: bold; }
 .hub-in-room-dot { width: 7px; height: 7px; border-radius: 50%; background: #57f287; animation: mic-pulse-cyan 1.4s ease-in-out infinite; }
+
+/* ─── 13A: Sesli oda presence (üye listesi, mikrofon, konuşan) ─────────────── */
+.hub-voice-room-side { align-self: stretch; display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; flex-shrink: 0; }
+.hub-voice-room-count { margin-top: auto; }
+.hub-voice-room-toggle {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; padding: 3px 10px; border-radius: 999px; cursor: pointer;
+  color: #c5c6c7; font-size: 10px; font-weight: bold; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.hub-voice-room-toggle:hover { border-color: rgba(102, 252, 241, 0.4); color: #66fcf1; }
+.hub-voice-room-chevron { display: inline-block; font-size: 10px; transition: transform 0.25s ease; }
+.hub-voice-room-toggle.open .hub-voice-room-chevron { transform: rotate(90deg); }
+
+.hub-voice-room-members-wrap { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 0.28s ease, opacity 0.2s ease; }
+.hub-voice-room-members-wrap.open { grid-template-rows: 1fr; opacity: 1; }
+.hub-voice-room-members { overflow: hidden; min-height: 0; }
+.hub-voice-room-members-list { display: flex; flex-direction: column; gap: 6px; padding: 2px 4px 6px; }
+.hub-voice-room-members-empty { color: #6b7280; font-size: 11px; text-align: center; padding: 8px 0; }
+.hub-voice-room-member {
+  display: flex; align-items: center; gap: 8px; padding: 5px 6px 5px 8px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.hub-voice-room-member.is-self { background: rgba(102, 252, 241, 0.06); border-color: rgba(102, 252, 241, 0.2); }
+.hub-voice-member-avatar {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; overflow: hidden;
+  font-size: 11px; font-weight: bold; color: var(--user-color, #66fcf1); background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.hub-voice-member-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.hub-voice-member-name { flex: 1; min-width: 0; color: #c5c6c7; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.voice-self-tag { color: #66fcf1; font-style: normal; font-size: 0.9em; opacity: 0.8; }
+
+/* Mikrofon / hoparlör simgeleri: köşesiz, saydam liquid glass. Kapalıyken kırmızı çapraz çizgi,
+   konuşurken mikrofon simgesinin çevresinde yeşil ışık. */
+.voice-status { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.voice-icon-btn {
+  position: relative; width: 28px; height: 28px; padding: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  color: #c5c6c7; background: rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(10px) saturate(160%); -webkit-backdrop-filter: blur(10px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.16); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08); transition: 0.2s;
+}
+.voice-icon-btn.interactive { cursor: pointer; }
+.voice-icon-btn.interactive:hover { border-color: rgba(102, 252, 241, 0.5); background: rgba(102, 252, 241, 0.12); }
+.voice-icon-btn.off { color: #ff6b7d; border-color: rgba(255, 46, 70, 0.45); }
+.voice-icon-btn.off::after {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 22px; height: 2px; border-radius: 2px; background: #ff2e46;
+  transform: translate(-50%, -50%) rotate(-45deg); box-shadow: 0 0 4px rgba(255, 46, 70, 0.6);
+}
+.voice-icon-btn.speaking {
+  color: #57f287; border-color: rgba(87, 242, 135, 0.9); background: rgba(87, 242, 135, 0.14);
+  box-shadow: 0 0 0 2px rgba(87, 242, 135, 0.3), 0 0 14px rgba(87, 242, 135, 0.75);
+}
+.call-hub-room-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.call-hub-room-person.is-self .call-hub-room-avatar { border-color: rgba(102, 252, 241, 0.45); }
+.call-hub-room-person .voice-status { margin-top: 2px; }
+#call-mute-btn { padding: 8px 16px; background: transparent; border: 1px solid #57f287; color: #57f287; font-weight: bold; font-size: 12px; cursor: pointer; transition: 0.2s; }
+#call-mute-btn:hover { background: #57f287; color: #0b0c10; }
+#call-mute-btn.muted { border-color: #ff2e46; color: #ff2e46; }
+#call-mute-btn.muted:hover { background: #ff2e46; color: #0b0c10; }
+.voice-room-preview-avatar { overflow: hidden; }
+.voice-room-preview-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.voice-room-preview-name { flex: 1; min-width: 0; }
 
 /* ─── v1.17: Sesli Oda Önizleme / Katıl Paneli ────────────────────────────── */
 .voice-room-preview-box { width: 320px; max-width: 92vw; display: flex; flex-direction: column; max-height: 70vh; }
@@ -1322,7 +1401,6 @@ body.call-mini-active { padding-top: 42px; }
   background: rgba(255, 255, 255, 0.06); backdrop-filter: blur(14px) saturate(160%); -webkit-backdrop-filter: blur(14px) saturate(160%);
   border: 1px solid rgba(255, 255, 255, 0.14); box-shadow: 0 0 16px rgba(0, 0, 0, 0.2);
 }
-.call-hub-room-avatar.speaking { border-color: rgba(87, 242, 135, 0.6); box-shadow: 0 0 16px rgba(87, 242, 135, 0.3); }
 .call-hub-room-name {
   color: #c5c6c7; font-size: 12px; font-weight: bold; text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   padding: 3px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1);
@@ -1549,57 +1627,6 @@ body.call-mini-active { padding-top: 42px; }
   .dm-msg:hover .hub-msg-actions { display: flex; }
 }
 
-/* ─── Geliştirme bilgilendirme penceresi — keskin köşeli liquid glass ─────── */
-.dev-notice-overlay {
-  position: fixed; inset: 0; z-index: 400; display: none; align-items: center; justify-content: center;
-  padding: 16px; background: rgba(5, 6, 10, 0.5);
-  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-  opacity: 0; transition: opacity 0.22s ease;
-}
-.dev-notice-overlay.visible { display: flex; }
-.dev-notice-overlay.open { opacity: 1; }
-.dev-notice-panel {
-  position: relative; width: 100%; max-width: 480px; max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px);
-  display: flex; flex-direction: column; overflow: hidden; border-radius: 0;
-  background: rgba(20, 22, 28, 0.58);
-  backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  transform: translateY(10px) scale(0.98); transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.dev-notice-overlay.open .dev-notice-panel { transform: translateY(0) scale(1); }
-.dev-notice-panel::before {
-  content: ''; position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0) 38%);
-}
-.dev-notice-scroll { position: relative; overflow-y: auto; padding: 26px 26px 10px; -webkit-overflow-scrolling: touch; }
-.dev-notice-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-.dev-notice-icon {
-  flex-shrink: 0; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
-  font-size: 14px; font-weight: bold; font-style: italic; font-family: Georgia, serif; color: var(--accent, #66fcf1);
-  border: 1px solid rgba(102, 252, 241, 0.45); background: rgba(102, 252, 241, 0.08);
-}
-.dev-notice-title { margin: 0; font-size: 17px; font-weight: bold; color: #fff; letter-spacing: 0.3px; line-height: 1.3; }
-.dev-notice-body p { margin: 0 0 12px; font-size: 13.5px; line-height: 1.65; color: #c5c6c7; }
-.dev-notice-body strong { color: #e2f8f6; }
-.dev-notice-sign { margin: 6px 0 14px; font-size: 12.5px; font-weight: bold; color: #9ca3af; letter-spacing: 0.4px; }
-.dev-notice-footer { position: relative; flex-shrink: 0; display: flex; justify-content: flex-end; padding: 14px 26px 22px; border-top: 1px solid rgba(255, 255, 255, 0.07); }
-.dev-notice-btn {
-  padding: 11px 24px; border-radius: 0; cursor: pointer; font-size: 13px; font-weight: bold; letter-spacing: 0.4px;
-  color: var(--accent, #66fcf1); background: rgba(102, 252, 241, 0.1); border: 1px solid rgba(102, 252, 241, 0.5);
-  transition: background 0.2s, box-shadow 0.2s;
-}
-.dev-notice-btn:hover { background: rgba(102, 252, 241, 0.2); box-shadow: 0 0 14px rgba(102, 252, 241, 0.25); }
-.dev-notice-btn:focus-visible { outline: 2px solid var(--accent, #66fcf1); outline-offset: 2px; }
-@media (max-width: 480px) {
-  .dev-notice-scroll { padding: 20px 18px 6px; }
-  .dev-notice-footer { padding: 12px 18px calc(16px + env(safe-area-inset-bottom)); }
-  .dev-notice-btn { width: 100%; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .dev-notice-overlay, .dev-notice-panel { transition: none; }
-}
-
 .report-modal-box { width: 92vw; max-width: 380px; display: flex; flex-direction: column; gap: 12px; padding: 22px; }
 .report-modal-box h3 { margin: 0; font-size: 16px; color: #66fcf1; }
 .report-reason-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; }
@@ -1687,7 +1714,60 @@ body.call-mini-active { padding-top: 42px; }
 
   .profile-modal-box, .profile-modal-box-minimal { width: 88vw; max-width: 320px; }
 
-  .call-header { padding: 10px 14px; }
+  .call-header { padding: 10px 14px; gap: 8px; flex-wrap: wrap; }
+  #call-mute-btn, #call-screenshare-btn, #call-leave-btn { padding: 7px 12px; font-size: 11px; }
+  .voice-icon-btn { width: 30px; height: 30px; }
   .call-header span { font-size: 12px; }
 
+}
+
+/* ─── Geliştirme bilgilendirme penceresi — keskin köşeli liquid glass ─────── */
+.dev-notice-overlay {
+  position: fixed; inset: 0; z-index: 400; display: none; align-items: center; justify-content: center;
+  padding: 16px; background: rgba(5, 6, 10, 0.5);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  opacity: 0; transition: opacity 0.22s ease;
+}
+.dev-notice-overlay.visible { display: flex; }
+.dev-notice-overlay.open { opacity: 1; }
+.dev-notice-panel {
+  position: relative; width: 100%; max-width: 480px; max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px);
+  display: flex; flex-direction: column; overflow: hidden; border-radius: 0;
+  background: rgba(20, 22, 28, 0.58);
+  backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transform: translateY(10px) scale(0.98); transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.dev-notice-overlay.open .dev-notice-panel { transform: translateY(0) scale(1); }
+.dev-notice-panel::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0) 38%);
+}
+.dev-notice-scroll { position: relative; overflow-y: auto; padding: 26px 26px 10px; -webkit-overflow-scrolling: touch; }
+.dev-notice-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.dev-notice-icon {
+  flex-shrink: 0; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: bold; font-style: italic; font-family: Georgia, serif; color: var(--accent, #66fcf1);
+  border: 1px solid rgba(102, 252, 241, 0.45); background: rgba(102, 252, 241, 0.08);
+}
+.dev-notice-title { margin: 0; font-size: 17px; font-weight: bold; color: #fff; letter-spacing: 0.3px; line-height: 1.3; }
+.dev-notice-body p { margin: 0 0 12px; font-size: 13.5px; line-height: 1.65; color: #c5c6c7; }
+.dev-notice-body strong { color: #e2f8f6; }
+.dev-notice-sign { margin: 6px 0 14px; font-size: 12.5px; font-weight: bold; color: #9ca3af; letter-spacing: 0.4px; }
+.dev-notice-footer { position: relative; flex-shrink: 0; display: flex; justify-content: flex-end; padding: 14px 26px 22px; border-top: 1px solid rgba(255, 255, 255, 0.07); }
+.dev-notice-btn {
+  padding: 11px 24px; border-radius: 0; cursor: pointer; font-size: 13px; font-weight: bold; letter-spacing: 0.4px;
+  color: var(--accent, #66fcf1); background: rgba(102, 252, 241, 0.1); border: 1px solid rgba(102, 252, 241, 0.5);
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.dev-notice-btn:hover { background: rgba(102, 252, 241, 0.2); box-shadow: 0 0 14px rgba(102, 252, 241, 0.25); }
+.dev-notice-btn:focus-visible { outline: 2px solid var(--accent, #66fcf1); outline-offset: 2px; }
+@media (max-width: 480px) {
+  .dev-notice-scroll { padding: 20px 18px 6px; }
+  .dev-notice-footer { padding: 12px 18px calc(16px + env(safe-area-inset-bottom)); }
+  .dev-notice-btn { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dev-notice-overlay, .dev-notice-panel { transition: none; }
 }

@@ -408,12 +408,21 @@ db.exec(`
   );
 `);
 
+// Sesli oda katılma/ayrılma bildirimi ve sesi (13A) — mevcut kurulumlara sonradan eklenir.
+const notifPrefColumns = db.prepare(`PRAGMA table_info(notification_preferences)`).all().map(col => col.name);
+for (const column of ['notify_voice_presence', 'voice_join_sound']) {
+  if (!notifPrefColumns.includes(column)) {
+    db.exec(`ALTER TABLE notification_preferences ADD COLUMN ${column} INTEGER NOT NULL DEFAULT 1`);
+  }
+}
+
 const NOTIFICATION_PREF_COLUMNS = [
   'desktop_enabled', 'inapp_enabled', 'sound_enabled',
   'notify_dm_message', 'notify_hub_message',
   'notify_friend_request', 'notify_friend_accepted',
   'notify_incoming_call', 'notify_missed_call',
-  'notify_hub_event', 'notify_system'
+  'notify_hub_event', 'notify_system',
+  'notify_voice_presence', 'voice_join_sound'
 ];
 
 function getNotificationPreferences(userId) {
@@ -514,15 +523,6 @@ if (!usersRoleColumns.includes('platform_role')) {
   db.exec(`ALTER TABLE users ADD COLUMN platform_role TEXT NOT NULL DEFAULT 'user'`);
 }
 
-const PLATFORM_ROLES = ['user', 'moderator', 'admin', 'founder'];
-const PLATFORM_ROLE_RANK = { user: 0, moderator: 1, admin: 2, founder: 3 };
-
-function hasAtLeastPlatformRole(platformRole, minRole) {
-  return (PLATFORM_ROLE_RANK[platformRole] ?? 0) >= (PLATFORM_ROLE_RANK[minRole] ?? 0);
-}
-
-function setPlatformRole(username, role) {
-  if (!PLATFORM_ROLES.includes(role)) {
 // =====================================================
 // GELİŞTİRME BİLGİLENDİRME PENCERESİ — hesaba bağlı kalıcı durum
 // =====================================================
@@ -548,6 +548,15 @@ function markDevNoticeSeen(userId) {
   db.prepare(`UPDATE users SET dev_notice_seen = 1 WHERE id = ?`).run(userId);
 }
 
+const PLATFORM_ROLES = ['user', 'moderator', 'admin', 'founder'];
+const PLATFORM_ROLE_RANK = { user: 0, moderator: 1, admin: 2, founder: 3 };
+
+function hasAtLeastPlatformRole(platformRole, minRole) {
+  return (PLATFORM_ROLE_RANK[platformRole] ?? 0) >= (PLATFORM_ROLE_RANK[minRole] ?? 0);
+}
+
+function setPlatformRole(username, role) {
+  if (!PLATFORM_ROLES.includes(role)) {
     return { success: false, error: `Geçersiz rol. Geçerli roller: ${PLATFORM_ROLES.join(', ')}` };
   }
 
@@ -2725,10 +2734,10 @@ function getAdminStats() {
     open_reports: one(`SELECT COUNT(*) AS c FROM reports WHERE status IN ('new', 'under_review')`)
   };
 }
-  devNoticeFor,
-  markDevNoticeSeen,
 
 module.exports = {
+  devNoticeFor,
+  markDevNoticeSeen,
   listAdminUsers,
   getAdminUserDetail,
   getAdminStats,

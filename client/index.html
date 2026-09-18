@@ -369,6 +369,7 @@
                         <button id="hub-in-room-pill" class="hub-in-room-pill" type="button" style="display:none;">
                             <span class="hub-in-room-dot"></span>
                             <span id="hub-in-room-name"></span>
+                            <span id="hub-in-room-count" class="hub-in-room-count"></span>
                         </button>
 
                         <button id="hub-settings-open-btn" class="hub-icon-btn" type="button" title="Lobi Ayarları">⚙️</button>
@@ -1182,6 +1183,8 @@
                         <div class="notif-pref-group">
                             <span class="notif-pref-group-title" data-i18n="notif-group-hub">Lobi</span>
                             <label class="notif-pref-row"><input type="checkbox" data-pref="notify_hub_event"><span data-i18n="notif-pref-hub-event">Lobi bildirimleri (davet, vb.)</span></label>
+                            <label class="notif-pref-row"><input type="checkbox" data-pref="notify_voice_presence"><span data-i18n="notif-pref-voice-presence">Sesli oda katılma/ayrılma bildirimleri</span></label>
+                            <label class="notif-pref-row"><input type="checkbox" data-pref="voice_join_sound"><span data-i18n="notif-pref-voice-sound">Sesli oda katılma/ayrılma sesi</span></label>
                         </div>
 
                         <div class="notif-pref-group">
@@ -1256,6 +1259,7 @@
         <div class="call-header">
             <span id="call-hub-name">🎙️ Sesli Sohbet</span>
             <span id="call-header-duration" class="call-duration-text" style="display:none;"></span>
+            <button id="call-mute-btn" type="button" style="display:none;">🎤 Mikrofon</button>
             <button id="call-screenshare-btn" type="button" style="display:none;">🖥️ Ekran Paylaş</button>
             <button id="call-minimize-btn" type="button" title="Ekranı alta al">▁</button>
             <button id="call-leave-btn" type="button" data-i18n="call-leave">Ayrıl</button>
@@ -1428,6 +1432,40 @@
     </div>
 
 
+    <!-- ================================================= -->
+    <!-- FOTOĞRAF KIRPMA (profil / kapak) -->
+    <!-- ================================================= -->
+
+    <div id="cropper-modal" class="modal-overlay cropper-overlay" style="display:none;">
+
+        <div class="modal-box liquid-modal-box cropper-box">
+
+            <button id="cropper-close-btn" class="liquid-modal-close-btn" type="button">✕</button>
+
+            <div class="liquid-modal-hero cropper-hero">
+                <h3 id="cropper-title">Fotoğrafı Kırp</h3>
+                <p>Sürükleyerek konumlandır, kaydırıcıyla yakınlaştır.</p>
+            </div>
+
+            <div class="cropper-stage-wrap">
+                <div id="cropper-stage" class="cropper-stage">
+                    <canvas id="cropper-canvas"></canvas>
+                    <div id="cropper-guide" class="cropper-guide"></div>
+                </div>
+            </div>
+
+            <input type="range" id="cropper-zoom" class="cropper-zoom" min="1" max="3" step="0.01" value="1">
+
+            <div class="cropper-actions">
+                <button id="cropper-cancel-btn" class="cropper-btn cropper-btn-ghost" type="button">İptal</button>
+                <button id="cropper-confirm-btn" class="cropper-btn cropper-btn-primary" type="button">Onayla</button>
+            </div>
+
+        </div>
+
+    </div>
+
+
     <!-- SOCKET.IO -->
 
     <script src="/socket.io/socket.io.js"></script>
@@ -1438,7 +1476,6 @@
 
     <!-- SAURAN -->
 
-    <script src="script.js"></script>
     <!-- ================================================= -->
     <!-- GELİŞTİRME BİLGİLENDİRME PENCERESİ (hesaba bağlı, bir kez) -->
     <!-- ================================================= -->
@@ -1459,6 +1496,7 @@
         </div>
     </div>
 
+    <script src="script.js"></script>
 
 </body>
 </html>

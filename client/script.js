@@ -75,6 +75,21 @@ function playMessageSound() {
     playAppTone(ctx, 660, ctx.currentTime, 0.1, 'sine', 0.15);
 }
 
+// Sesli odaya biri katılınca yükselen, ayrılınca alçalan iki notalı kısa ses.
+let notifInappEnabled = true;
+let notifVoicePresenceEnabled = true;
+let voiceJoinSoundEnabled = true;
+
+function playVoicePresenceSound(joined) {
+    if (!notifSoundEnabled || !voiceJoinSoundEnabled) return;
+    const ctx = getAppAudioCtx();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const [first, second] = joined ? [523.25, 783.99] : [659.25, 440];
+    playAppTone(ctx, first, now, 0.1, 'sine', 0.13);
+    playAppTone(ctx, second, now + 0.08, 0.14, 'sine', 0.13);
+}
+
 // Gelen arama için tekrar eden zil sesi (kabul/red/iptal edilene kadar).
 let ringtoneIntervalId = null;
 function startRingtone() {
@@ -2052,6 +2067,127 @@ avatarRemoveBtn.addEventListener(
 );
 
 
+function openImageCropper(file, { aspect, outWidth, title, round }) {
+
+    return new Promise((resolve) => {
+
+        const modal = document.getElementById('cropper-modal');
+        const stage = document.getElementById('cropper-stage');
+        const canvas = document.getElementById('cropper-canvas');
+        const guide = document.getElementById('cropper-guide');
+        const zoomInput = document.getElementById('cropper-zoom');
+        const confirmBtn = document.getElementById('cropper-confirm-btn');
+        const cancelBtn = document.getElementById('cropper-cancel-btn');
+        const closeBtn = document.getElementById('cropper-close-btn');
+
+        document.getElementById('cropper-title').textContent = title;
+
+        const stageW = Math.max(200, Math.min(320, window.innerWidth - 80));
+        const stageH = Math.round(stageW / aspect);
+        canvas.width = stageW;
+        canvas.height = stageH;
+        stage.style.width = `${stageW}px`;
+        stage.style.height = `${stageH}px`;
+        guide.classList.toggle('round', Boolean(round));
+
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+
+        let baseScale = 1;
+        let zoom = 1;
+        let offX = 0;
+        let offY = 0;
+
+        function clamp() {
+            const w = img.width * baseScale * zoom;
+            const h = img.height * baseScale * zoom;
+            offX = Math.min(0, Math.max(stageW - w, offX));
+            offY = Math.min(0, Math.max(stageH - h, offY));
+        }
+
+        function draw() {
+            const ctx = canvas.getContext('2d');
+            const s = baseScale * zoom;
+            ctx.clearRect(0, 0, stageW, stageH);
+            ctx.drawImage(img, offX, offY, img.width * s, img.height * s);
+        }
+
+        function cleanup(result) {
+            modal.style.display = 'none';
+            URL.revokeObjectURL(url);
+            stage.onpointerdown = stage.onpointermove = stage.onpointerup = stage.onpointercancel = null;
+            zoomInput.oninput = confirmBtn.onclick = cancelBtn.onclick = closeBtn.onclick = null;
+            resolve(result);
+        }
+
+        img.onerror = () => cleanup(null);
+
+        img.onload = () => {
+
+            baseScale = Math.max(stageW / img.width, stageH / img.height);
+            zoom = 1;
+            zoomInput.value = '1';
+            offX = (stageW - img.width * baseScale) / 2;
+            offY = (stageH - img.height * baseScale) / 2;
+            draw();
+            modal.style.display = 'flex';
+
+            let dragging = false;
+            let lastX = 0;
+            let lastY = 0;
+
+            stage.onpointerdown = (e) => {
+                dragging = true;
+                lastX = e.clientX;
+                lastY = e.clientY;
+                stage.setPointerCapture(e.pointerId);
+            };
+
+            stage.onpointermove = (e) => {
+                if (!dragging) return;
+                offX += e.clientX - lastX;
+                offY += e.clientY - lastY;
+                lastX = e.clientX;
+                lastY = e.clientY;
+                clamp();
+                draw();
+            };
+
+            stage.onpointerup = stage.onpointercancel = () => { dragging = false; };
+
+            zoomInput.oninput = () => {
+                const cx = stageW / 2;
+                const cy = stageH / 2;
+                const prev = baseScale * zoom;
+                zoom = Number(zoomInput.value);
+                const next = baseScale * zoom;
+                offX = cx - (cx - offX) * (next / prev);
+                offY = cy - (cy - offY) * (next / prev);
+                clamp();
+                draw();
+            };
+
+            confirmBtn.onclick = () => {
+                const out = document.createElement('canvas');
+                out.width = outWidth;
+                out.height = Math.round(outWidth / aspect);
+                const k = outWidth / stageW;
+                const s = baseScale * zoom * k;
+                out.getContext('2d').drawImage(img, offX * k, offY * k, img.width * s, img.height * s);
+                cleanup(out.toDataURL('image/jpeg', 0.88));
+            };
+
+            cancelBtn.onclick = closeBtn.onclick = () => cleanup(null);
+
+        };
+
+        img.src = url;
+
+    });
+
+}
+
+
 avatarFileInput.addEventListener(
     'change',
     async () => {
@@ -2065,10 +2201,9 @@ avatarFileInput.addEventListener(
         try {
 
             const dataUrl =
-                await resizeImageToDataUrl(
-                    file,
-                    128
-                );
+                await openImageCropper(file, { aspect: 1, outWidth: 256, title: 'Profil Fotoğrafını Kırp', round: true });
+
+            if (!dataUrl) return;
 
             const response =
                 await fetch(
@@ -2132,46 +2267,6 @@ avatarFileInput.addEventListener(
 );
 
 
-function resizeImageToDataUrlWide(file, maxWidth) {
-
-    return new Promise((resolve, reject) => {
-
-        const reader = new FileReader();
-        reader.onerror = reject;
-
-        reader.onload = () => {
-
-            const img = new Image();
-            img.onerror = reject;
-
-            img.onload = () => {
-
-                const scale = Math.min(1, maxWidth / img.width);
-                const w = Math.round(img.width * scale);
-                const h = Math.round(img.height * scale);
-
-                const canvas = document.createElement('canvas');
-                canvas.width = w;
-                canvas.height = h;
-
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, w, h);
-
-                resolve(canvas.toDataURL('image/jpeg', 0.85));
-
-            };
-
-            img.src = reader.result;
-
-        };
-
-        reader.readAsDataURL(file);
-
-    });
-
-}
-
-
 const bannerChangeBtn = document.getElementById('banner-change-btn');
 const bannerFileInput = document.getElementById('banner-file-input');
 
@@ -2185,7 +2280,9 @@ bannerFileInput.addEventListener('change', async () => {
 
     try {
 
-        const dataUrl = await resizeImageToDataUrlWide(file, 900);
+        const dataUrl = await openImageCropper(file, { aspect: 16 / 9, outWidth: 900, title: 'Kapak Fotoğrafını Kırp' });
+
+        if (!dataUrl) return;
 
         const response = await fetch('/api/profile/banner', {
             method: 'PATCH',
@@ -2355,6 +2452,9 @@ async function loadNotificationPreferences() {
             const key = input.dataset.pref;
             input.checked = data.preferences[key] !== 0;
             if (key === 'sound_enabled') notifSoundEnabled = input.checked;
+            if (key === 'inapp_enabled') notifInappEnabled = input.checked;
+            if (key === 'notify_voice_presence') notifVoicePresenceEnabled = input.checked;
+            if (key === 'voice_join_sound') voiceJoinSoundEnabled = input.checked;
         });
 
     } catch (error) {
@@ -2369,6 +2469,9 @@ document.querySelectorAll('#notif-pref-groups input[data-pref]').forEach((input)
 
         const key = input.dataset.pref;
         if (key === 'sound_enabled') notifSoundEnabled = input.checked;
+        if (key === 'inapp_enabled') notifInappEnabled = input.checked;
+        if (key === 'notify_voice_presence') notifVoicePresenceEnabled = input.checked;
+        if (key === 'voice_join_sound') voiceJoinSoundEnabled = input.checked;
 
         try {
             await fetch('/api/notifications/preferences', {
@@ -2731,6 +2834,7 @@ const I18N = {
     'menu-add-friend': { tr: 'Arkadaş Ekle', en: 'Add Friend' },
     'menu-settings': { tr: 'Ayarlar', en: 'Settings' },
     'menu-admin': { tr: 'Yönetim', en: 'Admin' },
+    'dev-notice-btn': { tr: 'Anladım, Devam Et', en: 'Got it, Continue' },
     'hubs-title': { tr: 'Ana Menü', en: 'Home' },
     'hubs-owned': { tr: 'OLUŞTURDUĞUM LOBİLER', en: 'LOBBIES I CREATED' },
     'hubs-joined': { tr: 'KATILDIĞIM LOBİLER', en: 'LOBBIES I JOINED' },
@@ -2834,7 +2938,6 @@ const I18N = {
     'delete-account-mismatch': { tr: 'Kullanıcı adı eşleşmedi, hesap silinmedi.', en: "Username didn't match, account not deleted." },
     'attach-camera': { tr: 'Kamerayla Çek', en: 'Take Photo/Video' },
     'attach-gallery': { tr: 'Galeriden Seç', en: 'Choose from Gallery' },
-    'dev-notice-btn': { tr: 'Anladım, Devam Et', en: 'Got it, Continue' },
     'attach-file': { tr: 'Dosya Seç', en: 'Choose File' },
     'attach-sticker': { tr: 'Çıkartma', en: 'Sticker' },
     'login-username-label': { tr: 'Kullanıcı Adın', en: 'Username' },
@@ -2865,11 +2968,22 @@ const I18N = {
     'voice-rooms-title': { tr: 'SESLİ ODALAR', en: 'VOICE ROOMS' },
     'voice-room-add': { tr: 'Oda Ekle', en: 'Add Room' },
     'voice-rooms-empty': { tr: 'Henüz sesli oda yok.', en: 'No voice rooms yet.' },
-    'voice-room-you-are-here': { tr: 'Bu odadasın', en: "You're here" },
+    'voice-room-members-btn': { tr: 'Odadakiler', en: 'In room' },
+    'voice-mic-title': { tr: 'Mikrofon', en: 'Microphone' },
+    'voice-speaker-title': { tr: 'Hoparlör (dinleme)', en: 'Speaker (listening)' },
     'voice-room-delete-confirm': { tr: 'Bu sesli odayı silmek istediğine emin misin?', en: 'Are you sure you want to delete this voice room?' },
     'voice-room-name-prompt': { tr: 'Oda adı:', en: 'Room name:' },
     'voice-room-join': { tr: 'Katıl', en: 'Join' },
     'voice-room-nobody-here': { tr: 'Bu odada henüz kimse yok.', en: 'Nobody is here yet.' },
+    'voice-room-you': { tr: '(Sen)', en: '(You)' },
+    'voice-mic-on': { tr: 'Mikrofon', en: 'Mic' },
+    'voice-mic-off': { tr: 'Kapalı', en: 'Muted' },
+    'voice-room-user-joined': { tr: 'odaya katıldı', en: 'joined the room' },
+    'voice-room-user-left': { tr: 'odadan ayrıldı', en: 'left the room' },
+    'voice-room-removed': { tr: 'Sesli odadan çıkarıldın.', en: 'You were removed from the voice room.' },
+    'voice-room-replaced': { tr: 'Başka bir cihazdan bu odaya katıldın.', en: 'You joined this room from another device.' },
+    'notif-pref-voice-presence': { tr: 'Sesli oda katılma/ayrılma bildirimleri', en: 'Voice room join/leave notices' },
+    'notif-pref-voice-sound': { tr: 'Sesli oda katılma/ayrılma sesi', en: 'Voice room join/leave sound' },
 
     // Dinamik JS metinleri (t() ile kullanılır)
     'send': { tr: 'Gönder', en: 'Send' },
@@ -3429,6 +3543,7 @@ function connectToChat() {
     });
 
     socket.on('hub_kicked', (data) => {
+        if (callMode === 'hub-room' && currentVoiceRoomHubId === data.hub_id) leaveCall();
         if (currentHub && data.hub_id === currentHub.id) {
             showToast(t('kicked-from-hub'));
             switchToView('hubs');
@@ -3437,6 +3552,7 @@ function connectToChat() {
     });
 
     socket.on('hub_banned', (data) => {
+        if (callMode === 'hub-room' && currentVoiceRoomHubId === data.hub_id) leaveCall();
         if (currentHub && data.hub_id === currentHub.id) {
             showToast(t('banned-from-hub'));
             switchToView('hubs');
@@ -3447,6 +3563,7 @@ function connectToChat() {
     socket.on('hub_force_muted', () => {
         if (callFrame) {
             callFrame.setLocalAudio(false);
+            if (callMode === 'hub-room') syncLocalMuteState(true);
         }
     });
 
@@ -3464,21 +3581,194 @@ function connectToChat() {
     });
 
     socket.on('voice_room_participants_updated', (data) => {
+
         const room = voiceRoomsCache.find(r => r.id === data.room_id);
-        if (room) {
-            room.participants = data.participants;
-            if (currentHub) renderVoiceRoomsList();
-            if (pendingVoiceRoomId === data.room_id) renderVoiceRoomPreviewList(room);
-            if (callMode === 'hub-room' && currentVoiceRoomId === data.room_id) renderHubRoomGrid(data.participants);
+        if (room) room.participants = data.participants;
+
+        if (callMode === 'hub-room' && currentVoiceRoomId === data.room_id) {
+
+            // Sunucu beni listeden çıkardıysa (ör. başka cihaz, atılma) yerel bağlantıyı da kapat.
+            if (voiceSessionConfirmed && !voiceRejoining && !data.participants.some(p => p.user_id === currentUser.id)) {
+                showToast(t('voice-room-removed'));
+                leaveCall();
+                return;
+            }
+
+            currentVoiceParticipants = data.participants;
+            renderHubRoomGrid(currentVoiceParticipants);
+            updateVoiceSessionSummary();
+            handleVoicePresenceChange(data.change);
+            refreshVoiceSpeaking();
+
         }
+
+        if (currentHub) renderVoiceRoomsList();
+        if (room && pendingVoiceRoomId === data.room_id) renderVoiceRoomPreviewList(room);
+
+    });
+
+    socket.on('voice_room_replaced', (data) => {
+        if (callMode === 'hub-room' && currentVoiceRoomId === data.room_id) {
+            showToast(t('voice-room-replaced'));
+            leaveCall();
+        }
+    });
+
+    // Bağlantı kopup geri geldiğinde sunucu tarafındaki üyelik yeniden kurulur
+    // (Daily/WebRTC bağlantısı bundan bağımsız olarak açık kalır).
+    socket.on('connect', async () => {
+
+        if (callMode !== 'hub-room' || !voiceSessionConfirmed) return;
+
+        voiceRejoining = true;
+        const ack = await emitVoiceRoomJoin();
+        voiceRejoining = false;
+
+        if (!ack.success) {
+            showToast(ack.error || t('voice-room-removed'));
+            leaveCall();
+            return;
+        }
+
+        currentVoiceParticipants = ack.participants;
+        renderHubRoomGrid(currentVoiceParticipants);
+        updateVoiceSessionSummary();
+        if (currentHub) loadVoiceRooms(currentHub.id);
+
     });
 
 
     switchToView('hubs');
     loadHubList();
     refreshNotificationsBadge();
+    loadNotificationPreferences();
+
+    maybeShowDevNotice();
 
 }
+
+
+// =====================================================
+// GELİŞTİRME BİLGİLENDİRME PENCERESİ
+// =====================================================
+// Görüldü bilgisi HESABA bağlı (users.dev_notice_seen) — localStorage'a
+// güvenilmiyor; farklı cihazda/oturumda tekrar çıkmaz. Sunucu, hesabın yeni
+// kayıtla mı oluştuğunu ('new') yoksa önceden var olan mı olduğunu ('existing')
+// currentUser.dev_notice ile bildirir; null ise zaten görülmüştür.
+
+const DEV_NOTICE_COPY = {
+    new: {
+        tr: {
+            title: 'Sauran Geliştirme Sürecinde',
+            paras: [
+                'Sauran şu anda aktif olarak geliştirilmeye devam ediyor. Geliştirme ve yazılım ekibimiz, uygulamanın performansını, kararlılığını ve yeni özelliklerini sürekli olarak iyileştirmek için çalışmalarını sürdürüyor.',
+                'Bu geliştirme sürecinde, sistem üzerinde yapılan bazı güncellemeler veya teknik çalışmalar nedeniyle zaman zaman kısa süreli bağlantı kesintileri yaşanabilir.',
+                'Bu kesintilerin süresi genellikle <strong>yaklaşık 30 saniye</strong> civarında olabilir. Ancak geliştirme çalışmalarının ve teknik güncellemelerin zamanlaması önceden sabit olmadığı için bu kesintilerin belirli veya düzenli bir zamanı bulunmamaktadır.',
+                'Çalışmalar sırasında göstereceğiniz anlayış için teşekkür ederiz. Sauran\'ı daha iyi, daha hızlı ve daha kararlı bir deneyim haline getirmek için çalışmaya devam ediyoruz.'
+            ],
+            sign: 'Sauran Geliştirme Ekibi'
+        },
+        en: {
+            title: 'Sauran Is Under Development',
+            paras: [
+                'Sauran is being actively developed. Our development and engineering team keeps working to continuously improve the app\'s performance, stability and new features.',
+                'During this process, some updates or technical work on the system may occasionally cause brief connection interruptions.',
+                'These interruptions usually last <strong>about 30 seconds</strong>. Since the timing of development work and technical updates is not fixed in advance, there is no specific or regular schedule for them.',
+                'Thank you for your understanding while we work. We are continuing to make Sauran a better, faster and more stable experience.'
+            ],
+            sign: 'The Sauran Development Team'
+        }
+    },
+    existing: {
+        tr: {
+            title: 'Sauran Geliştirilmeye Devam Ediyor',
+            paras: [
+                'Sauran\'ı kullandığınız için teşekkür ederiz.',
+                'Uygulamamız şu anda aktif geliştirme sürecindedir. Geliştirici ekibimiz; performans, kararlılık, sesli iletişim ve yeni özellikler üzerinde çalışmalarını sürdürmektedir.',
+                'Bu süreçte gerçekleştirilen geliştirme ve teknik çalışmalar nedeniyle zaman zaman kısa süreli bağlantı kesintileri yaşanabilir. Bu kesintilerin süresi genellikle <strong>yaklaşık 30 saniye</strong> olabilir ve çalışmaların zamanlamasına bağlı olarak önceden belirlenmiş sabit bir saati bulunmamaktadır.',
+                'Amacımız Sauran\'ı zaman içerisinde daha hızlı, daha kararlı ve daha iyi bir iletişim deneyimi sunan bir platform haline getirmek.',
+                'Göstereceğiniz anlayış ve Sauran\'ın gelişim sürecine eşlik ettiğiniz için teşekkür ederiz.'
+            ],
+            sign: 'Sauran Geliştirme Ekibi'
+        },
+        en: {
+            title: 'Sauran Keeps Evolving',
+            paras: [
+                'Thank you for using Sauran.',
+                'Our app is currently in active development. Our developer team continues to work on performance, stability, voice communication and new features.',
+                'Because of development and technical work during this period, brief connection interruptions may occasionally occur. They usually last <strong>about 30 seconds</strong> and, depending on the work being done, have no fixed pre-announced time.',
+                'Our goal is to turn Sauran, over time, into a platform that offers a faster, more stable and better communication experience.',
+                'Thank you for your understanding and for being part of Sauran\'s journey.'
+            ],
+            sign: 'The Sauran Development Team'
+        }
+    }
+};
+
+let devNoticeShown = false;
+let devNoticeReturnFocus = null;
+
+function maybeShowDevNotice() {
+
+    if (devNoticeShown || !currentUser || !currentUser.dev_notice) return;
+    const copy = DEV_NOTICE_COPY[currentUser.dev_notice];
+    if (!copy) return;
+
+    devNoticeShown = true;
+
+    let lang = 'tr';
+    try { lang = localStorage.getItem('sauran_lang') === 'en' ? 'en' : 'tr'; } catch (e) {}
+    const text = copy[lang] || copy.tr;
+
+    document.getElementById('dev-notice-title').textContent = text.title;
+    // İçerik yukarıdaki sabit metinlerden gelir (kullanıcı girdisi değil), <strong> içerir.
+    document.getElementById('dev-notice-body').innerHTML = text.paras.map((p) => '<p>' + p + '</p>').join('');
+    document.getElementById('dev-notice-sign').textContent = text.sign;
+
+    const overlay = document.getElementById('dev-notice-overlay');
+    const btn = document.getElementById('dev-notice-btn');
+
+    devNoticeReturnFocus = document.activeElement;
+    chatScreen.inert = true;
+
+    overlay.classList.add('visible');
+    overlay.setAttribute('aria-hidden', 'false');
+    void overlay.offsetWidth;
+    overlay.classList.add('open');
+    setTimeout(() => btn.focus(), 60);
+
+}
+
+function closeDevNotice() {
+
+    const overlay = document.getElementById('dev-notice-overlay');
+
+    // Hesaba bağlı kalıcı işaret — başarısız olursa bir sonraki girişte tekrar gösterilir.
+    fetch('/api/me/dev-notice-seen', { method: 'POST', credentials: 'include' }).catch(() => {});
+    if (currentUser) currentUser.dev_notice = null;
+
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden', 'true');
+    chatScreen.inert = false;
+
+    setTimeout(() => {
+        overlay.classList.remove('visible');
+        if (devNoticeReturnFocus && typeof devNoticeReturnFocus.focus === 'function') devNoticeReturnFocus.focus();
+    }, 240);
+
+}
+
+document.getElementById('dev-notice-btn').addEventListener('click', closeDevNotice);
+
+// Kullanıcının bildirimi gerçekten görmesi için ESC ile kapanmaz; tek etkileşimli
+// öğe düğme olduğundan Tab odağı da pencere içinde kalır.
+document.addEventListener('keydown', (event) => {
+    const overlay = document.getElementById('dev-notice-overlay');
+    if (!overlay.classList.contains('open')) return;
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); }
+    if (event.key === 'Tab') { event.preventDefault(); document.getElementById('dev-notice-btn').focus(); }
+}, true);
+
 
 
 // =====================================================
@@ -3641,135 +3931,9 @@ async function logout() {
 
 
     onlineCount.style.display =
-    loadNotificationPreferences();
-
-    maybeShowDevNotice();
-
-}
-
-
-// =====================================================
-// GELİŞTİRME BİLGİLENDİRME PENCERESİ
-// =====================================================
-// Görüldü bilgisi HESABA bağlı (users.dev_notice_seen) — localStorage'a
-// güvenilmiyor; farklı cihazda/oturumda tekrar çıkmaz. Sunucu, hesabın yeni
-// kayıtla mı oluştuğunu ('new') yoksa önceden var olan mı olduğunu ('existing')
-// currentUser.dev_notice ile bildirir; null ise zaten görülmüştür.
-
-const DEV_NOTICE_COPY = {
-    new: {
-        tr: {
-            title: 'Sauran Geliştirme Sürecinde',
-            paras: [
-                'Sauran şu anda aktif olarak geliştirilmeye devam ediyor. Geliştirme ve yazılım ekibimiz, uygulamanın performansını, kararlılığını ve yeni özelliklerini sürekli olarak iyileştirmek için çalışmalarını sürdürüyor.',
-                'Bu geliştirme sürecinde, sistem üzerinde yapılan bazı güncellemeler veya teknik çalışmalar nedeniyle zaman zaman kısa süreli bağlantı kesintileri yaşanabilir.',
-                'Bu kesintilerin süresi genellikle <strong>yaklaşık 30 saniye</strong> civarında olabilir. Ancak geliştirme çalışmalarının ve teknik güncellemelerin zamanlaması önceden sabit olmadığı için bu kesintilerin belirli veya düzenli bir zamanı bulunmamaktadır.',
-                'Çalışmalar sırasında göstereceğiniz anlayış için teşekkür ederiz. Sauran\'ı daha iyi, daha hızlı ve daha kararlı bir deneyim haline getirmek için çalışmaya devam ediyoruz.'
-            ],
-            sign: 'Sauran Geliştirme Ekibi'
-        },
-        en: {
-            title: 'Sauran Is Under Development',
-            paras: [
-                'Sauran is being actively developed. Our development and engineering team keeps working to continuously improve the app\'s performance, stability and new features.',
-                'During this process, some updates or technical work on the system may occasionally cause brief connection interruptions.',
-                'These interruptions usually last <strong>about 30 seconds</strong>. Since the timing of development work and technical updates is not fixed in advance, there is no specific or regular schedule for them.',
-                'Thank you for your understanding while we work. We are continuing to make Sauran a better, faster and more stable experience.'
-            ],
-            sign: 'The Sauran Development Team'
-        }
-    },
-    existing: {
-        tr: {
-            title: 'Sauran Geliştirilmeye Devam Ediyor',
-            paras: [
-                'Sauran\'ı kullandığınız için teşekkür ederiz.',
-                'Uygulamamız şu anda aktif geliştirme sürecindedir. Geliştirici ekibimiz; performans, kararlılık, sesli iletişim ve yeni özellikler üzerinde çalışmalarını sürdürmektedir.',
-                'Bu süreçte gerçekleştirilen geliştirme ve teknik çalışmalar nedeniyle zaman zaman kısa süreli bağlantı kesintileri yaşanabilir. Bu kesintilerin süresi genellikle <strong>yaklaşık 30 saniye</strong> olabilir ve çalışmaların zamanlamasına bağlı olarak önceden belirlenmiş sabit bir saati bulunmamaktadır.',
-                'Amacımız Sauran\'ı zaman içerisinde daha hızlı, daha kararlı ve daha iyi bir iletişim deneyimi sunan bir platform haline getirmek.',
-                'Göstereceğiniz anlayış ve Sauran\'ın gelişim sürecine eşlik ettiğiniz için teşekkür ederiz.'
-            ],
-            sign: 'Sauran Geliştirme Ekibi'
-        },
-        en: {
-            title: 'Sauran Keeps Evolving',
-            paras: [
-                'Thank you for using Sauran.',
-                'Our app is currently in active development. Our developer team continues to work on performance, stability, voice communication and new features.',
-                'Because of development and technical work during this period, brief connection interruptions may occasionally occur. They usually last <strong>about 30 seconds</strong> and, depending on the work being done, have no fixed pre-announced time.',
-                'Our goal is to turn Sauran, over time, into a platform that offers a faster, more stable and better communication experience.',
-                'Thank you for your understanding and for being part of Sauran\'s journey.'
-            ],
-            sign: 'The Sauran Development Team'
-        }
-    }
-};
-
-let devNoticeShown = false;
-let devNoticeReturnFocus = null;
-
-function maybeShowDevNotice() {
-
-    if (devNoticeShown || !currentUser || !currentUser.dev_notice) return;
-    const copy = DEV_NOTICE_COPY[currentUser.dev_notice];
-    if (!copy) return;
-
-    devNoticeShown = true;
-
-    let lang = 'tr';
-    try { lang = localStorage.getItem('sauran_lang') === 'en' ? 'en' : 'tr'; } catch (e) {}
-    const text = copy[lang] || copy.tr;
-
-    document.getElementById('dev-notice-title').textContent = text.title;
-    // İçerik yukarıdaki sabit metinlerden gelir (kullanıcı girdisi değil), <strong> içerir.
-    document.getElementById('dev-notice-body').innerHTML = text.paras.map((p) => '<p>' + p + '</p>').join('');
-    document.getElementById('dev-notice-sign').textContent = text.sign;
-
-    const overlay = document.getElementById('dev-notice-overlay');
-    const btn = document.getElementById('dev-notice-btn');
-
-    devNoticeReturnFocus = document.activeElement;
-    chatScreen.inert = true;
-
-    overlay.classList.add('visible');
-    overlay.setAttribute('aria-hidden', 'false');
-    void overlay.offsetWidth;
-    overlay.classList.add('open');
-    setTimeout(() => btn.focus(), 60);
         'none';
 
     usersList.innerHTML =
-function closeDevNotice() {
-
-    const overlay = document.getElementById('dev-notice-overlay');
-
-    // Hesaba bağlı kalıcı işaret — başarısız olursa bir sonraki girişte tekrar gösterilir.
-    fetch('/api/me/dev-notice-seen', { method: 'POST', credentials: 'include' }).catch(() => {});
-    if (currentUser) currentUser.dev_notice = null;
-
-    overlay.classList.remove('open');
-    overlay.setAttribute('aria-hidden', 'true');
-    chatScreen.inert = false;
-
-    setTimeout(() => {
-        overlay.classList.remove('visible');
-        if (devNoticeReturnFocus && typeof devNoticeReturnFocus.focus === 'function') devNoticeReturnFocus.focus();
-    }, 240);
-
-}
-
-document.getElementById('dev-notice-btn').addEventListener('click', closeDevNotice);
-
-// Kullanıcının bildirimi gerçekten görmesi için ESC ile kapanmaz; tek etkileşimli
-// öğe düğme olduğundan Tab odağı da pencere içinde kalır.
-document.addEventListener('keydown', (event) => {
-    const overlay = document.getElementById('dev-notice-overlay');
-    if (!overlay.classList.contains('open')) return;
-    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); }
-    if (event.key === 'Tab') { event.preventDefault(); document.getElementById('dev-notice-btn').focus(); }
-}, true);
-
-
         '';
 
     otherProfileModal.style.display =
@@ -6011,6 +6175,280 @@ let voiceRoomsCache = [];
 let currentVoiceRoomId = null;
 let currentVoiceRoomName = '';
 
+// Sesli oda oturumu (13A): Hub ekranından çıkılsa bile korunur; üyelik
+// durumunun tek doğru kaynağı sunucudur (socket ile gelen anlık görüntü).
+let currentVoiceRoomHubId = null;
+let currentVoiceParticipants = []; // [{ user_id, username, muted }]
+let voiceSessionConfirmed = false;
+let voiceRejoining = false;
+let voiceLocalMuted = false;
+let voiceDeafened = false; // dinleme kapalı: odadaki uzak sesler bu cihazda çalınmaz
+let voiceLocalSpeaking = false;
+let voiceRemoteSpeaking = new Set();
+let voiceSpeakingIds = new Set();
+const voiceRoomsExpanded = new Set(); // "Odadakiler" listesi açık olan oda id'leri
+const voiceAvatarCache = new Map(); // userId -> avatar_data (Hub değişse de kalır)
+
+const hubInRoomCount = document.getElementById('hub-in-room-count');
+const callMuteBtn = document.getElementById('call-mute-btn');
+
+function rememberVoiceAvatars() {
+    (currentHub?.members || []).forEach((m) => voiceAvatarCache.set(m.user_id, m.avatar_data || null));
+}
+
+function voiceAvatarInnerHtml(userId, username) {
+    const avatar = voiceAvatarCache.get(userId);
+    return avatar
+        ? `<img src="${escapeAttr(avatar)}" alt="">`
+        : escapeHtml((username || '?').charAt(0).toUpperCase());
+}
+
+const VOICE_MIC_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>';
+const VOICE_SPK_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg>';
+
+// Mikrofon + hoparlör durum simgeleri. Kendi satırında (odadayken) tıklanabilir
+// düğme, başkalarında yalnızca durum göstergesi. Konuşma ışığı mikrofon simgesinde.
+function voiceStatusIconsHtml(p, allowSelfAction) {
+
+    const interactive = Boolean(allowSelfAction) && p.user_id === currentUser?.id && callMode === 'hub-room';
+    const tag = interactive ? 'button' : 'span';
+    const attrs = (action) => interactive ? ` type="button" data-voice-action="${action}"` : '';
+
+    return `
+        <span class="voice-status">
+            <${tag} class="voice-icon-btn${p.muted ? ' off' : ''}${interactive ? ' interactive' : ''}" data-voice-user="${p.user_id}"${attrs('mic')} title="${t('voice-mic-title')}">${VOICE_MIC_SVG}</${tag}>
+            <${tag} class="voice-icon-btn${p.deafened ? ' off' : ''}${interactive ? ' interactive' : ''}"${attrs('spk')} title="${t('voice-speaker-title')}">${VOICE_SPK_SVG}</${tag}>
+        </span>
+    `;
+
+}
+
+function voiceSelfTagHtml(userId) {
+    return userId === currentUser?.id ? ` <em class="voice-self-tag">${t('voice-room-you')}</em>` : '';
+}
+
+function refreshVoiceSpeaking() {
+    const muted = new Set(currentVoiceParticipants.filter(p => p.muted).map(p => p.user_id));
+    const next = new Set(voiceRemoteSpeaking);
+    if (voiceLocalSpeaking && currentUser) next.add(currentUser.id);
+    muted.forEach((id) => next.delete(id));
+
+    voiceSpeakingIds = next;
+    updateVoiceSpeakingUi();
+}
+
+function updateVoiceSpeakingUi() {
+    document.querySelectorAll('[data-voice-user]').forEach((el) => {
+        el.classList.toggle('speaking', voiceSpeakingIds.has(Number(el.dataset.voiceUser)));
+    });
+}
+
+function updateVoiceSessionSummary() {
+    const count = currentVoiceParticipants.length;
+    hubInRoomCount.textContent = count ? `· ${count}` : '';
+
+    if (callMode === 'hub-room' && callMiniBar.style.display !== 'none') {
+        callMiniName.textContent = `${callHubName.textContent} · ${count}`;
+    }
+}
+
+function updateMuteButton() {
+    callMuteBtn.textContent = voiceLocalMuted ? `🔇 ${t('voice-mic-off')}` : `🎤 ${t('voice-mic-on')}`;
+    callMuteBtn.classList.toggle('muted', voiceLocalMuted);
+}
+
+function syncLocalMuteState(muted) {
+
+    if (muted === voiceLocalMuted) return;
+
+    voiceLocalMuted = muted;
+    if (muted) voiceLocalSpeaking = false;
+    updateMuteButton();
+
+    if (voiceSessionConfirmed) socket?.emit('voice_room_mute', { muted });
+
+    // Sunucu anlık görüntüsü gelene kadar kendi satırını hemen güncelle.
+    const me = currentVoiceParticipants.find(p => p.user_id === currentUser?.id);
+    if (me && me.muted !== muted) {
+        me.muted = muted;
+        renderHubRoomGrid(currentVoiceParticipants);
+        if (currentHub) renderVoiceRoomsList();
+    }
+
+    refreshVoiceSpeaking();
+
+}
+
+function toggleLocalMute() {
+    if (!callFrame || callMode !== 'hub-room') return;
+    const nextMuted = !voiceLocalMuted;
+    callFrame.setLocalAudio(!nextMuted);
+    syncLocalMuteState(nextMuted);
+}
+
+callMuteBtn.addEventListener('click', toggleLocalMute);
+
+function applyDeafenToAudio() {
+    document.querySelectorAll('audio[data-call-audio]').forEach((el) => { el.muted = voiceDeafened; });
+}
+
+function setLocalDeafened(deafened) {
+
+    if (deafened === voiceDeafened) return;
+
+    voiceDeafened = deafened;
+    applyDeafenToAudio();
+
+    if (voiceSessionConfirmed) socket?.emit('voice_room_deafen', { deafened });
+
+    const me = currentVoiceParticipants.find(p => p.user_id === currentUser?.id);
+    if (me && me.deafened !== deafened) {
+        me.deafened = deafened;
+        renderHubRoomGrid(currentVoiceParticipants);
+        if (currentHub) renderVoiceRoomsList();
+    }
+
+}
+
+document.addEventListener('click', (event) => {
+
+    const btn = event.target.closest('[data-voice-action]');
+    if (!btn || callMode !== 'hub-room') return;
+
+    event.stopPropagation();
+
+    if (btn.dataset.voiceAction === 'mic') toggleLocalMute();
+    else setLocalDeafened(!voiceDeafened);
+
+});
+
+function voiceUserIdForDailyParticipant(p) {
+    if (!p) return null;
+    const byId = Number(p.user_id);
+    if (byId) return byId;
+    return currentVoiceParticipants.find(x => x.username === p.user_name)?.user_id || null;
+}
+
+function wireHubRoomPresenceEvents() {
+
+    if (!callFrame) return;
+
+    callFrame.on('participant-updated', (event) => {
+        if (event?.participant?.local) syncLocalMuteState(!callFrame.localAudio());
+    });
+
+    const useActiveSpeakerFallback = () => {
+        callFrame.on('active-speaker-change', (event) => {
+            const sessionId = event?.activeSpeaker?.peerId;
+            const participant = Object.values(callFrame.participants()).find(p => p.session_id === sessionId);
+            const userId = participant && !participant.local ? voiceUserIdForDailyParticipant(participant) : null;
+            voiceRemoteSpeaking = new Set(userId ? [userId] : []);
+            refreshVoiceSpeaking();
+        });
+    };
+
+    try {
+
+        callFrame.on('local-audio-level', (event) => {
+            const speaking = !voiceLocalMuted && (event?.audioLevel || 0) > 0.02;
+            if (speaking === voiceLocalSpeaking) return;
+            voiceLocalSpeaking = speaking;
+            refreshVoiceSpeaking();
+        });
+
+        callFrame.on('remote-participants-audio-level', (event) => {
+            const participants = Object.values(callFrame.participants());
+            const ids = new Set();
+
+            Object.entries(event?.participantsAudioLevel || {}).forEach(([sessionId, level]) => {
+                if (level <= 0.02) return;
+                const userId = voiceUserIdForDailyParticipant(participants.find(p => p.session_id === sessionId));
+                if (userId) ids.add(userId);
+            });
+
+            voiceRemoteSpeaking = ids;
+            refreshVoiceSpeaking();
+        });
+
+        Promise.all([
+            callFrame.startLocalAudioLevelObserver(250),
+            callFrame.startRemoteParticipantsAudioLevelObserver(250)
+        ]).catch(useActiveSpeakerFallback);
+
+    } catch (error) {
+        useActiveSpeakerFallback();
+    }
+
+}
+
+function emitVoiceRoomJoin() {
+    return new Promise((resolve) => {
+
+        if (!socket || !socket.connected) {
+            resolve({ success: false, error: 'Gerçek zamanlı bağlantı yok.' });
+            return;
+        }
+
+        const timer = setTimeout(() => resolve({ success: false, error: 'Sunucu yanıt vermedi.' }), 8000);
+
+        socket.emit(
+            'voice_room_join',
+            { room_id: currentVoiceRoomId, hub_id: currentVoiceRoomHubId, muted: voiceLocalMuted, deafened: voiceDeafened },
+            (response) => {
+                clearTimeout(timer);
+                resolve(response || { success: false, error: 'Odaya katılınamadı.' });
+            }
+        );
+
+    });
+}
+
+function handleVoicePresenceChange(change) {
+
+    if (!change || !voiceSessionConfirmed) return;
+    if (change.type !== 'joined' && change.type !== 'left') return;
+    if (change.user_id === currentUser?.id) return;
+
+    const joined = change.type === 'joined';
+
+    if (notifVoicePresenceEnabled && notifInappEnabled) {
+        showToast(`🎙 ${change.username} ${t(joined ? 'voice-room-user-joined' : 'voice-room-user-left')}`);
+    }
+
+    playVoicePresenceSound(joined);
+
+}
+
+function canShareScreen() {
+    const ua = navigator.userAgent || '';
+    const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua)
+        || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    return !isMobile && Boolean(navigator.mediaDevices?.getDisplayMedia);
+}
+
+function voiceRoomMembersHtml(room) {
+
+    const participants = room.participants || [];
+    const open = voiceRoomsExpanded.has(room.id);
+
+    const items = participants.length === 0
+        ? `<div class="hub-voice-room-members-empty">${t('voice-room-nobody-here')}</div>`
+        : participants.map((p) => `
+            <div class="hub-voice-room-member${p.user_id === currentUser?.id ? ' is-self' : ''}">
+                <span class="hub-voice-member-avatar" style="--user-color:${getUserColor(p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}</span>
+                <span class="hub-voice-member-name">${escapeHtml(p.username)}${voiceSelfTagHtml(p.user_id)}</span>
+                ${voiceStatusIconsHtml(p, true)}
+            </div>
+        `).join('');
+
+    return `
+        <div class="hub-voice-room-members-wrap${open ? ' open' : ''}" data-members-of="${room.id}">
+            <div class="hub-voice-room-members"><div class="hub-voice-room-members-list">${items}</div></div>
+        </div>
+    `;
+
+}
+
 async function loadVoiceRooms(hubId) {
 
     try {
@@ -6030,6 +6468,8 @@ async function loadVoiceRooms(hubId) {
 
 function renderVoiceRoomsList() {
 
+    rememberVoiceAvatars();
+
     hubVoiceRoomAddBtn.style.display = currentHub?.is_owner ? 'block' : 'none';
 
     const anyActive = voiceRoomsCache.some(r => r.participants && r.participants.length > 0);
@@ -6048,13 +6488,35 @@ function renderVoiceRoomsList() {
                 <span class="hub-voice-room-icon">${isActive ? '🔊' : '🔈'}</span>
                 <div class="hub-voice-room-info">
                     <div class="hub-voice-room-name">${escapeHtml(room.name)}</div>
-                    <div class="hub-voice-room-count">${isActive ? t('voice-room-you-are-here') : `${count} ${t('member-count')}`}</div>
+                    <button class="hub-voice-room-toggle${voiceRoomsExpanded.has(room.id) ? ' open' : ''}" data-toggle-members="${room.id}" type="button" aria-expanded="${voiceRoomsExpanded.has(room.id)}">
+                        <span>${t('voice-room-members-btn')}</span>
+                        <span class="hub-voice-room-chevron">▸</span>
+                    </button>
                 </div>
-                ${currentHub?.is_owner ? `<button class="hub-voice-room-delete" data-delete-room="${room.id}" type="button" title="${t('delete')}">🗑</button>` : ''}
+                <div class="hub-voice-room-side">
+                    ${currentHub?.is_owner ? `<button class="hub-voice-room-delete" data-delete-room="${room.id}" type="button" title="${t('delete')}">🗑</button>` : ''}
+                    <div class="hub-voice-room-count">${count} ${t('member-count')}</div>
+                </div>
             </div>
+            ${voiceRoomMembersHtml(room)}
             ${isActive ? `<button class="hub-voice-room-leave-btn" data-leave-room="${room.id}" type="button">🚪 ${t('call-leave')}</button>` : ''}
         `;
     }).join('');
+
+    hubVoiceRoomsList.querySelectorAll('[data-toggle-members]').forEach((btn) => {
+        btn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const roomId = Number(btn.dataset.toggleMembers);
+            const open = !voiceRoomsExpanded.has(roomId);
+
+            if (open) voiceRoomsExpanded.add(roomId);
+            else voiceRoomsExpanded.delete(roomId);
+
+            btn.classList.toggle('open', open);
+            btn.setAttribute('aria-expanded', String(open));
+            hubVoiceRoomsList.querySelector(`[data-members-of="${roomId}"]`)?.classList.toggle('open', open);
+        });
+    });
 
     hubVoiceRoomsList.querySelectorAll('.hub-voice-room-row').forEach((row) => {
         row.addEventListener('click', (event) => {
@@ -6131,6 +6593,8 @@ function openVoiceRoomPreview(room) {
 
 function renderVoiceRoomPreviewList(room) {
 
+    rememberVoiceAvatars();
+
     const participants = room.participants || [];
 
     if (participants.length === 0) {
@@ -6138,16 +6602,13 @@ function renderVoiceRoomPreviewList(room) {
         return;
     }
 
-    voiceRoomPreviewList.innerHTML = participants.map((name) => {
-        const color = getUserColor(name);
-        const initial = name.charAt(0).toUpperCase();
-        return `
-            <div class="voice-room-preview-person">
-                <span class="voice-room-preview-avatar" style="--user-color:${color};">${escapeHtml(initial)}</span>
-                <span class="voice-room-preview-name">${escapeHtml(name)}</span>
-            </div>
-        `;
-    }).join('');
+    voiceRoomPreviewList.innerHTML = participants.map((p) => `
+        <div class="voice-room-preview-person">
+            <span class="voice-room-preview-avatar" style="--user-color:${getUserColor(p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}</span>
+            <span class="voice-room-preview-name">${escapeHtml(p.username)}</span>
+            ${voiceStatusIconsHtml(p, false)}
+        </div>
+    `).join('');
 
 }
 
@@ -6190,49 +6651,79 @@ async function joinVoiceRoom(room) {
 
         callMode = 'hub-room';
         currentVoiceRoomId = room.id;
+        currentVoiceRoomHubId = currentHub.id;
         currentVoiceRoomName = room.name;
+        voiceSessionConfirmed = false;
+        voiceRejoining = false;
+        voiceLocalMuted = false;
+        voiceDeafened = false;
+        voiceLocalSpeaking = false;
+        voiceRemoteSpeaking = new Set();
         callHubName.textContent = `🎙️ ${room.name}`;
-        callScreenshareBtn.style.display = 'inline-block';
+        callScreenshareBtn.style.display = canShareScreen() ? 'inline-block' : 'none';
+        callMuteBtn.style.display = 'inline-block';
+        updateMuteButton();
 
         callFrameContainer.style.display = 'none';
         document.getElementById('call-hub-room-view').style.display = 'flex';
-        renderHubRoomGrid((room.participants || []).includes(currentUser.username)
-            ? room.participants
-            : [...(room.participants || []), currentUser.username]);
+
+        // Sunucu onaylayana kadar geçici görünüm: mevcut liste + ben.
+        currentVoiceParticipants = [
+            ...(room.participants || []).filter(p => p.user_id !== currentUser.id),
+            { user_id: currentUser.id, username: currentUser.username, muted: false }
+        ];
+        renderHubRoomGrid(currentVoiceParticipants);
 
         await joinCallFrame(data.room_url, data.token);
         wireHubRoomScreenshareEvents();
+        wireHubRoomPresenceEvents();
 
-        socket?.emit('voice_room_join', { room_id: room.id, hub_id: currentHub.id });
+        voiceLocalMuted = !callFrame.localAudio();
+        updateMuteButton();
+
+        const ack = await emitVoiceRoomJoin();
+
+        if (!ack.success) {
+            const failure = new Error('voice-presence');
+            failure.presenceError = ack.error;
+            throw failure;
+        }
+
+        voiceSessionConfirmed = true;
+        currentVoiceParticipants = ack.participants;
+        renderHubRoomGrid(currentVoiceParticipants);
 
         hubInRoomPill.style.display = 'flex';
         hubInRoomName.textContent = room.name;
+        updateVoiceSessionSummary();
 
         renderVoiceRoomsList();
 
     } catch (error) {
         console.error('Sesli odaya katılınamadı:', error);
-        alert('Sesli odaya katılınamadı.');
+        alert(error?.presenceError || 'Sesli odaya katılınamadı.');
         leaveCall();
     }
 
 }
 
 
-function renderHubRoomGrid(names) {
+function renderHubRoomGrid(participants) {
+
+    rememberVoiceAvatars();
 
     const grid = document.getElementById('call-hub-room-grid');
 
-    grid.innerHTML = (names || []).map((name) => {
-        const color = getUserColor(name);
-        const initial = name.charAt(0).toUpperCase();
-        return `
-            <div class="call-hub-room-person">
-                <span class="call-hub-room-avatar" style="--user-color:${color};">${escapeHtml(initial)}</span>
-                <span class="call-hub-room-name">${escapeHtml(name)}</span>
-            </div>
-        `;
-    }).join('');
+    grid.innerHTML = (participants || []).map((p) => `
+        <div class="call-hub-room-person${p.user_id === currentUser?.id ? ' is-self' : ''}">
+            <span class="call-hub-room-avatar" style="--user-color:${getUserColor(p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}</span>
+            <span class="call-hub-room-name">${escapeHtml(p.username)}</span>
+            ${p.user_id === currentUser?.id ? `<span class="voice-self-tag">${t('voice-room-you')}</span>` : ''}
+            ${voiceStatusIconsHtml(p, true)}
+        </div>
+    `).join('');
+
+    updateVoiceSpeakingUi();
 
 }
 
@@ -6627,6 +7118,7 @@ callMinimizeBtn.addEventListener('click', () => {
     callOverlay.style.display = 'none';
     callMiniBar.style.display = 'flex';
     document.body.classList.add('call-mini-active');
+    if (callMode === 'hub-room') updateVoiceSessionSummary();
 });
 
 callMiniExpandBtn.addEventListener('click', () => {
@@ -7674,6 +8166,7 @@ function wireCallAudioUnlock() {
         }
 
         audioEl.srcObject = new MediaStream([event.track]);
+        audioEl.muted = voiceDeafened;
         audioEl.play().catch(() => {});
 
     });
@@ -7741,8 +8234,8 @@ function leaveCall() {
         socket.emit('dm_call_end', { to_user_id: outgoingCallToId || incomingCallFromId });
     }
 
-    if (callMode === 'hub-room' && currentVoiceRoomId && socket && currentHub) {
-        socket.emit('voice_room_leave', { room_id: currentVoiceRoomId, hub_id: currentHub.id });
+    if (callMode === 'hub-room' && currentVoiceRoomId && socket) {
+        socket.emit('voice_room_leave');
     }
 
     if (callFrame) {
@@ -7770,7 +8263,18 @@ function leaveCall() {
     dmCallBtn.classList.remove('in-call');
 
     currentVoiceRoomId = null;
+    currentVoiceRoomHubId = null;
     currentVoiceRoomName = '';
+    currentVoiceParticipants = [];
+    voiceSessionConfirmed = false;
+    voiceRejoining = false;
+    voiceLocalMuted = false;
+    voiceDeafened = false;
+    voiceLocalSpeaking = false;
+    voiceRemoteSpeaking = new Set();
+    voiceSpeakingIds = new Set();
+    callMuteBtn.style.display = 'none';
+    hubInRoomCount.textContent = '';
     hubInRoomPill.style.display = 'none';
     renderVoiceRoomsList();
 
