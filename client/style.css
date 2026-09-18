@@ -146,7 +146,10 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 #chat-screen { width: 100%; display: flex; flex-direction: column; }
 
 /* ─── v1.9: Üst Bar ───────────────────────────────────────────────────────── */
-.topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 22px; background: var(--bg-surface); border-bottom: 1px solid var(--border-soft); flex-shrink: 0; position: relative; z-index: 80; transition: background-color 0.2s, border-color 0.2s; }
+/* viewport-fit=cover (AŞAMA 2) sayesinde sayfa artık iPhone çentiği/durum çubuğu
+   alanına kadar uzanabiliyor — topbar'ın oraya kaymaması için üst safe-area
+   payını ekliyoruz. env() desteklemeyen tarayıcılarda 0 olarak davranır, zararsız. */
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: calc(12px + env(safe-area-inset-top)) 22px 12px; background: var(--bg-surface); border-bottom: 1px solid var(--border-soft); flex-shrink: 0; position: relative; z-index: 80; transition: background-color 0.2s, border-color 0.2s; }
 .topbar-logo { color: #66fcf1; font-weight: bold; letter-spacing: 3px; font-size: 14px; }
 .topbar-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .topbar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
