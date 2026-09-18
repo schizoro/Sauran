@@ -2485,7 +2485,7 @@ const I18N = {
     'modal-invite-code': { tr: '🔑 Davet Kodu', en: '🔑 Invite Code' },
     'modal-poll': { tr: '📊 Oylama Başlat', en: '📊 Start a Poll' },
     'modal-share': { tr: '📌 Paylaşım Yap', en: '📌 Share Something' },
-    'modal-add-friend': { tr: '➕ Arkadaş Ekle', en: '➕ Add Friend' },
+    'modal-add-friend': { tr: '👤＋ Arkadaş Ekle', en: '👤＋ Add Friend' },
     'modal-settings': { tr: '⚙️ Ayarlar', en: '⚙️ Settings' },
     'label-theme': { tr: 'Tema', en: 'Theme' },
     'theme-dark': { tr: 'Kapalı Tema', en: 'Dark Theme' },
@@ -3554,24 +3554,16 @@ usersModal.addEventListener(
 );
 
 
+// NOT: Bu buton eskiden Lobi içindeyken "Lobi Üyeleri"ne dönüşüyordu — kullanıcı
+// isteğiyle kaldırıldı. Lobi üyeleri artık sadece Lobi ekranındaki kendi
+// panelinden (hub-members-toggle-btn) görüntüleniyor, bu her zaman "Arkadaşlar".
 function updateOnlineLabel() {
 
     const label = onlineBtn.querySelector('span');
 
-    if (currentHub) {
-
-        onlineBtn.title = t('menu-hub-members');
-        if (label) label.textContent = t('menu-hub-members');
-        onlineCount.style.display = 'flex';
-        onlineCount.textContent = currentHub.members.length;
-
-    } else {
-
-        onlineBtn.title = t('menu-friends');
-        if (label) label.textContent = t('menu-friends');
-        onlineCount.style.display = 'none';
-
-    }
+    onlineBtn.title = t('menu-friends');
+    if (label) label.textContent = t('menu-friends');
+    onlineCount.style.display = 'none';
 
 }
 
@@ -3590,22 +3582,6 @@ function refreshOnlinePanelIfOpen() {
 async function openOnlinePanel() {
 
     updateOnlineLabel();
-
-    if (currentHub) {
-
-        usersModalTitle.textContent = `🧩 ${currentHub.name} — Üyeler`;
-        friendRequestsSection.style.display = 'none';
-        topFriendsSection.style.display = 'none';
-        usersListSubtitle.style.display = 'none';
-
-        renderUsersList(
-            currentHub.members.map(m => ({ id: m.user_id, username: m.username, online: m.online })),
-            true
-        );
-
-        return;
-
-    }
 
     usersModalTitle.textContent = '👥 Arkadaşlar';
     friendRequestsSection.style.display = 'none';
