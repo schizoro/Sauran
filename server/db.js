@@ -2439,6 +2439,95 @@ function createUser(username) {
   }
 }
 
+// =====================================================
+// ÖNERİ / GERİ BİLDİRİM PANOSU
+// =====================================================
+// Kullanıcıların uygulama hakkında öneri/görüş paylaşabildiği, herkese açık,
+// oylanabilir bir pano. Moderasyon raporlarından (reports) tamamen ayrı —
+// buradaki kayıtlar gizli değil, tüm giriş yapmış kullanıcılara açık.
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS feedback_votes (
+    feedback_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (feedback_id, user_id),
+    FOREIGN KEY (feedback_id) REFERENCES feedback(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+`);
+
+const FEEDBACK_TITLE_MAX = 120;
+const FEEDBACK_BODY_MAX = 1000;
+
+function createFeedback(userId, { title, body }) {
+  const cleanTitle = String(title || '').trim().slice(0, FEEDBACK_TITLE_MAX);
+  const cleanBody = String(body || '').trim().slice(0, FEEDBACK_BODY_MAX);
+
+  if (!cleanTitle) return { success: false, error: 'Başlık boş olamaz.' };
+  if (!cleanBody) return { success: false, error: 'Açıklama boş olamaz.' };
+
+  const info = db.prepare(`
+    INSERT INTO feedback (user_id, title, body) VALUES (?, ?, ?)
+  `).run(userId, cleanTitle, cleanBody);
+
+  return { success: true, id: info.lastInsertRowid };
+}
+
+// viewerId: oy verip vermediğini (has_voted) işaretlemek için kullanılır.
+function listFeedback(viewerId, sort = 'top') {
+  const orderBy = sort === 'new'
+    ? 'feedback.created_at DESC'
+    : 'vote_count DESC, feedback.created_at DESC';
+
+  return db.prepare(`
+    SELECT
+      feedback.id,
+      feedback.title,
+      feedback.body,
+      feedback.created_at,
+      feedback.user_id,
+      users.username,
+      COUNT(feedback_votes.user_id) AS vote_count,
+      MAX(CASE WHEN feedback_votes.user_id = ? THEN 1 ELSE 0 END) AS has_voted
+    FROM feedback
+    JOIN users ON users.id = feedback.user_id
+    LEFT JOIN feedback_votes ON feedback_votes.feedback_id = feedback.id
+    GROUP BY feedback.id
+    ORDER BY ${orderBy}
+  `).all(viewerId || 0);
+}
+
+function voteFeedback(userId, feedbackId) {
+  const feedback = db.prepare(`SELECT id FROM feedback WHERE id = ?`).get(feedbackId);
+  if (!feedback) return { success: false, error: 'Öneri bulunamadı.' };
+
+  const existing = db.prepare(`
+    SELECT 1 FROM feedback_votes WHERE feedback_id = ? AND user_id = ?
+  `).get(feedbackId, userId);
+
+  if (existing) {
+    db.prepare(`DELETE FROM feedback_votes WHERE feedback_id = ? AND user_id = ?`).run(feedbackId, userId);
+  } else {
+    db.prepare(`INSERT INTO feedback_votes (feedback_id, user_id) VALUES (?, ?)`).run(feedbackId, userId);
+  }
+
+  const { vote_count } = db.prepare(`
+    SELECT COUNT(*) AS vote_count FROM feedback_votes WHERE feedback_id = ?
+  `).get(feedbackId);
+
+  return { success: true, voted: !existing, vote_count };
+}
+
 module.exports = {
   saveMessage,
   getMessages,
@@ -2543,5 +2632,8 @@ module.exports = {
   getNotificationPreferences,
   updateNotificationPreferences,
   markNotificationRead,
+  createFeedback,
+  listFeedback,
+  voteFeedback,
   db
 };

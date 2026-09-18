@@ -282,6 +282,8 @@
 
                 <button id="friend-add-open-btn" class="topbar-menu-item" title="Arkadaş Ekle" type="button">👤＋ <span data-i18n="menu-add-friend">Arkadaş Ekle</span></button>
 
+                <button id="feedback-open-btn" class="topbar-menu-item" title="Öneri & Görüş" type="button">💡 <span data-i18n="menu-feedback">Öneri & Görüş</span></button>
+
                 <button id="settings-btn" class="topbar-menu-item" title="Ayarlar" type="button">⚙️ <span data-i18n="menu-settings">Ayarlar</span></button>
 
             </div>
@@ -626,6 +628,38 @@
             </div>
 
             <div id="notifications-list" class="notifications-list"></div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ================================================= -->
+    <!-- ÖNERİ & GÖRÜŞ -->
+    <!-- ================================================= -->
+
+    <div id="feedback-modal" class="modal-overlay" style="display:none;">
+
+        <div class="modal-box users-modal-box feedback-modal-box">
+
+            <div class="modal-header">
+                <span data-i18n="modal-feedback">💡 Öneri & Görüş</span>
+                <button id="feedback-close-btn">✕</button>
+            </div>
+
+            <div class="feedback-form">
+                <input type="text" id="feedback-title-input" maxlength="120" placeholder="Kısa başlık...">
+                <textarea id="feedback-body-input" maxlength="1000" rows="3" placeholder="Önerini veya görüşünü yaz..."></textarea>
+                <div id="feedback-form-error" class="friend-add-error"></div>
+                <button id="feedback-submit-btn" type="button" class="about-btn about-btn-primary poll-submit-btn">Gönder</button>
+            </div>
+
+            <div class="feedback-sort-row">
+                <button id="feedback-sort-top" class="feedback-sort-btn feedback-sort-active" type="button">🔥 En çok oylanan</button>
+                <button id="feedback-sort-new" class="feedback-sort-btn" type="button">🕒 En yeni</button>
+            </div>
+
+            <div id="feedback-list" class="feedback-list"></div>
 
         </div>
 

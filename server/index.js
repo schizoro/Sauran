@@ -76,6 +76,9 @@ const {
   unblockUser,
   listBlockedUsers,
   createReport,
+  createFeedback,
+  listFeedback,
+  voteFeedback,
   calculateAge,
   isMinorAge,
   getAccountExport,
@@ -188,6 +191,7 @@ const friendRequestLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyF
 const hubCreateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, keyFn: byIp, message: 'Çok fazla Hub oluşturuldu. Biraz sonra tekrar dene.' });
 const inviteCreateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla davet oluşturuldu. Biraz sonra tekrar dene.' });
 const reportLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, keyFn: byIp, message: 'Çok fazla bildirim gönderildi. Biraz sonra tekrar dene.' });
+const feedbackLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, keyFn: byIp, message: 'Çok fazla öneri gönderildi. Biraz sonra tekrar dene.' });
 const fileUploadLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla dosya gönderildi. Biraz sonra tekrar dene.' });
 
 // Socket üzerinden gönderilen mesajlar için basit hız sınırlama (spam koruması).
@@ -764,6 +768,57 @@ app.post('/api/reports', reportLimiter, (req, res) => {
   } catch (error) {
     console.error('Bildirim oluşturma hatası:', error);
     res.status(500).json({ success: false, error: 'Bildirim gönderilemedi.' });
+  }
+});
+
+// =====================================================
+// ÖNERİ / GERİ BİLDİRİM PANOSU
+// =====================================================
+// Herkese açık: giriş yapmış tüm kullanıcılar öneri yazabilir, listeyi
+// görebilir ve oy verebilir. Moderasyon raporlarından (reports) ayrı.
+
+app.get('/api/feedback', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const sort = req.query.sort === 'new' ? 'new' : 'top';
+
+  try {
+    res.json({ success: true, feedback: listFeedback(user.id, sort) });
+  } catch (error) {
+    console.error('Öneri listesi alınamadı:', error);
+    res.status(500).json({ success: false, error: 'Öneriler yüklenemedi.' });
+  }
+});
+
+app.post('/api/feedback', feedbackLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    const result = createFeedback(user.id, req.body || {});
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (error) {
+    console.error('Öneri oluşturma hatası:', error);
+    res.status(500).json({ success: false, error: 'Öneri gönderilemedi.' });
+  }
+});
+
+app.post('/api/feedback/:id/vote', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const feedbackId = Number(req.params.id);
+  if (!feedbackId) return res.status(400).json({ success: false, error: 'Geçersiz öneri.' });
+
+  try {
+    const result = voteFeedback(user.id, feedbackId);
+    if (!result.success) return res.status(404).json(result);
+    return res.json(result);
+  } catch (error) {
+    console.error('Oy verme hatası:', error);
+    res.status(500).json({ success: false, error: 'Oy verilemedi.' });
   }
 });
 
