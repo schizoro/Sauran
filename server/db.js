@@ -243,6 +243,10 @@ const hubMembersColumns = db
   .all()
   .map(col => col.name);
 
+if (!hubMembersColumns.includes('muted')) {
+  db.exec(`ALTER TABLE hub_members ADD COLUMN muted INTEGER NOT NULL DEFAULT 0`);
+}
+
 if (!hubMembersColumns.includes('permission_tier')) {
   db.exec(`ALTER TABLE hub_members ADD COLUMN permission_tier TEXT NOT NULL DEFAULT 'member'`);
 
@@ -1116,7 +1120,7 @@ function getHubDetail(hubId, userId) {
   `).all(hubId);
 
   const membership = userId
-    ? db.prepare(`SELECT role_id, permission_tier FROM hub_members WHERE hub_id = ? AND user_id = ?`).get(hubId, userId)
+    ? db.prepare(`SELECT role_id, permission_tier, muted FROM hub_members WHERE hub_id = ? AND user_id = ?`).get(hubId, userId)
     : null;
 
   return {
@@ -1126,7 +1130,8 @@ function getHubDetail(hubId, userId) {
     is_member: Boolean(membership),
     is_owner: hub.created_by === userId,
     my_role_id: membership ? membership.role_id : null,
-    my_permission_tier: membership ? membership.permission_tier : null
+    my_permission_tier: membership ? membership.permission_tier : null,
+    my_muted: membership ? Boolean(membership.muted) : false
   };
 }
 
@@ -1167,6 +1172,14 @@ function setHubRole(hubId, userId, roleId) {
 function leaveHub(hubId, userId) {
   db.prepare(`DELETE FROM hub_members WHERE hub_id = ? AND user_id = ?`).run(hubId, userId);
   return { success: true };
+}
+
+// Kullanıcının kendi tercihi olarak bir Lobi'nin mesaj bildirimlerini
+// açıp/kapatması — sadece kendi hub_members satırını etkiler.
+function setHubMuted(hubId, userId, muted) {
+  if (!isHubMember(hubId, userId)) return { success: false, error: 'Bu Lobi\'nin üyesi değilsin.' };
+  db.prepare(`UPDATE hub_members SET muted = ? WHERE hub_id = ? AND user_id = ?`).run(muted ? 1 : 0, hubId, userId);
+  return { success: true, muted: Boolean(muted) };
 }
 
 function addHubRole(hubId, userId, { name, icon, slot_limit }) {
@@ -2394,6 +2407,7 @@ module.exports = {
   getHubDetail,
   setHubRole,
   leaveHub,
+  setHubMuted,
   addHubRole,
   isHubMember,
   getMemberTier,

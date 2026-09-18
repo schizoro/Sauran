@@ -365,6 +365,11 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 /* AŞAMA E: avatar üzerindeki çöp kovası artık ayrı bir buton değil, "⋯" ile
    açılan küçük bir liquid-glass menünün içinde. */
 .avatar-more-wrap { position: relative; }
+
+/* Lobi üyesi (sahip olmayan) seçenekleri — Bildirimleri sustur / Bildir / Ayrıl */
+.hub-member-options-wrap { position: relative; flex-shrink: 0; }
+.hub-member-options-wrap .msg-actions-menu { min-width: 210px; }
+.hub-member-mute-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 11px; font-size: 12.5px; color: #c5c6c7; }
 .avatar-more-menu {
   position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); z-index: 10;
   display: flex; flex-direction: column; min-width: 110px; padding: 5px; border-radius: 12px; animation: dropdown-in 0.15s ease-out;

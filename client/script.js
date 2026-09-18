@@ -2655,6 +2655,10 @@ const I18N = {
     'report-success-toast': { tr: 'Bildirimin alındı, teşekkürler.', en: 'Your report was received, thank you.' },
     'report-error-toast': { tr: 'Bildirim gönderilemedi.', en: 'Could not send report.' },
     'hub-settings-report': { tr: 'Lobiyi Bildir', en: 'Report Lobby' },
+    'hub-member-notifications': { tr: 'Lobi Bildirimleri', en: 'Lobby Notifications' },
+    'hub-member-leave': { tr: 'Lobiden Ayrıl', en: 'Leave Lobby' },
+    'confirm-leave-hub': { tr: '"{name}" lobisinden ayrılıyorsun, onaylıyor musun?', en: 'You are leaving "{name}". Are you sure?' },
+    'left-hub-toast': { tr: 'Lobiden ayrıldın.', en: 'You left the lobby.' },
     'label-legal': { tr: 'Gizlilik ve Yasal', en: 'Privacy & Legal' },
     'settings-privacy-policy': { tr: 'Gizlilik Politikası', en: 'Privacy Policy' },
     'settings-terms': { tr: 'Kullanım Şartları', en: 'Terms of Service' },
@@ -6503,6 +6507,14 @@ function renderHubDetail() {
     const hubReportBtnEl = document.getElementById('hub-report-btn');
     if (hubReportBtnEl) hubReportBtnEl.style.display = currentHub.is_owner ? 'none' : 'block';
 
+    // Katıldığım ama sahibi olmadığım Lobiler için: Bildirimleri Sustur /
+    // Lobiyi Bildir / Lobiden Ayrıl seçeneklerini içeren küçük menü.
+    if (hubMemberOptionsWrap) {
+        const showMemberOptions = currentHub.is_member && !currentHub.is_owner;
+        hubMemberOptionsWrap.style.display = showMemberOptions ? 'block' : 'none';
+        if (showMemberOptions && hubMuteToggle) hubMuteToggle.checked = Boolean(currentHub.my_muted);
+    }
+
     renderHubMembers();
 
 }
@@ -6535,6 +6547,81 @@ const hubReportBtn = document.getElementById('hub-report-btn');
 hubReportBtn?.addEventListener('click', () => {
     if (!currentHub) return;
     openReportModal('hub', currentHub.id, currentHub.name);
+});
+
+
+// =====================================================
+// LOBİ ÜYESİ SEÇENEKLERİ (Bildirimleri Sustur / Bildir / Ayrıl)
+// =====================================================
+// Sadece katıldığın ama sahibi olmadığın Lobiler'de görünür (bkz. renderHubDetail).
+
+const hubMemberOptionsWrap = document.getElementById('hub-member-options-wrap');
+const hubMemberOptionsBtn = document.getElementById('hub-member-options-btn');
+const hubMemberOptionsMenu = document.getElementById('hub-member-options-menu');
+const hubMuteToggle = document.getElementById('hub-mute-toggle');
+const hubMemberReportBtn = document.getElementById('hub-member-report-btn');
+const hubMemberLeaveBtn = document.getElementById('hub-member-leave-btn');
+
+hubMemberOptionsBtn?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const willOpen = hubMemberOptionsMenu.style.display !== 'flex';
+    closeAllMessageMenus();
+    hubMemberOptionsMenu.style.display = willOpen ? 'flex' : 'none';
+});
+
+hubMuteToggle?.addEventListener('click', (event) => event.stopPropagation());
+
+hubMuteToggle?.addEventListener('change', async () => {
+    if (!currentHub) return;
+
+    const muted = hubMuteToggle.checked;
+
+    try {
+        const res = await fetch(`/api/hubs/${currentHub.id}/mute`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ muted })
+        });
+        const data = await res.json();
+        if (!data.success) {
+            hubMuteToggle.checked = !muted;
+            showToast(data.error || 'Kaydedilemedi.');
+            return;
+        }
+        currentHub.my_muted = muted;
+    } catch (error) {
+        console.error('Lobi susturma tercihi kaydedilemedi:', error);
+        hubMuteToggle.checked = !muted;
+    }
+});
+
+hubMemberReportBtn?.addEventListener('click', () => {
+    if (!currentHub) return;
+    hubMemberOptionsMenu.style.display = 'none';
+    openReportModal('hub', currentHub.id, currentHub.name);
+});
+
+hubMemberLeaveBtn?.addEventListener('click', async () => {
+    if (!currentHub) return;
+    hubMemberOptionsMenu.style.display = 'none';
+
+    const confirmMsg = t('confirm-leave-hub').replace('{name}', currentHub.name);
+    if (!confirm(confirmMsg)) return;
+
+    try {
+        const res = await fetch(`/api/hubs/${currentHub.id}/leave`, { method: 'POST', credentials: 'include' });
+        const data = await res.json();
+        if (!data.success) {
+            showToast(data.error || 'Ayrılınamadı.');
+            return;
+        }
+        showToast(t('left-hub-toast'));
+        switchToView('hubs');
+        loadHubList();
+    } catch (error) {
+        console.error('Lobiden ayrılınamadı:', error);
+    }
 });
 
 

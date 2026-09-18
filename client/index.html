@@ -357,6 +357,22 @@
 
                         <button id="hub-settings-open-btn" class="hub-icon-btn" type="button" title="Lobi Ayarları">⚙️</button>
 
+                        <div class="hub-member-options-wrap" id="hub-member-options-wrap" style="display:none;">
+                            <button id="hub-member-options-btn" class="hub-icon-btn" type="button" title="Lobi Seçenekleri">⚙️</button>
+                            <div id="hub-member-options-menu" class="msg-actions-menu liquid-glass" style="display:none;">
+                                <div class="hub-member-mute-row">
+                                    <span>🔔 <span data-i18n="hub-member-notifications">Lobi Bildirimleri</span></span>
+                                    <span class="notif-toggle liquid-glass">
+                                        <input type="checkbox" id="hub-mute-toggle">
+                                        <span class="notif-toggle-track"><span class="notif-toggle-thumb"></span></span>
+                                    </span>
+                                </div>
+                                <div class="msg-actions-menu-divider"></div>
+                                <button id="hub-member-report-btn" type="button">🚩 <span data-i18n="hub-settings-report">Lobiyi Bildir</span></button>
+                                <button id="hub-member-leave-btn" type="button" class="hub-member-menu-danger">🚪 <span data-i18n="hub-member-leave">Lobiden Ayrıl</span></button>
+                            </div>
+                        </div>
+
                     </div>
 
                     <div id="hub-feed" class="hub-feed"></div>

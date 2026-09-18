@@ -23,6 +23,7 @@ const {
   getHubDetail,
   setHubRole,
   leaveHub,
+  setHubMuted,
   addHubRole,
   isHubMember,
   getMemberTier,
@@ -1131,6 +1132,20 @@ app.post('/api/hubs/:id/leave', (req, res) => {
   } catch (error) {
     console.error('Hub ayrılma API hatası:', error);
     res.status(500).json({ success: false, error: 'Ayrılınamadı.' });
+  }
+});
+
+app.patch('/api/hubs/:id/mute', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    const result = setHubMuted(Number(req.params.id), user.id, Boolean(req.body?.muted));
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (error) {
+    console.error('Lobi susturma API hatası:', error);
+    res.status(500).json({ success: false, error: 'Kaydedilemedi.' });
   }
 });
 
