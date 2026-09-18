@@ -632,6 +632,9 @@ app.patch('/api/profile/status', (req, res) => {
       return res.status(400).json(result);
     }
 
+    // Arkadaşların listesi durum değişikliğini anında görsün.
+    io.emit('presence_changed');
+
     return res.json(result);
 
   } catch (error) {

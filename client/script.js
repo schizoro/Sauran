@@ -253,12 +253,6 @@ const authError =
 // ÇEVRİMİÇİ / ARKADAŞLAR MODALI
 // =====================================================
 
-const onlineBtn =
-    document.getElementById('online-btn');
-
-const onlineCount =
-    document.getElementById('online-count');
-
 const usersModal =
     document.getElementById('users-modal');
 
@@ -3930,9 +3924,6 @@ async function logout() {
         '';
 
 
-    onlineCount.style.display =
-        'none';
-
     usersList.innerHTML =
         '';
 
@@ -4060,9 +4051,19 @@ function renderFriendsSidebar(friends) {
             ? `<img src="${escapeAttr(f.avatar_data)}" alt="">`
             : escapeHtml(initial);
 
+        // Çevrimdışı ya da durumunu "gizli" yapmış arkadaşlar sunucuda zaten
+        // online=false gelir; ikisi de gri görünür, gizli durum asla ele verilmez.
+        const statusInfo = f.online ? STATUS_INFO[f.status] : null;
+        const statusClass = statusInfo ? statusInfo.className : 'status-offline';
+        const statusTitle = statusInfo ? statusInfo.label : '';
+
         return `
             <div class="friends-sidebar-row ${f.online ? 'online' : ''}" data-friend-id="${f.id}" data-friend-name="${escapeAttr(f.username)}">
-                <span class="friends-sidebar-avatar" style="--user-color:${color};">${avatarInner}<span class="friends-sidebar-dot"></span></span>
+                <span class="friends-sidebar-presence" aria-hidden="true"></span>
+                <span class="friends-sidebar-avatar-wrap">
+                    <span class="friends-sidebar-avatar" style="--user-color:${color};">${avatarInner}</span>
+                    <span class="status-hex status-hex-sm friends-sidebar-status ${statusClass}" title="${escapeAttr(statusTitle)}"></span>
+                </span>
                 <span class="friends-sidebar-name">${escapeHtml(f.username)}</span>
                 ${unread > 0 ? `<span class="friends-sidebar-unread">${unread}</span>` : ''}
             </div>
@@ -4078,7 +4079,7 @@ function renderFriendsSidebar(friends) {
         const userId = Number(row.dataset.friendId);
         const username = row.dataset.friendName;
 
-        row.querySelector('.friends-sidebar-avatar').addEventListener('click', (event) => {
+        row.querySelector('.friends-sidebar-avatar-wrap').addEventListener('click', (event) => {
             event.stopPropagation();
             openOtherProfile(userId, { hideMessageAction: true });
         });
@@ -4098,17 +4099,6 @@ function renderFriendsSidebar(friends) {
 // ÇEVRİMİÇİ / ARKADAŞLAR MODALI
 // =====================================================
 
-onlineBtn.addEventListener(
-    'click',
-    () => {
-
-        usersModal.style.display = 'flex';
-        openOnlinePanel();
-
-    }
-);
-
-
 closeModalBtn.addEventListener(
     'click',
     () => usersModal.style.display = 'none'
@@ -4123,23 +4113,7 @@ usersModal.addEventListener(
 );
 
 
-// NOT: Bu buton eskiden Lobi içindeyken "Lobi Üyeleri"ne dönüşüyordu — kullanıcı
-// isteğiyle kaldırıldı. Lobi üyeleri artık sadece Lobi ekranındaki kendi
-// panelinden (hub-members-toggle-btn) görüntüleniyor, bu her zaman "Arkadaşlar".
-function updateOnlineLabel() {
-
-    const label = onlineBtn.querySelector('span');
-
-    onlineBtn.title = t('menu-friends');
-    if (label) label.textContent = t('menu-friends');
-    onlineCount.style.display = 'none';
-
-}
-
-
 function refreshOnlinePanelIfOpen() {
-
-    updateOnlineLabel();
 
     if (usersModal.style.display === 'flex') {
         openOnlinePanel();
@@ -4149,8 +4123,6 @@ function refreshOnlinePanelIfOpen() {
 
 
 async function openOnlinePanel() {
-
-    updateOnlineLabel();
 
     usersModalTitle.textContent = '👥 Arkadaşlar';
     friendRequestsSection.style.display = 'none';
@@ -4168,10 +4140,6 @@ async function openOnlinePanel() {
         const friendsData = await friendsRes.json();
         const requestsData = await requestsRes.json();
         const topData = await topRes.json();
-
-        const onlineFriendCount = friendsData.friends.filter(f => f.online).length;
-        onlineCount.style.display = onlineFriendCount > 0 ? 'flex' : 'none';
-        onlineCount.textContent = onlineFriendCount;
 
         renderUsersList(friendsData.friends, false);
 
@@ -7212,8 +7180,6 @@ function switchToView(view) {
 
     if (showFriendsSidebar) loadFriendsSidebar();
 
-    updateOnlineLabel();
-
 }
 
 
@@ -8358,11 +8324,10 @@ function renderHubMembers() {
 
     });
 
-    document.addEventListener('click', () => {
-        document.querySelectorAll('.hub-member-menu').forEach(m => m.style.display = 'none');
-    }, { once: true });
-
     wireMsgAvatars(hubMemberList);
+
+}
+
 // Üye satırlarında backdrop-filter var: her satır kendi yığın bağlamını (ve fixed
 // için yeni containing block'unu) oluşturduğundan menü satır içinde kalırsa alttaki
 // satırın ALTINDA kalıyordu. Menü açılırken body'ye taşınıp düğmenin ekran
@@ -8407,9 +8372,6 @@ function openMemberMenu(menu, menuBtn) {
 document.addEventListener('click', closeMemberMenus);
 window.addEventListener('resize', closeMemberMenus);
 document.addEventListener('scroll', closeMemberMenus, true);
-
-
-}
 
 async function handleMemberModerationAction(action, targetId, targetTier) {
 
