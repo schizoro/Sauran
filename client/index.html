@@ -26,6 +26,8 @@
 
     <div id="login-screen">
 
+        <canvas id="login-particles" class="login-particles" aria-hidden="true"></canvas>
+
         <div class="login-box">
 
             <h2 id="auth-title">Sauran'a Hoş Geldin</h2>
@@ -34,22 +36,32 @@
 
             <div id="login-form">
 
-                <input
-                    type="text"
-                    id="login-username-input"
-                    placeholder="Kullanıcı Adın"
-                    autocomplete="username"
-                >
+                <div class="field-float">
+                    <input
+                        type="text"
+                        id="login-username-input"
+                        placeholder=" "
+                        autocomplete="username"
+                    >
+                    <label for="login-username-input" data-i18n="login-username-label">Kullanıcı Adın</label>
+                </div>
 
-                <input
-                    type="password"
-                    id="login-password-input"
-                    placeholder="Şifren"
-                    autocomplete="current-password"
-                >
+                <div class="field-float">
+                    <input
+                        type="password"
+                        id="login-password-input"
+                        placeholder=" "
+                        autocomplete="current-password"
+                    >
+                    <label for="login-password-input" data-i18n="login-password-label">Şifren</label>
+                </div>
 
                 <button id="login-btn">
-                    Giriş Yap
+                    <span class="btn-label">Giriş Yap</span>
+                    <span class="btn-spinner" aria-hidden="true"></span>
+                    <span class="btn-success" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </span>
                 </button>
 
                 <div class="auth-switch">

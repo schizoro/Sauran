@@ -110,12 +110,42 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 ::-webkit-scrollbar-thumb:hover { background: #45a29e; }
 
 /* Giriş Ekranı */
-#login-screen { width: 100%; height: 100vh; display: flex; justify-content: center; align-items: center; background-color: var(--bg-app); }
-.login-box { background-color: var(--bg-surface); padding: 40px; border-radius: 18px; border: 1px solid var(--border-soft); box-shadow: var(--shadow-surface); text-align: center; width: 350px; }
+#login-screen { width: 100%; height: 100vh; height: 100dvh; display: flex; justify-content: center; align-items: center; background-color: var(--bg-app); position: relative; overflow: hidden; }
+.login-particles { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+
+@keyframes login-box-mount {
+  from { opacity: 0; transform: scale(0.92); filter: blur(14px); }
+  to   { opacity: 1; transform: scale(1);    filter: blur(0); }
+}
+.login-box {
+  position: relative; z-index: 1; background-color: var(--bg-surface); padding: 40px; border-radius: 18px;
+  border: 1px solid var(--border-soft); box-shadow: var(--shadow-surface); text-align: center; width: 350px; max-width: 92vw;
+  animation: login-box-mount 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
 .login-box h2 { color: #fff; margin-bottom: 25px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; font-size: 20px; }
 .login-box input { width: 100%; padding: 12px 14px; margin-bottom: 16px; background-color: var(--bg-surface-2); border: 1px solid var(--border-soft); border-radius: 12px; color: var(--accent); outline: none; transition: 0.2s; font-size: 14px; }
-.login-box input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.login-box input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), 0 0 18px var(--accent-soft); }
 .auth-field-label { display: block; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; margin: -8px 0 8px 2px; }
+
+/* Floating label alanları (kullanıcı adı / şifre) */
+.field-float { position: relative; margin-bottom: 16px; }
+.field-float input { margin-bottom: 0; padding: 21px 14px 9px; }
+.field-float label {
+  position: absolute; left: 15px; top: 50%; transform: translateY(-50%);
+  color: #6b7280; font-size: 14px; letter-spacing: normal; text-transform: none;
+  pointer-events: none; transition: top 0.18s ease, font-size 0.18s ease, color 0.18s ease, letter-spacing 0.18s ease;
+}
+.field-float input:focus + label,
+.field-float input:not(:placeholder-shown) + label {
+  top: 11px; transform: translateY(0); font-size: 9.5px; color: var(--accent); text-transform: uppercase; letter-spacing: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-box { animation: none; }
+  .login-particles { display: none; }
+  #login-btn.is-loading .btn-spinner { animation: none; }
+  #login-btn.is-success .btn-success { animation: none; }
+}
 .auth-terms-note { text-align: left; font-size: 12px; color: #9ca3af; margin: 4px 0 16px; line-height: 1.5; }
 .auth-terms-note a { color: #66fcf1; }
 
@@ -141,6 +171,23 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
   border: 1px solid rgba(102, 252, 241, 0.35); transition: 0.3s;
 }
 .login-box button:hover { background: rgba(102, 252, 241, 0.22); box-shadow: 0 0 14px rgba(102, 252, 241, 0.3); }
+
+/* Giriş butonu: yüklenme (spinner) ve başarı (checkmark) durumları */
+#login-btn { display: flex; align-items: center; justify-content: center; gap: 8px; position: relative; }
+#login-btn .btn-spinner, #login-btn .btn-success { display: none; }
+#login-btn .btn-success { width: 16px; height: 16px; }
+#login-btn .btn-success svg { width: 100%; height: 100%; }
+#login-btn.is-loading .btn-label { visibility: hidden; }
+#login-btn.is-loading .btn-spinner {
+  display: block; position: absolute; width: 17px; height: 17px; border-radius: 50%;
+  border: 2px solid rgba(102, 252, 241, 0.25); border-top-color: var(--accent, #66fcf1);
+  animation: login-btn-spin 0.7s linear infinite;
+}
+#login-btn.is-success { background: rgba(87, 242, 135, 0.16); border-color: rgba(87, 242, 135, 0.5); }
+#login-btn.is-success .btn-label, #login-btn.is-success .btn-spinner { display: none; }
+#login-btn.is-success .btn-success { display: block; color: #57f287; animation: login-btn-success-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@keyframes login-btn-spin { to { transform: rotate(360deg); } }
+@keyframes login-btn-success-pop { from { transform: scale(0.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
 /* İkincil aksiyonlar ("Şifremi Unuttum", "Zaten hesabın var mı? Giriş Yap",
    "Geri Dön" vb.) — ana pill butonla (Giriş Yap / Kayıt Ol) birbirine

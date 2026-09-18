@@ -677,6 +677,9 @@ function showLoginForm() {
     forgotResetForm.style.display =
         'none';
 
+    loginBtn.disabled = false;
+    loginBtn.classList.remove('is-loading', 'is-success');
+
     loginUsernameInput.focus();
 
 }
@@ -935,6 +938,85 @@ showLoginBtn.addEventListener(
 
 
 // =====================================================
+// GİRİŞ EKRANI ARKA PLAN PARTİKÜLLERİ (hafif, yavaş, tema renkli)
+// =====================================================
+
+(function initLoginParticles() {
+
+    const canvas = document.getElementById('login-particles');
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) return;
+
+    let particles = [];
+    let width = 0;
+    let height = 0;
+    let rafId = null;
+
+    function accentColor() {
+        return getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#66fcf1';
+    }
+
+    function resize() {
+        const w = canvas.offsetWidth;
+        const h = canvas.offsetHeight;
+        if (!w || !h || (w === width && h === height)) return;
+        width = canvas.width = w;
+        height = canvas.height = h;
+        const count = width < 480 ? 26 : 42;
+        particles = Array.from({ length: count }, () => ({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            r: 0.6 + Math.random() * 1.8,
+            vx: (Math.random() - 0.5) * 0.12,
+            vy: -0.06 - Math.random() * 0.14,
+            o: 0.15 + Math.random() * 0.35
+        }));
+    }
+
+    function tick() {
+
+        rafId = requestAnimationFrame(tick);
+
+        // Ekran görünür değilse (giriş yapılmış, sohbet açık) gereksiz çizim yapma.
+        if (canvas.offsetParent === null) return;
+
+        // offsetParent null iken boyut değişmiş olabilir (ör. logout ile tekrar
+        // görünür oldu) — her karede ucuz bir boyut kontrolü yapıp gerekirse
+        // yeniden boyutlandır, ResizeObserver'a bağımlı kalmadan sağlam çalışsın.
+        resize();
+
+        ctx.clearRect(0, 0, width, height);
+        const color = accentColor();
+
+        particles.forEach((p) => {
+            p.x += p.vx;
+            p.y += p.vy;
+            if (p.y < -4) { p.y = height + 4; p.x = Math.random() * width; }
+            if (p.x < -4) p.x = width + 4;
+            if (p.x > width + 4) p.x = -4;
+
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.globalAlpha = p.o;
+            ctx.fill();
+        });
+
+        ctx.globalAlpha = 1;
+
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+    tick();
+
+})();
+
+
+// =====================================================
 // GİRİŞ FORMU
 // =====================================================
 
@@ -1009,12 +1091,10 @@ async function login() {
     }
 
 
-    loginBtn.disabled =
-        true;
+    loginBtn.disabled = true;
+    loginBtn.classList.add('is-loading');
 
-    loginBtn.textContent =
-        'Giriş yapılıyor...';
-
+    let loggedIn = false;
 
     try {
 
@@ -1062,6 +1142,12 @@ async function login() {
             data.user
         );
 
+        loggedIn = true;
+        loginBtn.classList.remove('is-loading');
+        loginBtn.classList.add('is-success');
+
+        // Başarı animasyonunun görünmesi için kısa bir an bekleyip sohbete geç.
+        await new Promise((resolve) => setTimeout(resolve, 450));
 
         connectToChat();
 
@@ -1079,11 +1165,10 @@ async function login() {
 
     } finally {
 
-        loginBtn.disabled =
-            false;
-
-        loginBtn.textContent =
-            'Giriş Yap';
+        if (!loggedIn) {
+            loginBtn.disabled = false;
+            loginBtn.classList.remove('is-loading');
+        }
 
     }
 
@@ -2551,8 +2636,6 @@ const TRANSLATIONS = {
 };
 
 const TRANSLATIONS_PLACEHOLDER = {
-    'login-username-input': { tr: 'Kullanıcı Adın', en: 'Username' },
-    'login-password-input': { tr: 'Şifren', en: 'Password' },
     'register-username-input': { tr: 'Kullanıcı Adın', en: 'Username' },
     'register-email-input': { tr: 'E-posta Adresin', en: 'Your Email' },
     'register-password-input': { tr: 'Şifren', en: 'Password' },
@@ -2674,6 +2757,8 @@ const I18N = {
     'attach-gallery': { tr: 'Galeriden Seç', en: 'Choose from Gallery' },
     'attach-file': { tr: 'Dosya Seç', en: 'Choose File' },
     'attach-sticker': { tr: 'Çıkartma', en: 'Sticker' },
+    'login-username-label': { tr: 'Kullanıcı Adın', en: 'Username' },
+    'login-password-label': { tr: 'Şifren', en: 'Password' },
     'hub-settings-invite-friend': { tr: 'Arkadaşını Davet Et', en: 'Invite a Friend' },
     'hub-settings-invite-code': { tr: 'Davet Kodu Oluştur', en: 'Create Invite Code' },
     'hub-settings-delete': { tr: 'Lobiyi Sil', en: 'Delete Lobby' },
