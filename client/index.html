@@ -276,8 +276,8 @@
 
                     <h2 data-i18n="hubs-title">ANA MENÜ</h2>
 
-                    <button id="hub-create-open-btn" class="hub-create-btn">
-                        + Yeni Hub
+                    <button id="hub-create-open-btn" class="hub-create-btn" data-i18n="hub-create-open-btn">
+                        + Yeni Lobi
                     </button>
 
                 </div>
@@ -299,7 +299,7 @@
                 <div id="hub-list-empty" class="hub-list-empty" style="display:none;">
 
                     <button id="hub-create-open-btn-big" class="hub-create-btn-big" type="button">+</button>
-                    <p data-i18n="hubs-empty">İlk Hub'ını oluştur</p>
+                    <p data-i18n="hubs-empty">İlk Lobini oluştur</p>
 
                 </div>
 
@@ -344,7 +344,7 @@
                             <span id="hub-in-room-name"></span>
                         </button>
 
-                        <button id="hub-settings-open-btn" class="hub-icon-btn" type="button" title="Hub Ayarları">⚙️</button>
+                        <button id="hub-settings-open-btn" class="hub-icon-btn" type="button" title="Lobi Ayarları">⚙️</button>
 
                     </div>
 
@@ -477,7 +477,7 @@
         <div class="modal-box hub-create-box">
 
             <div class="modal-header">
-                <span data-i18n="modal-new-hub">Yeni Hub</span>
+                <span data-i18n="modal-new-hub">Yeni Lobi</span>
                 <button id="hub-create-close-btn">✕</button>
             </div>
 
@@ -489,7 +489,7 @@
                     <input type="file" id="hub-create-image-input" accept="image/png,image/jpeg,image/webp" hidden>
                 </div>
 
-                <input type="text" id="hub-create-name-input" class="hub-name-input" placeholder="Hub adı" maxlength="40">
+                <input type="text" id="hub-create-name-input" class="hub-name-input" placeholder="Lobi adı" maxlength="40">
 
                 <div id="hub-create-error" class="hub-create-error"></div>
 
@@ -523,7 +523,7 @@
                     <input type="file" id="hub-settings-image-input" accept="image/png,image/jpeg,image/webp" hidden>
                 </div>
 
-                <input type="text" id="hub-settings-name-input" class="hub-name-input" placeholder="Hub adı" maxlength="40">
+                <input type="text" id="hub-settings-name-input" class="hub-name-input" placeholder="Lobi adı" maxlength="40">
 
                 <div id="hub-settings-error" class="hub-create-error"></div>
 
@@ -632,7 +632,7 @@
 
             <div class="poll-create-body">
 
-                <p class="verify-info">Bu kodu arkadaşınla paylaş, Hub'a katılabilsin.</p>
+                <p class="verify-info">Bu kodu arkadaşınla paylaş, lobiye katılabilsin.</p>
                 <div id="hub-invite-code-display" class="invite-code-display"></div>
 
             </div>
@@ -1067,7 +1067,7 @@
                         <div class="notif-pref-group">
                             <span class="notif-pref-group-title" data-i18n="notif-group-messages">Mesajlar</span>
                             <label class="notif-pref-row"><input type="checkbox" data-pref="notify_dm_message"><span data-i18n="notif-pref-dm">Yeni özel mesajlar</span></label>
-                            <label class="notif-pref-row"><input type="checkbox" data-pref="notify_hub_message"><span data-i18n="notif-pref-hub-message">Yeni Hub mesaj bildirimleri</span></label>
+                            <label class="notif-pref-row"><input type="checkbox" data-pref="notify_hub_message"><span data-i18n="notif-pref-hub-message">Yeni Lobi mesaj bildirimleri</span></label>
                         </div>
 
                         <div class="notif-pref-group">
@@ -1083,8 +1083,8 @@
                         </div>
 
                         <div class="notif-pref-group">
-                            <span class="notif-pref-group-title" data-i18n="notif-group-hub">Hub</span>
-                            <label class="notif-pref-row"><input type="checkbox" data-pref="notify_hub_event"><span data-i18n="notif-pref-hub-event">Hub bildirimleri (davet, vb.)</span></label>
+                            <span class="notif-pref-group-title" data-i18n="notif-group-hub">Lobi</span>
+                            <label class="notif-pref-row"><input type="checkbox" data-pref="notify_hub_event"><span data-i18n="notif-pref-hub-event">Lobi bildirimleri (davet, vb.)</span></label>
                         </div>
 
                         <div class="notif-pref-group">

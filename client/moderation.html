@@ -207,7 +207,7 @@
         };
 
         const TARGET_TYPE_LABELS = {
-            user: '👤 Kullanıcı Profili', hub: '🧩 Hub', message: '💬 İleti', voice_room: '🎙️ Sesli Oda'
+            user: '👤 Kullanıcı Profili', hub: '🧩 Lobi', message: '💬 İleti', voice_room: '🎙️ Sesli Oda'
         };
 
         const PLATFORM_ROLE_LABELS = {
@@ -219,10 +219,10 @@
             if (!ctx || !ctx.exists) return 'Hedef bulunamadı (silinmiş olabilir).';
 
             if (report.target_type === 'user') return `Kullanıcı: ${esc(ctx.username)} (#${ctx.user_id})`;
-            if (report.target_type === 'hub') return `Hub: ${esc(ctx.hub_name)} — sahibi: ${esc(ctx.owner_username || 'bilinmiyor')}`;
-            if (report.target_type === 'voice_room') return `Sesli Oda: ${esc(ctx.room_name)} — Hub: ${esc(ctx.hub_name || 'bilinmiyor')}`;
+            if (report.target_type === 'hub') return `Lobi: ${esc(ctx.hub_name)} — sahibi: ${esc(ctx.owner_username || 'bilinmiyor')}`;
+            if (report.target_type === 'voice_room') return `Sesli Oda: ${esc(ctx.room_name)} — Lobi: ${esc(ctx.hub_name || 'bilinmiyor')}`;
             if (report.target_type === 'message') {
-                const where = ctx.context?.type === 'hub' ? `Hub: ${esc(ctx.context.hub_name || 'bilinmiyor')}` : 'Özel Mesaj (DM)';
+                const where = ctx.context?.type === 'hub' ? `Lobi: ${esc(ctx.context.hub_name || 'bilinmiyor')}` : 'Özel Mesaj (DM)';
                 const kindLabel = MESSAGE_KIND_LABELS[ctx.kind] || ctx.kind;
                 return `Gönderen: ${esc(ctx.sender_username)} — ${where}\nİleti Türü: ${esc(kindLabel)}`;
             }
@@ -296,7 +296,7 @@
                         <span class="mod-field-label">İstatistikler</span>
                         <span class="mod-field-value">
                             Bu kullanıcı hakkında ${u.stats.reportsAgainst} rapor var · Kendisi ${u.stats.reportsFiled} rapor açmış<br>
-                            ${u.stats.hubsOwned} Hub sahibi · ${u.stats.hubsMember} Hub üyesi · ${u.stats.messageCount} ileti göndermiş
+                            ${u.stats.hubsOwned} Lobi sahibi · ${u.stats.hubsMember} Lobi üyesi · ${u.stats.messageCount} ileti göndermiş
                         </span>
                     </div>
                 `;

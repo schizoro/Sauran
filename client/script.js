@@ -2431,8 +2431,8 @@ const TRANSLATIONS = {
     'register-birthdate-label': { tr: 'Doğum Tarihin', en: 'Date of Birth' },
     'forgot-email-btn': { tr: 'Kod Gönder', en: 'Send Code' },
     'forgot-reset-btn': { tr: 'Şifreyi Sıfırla', en: 'Reset Password' },
-    'hub-create-open-btn': { tr: '+ Yeni Hub', en: '+ New Hub' },
-    'hub-create-submit-btn': { tr: "Hub'ı Oluştur", en: 'Create Hub' },
+    'hub-create-open-btn': { tr: '+ Yeni Lobi', en: '+ New Lobby' },
+    'hub-create-submit-btn': { tr: 'Lobiyi Oluştur', en: 'Create Lobby' },
     'hub-create-image-btn': { tr: 'Görsel Ekle', en: 'Add Image' },
     'logout-btn': { tr: 'Çıkış Yap', en: 'Log Out' },
     'settings-password-btn': { tr: 'Şifreyi Güncelle', en: 'Update Password' },
@@ -2448,12 +2448,12 @@ const TRANSLATIONS_PLACEHOLDER = {
     'register-email-input': { tr: 'E-posta Adresin', en: 'Your Email' },
     'register-password-input': { tr: 'Şifren', en: 'Password' },
     'register-password-confirm-input': { tr: 'Şifreni Tekrar Gir', en: 'Confirm Password' },
-    'hub-create-name-input': { tr: 'Hub adı', en: 'Hub name' },
+    'hub-create-name-input': { tr: 'Lobi adı', en: 'Lobby name' },
     'friend-add-input': { tr: 'Kullanıcı adıyla arkadaş ekle...', en: 'Add friend by username...' },
     'hub-join-code-input': { tr: 'Davet kodunu gir...', en: 'Enter invite code...' },
     'hub-message-input': { tr: 'Bir mesaj yaz...', en: 'Type a message...' },
     'dm-message-input': { tr: 'Bir mesaj yaz...', en: 'Type a message...' },
-    'hub-settings-name-input': { tr: 'Hub adı', en: 'Hub name' }
+    'hub-settings-name-input': { tr: 'Lobi adı', en: 'Lobby name' }
 };
 
 // data-i18n / data-i18n-placeholder ile işaretlenmiş elemanlar + dinamik
@@ -2462,17 +2462,17 @@ const I18N = {
     'menu-join-code': { tr: 'Davet Koduyla Katıl', en: 'Join with Invite Code' },
     'menu-notifications': { tr: 'Bildirimler', en: 'Notifications' },
     'menu-friends': { tr: 'Arkadaşlar', en: 'Friends' },
-    'menu-hub-members': { tr: 'Hub Üyeleri', en: 'Hub Members' },
+    'menu-hub-members': { tr: 'Lobi Üyeleri', en: 'Lobby Members' },
     'menu-add-friend': { tr: 'Arkadaş Ekle', en: 'Add Friend' },
     'menu-settings': { tr: 'Ayarlar', en: 'Settings' },
     'hubs-title': { tr: 'ANA MENÜ', en: 'HOME' },
-    'hubs-owned': { tr: 'OLUŞTURDUĞUM HUBLAR', en: 'HUBS I CREATED' },
-    'hubs-joined': { tr: 'KATILDIĞIM HUBLAR', en: 'HUBS I JOINED' },
-    'hubs-empty': { tr: "İlk Hub'ını oluştur", en: 'Create your first Hub' },
-    'modal-new-hub': { tr: 'Yeni Hub', en: 'New Hub' },
+    'hubs-owned': { tr: 'OLUŞTURDUĞUM LOBİLER', en: 'LOBBIES I CREATED' },
+    'hubs-joined': { tr: 'KATILDIĞIM LOBİLER', en: 'LOBBIES I JOINED' },
+    'hubs-empty': { tr: 'İlk Lobini oluştur', en: 'Create your first lobby' },
+    'modal-new-hub': { tr: 'Yeni Lobi', en: 'New Lobby' },
     'add-image': { tr: 'Görsel Ekle', en: 'Add Image' },
     'change-image': { tr: 'Görseli Değiştir', en: 'Change Image' },
-    'modal-hub-settings': { tr: '⚙️ Hub Ayarları', en: '⚙️ Hub Settings' },
+    'modal-hub-settings': { tr: '⚙️ Lobi Ayarları', en: '⚙️ Lobby Settings' },
     'modal-invite-friend': { tr: '👥 Arkadaşını Davet Et', en: '👥 Invite a Friend' },
     'modal-notifications': { tr: '🔔 Bildirimler', en: '🔔 Notifications' },
     'modal-join-code': { tr: '🔑 Davet Koduyla Katıl', en: '🔑 Join with Invite Code' },
@@ -2497,19 +2497,19 @@ const I18N = {
     'notif-group-messages': { tr: 'Mesajlar', en: 'Messages' },
     'notif-group-friends': { tr: 'Arkadaşlar', en: 'Friends' },
     'notif-group-calls': { tr: 'Aramalar', en: 'Calls' },
-    'notif-group-hub': { tr: 'Hub', en: 'Hub' },
+    'notif-group-hub': { tr: 'Lobi', en: 'Lobby' },
     'notif-group-other': { tr: 'Diğer', en: 'Other' },
     'notif-pref-desktop': { tr: 'Masaüstü / tarayıcı bildirimleri', en: 'Desktop / browser notifications' },
     'notif-pref-mobile': { tr: 'Mobil bildirimleri', en: 'Mobile notifications' },
     'notif-pref-inapp': { tr: 'Uygulama içi bildirimler', en: 'In-app notifications' },
     'notif-pref-sound': { tr: 'Bildirim sesleri', en: 'Notification sounds' },
     'notif-pref-dm': { tr: 'Yeni özel mesajlar', en: 'New private messages' },
-    'notif-pref-hub-message': { tr: 'Yeni Hub mesaj bildirimleri', en: 'New Hub message notifications' },
+    'notif-pref-hub-message': { tr: 'Yeni Lobi mesaj bildirimleri', en: 'New lobby message notifications' },
     'notif-pref-friend-request': { tr: 'Arkadaşlık istekleri', en: 'Friend requests' },
     'notif-pref-friend-accepted': { tr: 'Arkadaşlık isteği kabul edildi', en: 'Friend request accepted' },
     'notif-pref-incoming-call': { tr: 'Gelen aramalar', en: 'Incoming calls' },
     'notif-pref-missed-call': { tr: 'Cevapsız aramalar', en: 'Missed calls' },
-    'notif-pref-hub-event': { tr: 'Hub bildirimleri (davet, vb.)', en: 'Hub notifications (invites, etc.)' },
+    'notif-pref-hub-event': { tr: 'Lobi bildirimleri (davet, vb.)', en: 'Lobby notifications (invites, etc.)' },
     'notif-pref-system': { tr: 'Sistem bildirimleri', en: 'System notifications' },
     'members-title': { tr: 'Üyeler', en: 'Members' },
     'settings-tab-general': { tr: 'Genel', en: 'General' },
@@ -2535,10 +2535,10 @@ const I18N = {
     'mute': { tr: 'Sustur', en: 'Mute' },
     'kick': { tr: 'At', en: 'Kick' },
     'ban': { tr: 'Yasakla', en: 'Ban' },
-    'confirm-kick': { tr: 'Bu kullanıcıyı Hub\'dan atmak istediğine emin misin?', en: 'Are you sure you want to kick this user from the Hub?' },
-    'confirm-ban': { tr: 'Bu kullanıcıyı Hub\'dan yasaklamak istediğine emin misin?', en: 'Are you sure you want to ban this user from the Hub?' },
-    'kicked-from-hub': { tr: 'Bu Hub\'dan atıldın.', en: "You've been kicked from this Hub." },
-    'banned-from-hub': { tr: 'Bu Hub\'dan yasaklandın.', en: "You've been banned from this Hub." },
+    'confirm-kick': { tr: 'Bu kullanıcıyı lobiden atmak istediğine emin misin?', en: 'Are you sure you want to kick this user from the lobby?' },
+    'confirm-ban': { tr: 'Bu kullanıcıyı lobiden yasaklamak istediğine emin misin?', en: 'Are you sure you want to ban this user from the lobby?' },
+    'kicked-from-hub': { tr: 'Bu lobiden atıldın.', en: "You've been kicked from this lobby." },
+    'banned-from-hub': { tr: 'Bu lobiden yasaklandın.', en: "You've been banned from this lobby." },
     'hub-bans-title': { tr: 'Yasaklılar', en: 'Banned Users' },
     'hub-bans-empty': { tr: 'Yasaklı kimse yok.', en: 'No one is banned.' },
     'unban': { tr: 'Yasağı Kaldır', en: 'Unban' },
@@ -2557,7 +2557,7 @@ const I18N = {
     'attach-file': { tr: 'Dosya Seç', en: 'Choose File' },
     'hub-settings-invite-friend': { tr: 'Arkadaşını Davet Et', en: 'Invite a Friend' },
     'hub-settings-invite-code': { tr: 'Davet Kodu Oluştur', en: 'Create Invite Code' },
-    'hub-settings-delete': { tr: "Hub'ı Sil", en: 'Delete Hub' },
+    'hub-settings-delete': { tr: 'Lobiyi Sil', en: 'Delete Lobby' },
     'call-ringing': { tr: 'Aranıyor...', en: 'Calling...' },
     'call-cancel': { tr: 'İptal Et', en: 'Cancel' },
     'call-decline': { tr: 'Reddet', en: 'Decline' },
@@ -2567,13 +2567,13 @@ const I18N = {
     'call-connected': { tr: 'Bağlandı', en: 'Connected' },
     'call-connecting': { tr: 'Bağlanıyor...', en: 'Connecting...' },
     'notif-friend-request': { tr: '1 arkadaşlık isteği', en: '1 friend request' },
-    'notif-hub-invite': { tr: '1 hub daveti', en: '1 hub invite' },
+    'notif-hub-invite': { tr: '1 lobi daveti', en: '1 lobby invite' },
     'notif-friend-accepted': { tr: 'Arkadaşlık isteğin kabul edildi', en: 'Your friend request was accepted' },
     'friend-request-notif-text': { tr: 'sana arkadaşlık isteği gönderdi', en: 'sent you a friend request' },
     'friend-accepted-notif-text': { tr: 'arkadaşlık isteğini kabul etti', en: 'accepted your friend request' },
     'ok-got-it': { tr: 'Tamam', en: 'Got it' },
     'friends-empty': { tr: 'Henüz arkadaşın yok.', en: "You don't have any friends yet." },
-    'back-to-hubs': { tr: 'Hublar', en: 'Hubs' },
+    'back-to-hubs': { tr: 'Lobiler', en: 'Lobbies' },
     'start-something': { tr: 'Bir şey başlat', en: 'Start something' },
     'start-poll': { tr: 'Oylama', en: 'Poll' },
     'start-share': { tr: 'Paylaşım', en: 'Share' },
@@ -2642,7 +2642,7 @@ const I18N = {
     'report-submit': { tr: 'Bildir', en: 'Submit report' },
     'report-success-toast': { tr: 'Bildirimin alındı, teşekkürler.', en: 'Your report was received, thank you.' },
     'report-error-toast': { tr: 'Bildirim gönderilemedi.', en: 'Could not send report.' },
-    'hub-settings-report': { tr: "Hub'ı Bildir", en: 'Report Hub' },
+    'hub-settings-report': { tr: 'Lobiyi Bildir', en: 'Report Lobby' },
     'label-legal': { tr: 'Gizlilik ve Yasal', en: 'Privacy & Legal' },
     'settings-privacy-policy': { tr: 'Gizlilik Politikası', en: 'Privacy Policy' },
     'settings-terms': { tr: 'Kullanım Şartları', en: 'Terms of Service' },
@@ -3912,7 +3912,7 @@ function renderNotifications(notifications) {
                 <div class="notification-card" data-notif-id="${n.id}" data-notif-type="hub_invite">
                     <div class="notification-text">
                         <strong>${escapeHtml(n.data.from_username)}</strong> seni
-                        <strong>${escapeHtml(n.data.hub_name)}</strong> Hub'ına davet etti.
+                        <strong>${escapeHtml(n.data.hub_name)}</strong> lobisine davet etti.
                     </div>
                     <div class="notification-actions">
                         <button class="notification-accept" data-accept type="button">Katıl</button>
@@ -5831,7 +5831,7 @@ hubSettingsSaveBtn.addEventListener('click', async () => {
     const name = hubSettingsNameInput.value.trim();
 
     if (name.length < 3) {
-        hubSettingsError.textContent = 'Hub adı en az 3 karakter olmalı.';
+        hubSettingsError.textContent = 'Lobi adı en az 3 karakter olmalı.';
         return;
     }
 
@@ -6154,7 +6154,7 @@ hubCreateSubmitBtn.addEventListener(
         hubCreateError.textContent = '';
 
         if (!name) {
-            hubCreateError.textContent = 'Hub adı gerekli.';
+            hubCreateError.textContent = 'Lobi adı gerekli.';
             return;
         }
 
@@ -6173,7 +6173,7 @@ hubCreateSubmitBtn.addEventListener(
             const data = await response.json();
 
             if (!response.ok || !data.success) {
-                hubCreateError.textContent = data.error || 'Hub oluşturulamadı.';
+                hubCreateError.textContent = data.error || 'Lobi oluşturulamadı.';
                 return;
             }
 
@@ -6189,7 +6189,7 @@ hubCreateSubmitBtn.addEventListener(
         } finally {
 
             hubCreateSubmitBtn.disabled = false;
-            hubCreateSubmitBtn.textContent = 'Hub\'ı Oluştur';
+            hubCreateSubmitBtn.textContent = 'Lobiyi Oluştur';
 
         }
 
@@ -6498,7 +6498,7 @@ hubDeleteBtn.addEventListener(
 
         if (!currentHub) return;
 
-        if (!confirm(`"${currentHub.name}" Hub'ını kalıcı olarak silmek istediğine emin misin?`)) return;
+        if (!confirm(`"${currentHub.name}" Lobisini kalıcı olarak silmek istediğine emin misin?`)) return;
 
         const response = await fetch(`/api/hubs/${currentHub.id}`, {
             method: 'DELETE',
