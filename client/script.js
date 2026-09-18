@@ -2730,7 +2730,8 @@ const I18N = {
     'add-image': { tr: 'Görsel Ekle', en: 'Add Image' },
     'change-image': { tr: 'Görseli Değiştir', en: 'Change Image' },
     'modal-hub-settings': { tr: '⚙️ Lobi Ayarları', en: '⚙️ Lobby Settings' },
-    'modal-invite-friend': { tr: '👥 Arkadaşını Davet Et', en: '👥 Invite a Friend' },
+    'modal-invite-friend': { tr: 'Arkadaşını Davet Et', en: 'Invite a Friend' },
+    'modal-invite-friend-subtitle': { tr: 'Lobiye katılmasını istediğin arkadaşını seç.', en: 'Pick the friend you want to invite to the Hub.' },
     'modal-notifications': { tr: '🔔 Bildirimler', en: '🔔 Notifications' },
     'modal-join-code': { tr: '🔑 Davet Koduyla Katıl', en: '🔑 Join with Invite Code' },
     'modal-invite-code': { tr: '🔑 Davet Kodu', en: '🔑 Invite Code' },
@@ -6896,22 +6897,25 @@ hubInviteFriendBtn.addEventListener(
             const invitableFriends = data.friends.filter(friend => !memberIds.has(friend.id));
 
             if (invitableFriends.length === 0) {
-                hubInviteFriendList.innerHTML = '<div class="users-list-empty">Davet edilebilecek arkadaşın yok.</div>';
+                hubInviteFriendList.innerHTML = '<div class="liquid-friend-empty">Davet edilebilecek arkadaşın yok.</div>';
             }
 
             invitableFriends.forEach((friend) => {
 
                 const li = document.createElement('li');
-                li.style.justifyContent = 'space-between';
+                li.className = 'liquid-friend-row';
 
                 li.innerHTML = `
-                    <span>${escapeHtml(friend.username)}</span>
-                    <button class="friend-accept-btn" data-invite-user="${friend.id}" type="button">Davet Et</button>
+                    ${avatarButtonHtml(friend.id, friend.avatar_data, friend.username)}
+                    <span class="liquid-friend-name">${escapeHtml(friend.username)}</span>
+                    <button class="liquid-friend-invite-btn" data-invite-user="${friend.id}" type="button">Davet Et</button>
                 `;
 
                 hubInviteFriendList.appendChild(li);
 
             });
+
+            wireMsgAvatars(hubInviteFriendList);
 
             hubInviteFriendList.querySelectorAll('[data-invite-user]').forEach((btn) => {
 
