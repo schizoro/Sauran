@@ -1439,6 +1439,26 @@
     <!-- SAURAN -->
 
     <script src="script.js"></script>
+    <!-- ================================================= -->
+    <!-- GELİŞTİRME BİLGİLENDİRME PENCERESİ (hesaba bağlı, bir kez) -->
+    <!-- ================================================= -->
+
+    <div id="dev-notice-overlay" class="dev-notice-overlay" aria-hidden="true">
+        <div class="dev-notice-panel" role="dialog" aria-modal="true" aria-labelledby="dev-notice-title" aria-describedby="dev-notice-body">
+            <div class="dev-notice-scroll">
+                <div class="dev-notice-head">
+                    <span class="dev-notice-icon" aria-hidden="true">i</span>
+                    <h2 id="dev-notice-title" class="dev-notice-title"></h2>
+                </div>
+                <div id="dev-notice-body" class="dev-notice-body"></div>
+                <div id="dev-notice-sign" class="dev-notice-sign"></div>
+            </div>
+            <div class="dev-notice-footer">
+                <button id="dev-notice-btn" class="dev-notice-btn" type="button" data-i18n="dev-notice-btn">Anladım, Devam Et</button>
+            </div>
+        </div>
+    </div>
+
 
 </body>
 </html>

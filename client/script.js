@@ -2834,6 +2834,7 @@ const I18N = {
     'delete-account-mismatch': { tr: 'Kullanıcı adı eşleşmedi, hesap silinmedi.', en: "Username didn't match, account not deleted." },
     'attach-camera': { tr: 'Kamerayla Çek', en: 'Take Photo/Video' },
     'attach-gallery': { tr: 'Galeriden Seç', en: 'Choose from Gallery' },
+    'dev-notice-btn': { tr: 'Anladım, Devam Et', en: 'Got it, Continue' },
     'attach-file': { tr: 'Dosya Seç', en: 'Choose File' },
     'attach-sticker': { tr: 'Çıkartma', en: 'Sticker' },
     'login-username-label': { tr: 'Kullanıcı Adın', en: 'Username' },
@@ -3640,9 +3641,135 @@ async function logout() {
 
 
     onlineCount.style.display =
+    loadNotificationPreferences();
+
+    maybeShowDevNotice();
+
+}
+
+
+// =====================================================
+// GELİŞTİRME BİLGİLENDİRME PENCERESİ
+// =====================================================
+// Görüldü bilgisi HESABA bağlı (users.dev_notice_seen) — localStorage'a
+// güvenilmiyor; farklı cihazda/oturumda tekrar çıkmaz. Sunucu, hesabın yeni
+// kayıtla mı oluştuğunu ('new') yoksa önceden var olan mı olduğunu ('existing')
+// currentUser.dev_notice ile bildirir; null ise zaten görülmüştür.
+
+const DEV_NOTICE_COPY = {
+    new: {
+        tr: {
+            title: 'Sauran Geliştirme Sürecinde',
+            paras: [
+                'Sauran şu anda aktif olarak geliştirilmeye devam ediyor. Geliştirme ve yazılım ekibimiz, uygulamanın performansını, kararlılığını ve yeni özelliklerini sürekli olarak iyileştirmek için çalışmalarını sürdürüyor.',
+                'Bu geliştirme sürecinde, sistem üzerinde yapılan bazı güncellemeler veya teknik çalışmalar nedeniyle zaman zaman kısa süreli bağlantı kesintileri yaşanabilir.',
+                'Bu kesintilerin süresi genellikle <strong>yaklaşık 30 saniye</strong> civarında olabilir. Ancak geliştirme çalışmalarının ve teknik güncellemelerin zamanlaması önceden sabit olmadığı için bu kesintilerin belirli veya düzenli bir zamanı bulunmamaktadır.',
+                'Çalışmalar sırasında göstereceğiniz anlayış için teşekkür ederiz. Sauran\'ı daha iyi, daha hızlı ve daha kararlı bir deneyim haline getirmek için çalışmaya devam ediyoruz.'
+            ],
+            sign: 'Sauran Geliştirme Ekibi'
+        },
+        en: {
+            title: 'Sauran Is Under Development',
+            paras: [
+                'Sauran is being actively developed. Our development and engineering team keeps working to continuously improve the app\'s performance, stability and new features.',
+                'During this process, some updates or technical work on the system may occasionally cause brief connection interruptions.',
+                'These interruptions usually last <strong>about 30 seconds</strong>. Since the timing of development work and technical updates is not fixed in advance, there is no specific or regular schedule for them.',
+                'Thank you for your understanding while we work. We are continuing to make Sauran a better, faster and more stable experience.'
+            ],
+            sign: 'The Sauran Development Team'
+        }
+    },
+    existing: {
+        tr: {
+            title: 'Sauran Geliştirilmeye Devam Ediyor',
+            paras: [
+                'Sauran\'ı kullandığınız için teşekkür ederiz.',
+                'Uygulamamız şu anda aktif geliştirme sürecindedir. Geliştirici ekibimiz; performans, kararlılık, sesli iletişim ve yeni özellikler üzerinde çalışmalarını sürdürmektedir.',
+                'Bu süreçte gerçekleştirilen geliştirme ve teknik çalışmalar nedeniyle zaman zaman kısa süreli bağlantı kesintileri yaşanabilir. Bu kesintilerin süresi genellikle <strong>yaklaşık 30 saniye</strong> olabilir ve çalışmaların zamanlamasına bağlı olarak önceden belirlenmiş sabit bir saati bulunmamaktadır.',
+                'Amacımız Sauran\'ı zaman içerisinde daha hızlı, daha kararlı ve daha iyi bir iletişim deneyimi sunan bir platform haline getirmek.',
+                'Göstereceğiniz anlayış ve Sauran\'ın gelişim sürecine eşlik ettiğiniz için teşekkür ederiz.'
+            ],
+            sign: 'Sauran Geliştirme Ekibi'
+        },
+        en: {
+            title: 'Sauran Keeps Evolving',
+            paras: [
+                'Thank you for using Sauran.',
+                'Our app is currently in active development. Our developer team continues to work on performance, stability, voice communication and new features.',
+                'Because of development and technical work during this period, brief connection interruptions may occasionally occur. They usually last <strong>about 30 seconds</strong> and, depending on the work being done, have no fixed pre-announced time.',
+                'Our goal is to turn Sauran, over time, into a platform that offers a faster, more stable and better communication experience.',
+                'Thank you for your understanding and for being part of Sauran\'s journey.'
+            ],
+            sign: 'The Sauran Development Team'
+        }
+    }
+};
+
+let devNoticeShown = false;
+let devNoticeReturnFocus = null;
+
+function maybeShowDevNotice() {
+
+    if (devNoticeShown || !currentUser || !currentUser.dev_notice) return;
+    const copy = DEV_NOTICE_COPY[currentUser.dev_notice];
+    if (!copy) return;
+
+    devNoticeShown = true;
+
+    let lang = 'tr';
+    try { lang = localStorage.getItem('sauran_lang') === 'en' ? 'en' : 'tr'; } catch (e) {}
+    const text = copy[lang] || copy.tr;
+
+    document.getElementById('dev-notice-title').textContent = text.title;
+    // İçerik yukarıdaki sabit metinlerden gelir (kullanıcı girdisi değil), <strong> içerir.
+    document.getElementById('dev-notice-body').innerHTML = text.paras.map((p) => '<p>' + p + '</p>').join('');
+    document.getElementById('dev-notice-sign').textContent = text.sign;
+
+    const overlay = document.getElementById('dev-notice-overlay');
+    const btn = document.getElementById('dev-notice-btn');
+
+    devNoticeReturnFocus = document.activeElement;
+    chatScreen.inert = true;
+
+    overlay.classList.add('visible');
+    overlay.setAttribute('aria-hidden', 'false');
+    void overlay.offsetWidth;
+    overlay.classList.add('open');
+    setTimeout(() => btn.focus(), 60);
         'none';
 
     usersList.innerHTML =
+function closeDevNotice() {
+
+    const overlay = document.getElementById('dev-notice-overlay');
+
+    // Hesaba bağlı kalıcı işaret — başarısız olursa bir sonraki girişte tekrar gösterilir.
+    fetch('/api/me/dev-notice-seen', { method: 'POST', credentials: 'include' }).catch(() => {});
+    if (currentUser) currentUser.dev_notice = null;
+
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden', 'true');
+    chatScreen.inert = false;
+
+    setTimeout(() => {
+        overlay.classList.remove('visible');
+        if (devNoticeReturnFocus && typeof devNoticeReturnFocus.focus === 'function') devNoticeReturnFocus.focus();
+    }, 240);
+
+}
+
+document.getElementById('dev-notice-btn').addEventListener('click', closeDevNotice);
+
+// Kullanıcının bildirimi gerçekten görmesi için ESC ile kapanmaz; tek etkileşimli
+// öğe düğme olduğundan Tab odağı da pencere içinde kalır.
+document.addEventListener('keydown', (event) => {
+    const overlay = document.getElementById('dev-notice-overlay');
+    if (!overlay.classList.contains('open')) return;
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); }
+    if (event.key === 'Tab') { event.preventDefault(); document.getElementById('dev-notice-btn').focus(); }
+}, true);
+
+
         '';
 
     otherProfileModal.style.display =

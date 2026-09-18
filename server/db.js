@@ -523,6 +523,31 @@ function hasAtLeastPlatformRole(platformRole, minRole) {
 
 function setPlatformRole(username, role) {
   if (!PLATFORM_ROLES.includes(role)) {
+// =====================================================
+// GELİŞTİRME BİLGİLENDİRME PENCERESİ — hesaba bağlı kalıcı durum
+// =====================================================
+// dev_notice_seen: kullanıcı bilgilendirmeyi "Anladım" ile onayladı mı (cihazdan bağımsız).
+// dev_notice_new : 1 = hesap yeni kayıtla oluştu ("Sauran Geliştirme Sürecinde"),
+//                  0 = bu özellikten önce var olan hesap ("Sauran Geliştirilmeye Devam Ediyor").
+// Mevcut satırlar iki kolonda da 0 alır (görmedi, eski kullanıcı) — ayrı bir veri
+// dönüşümü gerekmez, auth/session yapısına dokunulmaz.
+const usersNoticeColumns = db.prepare(`PRAGMA table_info(users)`).all().map(col => col.name);
+if (!usersNoticeColumns.includes('dev_notice_seen')) {
+  db.exec(`ALTER TABLE users ADD COLUMN dev_notice_seen INTEGER NOT NULL DEFAULT 0`);
+}
+if (!usersNoticeColumns.includes('dev_notice_new')) {
+  db.exec(`ALTER TABLE users ADD COLUMN dev_notice_new INTEGER NOT NULL DEFAULT 0`);
+}
+
+function devNoticeFor(seen, isNew) {
+  if (seen) return null;
+  return isNew ? 'new' : 'existing';
+}
+
+function markDevNoticeSeen(userId) {
+  db.prepare(`UPDATE users SET dev_notice_seen = 1 WHERE id = ?`).run(userId);
+}
+
     return { success: false, error: `Geçersiz rol. Geçerli roller: ${PLATFORM_ROLES.join(', ')}` };
   }
 
@@ -805,8 +830,8 @@ function verifyAndCreateUser(email, code) {
     const minor = isMinorAge(age);
 
     const result = db.prepare(`
-      INSERT INTO users (username, email, password_hash, password_salt, birth_date, avatar_visibility, terms_accepted_at)
-      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      INSERT INTO users (username, email, password_hash, password_salt, birth_date, avatar_visibility, terms_accepted_at, dev_notice_new)
+      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 1)
     `).run(pending.username, pending.email, pending.password_hash, pending.password_salt, pending.birth_date, minor ? 'friends' : 'public');
 
     db.prepare(`DELETE FROM pending_verifications WHERE id = ?`).run(pending.id);
@@ -820,7 +845,8 @@ function verifyAndCreateUser(email, code) {
       status: 'signal',
       avatar_visibility: minor ? 'friends' : 'public',
       avatar_data: null,
-      is_minor: minor
+      is_minor: minor,
+      dev_notice: 'new'
     };
 
   } catch (error) {
@@ -844,7 +870,8 @@ function loginUser(username, password) {
 
     const user = db.prepare(`
       SELECT id, username, email, password_hash, password_salt,
-             about_me, status, avatar_visibility, avatar_data, banner_data
+             about_me, status, avatar_visibility, avatar_data, banner_data,
+             platform_role, dev_notice_seen, dev_notice_new
       FROM users WHERE LOWER(username) = LOWER(?)
     `).get(username);
 
@@ -871,7 +898,9 @@ function loginUser(username, password) {
       status: user.status || 'signal',
       avatar_visibility: user.avatar_visibility || 'public',
       avatar_data: user.avatar_data,
-      banner_data: user.banner_data
+      banner_data: user.banner_data,
+      platform_role: user.platform_role || 'user',
+      dev_notice: devNoticeFor(user.dev_notice_seen, user.dev_notice_new)
     };
 
   } catch (error) {
@@ -2696,6 +2725,8 @@ function getAdminStats() {
     open_reports: one(`SELECT COUNT(*) AS c FROM reports WHERE status IN ('new', 'under_review')`)
   };
 }
+  devNoticeFor,
+  markDevNoticeSeen,
 
 module.exports = {
   listAdminUsers,

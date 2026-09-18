@@ -98,6 +98,8 @@ const {
   getReportDetail,
   getModerationUserDetail,
   listAdminUsers,
+  devNoticeFor,
+  markDevNoticeSeen,
   PLATFORM_ROLES,
   getAdminUserDetail,
   getAdminStats,
@@ -278,7 +280,7 @@ function getUserFromSessionToken(token) {
   const user = db.prepare(`
     SELECT users.id, users.username, users.email, users.about_me,
            users.status, users.avatar_visibility, users.avatar_data, users.banner_data,
-           users.birth_date, users.platform_role,
+           users.birth_date, users.platform_role, users.dev_notice_seen, users.dev_notice_new,
            sessions.expires_at
     FROM sessions
     INNER JOIN users ON users.id = sessions.user_id
@@ -302,7 +304,8 @@ function getUserFromSessionToken(token) {
     avatar_data: user.avatar_data,
     banner_data: user.banner_data,
     is_minor: isMinorAge(calculateAge(user.birth_date)),
-    platform_role: user.platform_role || 'user'
+    platform_role: user.platform_role || 'user',
+    dev_notice: devNoticeFor(user.dev_notice_seen, user.dev_notice_new)
   };
 }
 
@@ -379,7 +382,8 @@ app.post('/api/verify', (req, res) => {
         status: result.status,
         avatar_visibility: result.avatar_visibility,
         avatar_data: result.avatar_data,
-        is_minor: result.is_minor
+        is_minor: result.is_minor,
+        dev_notice: result.dev_notice
       }
     });
 
@@ -439,7 +443,9 @@ app.post('/api/login', loginLimiter, (req, res) => {
         about_me: result.about_me,
         status: result.status,
         avatar_visibility: result.avatar_visibility,
-        avatar_data: result.avatar_data
+        avatar_data: result.avatar_data,
+        platform_role: result.platform_role,
+        dev_notice: result.dev_notice
       }
     });
 
@@ -525,6 +531,19 @@ app.post('/api/sessions/logout-all', (req, res) => {
 // =====================================================
 // HESABI SİL
 // =====================================================
+
+app.post('/api/me/dev-notice-seen', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    markDevNoticeSeen(user.id);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Bilgilendirme durumu kaydedilemedi:', error);
+    return res.status(500).json({ success: false, error: 'Kaydedilemedi.' });
+  }
+});
 
 app.get('/api/account/export', (req, res) => {
   const user = requireAuth(req, res);
