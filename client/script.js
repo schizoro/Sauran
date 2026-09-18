@@ -2144,20 +2144,26 @@ function updateBrowserNotifUI() {
     const btnEl = document.getElementById('browser-notif-permission-btn');
     if (!textEl || !btnEl) return;
 
+    // "Masaüstü Bildirimlerine İzin Ver" metni mobilde de sabit kalıyordu —
+    // burada da AŞAMA E'deki mobil/masaüstü ayrımıyla aynı eşiği kullanıyoruz.
+    const isMobile = window.innerWidth <= 768;
+    const k = (key) => isMobile ? `${key}-mobile` : key;
+
     textEl.classList.remove('state-granted', 'state-denied');
     btnEl.style.display = 'none';
 
     if (state === 'unsupported') {
-        textEl.textContent = t('notif-permission-unsupported');
+        textEl.textContent = t(k('notif-permission-unsupported'));
     } else if (state === 'granted') {
-        textEl.textContent = t('notif-permission-granted');
+        textEl.textContent = t(k('notif-permission-granted'));
         textEl.classList.add('state-granted');
     } else if (state === 'denied') {
-        textEl.textContent = t('notif-permission-denied');
+        textEl.textContent = t(k('notif-permission-denied'));
         textEl.classList.add('state-denied');
     } else {
         textEl.textContent = t('notif-permission-default');
         btnEl.style.display = 'block';
+        btnEl.querySelector('span').textContent = t(k('notif-permission-btn'));
     }
 
 }
@@ -2492,6 +2498,12 @@ const I18N = {
     'notif-permission-unsupported': { tr: 'Tarayıcın masaüstü bildirimlerini desteklemiyor.', en: 'Your browser does not support desktop notifications.' },
     'notif-permission-granted': { tr: '✓ Masaüstü bildirimleri açık.', en: '✓ Desktop notifications are on.' },
     'notif-permission-denied': { tr: 'Masaüstü bildirimleri engellendi. Açmak için tarayıcı adres çubuğundaki site ayarlarından izin vermen gerekiyor.', en: 'Desktop notifications are blocked. To enable them, allow notifications from your browser\'s site settings.' },
+    // Mobil cihazlarda aynı butonun/metnin "Masaüstü" değil "Mobil" demesi için
+    // (AŞAMA 2/3 mobil dönüşümü sırasında bulunan gerçek bir hata düzeltmesi).
+    'notif-permission-btn-mobile': { tr: 'Mobil Bildirimlerine İzin Ver', en: 'Allow Mobile Notifications' },
+    'notif-permission-unsupported-mobile': { tr: 'Bu tarayıcı/mod mobil bildirimleri desteklemiyor. iPhone\'da bildirim alabilmek için Sauran\'ı Ana Ekrana Ekle.', en: "This browser/mode doesn't support mobile notifications. On iPhone, add Sauran to your Home Screen to receive notifications." },
+    'notif-permission-granted-mobile': { tr: '✓ Mobil bildirimler açık.', en: '✓ Mobile notifications are on.' },
+    'notif-permission-denied-mobile': { tr: 'Mobil bildirimler engellendi. Açmak için tarayıcı/site ayarlarından izin vermen gerekiyor.', en: "Mobile notifications are blocked. To enable them, allow notifications from your browser/site settings." },
     'notif-permission-default': { tr: 'Sauran, önemli olaylarda (mesaj, arkadaşlık isteği, arama) masaüstünde bildirim gösterebilir.', en: 'Sauran can show desktop notifications for important events (messages, friend requests, calls).' },
     'notif-group-general': { tr: 'Genel', en: 'General' },
     'notif-group-messages': { tr: 'Mesajlar', en: 'Messages' },
@@ -2687,6 +2699,10 @@ function applyLanguage(lang) {
     // Açık olan sohbetlerdeki dinamik metinleri (saat, "silindi" vb.) tazele.
     if (currentHub) loadHubMessages(currentHub.id);
     if (activeDmUserId) openDm(activeDmUserId, activeDmUsername);
+
+    // Yukarıdaki genel data-i18n döngüsü bildirim izni metnini masaüstü
+    // versiyonuna geri döndürüyor olabilir — mobil/masaüstü ayrımını yeniden uygula.
+    updateBrowserNotifUI();
 
 }
 
