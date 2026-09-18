@@ -105,6 +105,8 @@ const {
   getModerationUserDetail,
   listAdminUsers,
   devNoticeFor,
+  AUDIT_ACTIONS,
+  listAuditLog,
   markDevNoticeSeen,
   PLATFORM_ROLES,
   getAdminUserDetail,
@@ -1024,6 +1026,48 @@ app.get('/api/admin/stats', (req, res) => {
 });
 
 app.patch('/api/moderation/reports/:id', (req, res) => {
+// Audit Log: YALNIZCA founder okuyabilir. Kayıtlar bu API'den silinemez/düzenlenemez
+// (böyle bir endpoint yoktur); ilk sürümde sadece yönetimsel DEĞİŞİKLİKLER loglanır,
+// panel görüntülemeleri değil.
+app.get('/api/admin/audit-log', (req, res) => {
+  const user = requirePlatformRole(req, res, 'founder');
+  if (!user) return;
+
+  const isId = (v) => /^[0-9]{1,15}$/.test(String(v));
+  const isDate = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`));
+
+  const { action, actor_user_id, target_user_id, from, to } = req.query;
+
+  if (action && !AUDIT_ACTIONS.includes(String(action))) {
+    return res.status(400).json({ success: false, error: 'Geçersiz işlem filtresi.' });
+  }
+  if (actor_user_id && !isId(actor_user_id)) {
+    return res.status(400).json({ success: false, error: 'Geçersiz yapan kullanıcı ID.' });
+  }
+  if (target_user_id && !isId(target_user_id)) {
+    return res.status(400).json({ success: false, error: 'Geçersiz hedef kullanıcı ID.' });
+  }
+  if ((from && !isDate(String(from))) || (to && !isDate(String(to)))) {
+    return res.status(400).json({ success: false, error: 'Tarih YYYY-AA-GG biçiminde olmalı.' });
+  }
+
+  try {
+    const result = listAuditLog({
+      page: req.query.page,
+      limit: req.query.limit,
+      action: action ? String(action) : '',
+      actorUserId: actor_user_id ? Number(actor_user_id) : null,
+      targetUserId: target_user_id ? Number(target_user_id) : null,
+      from: from ? String(from) : '',
+      to: to ? String(to) : ''
+    });
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Audit log listeleme hatası:', error);
+    res.status(500).json({ success: false, error: 'Audit log alınamadı.' });
+  }
+});
+
   const user = requirePlatformRole(req, res, 'moderator');
   if (!user) return;
 

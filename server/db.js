@@ -2821,7 +2821,129 @@ module.exports = {
   createUser,
   loginUser,
   createVerification,
+// =====================================================
+// ADMIN AUDIT LOG (platform yöneticisinin YAZMA işlemlerinin geçmişi)
+// =====================================================
+// Amaç: kim → ne yaptı → kime/neye → ne zaman → hangi (iç) gerekçeyle.
+// moderation_actions'tan AYRIDIR: o, rapor iş akışının geçmişidir; bu ise
+// yöneticinin kendi yönetim eylemleridir. İkisi birleştirilmez.
+//
+// Tasarım notları:
+// - actor_user_id / target_user_id düz sayı olarak tutulur, FK YOKTUR. FK olsaydı
+//   "Hesabımı Sil" (users satırı silme) ile tetikleyiciler çakışırdı. Bu ID'ler
+//   ANONİM VERİ DEĞİLDİR: bir hesaba geri çözülebilen kişisel veri olarak ele
+//   alınmalıdır (silinen hesabın ID'si de pseudonymous veri olarak kalır).
+// - Kullanıcı adı, IP, şifre/token/kod, mesaj içeriği KAYDEDİLMEZ.
+// - reason bir İÇ yönetim gerekçesidir; kullanıcıya gösterilen metin ayrı tutulur.
+// - Değiştirilemezlik UYGULAMA DÜZEYİNDEDİR: aşağıdaki SQLite tetikleyicileri,
+//   uygulama üzerinden yapılan UPDATE/DELETE'i reddeder ve panelde silme/düzenleme
+//   yolu yoktur. Bu, veritabanı yöneticisine ya da dosya erişimi olan birine karşı
+//   mutlak/kriptografik bir koruma DEĞİLDİR (tetikleyici kaldırılabilir).
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS admin_audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor_user_id INTEGER,
+    action TEXT NOT NULL,
+    target_user_id INTEGER,
+    reason TEXT,
+    old_value TEXT,
+    new_value TEXT,
+    report_id INTEGER,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_log(created_at);
+  CREATE INDEX IF NOT EXISTS idx_admin_audit_target ON admin_audit_log(target_user_id);
+  CREATE INDEX IF NOT EXISTS idx_admin_audit_actor ON admin_audit_log(actor_user_id);
+  CREATE INDEX IF NOT EXISTS idx_admin_audit_action ON admin_audit_log(action);
+
+  CREATE TRIGGER IF NOT EXISTS admin_audit_log_no_update
+  BEFORE UPDATE ON admin_audit_log
+  BEGIN SELECT RAISE(ABORT, 'admin_audit_log is append-only'); END;
+
+  CREATE TRIGGER IF NOT EXISTS admin_audit_log_no_delete
+  BEFORE DELETE ON admin_audit_log
+  BEGIN SELECT RAISE(ABORT, 'admin_audit_log is append-only'); END;
+`);
+
+const AUDIT_ACTIONS = ['platform_role_changed', 'account_suspended', 'account_unsuspended'];
+const AUDIT_REASON_MAX = 500;
+const AUDIT_VALUE_MAX = 100;
+const AUDIT_MAX_LIMIT = 50;
+
+// Bir yazma işleminin içinde (db.transaction ile) çağrılmak üzere tasarlandı:
+// aynı bağlantıyı kullandığı için işlemle birlikte commit/rollback olur.
+// Hata fırlatırsa çağıran işlem de geri alınmalıdır.
+function writeAuditLog({ actorUserId, action, targetUserId, reason, oldValue, newValue, reportId }) {
+  if (!AUDIT_ACTIONS.includes(action)) {
+    throw new Error('Geçersiz audit işlemi.');
+  }
+  if (!Number.isInteger(actorUserId) || !Number.isInteger(targetUserId)) {
+    throw new Error('Audit kaydı için geçerli kullanıcı ID\'leri gerekli.');
+  }
+
+  const clip = (v, max) => (v == null ? null : String(v).slice(0, max));
+
+  const info = db.prepare(`
+    INSERT INTO admin_audit_log (actor_user_id, action, target_user_id, reason, old_value, new_value, report_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    actorUserId,
+    action,
+    targetUserId,
+    clip(reason, AUDIT_REASON_MAX),
+    clip(oldValue, AUDIT_VALUE_MAX),
+    clip(newValue, AUDIT_VALUE_MAX),
+    Number.isInteger(reportId) ? reportId : null
+  );
+
+  return info.lastInsertRowid;
+}
+
+function nextDayStart(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return `${d.toISOString().slice(0, 10)} 00:00:00`;
+}
+
+// Kullanıcı adları yalnızca GÖSTERİM için o anki users tablosundan çözülür
+// (audit satırında saklanmaz); hesap silinmişse NULL döner.
+function listAuditLog({ page = 1, limit = 20, action = '', actorUserId = null, targetUserId = null, from = '', to = '' } = {}) {
+  limit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), AUDIT_MAX_LIMIT);
+  page = Math.max(parseInt(page, 10) || 1, 1);
+
+  const where = [];
+  const params = [];
+
+  if (action) { where.push('a.action = ?'); params.push(action); }
+  if (actorUserId != null) { where.push('a.actor_user_id = ?'); params.push(actorUserId); }
+  if (targetUserId != null) { where.push('a.target_user_id = ?'); params.push(targetUserId); }
+  if (from) { where.push('a.created_at >= ?'); params.push(`${from} 00:00:00`); }
+  if (to) { where.push('a.created_at < ?'); params.push(nextDayStart(to)); }
+
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const total = db.prepare(`SELECT COUNT(*) AS c FROM admin_audit_log a ${whereSql}`).get(...params).c;
+
+  const entries = db.prepare(`
+    SELECT a.id, a.created_at, a.action, a.reason, a.old_value, a.new_value, a.report_id,
+           a.actor_user_id, actor.username AS actor_username,
+           a.target_user_id, target.username AS target_username
+    FROM admin_audit_log a
+    LEFT JOIN users actor ON actor.id = a.actor_user_id
+    LEFT JOIN users target ON target.id = a.target_user_id
+    ${whereSql}
+    ORDER BY a.id DESC LIMIT ? OFFSET ?
+  `).all(...params, limit, (page - 1) * limit);
+
+  return { total, page, limit, entries };
+}
+
   verifyAndCreateUser,
+  AUDIT_ACTIONS,
+  writeAuditLog,
+  listAuditLog,
   updateAboutMe,
   updateStatus,
   updatePrivacy,

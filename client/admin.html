@@ -35,7 +35,7 @@
         .adm-toolbar input:focus { border-color: rgba(102,252,241,0.45); }
         table.adm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
         .adm-table th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; padding: 8px 10px; }
-        .adm-table td { padding: 10px; border-top: 1px solid rgba(255,255,255,0.06); }
+        .adm-table td { padding: 10px; border-top: 1px solid rgba(255,255,255,0.06); overflow-wrap: anywhere; }
         .adm-table tbody tr { cursor: pointer; transition: 0.12s; }
         .adm-table tbody tr:hover { background: rgba(102,252,241,0.06); }
         .adm-role { font-size: 10.5px; font-weight: bold; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; background: rgba(255,255,255,0.06); color: #9ca3af; }
@@ -79,6 +79,8 @@
         <div class="adm-header">
             <h1 id="t-title">🛡️ SAURAN YÖNETİM PANELİ</h1>
             <div class="adm-nav">
+                <button type="button" id="tab-users" class="active">Kullanıcılar</button>
+                <button type="button" id="tab-audit" style="display:none;">Audit Log</button>
                 <a href="/" id="t-back">← Uygulama</a>
                 <a href="moderation.html" id="t-moderation">Moderasyon Paneli</a>
             </div>
@@ -88,6 +90,8 @@
         <div id="adm-denied" class="adm-state" style="display:none;"></div>
 
         <div id="adm-content" style="display:none;">
+
+          <div id="adm-users-view">
 
             <div id="adm-stats" class="adm-stats"></div>
 
@@ -106,6 +110,30 @@
                     </div>
                 </div>
             </div>
+
+          </div>
+
+          <div id="adm-audit-view" style="display:none;">
+            <div class="adm-glass">
+                <div class="adm-toolbar">
+                    <select id="au-action"></select>
+                    <input type="text" id="au-actor" inputmode="numeric" style="flex:0 1 120px;min-width:100px;">
+                    <input type="text" id="au-target" inputmode="numeric" style="flex:0 1 120px;min-width:100px;">
+                    <input type="date" id="au-from">
+                    <input type="date" id="au-to">
+                </div>
+                <div id="au-table-wrap"></div>
+                <div id="au-empty" class="adm-state" style="display:none;"></div>
+                <div class="adm-pager">
+                    <span id="au-page-info"></span>
+                    <div>
+                        <button id="au-prev" type="button"></button>
+                        <button id="au-next" type="button"></button>
+                    </div>
+                </div>
+                <p id="au-note" class="adm-muted" style="font-size:11px;margin:12px 0 0;"></p>
+            </div>
+          </div>
 
         </div>
     </div>
@@ -131,7 +159,13 @@
                 avatarVisibility: 'Avatar görünürlüğü', activity: 'Aktivite', lastActivity: 'Son aktivite', notTracked: 'sistemde tutulmuyor',
                 hubMessages: 'Lobi mesajı', dmSent: 'Gönderilen DM', hubsOwned: 'Sahibi olduğu Lobi', hubsMember: 'Üye olduğu Lobi',
                 moderationSec: 'Moderasyon', reportsAgainst: 'Hakkındaki rapor', reportsOpen: 'Açık', reportsResolved: 'Çözümlenen', reportsFiled: 'Açtığı rapor',
-                viewReports: 'Moderasyon panelinde incele →', readOnly: 'Salt okunur görünüm — bu panelden veri değiştirilemez, silinemez veya dışa aktarılamaz.'
+                viewReports: 'Moderasyon panelinde incele →', readOnly: 'Salt okunur görünüm — bu panelden veri değiştirilemez, silinemez veya dışa aktarılamaz.',
+                tabUsers: 'Kullanıcılar', tabAudit: 'Audit Log',
+                auDate: 'Tarih', auActor: 'Yapan', auAction: 'İşlem', auTarget: 'Hedef', auReason: 'Gerekçe', auChange: 'Değişiklik',
+                auAllActions: 'Tüm işlemler', auActorPh: 'Yapan ID', auTargetPh: 'Hedef ID', auFrom: 'Başlangıç', auTo: 'Bitiş',
+                auEmpty: 'Kayıt bulunamadı.', auEntries: 'kayıt', auDeleted: 'silinmiş hesap',
+                auNote: 'Yönetim geçmişi yalnızca ekleme yapılarak tutulur; bu panelden değiştirilemez veya silinemez. Yalnızca yönetimsel değişiklikler kaydedilir, sayfa görüntülemeleri kaydedilmez.',
+                act_platform_role_changed: 'Rol değişikliği', act_account_suspended: 'Hesap askıya alındı', act_account_unsuspended: 'Askı kaldırıldı'
             },
             en: {
                 title: '🛡️ SAURAN ADMIN PANEL', back: '← App', moderation: 'Moderation Panel',
@@ -145,7 +179,13 @@
                 avatarVisibility: 'Avatar visibility', activity: 'Activity', lastActivity: 'Last activity', notTracked: 'not tracked by the system',
                 hubMessages: 'Lobby messages', dmSent: 'DMs sent', hubsOwned: 'Lobbies owned', hubsMember: 'Lobbies joined',
                 moderationSec: 'Moderation', reportsAgainst: 'Reports against', reportsOpen: 'Open', reportsResolved: 'Resolved', reportsFiled: 'Reports filed',
-                viewReports: 'Review in moderation panel →', readOnly: 'Read-only view — nothing can be changed, deleted or exported from this panel.'
+                viewReports: 'Review in moderation panel →', readOnly: 'Read-only view — nothing can be changed, deleted or exported from this panel.',
+                tabUsers: 'Users', tabAudit: 'Audit Log',
+                auDate: 'Date', auActor: 'By', auAction: 'Action', auTarget: 'Target', auReason: 'Reason', auChange: 'Change',
+                auAllActions: 'All actions', auActorPh: 'Actor ID', auTargetPh: 'Target ID', auFrom: 'From', auTo: 'To',
+                auEmpty: 'No entries found.', auEntries: 'entries', auDeleted: 'deleted account',
+                auNote: 'The admin history is append-only; it cannot be changed or deleted from this panel. Only administrative changes are recorded, not page views.',
+                act_platform_role_changed: 'Role changed', act_account_suspended: 'Account suspended', act_account_unsuspended: 'Suspension lifted'
             }
         };
 
@@ -187,6 +227,18 @@
             $('adm-empty').textContent = t('empty');
             $('adm-loading').textContent = t('loading');
             $('adm-denied').textContent = t('denied');
+            $('tab-users').textContent = t('tabUsers');
+            $('tab-audit').textContent = t('tabAudit');
+            $('au-actor').placeholder = t('auActorPh');
+            $('au-target').placeholder = t('auTargetPh');
+            $('au-from').title = t('auFrom');
+            $('au-to').title = t('auTo');
+            $('au-empty').textContent = t('auEmpty');
+            $('au-prev').textContent = t('prev');
+            $('au-next').textContent = t('next');
+            $('au-note').textContent = t('auNote');
+            $('au-action').innerHTML = `<option value="">${esc(t('auAllActions'))}</option>` +
+                AUDIT_ACTIONS.map((a) => `<option value="${a}">${esc(t('act_' + a))}</option>`).join('');
             const sel = $('adm-role-filter');
             sel.innerHTML = `<option value="">${esc(t('allRoles'))}</option>` +
                 ['user', 'moderator', 'admin', 'founder'].map((r) => `<option value="${r}">${r}</option>`).join('');
@@ -277,8 +329,78 @@
             }
         }
 
+        const AUDIT_ACTIONS = ['platform_role_changed', 'account_suspended', 'account_unsuspended'];
+        const audit = { page: 1, limit: 20, total: 0, loaded: false };
+
+        function who(id, username) {
+            if (id == null) return '—';
+            return username ? `${esc(username)} <span class="adm-muted">#${id}</span>` : `<span class="adm-muted">${esc(t('auDeleted'))} #${id}</span>`;
+        }
+
+        async function loadAudit() {
+            const params = new URLSearchParams({ page: audit.page, limit: audit.limit });
+            const action = $('au-action').value;
+            const actor = $('au-actor').value.trim();
+            const target = $('au-target').value.trim();
+            const from = $('au-from').value;
+            const to = $('au-to').value;
+            if (action) params.set('action', action);
+            if (actor) params.set('actor_user_id', actor);
+            if (target) params.set('target_user_id', target);
+            if (from) params.set('from', from);
+            if (to) params.set('to', to);
+
+            const data = await api(`/api/admin/audit-log?${params}`);
+            audit.total = data.total;
+
+            $('au-empty').style.display = data.entries.length ? 'none' : 'block';
+            $('au-table-wrap').innerHTML = data.entries.length ? `
+                <table class="adm-table"><thead><tr>
+                    <th>${t('auDate')}</th><th>${t('auActor')}</th><th>${t('auAction')}</th>
+                    <th>${t('auTarget')}</th><th>${t('auReason')}</th><th>${t('auChange')}</th>
+                </tr></thead><tbody style="cursor:default;">
+                ${data.entries.map((e) => `
+                    <tr style="cursor:default;">
+                        <td data-label="${t('auDate')}">${fmtDate(e.created_at)}</td>
+                        <td data-label="${t('auActor')}">${who(e.actor_user_id, e.actor_username)}</td>
+                        <td data-label="${t('auAction')}">${esc(I18N[lang]['act_' + e.action] || e.action)}</td>
+                        <td data-label="${t('auTarget')}">${who(e.target_user_id, e.target_username)}</td>
+                        <td data-label="${t('auReason')}">${e.reason ? esc(e.reason) : '<span class="adm-muted">—</span>'}</td>
+                        <td data-label="${t('auChange')}">${e.old_value || e.new_value ? `${esc(e.old_value ?? '—')} → ${esc(e.new_value ?? '—')}` : '<span class="adm-muted">—</span>'}</td>
+                    </tr>`).join('')}
+                </tbody></table>` : '';
+
+            const pages = Math.max(1, Math.ceil(audit.total / audit.limit));
+            $('au-page-info').textContent = `${audit.total} ${t('auEntries')} · ${t('page')} ${audit.page} ${t('of')} ${pages}`;
+            $('au-prev').disabled = audit.page <= 1;
+            $('au-next').disabled = audit.page >= pages;
+        }
+
+        function showView(name) {
+            $('adm-users-view').style.display = name === 'users' ? 'block' : 'none';
+            $('adm-audit-view').style.display = name === 'audit' ? 'block' : 'none';
+            $('tab-users').classList.toggle('active', name === 'users');
+            $('tab-audit').classList.toggle('active', name === 'audit');
+            if (name === 'audit') loadAudit().then(() => { audit.loaded = true; }).catch(showError);
+        }
+
+        async function detectFounder() {
+            try {
+                const res = await fetch('/api/me', { credentials: 'include' });
+                const data = await res.json();
+                if (data.success && data.user.platform_role === 'founder') $('tab-audit').style.display = '';
+            } catch (e) {}
+        }
+
         let searchTimer = null;
         function wire() {
+            $('tab-users').addEventListener('click', () => showView('users'));
+            $('tab-audit').addEventListener('click', () => showView('audit'));
+            ['au-action', 'au-actor', 'au-target', 'au-from', 'au-to'].forEach((id) => {
+                $(id).addEventListener(id === 'au-actor' || id === 'au-target' ? 'input' : 'change', () => { audit.page = 1; loadAudit().catch(showError); });
+            });
+            $('au-prev').addEventListener('click', () => { audit.page--; loadAudit().catch(showError); });
+            $('au-next').addEventListener('click', () => { audit.page++; loadAudit().catch(showError); });
             $('adm-search').addEventListener('input', (e) => {
                 clearTimeout(searchTimer);
                 searchTimer = setTimeout(() => { state.search = e.target.value.trim(); state.page = 1; loadUsers().catch(showError); }, 300);
@@ -302,6 +424,7 @@
             try {
                 await loadStats();
                 wire();
+                detectFounder();
                 await loadUsers();
                 $('adm-loading').style.display = 'none';
                 $('adm-content').style.display = 'block';
