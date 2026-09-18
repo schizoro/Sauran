@@ -1667,6 +1667,14 @@ function setCurrentUser(user) {
     currentUser =
         user;
 
+    // Sadece bir GÖRÜNÜRLÜK kolaylığı — asıl yetki kontrolü sunucuda (requirePlatformRole).
+    const adminLink = document.getElementById('admin-panel-link');
+    if (adminLink) {
+        const role = user.platform_role;
+        adminLink.style.display = (role === 'moderator' || role === 'admin' || role === 'founder') ? 'flex' : 'none';
+        adminLink.setAttribute('href', role === 'moderator' ? 'moderation.html' : 'admin.html');
+    }
+
     currentUsername =
         user.username;
 
@@ -2722,6 +2730,7 @@ const I18N = {
     'menu-hub-members': { tr: 'Lobi Üyeleri', en: 'Lobby Members' },
     'menu-add-friend': { tr: 'Arkadaş Ekle', en: 'Add Friend' },
     'menu-settings': { tr: 'Ayarlar', en: 'Settings' },
+    'menu-admin': { tr: 'Yönetim', en: 'Admin' },
     'hubs-title': { tr: 'Ana Menü', en: 'Home' },
     'hubs-owned': { tr: 'OLUŞTURDUĞUM LOBİLER', en: 'LOBBIES I CREATED' },
     'hubs-joined': { tr: 'KATILDIĞIM LOBİLER', en: 'LOBBIES I JOINED' },

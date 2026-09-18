@@ -97,6 +97,10 @@ const {
   hasAtLeastPlatformRole,
   getReportDetail,
   getModerationUserDetail,
+  listAdminUsers,
+  PLATFORM_ROLES,
+  getAdminUserDetail,
+  getAdminStats,
   logModerationAction,
   updateReportStatus,
   listReports,
@@ -896,6 +900,67 @@ app.get('/api/moderation/users/:id', (req, res) => {
   } catch (error) {
     console.error('Moderasyon kullanıcı detay hatası:', error);
     res.status(500).json({ success: false, error: 'Kullanıcı bilgisi alınamadı.' });
+  }
+});
+
+// =====================================================
+// FOUNDER / ADMIN PANELİ (yalnızca platform_role >= admin, SADECE OKUMA)
+// =====================================================
+// Kasıtlı olarak yalnızca GET: silme, export, rol değiştirme veya askıya alma
+// endpoint'i YOKTUR. Kullanıcının kendi veri hakları (Verilerimi İndir /
+// Hesabımı Sil) ayrı, mevcut sistemdir. Lobi sahipliği burada hiçbir yetki
+// vermez — sadece users.platform_role belirleyicidir.
+
+app.get('/api/admin/users', (req, res) => {
+  const user = requirePlatformRole(req, res, 'admin');
+  if (!user) return;
+
+  const role = String(req.query.role || '');
+  if (role && !PLATFORM_ROLES.includes(role)) {
+    return res.status(400).json({ success: false, error: 'Geçersiz rol filtresi.' });
+  }
+
+  try {
+    const result = listAdminUsers({
+      page: req.query.page,
+      limit: req.query.limit,
+      search: req.query.search,
+      role
+    });
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Admin kullanıcı listesi hatası:', error);
+    res.status(500).json({ success: false, error: 'Kullanıcılar alınamadı.' });
+  }
+});
+
+app.get('/api/admin/users/:id', (req, res) => {
+  const user = requirePlatformRole(req, res, 'admin');
+  if (!user) return;
+
+  if (!/^[0-9]+$/.test(req.params.id)) {
+    return res.status(400).json({ success: false, error: 'Geçersiz kullanıcı ID.' });
+  }
+
+  try {
+    const detail = getAdminUserDetail(Number(req.params.id));
+    if (!detail) return res.status(404).json({ success: false, error: 'Kullanıcı bulunamadı.' });
+    return res.json({ success: true, ...detail });
+  } catch (error) {
+    console.error('Admin kullanıcı detay hatası:', error);
+    res.status(500).json({ success: false, error: 'Kullanıcı bilgisi alınamadı.' });
+  }
+});
+
+app.get('/api/admin/stats', (req, res) => {
+  const user = requirePlatformRole(req, res, 'admin');
+  if (!user) return;
+
+  try {
+    return res.json({ success: true, stats: { ...getAdminStats(), online_now: activeUsers.size } });
+  } catch (error) {
+    console.error('Admin istatistik hatası:', error);
+    res.status(500).json({ success: false, error: 'İstatistikler alınamadı.' });
   }
 });
 

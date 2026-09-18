@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yönetim Paneli — Sauran</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { display: block; height: auto; min-height: 100vh; margin: 0; padding: 20px; background: #0b0c10; color: #c5c6c7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        .adm-wrap { max-width: 1100px; margin: 0 auto; }
+        .adm-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+        .adm-header h1 { font-size: 18px; color: #66fcf1; margin: 0; letter-spacing: 1px; }
+        .adm-nav { display: flex; gap: 8px; flex-wrap: wrap; }
+        .adm-nav a, .adm-nav button {
+            padding: 8px 16px; border-radius: 999px; font-size: 12.5px; font-weight: bold; cursor: pointer; text-decoration: none;
+            color: #c5c6c7; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); transition: 0.15s;
+        }
+        .adm-nav a:hover, .adm-nav button:hover, .adm-nav button.active { color: #66fcf1; border-color: rgba(102,252,241,0.4); }
+        .adm-state { text-align: center; padding: 60px 20px; color: #6b7280; font-size: 14px; }
+        .adm-glass {
+            border-radius: 18px; padding: 18px; background: rgba(20,22,28,0.55);
+            backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%);
+            border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 8px 40px rgba(0,0,0,0.35);
+        }
+        .adm-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 22px; }
+        .adm-stat { padding: 14px 16px; }
+        .adm-stat-value { font-size: 24px; font-weight: bold; color: #e2f8f6; }
+        .adm-stat-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.8px; margin-top: 2px; }
+        .adm-toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+        .adm-toolbar input, .adm-toolbar select {
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); color: #c5c6c7;
+            border-radius: 10px; padding: 9px 12px; font-size: 13px; outline: none;
+        }
+        .adm-toolbar input { flex: 1; min-width: 180px; }
+        .adm-toolbar input:focus { border-color: rgba(102,252,241,0.45); }
+        table.adm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .adm-table th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; padding: 8px 10px; }
+        .adm-table td { padding: 10px; border-top: 1px solid rgba(255,255,255,0.06); }
+        .adm-table tbody tr { cursor: pointer; transition: 0.12s; }
+        .adm-table tbody tr:hover { background: rgba(102,252,241,0.06); }
+        .adm-role { font-size: 10.5px; font-weight: bold; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; background: rgba(255,255,255,0.06); color: #9ca3af; }
+        .adm-role.moderator { background: rgba(102,252,241,0.12); color: #66fcf1; }
+        .adm-role.admin { background: rgba(255,159,67,0.15); color: #ffb066; }
+        .adm-role.founder { background: rgba(255,46,70,0.15); color: #ff6b7d; }
+        .adm-pager { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; font-size: 12.5px; color: #6b7280; gap: 10px; flex-wrap: wrap; }
+        .adm-pager button { padding: 7px 16px; border-radius: 999px; cursor: pointer; color: #66fcf1; background: rgba(102,252,241,0.08); border: 1px solid rgba(102,252,241,0.35); font-weight: bold; }
+        .adm-pager button:disabled { opacity: 0.35; cursor: not-allowed; }
+        .adm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; justify-content: flex-end; z-index: 200; }
+        .adm-overlay.open { display: flex; }
+        .adm-panel {
+            position: relative; width: 420px; max-width: 100vw; height: 100%; overflow-y: auto; padding: 24px 22px;
+            background: rgba(20,22,28,0.7); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%);
+            border-left: 1px solid rgba(255,255,255,0.1); box-shadow: -14px 0 40px rgba(0,0,0,0.45); animation: dm-panel-in 0.22s ease-out;
+        }
+        .adm-close { position: absolute; top: 16px; right: 16px; width: 28px; height: 28px; border-radius: 50%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #8e9297; cursor: pointer; }
+        .adm-user-head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; padding-right: 30px; }
+        .adm-avatar { width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 22px; font-weight: bold; color: #66fcf1; background: rgba(255,255,255,0.06); }
+        .adm-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .adm-section-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; color: #66fcf1; margin: 18px 0 8px; }
+        .adm-row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 13px; }
+        .adm-row span:first-child { color: #6b7280; }
+        .adm-row span:last-child { color: #e2f8f6; text-align: right; word-break: break-word; }
+        .adm-muted { color: #6b7280 !important; font-style: italic; }
+        .adm-about { font-size: 13px; color: #c5c6c7; white-space: pre-wrap; word-break: break-word; }
+        .adm-mod-link { display: inline-block; margin-top: 14px; font-size: 12.5px; color: #66fcf1; }
+        @media (max-width: 720px) {
+            body { padding: 14px; }
+            table.adm-table thead { display: none; }
+            table.adm-table, .adm-table tbody, .adm-table tr, .adm-table td { display: block; width: 100%; }
+            .adm-table tr { border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; background: rgba(255,255,255,0.03); }
+            .adm-table td { border: none; padding: 3px 0; display: flex; justify-content: space-between; gap: 10px; }
+            .adm-table td::before { content: attr(data-label); color: #6b7280; font-size: 11px; text-transform: uppercase; }
+        }
+    </style>
+</head>
+<body>
+    <div class="adm-wrap">
+
+        <div class="adm-header">
+            <h1 id="t-title">🛡️ SAURAN YÖNETİM PANELİ</h1>
+            <div class="adm-nav">
+                <a href="/" id="t-back">← Uygulama</a>
+                <a href="moderation.html" id="t-moderation">Moderasyon Paneli</a>
+            </div>
+        </div>
+
+        <div id="adm-loading" class="adm-state"></div>
+        <div id="adm-denied" class="adm-state" style="display:none;"></div>
+
+        <div id="adm-content" style="display:none;">
+
+            <div id="adm-stats" class="adm-stats"></div>
+
+            <div class="adm-glass">
+                <div class="adm-toolbar">
+                    <input type="text" id="adm-search" autocomplete="off">
+                    <select id="adm-role-filter"></select>
+                </div>
+                <div id="adm-table-wrap"></div>
+                <div id="adm-empty" class="adm-state" style="display:none;"></div>
+                <div class="adm-pager">
+                    <span id="adm-page-info"></span>
+                    <div>
+                        <button id="adm-prev" type="button"></button>
+                        <button id="adm-next" type="button"></button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="adm-overlay" class="adm-overlay">
+        <div class="adm-panel">
+            <button id="adm-close" class="adm-close" type="button">✕</button>
+            <div id="adm-detail"></div>
+        </div>
+    </div>
+
+    <script>
+        const I18N = {
+            tr: {
+                title: '🛡️ SAURAN YÖNETİM PANELİ', back: '← Uygulama', moderation: 'Moderasyon Paneli',
+                loading: 'Yükleniyor…', denied: 'Bu sayfaya erişim yetkin yok.', error: 'Bir hata oluştu.',
+                search: 'Kullanıcı adı, e-posta veya ID ara…', allRoles: 'Tüm roller',
+                total_users: 'Toplam kullanıcı', online_now: 'Şu an çevrimiçi', users_registered_today: 'Bugünkü kayıtlar',
+                total_hubs: 'Toplam Lobi', total_messages: 'Toplam mesaj', total_reports: 'Toplam rapor', open_reports: 'Bekleyen rapor',
+                id: 'ID', username: 'Kullanıcı adı', role: 'Rol', created: 'Kayıt', hubs: 'Lobi', friends: 'Arkadaş', messages: 'Mesaj', reports: 'Rapor',
+                empty: 'Eşleşen kullanıcı yok.', prev: 'Önceki', next: 'Sonraki', page: 'Sayfa', of: '/', users: 'kullanıcı',
+                account: 'Hesap', email: 'E-posta', noEmail: 'kayıtlı değil', profile: 'Profil', about: 'Hakkında', noAbout: 'yazılmamış',
+                avatarVisibility: 'Avatar görünürlüğü', activity: 'Aktivite', lastActivity: 'Son aktivite', notTracked: 'sistemde tutulmuyor',
+                hubMessages: 'Lobi mesajı', dmSent: 'Gönderilen DM', hubsOwned: 'Sahibi olduğu Lobi', hubsMember: 'Üye olduğu Lobi',
+                moderationSec: 'Moderasyon', reportsAgainst: 'Hakkındaki rapor', reportsOpen: 'Açık', reportsResolved: 'Çözümlenen', reportsFiled: 'Açtığı rapor',
+                viewReports: 'Moderasyon panelinde incele →', readOnly: 'Salt okunur görünüm — bu panelden veri değiştirilemez, silinemez veya dışa aktarılamaz.'
+            },
+            en: {
+                title: '🛡️ SAURAN ADMIN PANEL', back: '← App', moderation: 'Moderation Panel',
+                loading: 'Loading…', denied: 'You do not have access to this page.', error: 'Something went wrong.',
+                search: 'Search username, email or ID…', allRoles: 'All roles',
+                total_users: 'Total users', online_now: 'Online now', users_registered_today: 'Registered today',
+                total_hubs: 'Total lobbies', total_messages: 'Total messages', total_reports: 'Total reports', open_reports: 'Pending reports',
+                id: 'ID', username: 'Username', role: 'Role', created: 'Joined', hubs: 'Lobbies', friends: 'Friends', messages: 'Messages', reports: 'Reports',
+                empty: 'No matching users.', prev: 'Previous', next: 'Next', page: 'Page', of: '/', users: 'users',
+                account: 'Account', email: 'Email', noEmail: 'not on file', profile: 'Profile', about: 'About', noAbout: 'not written',
+                avatarVisibility: 'Avatar visibility', activity: 'Activity', lastActivity: 'Last activity', notTracked: 'not tracked by the system',
+                hubMessages: 'Lobby messages', dmSent: 'DMs sent', hubsOwned: 'Lobbies owned', hubsMember: 'Lobbies joined',
+                moderationSec: 'Moderation', reportsAgainst: 'Reports against', reportsOpen: 'Open', reportsResolved: 'Resolved', reportsFiled: 'Reports filed',
+                viewReports: 'Review in moderation panel →', readOnly: 'Read-only view — nothing can be changed, deleted or exported from this panel.'
+            }
+        };
+
+        let lang = 'tr';
+        try { lang = localStorage.getItem('sauran_lang') === 'en' ? 'en' : 'tr'; } catch (e) {}
+        const t = (k) => I18N[lang][k] ?? k;
+        document.documentElement.lang = lang;
+
+        function esc(s) {
+            return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+        function fmtDate(d) {
+            if (!d) return '—';
+            const dt = new Date(String(d).replace(' ', 'T') + 'Z');
+            return isNaN(dt) ? esc(d) : dt.toLocaleString(lang === 'en' ? 'en-GB' : 'tr-TR', { dateStyle: 'medium', timeStyle: 'short' });
+        }
+        function safeImg(src) {
+            return typeof src === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,/.test(src) ? src : null;
+        }
+
+        const state = { page: 1, limit: 20, search: '', role: '', total: 0 };
+        const $ = (id) => document.getElementById(id);
+
+        async function api(path) {
+            const res = await fetch(path, { credentials: 'include' });
+            if (res.status === 401 || res.status === 403) throw Object.assign(new Error('denied'), { denied: true });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || 'error');
+            return data;
+        }
+
+        function applyStaticText() {
+            $('t-title').textContent = t('title');
+            $('t-back').textContent = t('back');
+            $('t-moderation').textContent = t('moderation');
+            $('adm-search').placeholder = t('search');
+            $('adm-prev').textContent = t('prev');
+            $('adm-next').textContent = t('next');
+            $('adm-empty').textContent = t('empty');
+            $('adm-loading').textContent = t('loading');
+            $('adm-denied').textContent = t('denied');
+            const sel = $('adm-role-filter');
+            sel.innerHTML = `<option value="">${esc(t('allRoles'))}</option>` +
+                ['user', 'moderator', 'admin', 'founder'].map((r) => `<option value="${r}">${r}</option>`).join('');
+        }
+
+        async function loadStats() {
+            const { stats } = await api('/api/admin/stats');
+            const keys = ['total_users', 'online_now', 'users_registered_today', 'total_hubs', 'total_messages', 'total_reports', 'open_reports'];
+            $('adm-stats').innerHTML = keys.map((k) => `
+                <div class="adm-glass adm-stat"><div class="adm-stat-value">${esc(stats[k])}</div><div class="adm-stat-label">${esc(t(k))}</div></div>
+            `).join('');
+        }
+
+        async function loadUsers() {
+            const params = new URLSearchParams({ page: state.page, limit: state.limit });
+            if (state.search) params.set('search', state.search);
+            if (state.role) params.set('role', state.role);
+            const data = await api(`/api/admin/users?${params}`);
+            state.total = data.total;
+
+            const wrap = $('adm-table-wrap');
+            $('adm-empty').style.display = data.users.length ? 'none' : 'block';
+
+            wrap.innerHTML = data.users.length ? `
+                <table class="adm-table"><thead><tr>
+                    <th>${t('id')}</th><th>${t('username')}</th><th>${t('role')}</th><th>${t('created')}</th>
+                    <th>${t('hubs')}</th><th>${t('friends')}</th><th>${t('messages')}</th><th>${t('reports')}</th>
+                </tr></thead><tbody>
+                ${data.users.map((u) => `
+                    <tr data-id="${u.id}">
+                        <td data-label="${t('id')}">${u.id}</td>
+                        <td data-label="${t('username')}"><b>${esc(u.username)}</b></td>
+                        <td data-label="${t('role')}"><span class="adm-role ${esc(u.platform_role)}">${esc(u.platform_role)}</span></td>
+                        <td data-label="${t('created')}">${fmtDate(u.created_at)}</td>
+                        <td data-label="${t('hubs')}">${u.hub_count}</td>
+                        <td data-label="${t('friends')}">${u.friend_count}</td>
+                        <td data-label="${t('messages')}">${u.message_count}</td>
+                        <td data-label="${t('reports')}">${u.reports_against}</td>
+                    </tr>`).join('')}
+                </tbody></table>` : '';
+
+            wrap.querySelectorAll('tbody tr').forEach((tr) => tr.addEventListener('click', () => openDetail(tr.dataset.id)));
+
+            const pages = Math.max(1, Math.ceil(state.total / state.limit));
+            $('adm-page-info').textContent = `${state.total} ${t('users')} · ${t('page')} ${state.page} ${t('of')} ${pages}`;
+            $('adm-prev').disabled = state.page <= 1;
+            $('adm-next').disabled = state.page >= pages;
+        }
+
+        async function openDetail(id) {
+            $('adm-overlay').classList.add('open');
+            $('adm-detail').innerHTML = `<div class="adm-state">${esc(t('loading'))}</div>`;
+            try {
+                const d = await api(`/api/admin/users/${encodeURIComponent(id)}`);
+                const a = d.account, p = d.profile, ac = d.activity, m = d.moderation;
+                const img = safeImg(p.avatar_data);
+                const row = (label, value, muted) => `<div class="adm-row"><span>${esc(label)}</span><span class="${muted ? 'adm-muted' : ''}">${value}</span></div>`;
+                $('adm-detail').innerHTML = `
+                    <div class="adm-user-head">
+                        <div class="adm-avatar">${img ? `<img src="${img}" alt="">` : esc((a.username || '?').charAt(0).toUpperCase())}</div>
+                        <div><div style="font-size:16px;font-weight:bold;color:#fff;">${esc(a.username)}</div>
+                        <span class="adm-role ${esc(a.platform_role)}">${esc(a.platform_role)}</span></div>
+                    </div>
+                    <div class="adm-section-title">${t('account')}</div>
+                    ${row('ID', a.id)}
+                    ${row(t('email'), a.email ? esc(a.email) : esc(t('noEmail')), !a.email)}
+                    ${row(t('created'), fmtDate(a.created_at))}
+                    <div class="adm-section-title">${t('profile')}</div>
+                    ${row(t('avatarVisibility'), esc(p.avatar_visibility || '—'))}
+                    <div class="adm-row" style="display:block;"><span>${t('about')}</span>
+                        <div class="${p.about_me ? 'adm-about' : 'adm-muted'}" style="margin-top:4px;">${p.about_me ? esc(p.about_me) : esc(t('noAbout'))}</div></div>
+                    <div class="adm-section-title">${t('activity')}</div>
+                    ${row(t('lastActivity'), esc(t('notTracked')), true)}
+                    ${row(t('hubMessages'), ac.hub_message_count)}
+                    ${row(t('dmSent'), ac.dm_sent_count)}
+                    ${row(t('hubsOwned'), ac.hubs_owned)}
+                    ${row(t('hubsMember'), ac.hubs_member)}
+                    ${row(t('friends'), ac.friend_count)}
+                    <div class="adm-section-title">${t('moderationSec')}</div>
+                    ${row(t('reportsAgainst'), m.reports_against)}
+                    ${row(t('reportsOpen'), m.reports_open)}
+                    ${row(t('reportsResolved'), m.reports_resolved)}
+                    ${row(t('reportsFiled'), m.reports_filed)}
+                    <a class="adm-mod-link" href="moderation.html">${esc(t('viewReports'))}</a>
+                    <p class="adm-muted" style="font-size:11px;margin-top:18px;">${esc(t('readOnly'))}</p>`;
+            } catch (e) {
+                $('adm-detail').innerHTML = `<div class="adm-state">${esc(e.denied ? t('denied') : t('error'))}</div>`;
+            }
+        }
+
+        let searchTimer = null;
+        function wire() {
+            $('adm-search').addEventListener('input', (e) => {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(() => { state.search = e.target.value.trim(); state.page = 1; loadUsers().catch(showError); }, 300);
+            });
+            $('adm-role-filter').addEventListener('change', (e) => { state.role = e.target.value; state.page = 1; loadUsers().catch(showError); });
+            $('adm-prev').addEventListener('click', () => { state.page--; loadUsers().catch(showError); });
+            $('adm-next').addEventListener('click', () => { state.page++; loadUsers().catch(showError); });
+            $('adm-close').addEventListener('click', () => $('adm-overlay').classList.remove('open'));
+            $('adm-overlay').addEventListener('click', (e) => { if (e.target === $('adm-overlay')) $('adm-overlay').classList.remove('open'); });
+        }
+
+        function showError(e) {
+            $('adm-content').style.display = 'none';
+            $('adm-loading').style.display = 'none';
+            $('adm-denied').textContent = e.denied ? t('denied') : t('error');
+            $('adm-denied').style.display = 'block';
+        }
+
+        (async function init() {
+            applyStaticText();
+            try {
+                await loadStats();
+                wire();
+                await loadUsers();
+                $('adm-loading').style.display = 'none';
+                $('adm-content').style.display = 'block';
+            } catch (e) {
+                showError(e);
+            }
+        })();
+    </script>
+</body>
+</html>

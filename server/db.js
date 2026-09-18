@@ -2528,7 +2528,179 @@ function voteFeedback(userId, feedbackId) {
   return { success: true, voted: !existing, vote_count };
 }
 
+// =====================================================
+// FOUNDER / ADMIN PANELİ — SADECE OKUMA (read-only)
+// =====================================================
+// Bu fonksiyonlar kullanıcı verisini DEĞİŞTİRMEZ, silmez, dışa aktarmaz.
+// Kullanıcının kendi veri hakları ("Verilerimi İndir" / "Hesabımı Sil") ayrı
+// mevcut sistemdir; burası onların alternatifi değil, sadece yönetim
+// görünürlüğüdür. Yalnızca açıkça seçilen kolonlar döner — password_hash,
+// password_salt, token/kod alanları ve doğum tarihi HİÇBİR zaman seçilmez.
+
+const ADMIN_USERS_MAX_LIMIT = 50;
+
+function escapeLike(value) {
+  return String(value).replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+function countsByUser(sql, ids) {
+  // ids: sayfadaki kullanıcı id'leri. Tek sorguyla hepsi için sayı alınır (N+1 yok).
+  const map = new Map();
+  if (ids.length === 0) return map;
+  const placeholders = ids.map(() => '?').join(',');
+  db.prepare(sql.replace('__IDS__', placeholders)).all(...ids).forEach((r) => map.set(r.uid, r.c));
+  return map;
+}
+
+function listAdminUsers({ page = 1, limit = 20, search = '', role = '' } = {}) {
+  limit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), ADMIN_USERS_MAX_LIMIT);
+  page = Math.max(parseInt(page, 10) || 1, 1);
+
+  const where = [];
+  const params = [];
+
+  search = String(search || '').trim().slice(0, 64);
+  if (search) {
+    const like = `%${escapeLike(search)}%`;
+    if (/^\d+$/.test(search)) {
+      where.push(`(id = ? OR username LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\')`);
+      params.push(Number(search), like, like);
+    } else {
+      where.push(`(username LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\')`);
+      params.push(like, like);
+    }
+  }
+
+  if (role) {
+    where.push(`platform_role = ?`);
+    params.push(role);
+  }
+
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const total = db.prepare(`SELECT COUNT(*) AS c FROM users ${whereSql}`).get(...params).c;
+
+  const users = db.prepare(`
+    SELECT id, username, platform_role, created_at
+    FROM users ${whereSql}
+    ORDER BY id DESC LIMIT ? OFFSET ?
+  `).all(...params, limit, (page - 1) * limit);
+
+  const ids = users.map((u) => u.id);
+
+  const hubCounts = countsByUser(`SELECT user_id AS uid, COUNT(*) AS c FROM hub_members WHERE user_id IN (__IDS__) GROUP BY user_id`, ids);
+  const messageCounts = countsByUser(`SELECT user_id AS uid, COUNT(*) AS c FROM messages WHERE user_id IN (__IDS__) GROUP BY user_id`, ids);
+  const reportCounts = countsByUser(`SELECT target_id AS uid, COUNT(*) AS c FROM reports WHERE target_type = 'user' AND target_id IN (__IDS__) GROUP BY target_id`, ids);
+
+  // Kabul edilmiş arkadaşlıklar iki kolondan birinde olabilir.
+  const friendCounts = new Map();
+  if (ids.length) {
+    const ph = ids.map(() => '?').join(',');
+    db.prepare(`
+      SELECT uid, COUNT(*) AS c FROM (
+        SELECT user_low AS uid FROM friendships WHERE status = 'accepted' AND user_low IN (${ph})
+        UNION ALL
+        SELECT user_high AS uid FROM friendships WHERE status = 'accepted' AND user_high IN (${ph})
+      ) GROUP BY uid
+    `).all(...ids, ...ids).forEach((r) => friendCounts.set(r.uid, r.c));
+  }
+
+  return {
+    total,
+    page,
+    limit,
+    users: users.map((u) => ({
+      id: u.id,
+      username: u.username,
+      platform_role: u.platform_role,
+      created_at: u.created_at,
+      hub_count: hubCounts.get(u.id) || 0,
+      friend_count: friendCounts.get(u.id) || 0,
+      message_count: messageCounts.get(u.id) || 0,
+      reports_against: reportCounts.get(u.id) || 0
+    }))
+  };
+}
+
+function getAdminUserDetail(userId) {
+  const user = db.prepare(`
+    SELECT id, username, email, created_at, platform_role, about_me, avatar_data, avatar_visibility
+    FROM users WHERE id = ?
+  `).get(userId);
+
+  if (!user) return null;
+
+  const count = (sql, ...p) => db.prepare(sql).get(...p).c;
+
+  const friends = count(`SELECT COUNT(*) AS c FROM friendships WHERE status = 'accepted' AND (user_low = ? OR user_high = ?)`, userId, userId);
+  const dmSent = count(`SELECT COUNT(*) AS c FROM messages WHERE user_id = ? AND to_user_id IS NOT NULL`, userId);
+  const hubMessages = count(`SELECT COUNT(*) AS c FROM messages WHERE user_id = ? AND to_user_id IS NULL`, userId);
+  const hubsOwned = count(`SELECT COUNT(*) AS c FROM hubs WHERE created_by = ?`, userId);
+  const hubsMember = count(`SELECT COUNT(*) AS c FROM hub_members WHERE user_id = ?`, userId);
+
+  const reportRows = db.prepare(`
+    SELECT status, COUNT(*) AS c FROM reports WHERE target_type = 'user' AND target_id = ? GROUP BY status
+  `).all(userId);
+  const openStatuses = ['new', 'under_review'];
+  const reportsAgainst = reportRows.reduce((sum, r) => sum + r.c, 0);
+  const reportsOpen = reportRows.filter((r) => openStatuses.includes(r.status)).reduce((sum, r) => sum + r.c, 0);
+
+  const reportsFiled = count(`SELECT COUNT(*) AS c FROM reports WHERE reporter_user_id = ?`, userId);
+
+  return {
+    account: {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      created_at: user.created_at,
+      platform_role: user.platform_role
+    },
+    profile: {
+      about_me: user.about_me,
+      avatar_data: user.avatar_data,
+      avatar_visibility: user.avatar_visibility
+    },
+    activity: {
+      // Sistemde son aktivite/son giriş zamanı tutulmuyor — sahte değer üretilmez.
+      last_activity: null,
+      hub_message_count: hubMessages,
+      dm_sent_count: dmSent,
+      hubs_owned: hubsOwned,
+      hubs_member: hubsMember,
+      friend_count: friends
+    },
+    moderation: {
+      reports_against: reportsAgainst,
+      reports_open: reportsOpen,
+      reports_resolved: reportsAgainst - reportsOpen,
+      reports_filed: reportsFiled
+    }
+  };
+}
+
+function getAdminStats() {
+  const one = (sql) => db.prepare(sql).get().c;
+
+  const roleRows = db.prepare(`SELECT platform_role AS role, COUNT(*) AS c FROM users GROUP BY platform_role`).all();
+  const usersByRole = {};
+  PLATFORM_ROLES.forEach((r) => { usersByRole[r] = 0; });
+  roleRows.forEach((r) => { usersByRole[r.role] = r.c; });
+
+  return {
+    total_users: one(`SELECT COUNT(*) AS c FROM users`),
+    users_registered_today: one(`SELECT COUNT(*) AS c FROM users WHERE date(created_at) = date('now')`),
+    users_by_role: usersByRole,
+    total_hubs: one(`SELECT COUNT(*) AS c FROM hubs`),
+    total_messages: one(`SELECT COUNT(*) AS c FROM messages`),
+    total_reports: one(`SELECT COUNT(*) AS c FROM reports`),
+    open_reports: one(`SELECT COUNT(*) AS c FROM reports WHERE status IN ('new', 'under_review')`)
+  };
+}
+
 module.exports = {
+  listAdminUsers,
+  getAdminUserDetail,
+  getAdminStats,
   saveMessage,
   getMessages,
   createUser,
