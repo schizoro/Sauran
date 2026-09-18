@@ -786,18 +786,20 @@
 
     <div id="friend-add-modal" class="modal-overlay" style="display:none;">
 
-        <div class="modal-box poll-create-box">
+        <div class="modal-box poll-create-box friend-add-box">
 
-            <div class="modal-header">
-                <span data-i18n="modal-add-friend">👤＋ Arkadaş Ekle</span>
-                <button id="friend-add-close-btn">✕</button>
+            <button id="friend-add-close-btn" class="friend-add-close-btn">✕</button>
+
+            <div class="friend-add-hero">
+                <span class="friend-add-hero-icon">👤＋</span>
+                <h3 data-i18n="modal-add-friend-title">Arkadaş Ekle</h3>
+                <p data-i18n="modal-add-friend-subtitle">Kullanıcı adını yaz, arkadaşlık isteği gönder.</p>
             </div>
 
             <div class="friend-add-section">
-
-                <input type="text" id="friend-add-input" placeholder="Kullanıcı adıyla arkadaş ekle...">
-                <button id="friend-add-btn" type="button">Ekle</button>
-
+                <span class="friend-add-input-icon">@</span>
+                <input type="text" id="friend-add-input" placeholder="Kullanıcı adı">
+                <button id="friend-add-btn" type="button" data-i18n="friend-add-submit">Gönder</button>
             </div>
 
             <div id="friend-add-error" class="friend-add-error"></div>
@@ -1163,6 +1165,10 @@
                 </div>
 
                 <div class="settings-panel" data-settings-panel="account" style="display:none;">
+
+                    <button id="settings-logout-btn" class="hub-settings-action-btn" type="button">🚪 <span data-i18n="logout-btn">Çıkış Yap</span></button>
+
+                    <div class="hub-settings-divider"></div>
 
                     <button id="settings-delete-account-btn" class="hub-settings-action-btn hub-settings-danger" type="button">🗑 <span data-i18n="delete-account">Hesabı Sil</span></button>
 

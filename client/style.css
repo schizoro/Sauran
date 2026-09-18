@@ -33,7 +33,7 @@ body.theme-purple {
 
 * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; -webkit-tap-highlight-color: transparent; }
 html, body { overflow-x: hidden; max-width: 100%; }
-body { background-color: var(--bg-app); color: var(--text-secondary); height: 100vh; display: flex; transition: background-color 0.2s, color 0.2s; }
+body { background-color: var(--bg-app); color: var(--text-secondary); height: 100vh; height: 100dvh; display: flex; transition: background-color 0.2s, color 0.2s; }
 img, iframe { max-width: 100%; }
 
 /* ─── v1.9/v1.17: Açık Tema — yumuşak yüzeyler, sert siyah çerçeve yok ───── */
@@ -324,7 +324,36 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
   -webkit-backdrop-filter: blur(22px) saturate(180%);
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
-#friend-add-modal .modal-header { border-bottom-color: rgba(255, 255, 255, 0.08); }
+.friend-add-box { position: relative; padding: 30px 24px 24px; align-items: stretch; max-height: none; }
+.friend-add-close-btn {
+  position: absolute; top: 14px; right: 14px; width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1); color: #8e9297; font-size: 12px; cursor: pointer; transition: 0.2s;
+}
+.friend-add-close-btn:hover { color: #ff2e46; border-color: rgba(255, 46, 70, 0.4); background: rgba(255, 46, 70, 0.1); }
+.friend-add-hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; margin-bottom: 22px; }
+.friend-add-hero-icon {
+  width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 22px; background: rgba(102, 252, 241, 0.1); border: 1px solid rgba(102, 252, 241, 0.3);
+  box-shadow: 0 0 20px rgba(102, 252, 241, 0.15); margin-bottom: 6px;
+}
+.friend-add-hero h3 { color: #fff; font-size: 16px; font-weight: bold; }
+.friend-add-hero p { color: #8e9297; font-size: 12px; line-height: 1.5; max-width: 260px; }
+#friend-add-modal .friend-add-section {
+  display: flex; align-items: center; gap: 8px; padding: 5px 6px 5px 16px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); transition: 0.2s;
+}
+#friend-add-modal .friend-add-section:focus-within { border-color: rgba(102, 252, 241, 0.45); box-shadow: 0 0 10px rgba(102, 252, 241, 0.15); }
+.friend-add-input-icon { color: #66fcf1; font-size: 13px; font-weight: bold; flex-shrink: 0; }
+#friend-add-modal .friend-add-section input {
+  flex: 1; background: transparent; border: none; color: #eef0f3; padding: 8px 0; font-size: 13px; outline: none;
+}
+#friend-add-modal .friend-add-section button {
+  flex-shrink: 0; padding: 9px 18px; border-radius: 999px; background: #66fcf1; border: none;
+  color: #0b0c10; font-size: 12px; font-weight: bold; cursor: pointer; transition: 0.2s;
+}
+#friend-add-modal .friend-add-section button:hover { box-shadow: 0 0 14px rgba(102, 252, 241, 0.4); transform: translateY(-1px); }
+#friend-add-modal .friend-add-error { padding: 10px 4px 0; text-align: center; }
 
 .profile-banner {
   position: relative; padding: 28px 20px 18px; text-align: center;
@@ -623,7 +652,7 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 
 /* ─── v1.6: Hub Detay ─────────────────────────────────────────────────────── */
 .hub-detail-view { flex-direction: row; position: relative; }
-.hub-detail-main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+.hub-detail-main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }
 
 /* Üye paneli: her ekran boyutunda varsayılan olarak kapalı, sağdan kayan panel */
 .hub-detail-side {

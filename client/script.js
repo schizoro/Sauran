@@ -2558,7 +2558,7 @@ const TRANSLATIONS_PLACEHOLDER = {
     'register-password-input': { tr: 'Şifren', en: 'Password' },
     'register-password-confirm-input': { tr: 'Şifreni Tekrar Gir', en: 'Confirm Password' },
     'hub-create-name-input': { tr: 'Lobi adı', en: 'Lobby name' },
-    'friend-add-input': { tr: 'Kullanıcı adıyla arkadaş ekle...', en: 'Add friend by username...' },
+    'friend-add-input': { tr: 'Kullanıcı adı', en: 'Username' },
     'hub-join-code-input': { tr: 'Davet kodunu gir...', en: 'Enter invite code...' },
     'hub-message-input': { tr: 'Bir mesaj yaz...', en: 'Type a message...' },
     'dm-message-input': { tr: 'Bir mesaj yaz...', en: 'Type a message...' },
@@ -2589,6 +2589,9 @@ const I18N = {
     'modal-poll': { tr: '📊 Oylama Başlat', en: '📊 Start a Poll' },
     'modal-share': { tr: '📌 Paylaşım Yap', en: '📌 Share Something' },
     'modal-add-friend': { tr: '👤＋ Arkadaş Ekle', en: '👤＋ Add Friend' },
+    'modal-add-friend-title': { tr: 'Arkadaş Ekle', en: 'Add Friend' },
+    'modal-add-friend-subtitle': { tr: 'Kullanıcı adını yaz, arkadaşlık isteği gönder.', en: 'Type a username to send a friend request.' },
+    'friend-add-submit': { tr: 'Gönder', en: 'Send' },
     'modal-settings': { tr: '⚙️ Ayarlar', en: '⚙️ Settings' },
     'label-theme': { tr: 'Tema', en: 'Theme' },
     'theme-dark': { tr: 'Kapalı Tema', en: 'Dark Theme' },
@@ -2979,6 +2982,11 @@ logoutBtn.addEventListener(
 
     }
 );
+
+document.getElementById('settings-logout-btn').addEventListener('click', () => {
+    settingsModal.style.display = 'none';
+    logout();
+});
 
 
 // =====================================================
