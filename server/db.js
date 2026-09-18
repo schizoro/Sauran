@@ -2810,17 +2810,6 @@ function getAdminStats() {
   };
 }
 
-module.exports = {
-  devNoticeFor,
-  markDevNoticeSeen,
-  listAdminUsers,
-  getAdminUserDetail,
-  getAdminStats,
-  saveMessage,
-  getMessages,
-  createUser,
-  loginUser,
-  createVerification,
 // =====================================================
 // ADMIN AUDIT LOG (platform yöneticisinin YAZMA işlemlerinin geçmişi)
 // =====================================================
@@ -2939,6 +2928,18 @@ function listAuditLog({ page = 1, limit = 20, action = '', actorUserId = null, t
 
   return { total, page, limit, entries };
 }
+
+module.exports = {
+  devNoticeFor,
+  markDevNoticeSeen,
+  listAdminUsers,
+  getAdminUserDetail,
+  getAdminStats,
+  saveMessage,
+  getMessages,
+  createUser,
+  loginUser,
+  createVerification,
 
   verifyAndCreateUser,
   AUDIT_ACTIONS,
