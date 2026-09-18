@@ -218,7 +218,11 @@
 
                 <span class="topbar-logo">SAURAN</span>
 
-                <button id="profile-btn" class="topbar-profile-btn">
+            </div>
+
+            <div class="topbar-right">
+
+                <button id="profile-btn" class="topbar-profile-btn" title="Profilim">
 
                     <span class="profile-avatar-wrap profile-avatar-wrap-sm">
                         <span id="profile-avatar" class="profile-avatar"></span>
@@ -230,12 +234,12 @@
 
                 </button>
 
-            </div>
+                <button id="topbar-menu-btn" class="topbar-menu-btn" type="button" title="Menü">
+                    <span class="topbar-menu-badge" id="topbar-menu-badge" style="display:none;"></span>
+                    ☰
+                </button>
 
-            <button id="topbar-menu-btn" class="topbar-menu-btn" type="button" title="Menü">
-                <span class="topbar-menu-badge" id="topbar-menu-badge" style="display:none;"></span>
-                ☰
-            </button>
+            </div>
 
             <div id="topbar-menu-dropdown" class="topbar-menu-dropdown liquid-glass" style="display:none;">
 
@@ -270,7 +274,7 @@
 
                 <div class="hub-list-header" id="hub-list-header" style="display:none;">
 
-                    <h2 data-i18n="hubs-title">HUBLARIM</h2>
+                    <h2 data-i18n="hubs-title">ANA MENÜ</h2>
 
                     <button id="hub-create-open-btn" class="hub-create-btn">
                         + Yeni Hub
@@ -896,7 +900,12 @@
                                 <path fill="currentColor" d="M9 3l-1.8 2H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9zm3 5.5a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
                             </svg>
                         </button>
-                        <button id="avatar-remove-btn" type="button" title="Kaldır">🗑</button>
+                        <div class="avatar-more-wrap">
+                            <button id="avatar-more-btn" type="button" title="Diğer seçenekler">⋯</button>
+                            <div id="avatar-more-menu" class="avatar-more-menu liquid-glass" style="display:none;">
+                                <button id="avatar-remove-btn" type="button">🗑 <span data-i18n="remove-photo">Kaldır</span></button>
+                            </div>
+                        </div>
                     </div>
 
                     <input type="file" id="avatar-file-input" accept="image/png,image/jpeg,image/webp" hidden>
@@ -944,7 +953,10 @@
 
                 <span id="username-edit-error" class="friend-add-error"></span>
 
-                <span id="status-label" class="status-label"></span>
+                <div class="status-label-row">
+                    <span id="status-label" class="status-label"></span>
+                    <button id="status-label-btn" class="status-label-btn liquid-glass" type="button" data-i18n="my-status">Durumum</button>
+                </div>
 
             </div>
 
@@ -1038,7 +1050,16 @@
 
                         <div class="notif-pref-group">
                             <span class="notif-pref-group-title" data-i18n="notif-group-general">Genel</span>
-                            <label class="notif-pref-row"><input type="checkbox" data-pref="desktop_enabled"><span data-i18n="notif-pref-desktop">Masaüstü / tarayıcı bildirimleri</span></label>
+                            <label class="notif-pref-row notif-pref-toggle-row">
+                                <span class="notif-pref-toggle-text">
+                                    <span class="notif-pref-desktop-text" data-i18n="notif-pref-desktop">Masaüstü / tarayıcı bildirimleri</span>
+                                    <span class="notif-pref-mobile-text" data-i18n="notif-pref-mobile">Mobil bildirimleri</span>
+                                </span>
+                                <span class="notif-toggle liquid-glass">
+                                    <input type="checkbox" data-pref="desktop_enabled">
+                                    <span class="notif-toggle-track"><span class="notif-toggle-thumb"></span></span>
+                                </span>
+                            </label>
                             <label class="notif-pref-row"><input type="checkbox" data-pref="inapp_enabled"><span data-i18n="notif-pref-inapp">Uygulama içi bildirimler</span></label>
                             <label class="notif-pref-row"><input type="checkbox" data-pref="sound_enabled"><span data-i18n="notif-pref-sound">Bildirim sesleri</span></label>
                         </div>

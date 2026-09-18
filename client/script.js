@@ -395,6 +395,16 @@ const avatarRemoveBtn =
 const avatarFileInput =
     document.getElementById('avatar-file-input');
 
+const avatarMoreBtn = document.getElementById('avatar-more-btn');
+const avatarMoreMenu = document.getElementById('avatar-more-menu');
+
+avatarMoreBtn?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    avatarMoreMenu.style.display = avatarMoreMenu.style.display === 'flex' ? 'none' : 'flex';
+});
+
+document.addEventListener('click', () => { if (avatarMoreMenu) avatarMoreMenu.style.display = 'none'; });
+
 
 // =====================================================
 // PROFİL — DURUM
@@ -411,6 +421,12 @@ const statusLabel =
 
 const statusOptionButtons =
     document.querySelectorAll('.status-option');
+
+const statusLabelBtn = document.getElementById('status-label-btn');
+statusLabelBtn?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    statusDropdown.style.display = statusDropdown.style.display === 'flex' ? 'none' : 'flex';
+});
 
 
 // =====================================================
@@ -2449,7 +2465,7 @@ const I18N = {
     'menu-hub-members': { tr: 'Hub Üyeleri', en: 'Hub Members' },
     'menu-add-friend': { tr: 'Arkadaş Ekle', en: 'Add Friend' },
     'menu-settings': { tr: 'Ayarlar', en: 'Settings' },
-    'hubs-title': { tr: 'HUBLARIM', en: 'MY HUBS' },
+    'hubs-title': { tr: 'ANA MENÜ', en: 'HOME' },
     'hubs-owned': { tr: 'OLUŞTURDUĞUM HUBLAR', en: 'HUBS I CREATED' },
     'hubs-joined': { tr: 'KATILDIĞIM HUBLAR', en: 'HUBS I JOINED' },
     'hubs-empty': { tr: "İlk Hub'ını oluştur", en: 'Create your first Hub' },
@@ -2484,6 +2500,7 @@ const I18N = {
     'notif-group-hub': { tr: 'Hub', en: 'Hub' },
     'notif-group-other': { tr: 'Diğer', en: 'Other' },
     'notif-pref-desktop': { tr: 'Masaüstü / tarayıcı bildirimleri', en: 'Desktop / browser notifications' },
+    'notif-pref-mobile': { tr: 'Mobil bildirimleri', en: 'Mobile notifications' },
     'notif-pref-inapp': { tr: 'Uygulama içi bildirimler', en: 'In-app notifications' },
     'notif-pref-sound': { tr: 'Bildirim sesleri', en: 'Notification sounds' },
     'notif-pref-dm': { tr: 'Yeni özel mesajlar', en: 'New private messages' },
@@ -2576,6 +2593,8 @@ const I18N = {
     'cancel': { tr: 'Vazgeç', en: 'Cancel' },
     'delete': { tr: 'Sil', en: 'Delete' },
     'edit': { tr: 'Düzenle', en: 'Edit' },
+    'my-status': { tr: 'Durumum', en: 'My Status' },
+    'remove-photo': { tr: 'Kaldır', en: 'Remove' },
     'confirm-delete-message': { tr: 'Bu mesajı silmek istediğine emin misin?', en: 'Are you sure you want to delete this message?' },
     'message-deleted': { tr: 'Bu mesaj silindi', en: 'This message was deleted' },
     'edited-tag': { tr: '(düzenlendi)', en: '(edited)' },

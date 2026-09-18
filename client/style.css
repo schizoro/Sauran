@@ -149,9 +149,20 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 .topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 22px; background: var(--bg-surface); border-bottom: 1px solid var(--border-soft); flex-shrink: 0; position: relative; z-index: 80; transition: background-color 0.2s, border-color 0.2s; }
 .topbar-logo { color: #66fcf1; font-weight: bold; letter-spacing: 3px; font-size: 14px; }
 .topbar-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.topbar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .topbar-badge { position: absolute; top: -5px; right: -5px; background: #66fcf1; color: #0b0c10; font-size: 9px; font-weight: bold; padding: 1px 5px; border-radius: 8px; }
-.topbar-profile-btn { display: flex; align-items: center; gap: 8px; padding: 5px 10px 5px 5px; background: transparent; border: 1px solid #1f2833; cursor: pointer; transition: 0.2s; min-width: 0; }
-.topbar-profile-btn:hover { border-color: #66fcf1; }
+/* AŞAMA E: profil butonu artık yuvarlak bir ikon olarak sağ üstte, 3 çizgi
+   menüsünün hemen solunda — hamburger butonuyla aynı boyut dilinde. */
+.topbar-profile-btn {
+  display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex-shrink: 0; padding: 0; gap: 0;
+  border-radius: 50%; background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px) saturate(160%); -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.12); cursor: pointer; transition: 0.2s;
+}
+.topbar-profile-btn:hover { border-color: rgba(102, 252, 241, 0.4); }
+.topbar-profile-btn .profile-username { display: none; }
+.topbar-profile-btn .profile-avatar-wrap-sm { width: 32px; height: 32px; }
+.topbar-profile-btn .profile-avatar-wrap-sm .profile-avatar { width: 32px; height: 32px; font-size: 14px; }
+.topbar-profile-btn .profile-avatar-wrap-sm .profile-avatar-img { width: 32px; height: 32px; max-width: 32px; max-height: 32px; }
 
 /* ─── v1.15: Hamburger Menü ───────────────────────────────────────────────── */
 .topbar-menu-btn {
@@ -343,6 +354,23 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 .username-edit input { width: 120px; background: #0b0c10; border: 1px solid #66fcf1; color: #66fcf1; padding: 6px 8px; font-size: 13px; outline: none; }
 
 .status-label { display: block; margin-top: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #45a29e; }
+
+/* AŞAMA E: "Durumum" liquid glass butonu — status-label'ın yanında, tıklayınca
+   aynı status-dropdown'ı açar (statusDotBtn ile aynı davranış, ikinci bir giriş noktası). */
+.status-label-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 4px; }
+.status-label-row .status-label { margin-top: 0; }
+.status-label-btn { padding: 4px 12px; border-radius: 999px; color: #66fcf1; font-size: 10px; font-weight: bold; letter-spacing: 0.5px; cursor: pointer; }
+.status-label-btn:hover { color: #fff; }
+
+/* AŞAMA E: avatar üzerindeki çöp kovası artık ayrı bir buton değil, "⋯" ile
+   açılan küçük bir liquid-glass menünün içinde. */
+.avatar-more-wrap { position: relative; }
+.avatar-more-menu {
+  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); z-index: 10;
+  display: flex; flex-direction: column; min-width: 110px; padding: 5px; border-radius: 12px; animation: dropdown-in 0.15s ease-out;
+}
+.avatar-more-menu button { display: flex; align-items: center; gap: 6px; padding: 7px 10px; border-radius: 8px; background: none; border: none; color: #ff2e46; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.avatar-more-menu button:hover { background: rgba(255, 46, 70, 0.12); color: #ff6b7d; }
 
 /* ─── v1.5: Durum Açılır Menüsü ──────────────────────────────────────────── */
 .status-dropdown { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 10px; width: 240px; background: #12141a; border: 1px solid rgba(102, 252, 241, 0.35); box-shadow: 0 0 20px rgba(102, 252, 241, 0.15), 0 10px 30px rgba(0,0,0,0.6); z-index: 10; padding: 6px; animation: dropdown-in 0.18s ease-out; flex-direction: column; gap: 2px; }
@@ -1188,6 +1216,25 @@ body.call-mini-active { padding-top: 42px; }
 }
 .notif-pref-row:hover { border-color: rgba(102, 252, 241, 0.25); }
 .notif-pref-row input[type="checkbox"] { accent-color: #66fcf1; width: 16px; height: 16px; flex-shrink: 0; }
+
+/* AŞAMA E: masaüstü/tarayıcı bildirim satırı — mobilde "Mobil bildirimleri"
+   metnine geçer, sağında liquid glass açma/kapama anahtarı var. */
+.notif-pref-toggle-row { justify-content: space-between; }
+.notif-pref-toggle-text { flex: 1; }
+.notif-pref-mobile-text { display: none; }
+@media (max-width: 768px) {
+  .notif-pref-desktop-text { display: none; }
+  .notif-pref-mobile-text { display: inline; }
+}
+
+.notif-toggle { position: relative; flex-shrink: 0; width: 40px; height: 24px; border-radius: 999px; padding: 0; overflow: hidden; }
+.notif-toggle input[type="checkbox"] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; z-index: 2; }
+.notif-toggle-track { position: absolute; inset: 0; display: flex; align-items: center; padding: 3px; transition: 0.2s; }
+.notif-toggle-thumb {
+  width: 16px; height: 16px; border-radius: 50%; background: #8e9297; transition: transform 0.2s, background-color 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.notif-toggle input:checked ~ .notif-toggle-track .notif-toggle-thumb { transform: translateX(16px); background: #66fcf1; box-shadow: 0 0 8px rgba(102, 252, 241, 0.6); }
 .settings-blocked-empty { color: #4b5563; font-size: 12px; text-align: center; padding: 8px 0; }
 .settings-blocked-row {
   display: flex; align-items: flex-start; gap: 8px; padding: 8px; border-radius: 10px;
@@ -1318,8 +1365,10 @@ body.call-mini-active { padding-top: 42px; }
 
   .topbar { padding: 10px 10px; gap: 6px; }
   .topbar-logo { font-size: 12px; letter-spacing: 1px; flex-shrink: 0; }
-  .topbar-profile-btn { padding: 4px 6px 4px 4px; flex-shrink: 0; }
-  .profile-username { max-width: 90px; }
+  .topbar-profile-btn { width: 36px; height: 36px; }
+  .topbar-profile-btn .profile-avatar-wrap-sm { width: 28px; height: 28px; }
+  .topbar-profile-btn .profile-avatar-wrap-sm .profile-avatar { width: 28px; height: 28px; font-size: 12px; }
+  .topbar-profile-btn .profile-avatar-wrap-sm .profile-avatar-img { width: 28px; height: 28px; max-width: 28px; max-height: 28px; }
   .topbar-menu-dropdown { right: 10px; min-width: 200px; }
 
   .hub-list-view { padding: 18px 14px; }
