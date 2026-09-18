@@ -8341,14 +8341,17 @@ function renderHubMembers() {
 
         menuBtn.addEventListener('click', (event) => {
             event.stopPropagation();
-            document.querySelectorAll('.hub-member-menu').forEach(m => { if (m !== menu) m.style.display = 'none'; });
-            menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
+            if (menu.style.display === 'flex') {
+                closeMemberMenus();
+            } else {
+                openMemberMenu(menu, menuBtn);
+            }
         });
 
         menu.querySelectorAll('[data-action]').forEach((btn) => {
             btn.addEventListener('click', async (event) => {
                 event.stopPropagation();
-                menu.style.display = 'none';
+                closeMemberMenus();
                 await handleMemberModerationAction(btn.dataset.action, userId, row.dataset.tier);
             });
         });
@@ -8360,6 +8363,51 @@ function renderHubMembers() {
     }, { once: true });
 
     wireMsgAvatars(hubMemberList);
+// Üye satırlarında backdrop-filter var: her satır kendi yığın bağlamını (ve fixed
+// için yeni containing block'unu) oluşturduğundan menü satır içinde kalırsa alttaki
+// satırın ALTINDA kalıyordu. Menü açılırken body'ye taşınıp düğmenin ekran
+// konumuna göre sabitleniyor, kapanınca yerine dönüyor.
+function closeMemberMenus() {
+    document.querySelectorAll('.hub-member-menu').forEach((m) => {
+        m.style.display = 'none';
+        m.style.position = '';
+        m.style.top = '';
+        m.style.right = '';
+        m.style.left = '';
+        m.style.zIndex = '';
+        if (m._homeParent) {
+            if (m._homeParent.isConnected) m._homeParent.appendChild(m);
+            else m.remove();
+        }
+    });
+}
+
+function openMemberMenu(menu, menuBtn) {
+
+    closeMemberMenus();
+
+    menu._homeParent = menu.parentElement;
+    document.body.appendChild(menu);
+
+    menu.style.position = 'fixed';
+    menu.style.zIndex = '250';
+    menu.style.display = 'flex';
+
+    const rect = menuBtn.getBoundingClientRect();
+    const height = menu.offsetHeight;
+    let top = rect.bottom + 4;
+    if (top + height > window.innerHeight - 8) top = Math.max(8, rect.top - height - 4);
+
+    menu.style.top = `${top}px`;
+    menu.style.left = 'auto';
+    menu.style.right = `${Math.max(8, window.innerWidth - rect.right)}px`;
+
+}
+
+document.addEventListener('click', closeMemberMenus);
+window.addEventListener('resize', closeMemberMenus);
+document.addEventListener('scroll', closeMemberMenus, true);
+
 
 }
 
