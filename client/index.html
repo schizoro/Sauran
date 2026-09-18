@@ -578,7 +578,6 @@
                 <button id="hub-invite-btn" class="hub-settings-action-btn" type="button">🔑 <span data-i18n="hub-settings-invite-code">Davet Kodu Oluştur</span></button>
 
                 <button id="hub-ban-member-btn" class="hub-settings-action-btn hub-settings-danger" type="button" style="display:none;">🚫 <span data-i18n="hub-ban-member">Katılımcı Yasakla</span></button>
-                <div id="hub-ban-picker" class="settings-blocked-list" style="display:none;"></div>
 
                 <div id="hub-settings-bans-section" style="display:none;">
                     <button id="hub-bans-open-btn" class="hub-settings-action-btn" type="button">⛔ <span data-i18n="hub-bans-title">Yasaklılar</span></button>
@@ -588,6 +587,13 @@
 
                 <button id="hub-delete-btn" class="hub-settings-action-btn hub-settings-danger" type="button" style="display:none;">🗑 <span data-i18n="hub-settings-delete">Hub'ı Sil</span></button>
 
+            </div>
+
+            <div class="hub-settings-body" id="hub-settings-pick-view" style="display:none;">
+                <button id="hub-pick-back-btn" class="hub-settings-back-btn" type="button">← <span data-i18n="bans-back">Geri</span></button>
+                <span class="profile-field-label" data-i18n="hub-ban-member">Katılımcı Yasakla</span>
+                <input type="text" id="hub-ban-search-input" class="hub-name-input" data-i18n-placeholder="hub-ban-search-placeholder" placeholder="Kullanıcı adı ara..." autocomplete="off">
+                <div id="hub-ban-picker" class="settings-blocked-list settings-blocked-list-tall"></div>
             </div>
 
             <div class="hub-settings-body" id="hub-settings-bans-view" style="display:none;">

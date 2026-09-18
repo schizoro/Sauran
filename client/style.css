@@ -1235,6 +1235,10 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 .hub-settings-panel .modal-header { border-bottom-color: rgba(255, 255, 255, 0.08); flex-shrink: 0; }
 .hub-settings-panel .hub-settings-body { flex: 1; min-height: 0; }
 #hub-settings-bans-section .hub-settings-action-btn { width: 100%; }
+.settings-blocked-list-tall { max-height: none; }
+#hub-settings-pick-view .settings-blocked-row, #hub-settings-bans-view .settings-blocked-row { align-items: center; }
+#hub-settings-pick-view .settings-blocked-avatar, #hub-settings-bans-view .settings-blocked-avatar { width: 36px; height: 36px; font-size: 14px; }
+#hub-settings-pick-view .settings-blocked-name, #hub-settings-bans-view .settings-blocked-name { font-size: 13px; font-weight: bold; }
 .hub-settings-back-btn {
   align-self: flex-start; display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; cursor: pointer;
   background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); color: #c5c6c7; font-size: 12px; font-weight: bold; transition: 0.2s;
