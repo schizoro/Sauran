@@ -4312,6 +4312,7 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
         : '';
 
     const editedTag = msg.edited ? ` <span class="edited-tag">(${t('edited-tag')})</span>` : '';
+    const forwardedTag = msg.forwarded_from_message_id ? `<div class="msg-forwarded-tag">↗ ${t('message-forwarded')}</div>` : '';
     const opts = { context: 'dm' };
     const actions = buildMsgActionsBarHtml(msg, opts);
     const replyQuote = buildMsgReplyQuoteHtml(msg);
@@ -4337,7 +4338,7 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
 
     }
 
-    wrap.innerHTML = `${actions}${replyQuote}<div class="dm-msg-line">${body}<span class="dm-msg-time">${time}${editedTag}</span></div>${reactionsRow}`;
+    wrap.innerHTML = `${actions}${forwardedTag}${replyQuote}<div class="dm-msg-line">${body}<span class="dm-msg-time">${time}${editedTag}</span></div>${reactionsRow}`;
 
     wireVoiceCards(wrap);
     enableLongPress(wrap);
