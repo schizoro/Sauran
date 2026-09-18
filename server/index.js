@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail } = require('./mailer');
+const push = require('./push');
 const daily = require('./daily');
 const express = require('express');
 const http = require('http');
@@ -77,6 +78,10 @@ const {
   listBlockedUsers,
   createReport,
   MAX_VOICE_ROOM_PARTICIPANTS,
+  getHubPushInfo,
+  savePushSubscription,
+  removePushSubscription,
+  listPushSubscriptions,
   createFeedback,
   listFeedback,
   voteFeedback,
@@ -799,6 +804,37 @@ app.post('/api/reports', reportLimiter, (req, res) => {
 });
 
 // =====================================================
+// WEB PUSH ABONELİK API'Sİ
+// =====================================================
+
+app.get('/api/push/public-key', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  return res.json({ success: true, configured: push.isConfigured(), public_key: push.getPublicKey() });
+});
+
+app.post('/api/push/subscribe', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  if (!push.isConfigured()) {
+    return res.status(503).json({ success: false, error: 'Bildirim servisi yapılandırılmamış.' });
+  }
+
+  const result = savePushSubscription(user.id, req.body?.subscription, req.headers['user-agent']);
+  return res.status(result.success ? 200 : 400).json(result);
+});
+
+app.post('/api/push/unsubscribe', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  if (typeof req.body?.endpoint === 'string') removePushSubscription(req.body.endpoint, user.id);
+  return res.json({ success: true });
+});
+
+// =====================================================
 // ÖNERİ / GERİ BİLDİRİM PANOSU
 // =====================================================
 // Herkese açık: giriş yapmış tüm kullanıcılar öneri yazabilir, listeyi
@@ -1351,7 +1387,7 @@ app.post('/api/hubs/:id/poll', (req, res) => {
       return res.status(400).json(result);
     }
 
-    io.to(`hub:${hubId}`).emit('hub_message', result.message);
+    emitHubMessage(hubId, result.message);
 
     return res.json(result);
 
@@ -1405,7 +1441,7 @@ app.post('/api/hubs/:id/share', fileUploadLimiter, (req, res) => {
       return res.status(400).json(result);
     }
 
-    io.to(`hub:${hubId}`).emit('hub_message', result.message);
+    emitHubMessage(hubId, result.message);
 
     return res.json(result);
 
@@ -1432,7 +1468,7 @@ app.post('/api/hubs/:id/voice', fileUploadLimiter, (req, res) => {
       return res.status(400).json(result);
     }
 
-    io.to(`hub:${hubId}`).emit('hub_message', result.message);
+    emitHubMessage(hubId, result.message);
 
     return res.json(result);
 
@@ -1459,7 +1495,7 @@ app.post('/api/hubs/:id/file', fileUploadLimiter, (req, res) => {
       return res.status(400).json(result);
     }
 
-    io.to(`hub:${hubId}`).emit('hub_message', result.message);
+    emitHubMessage(hubId, result.message);
 
     return res.json(result);
 
@@ -1486,7 +1522,7 @@ app.post('/api/hubs/:id/sticker', (req, res) => {
       return res.status(400).json(result);
     }
 
-    io.to(`hub:${hubId}`).emit('hub_message', result.message);
+    emitHubMessage(hubId, result.message);
 
     return res.json(result);
 
@@ -1817,7 +1853,7 @@ app.post('/api/messages/:id/forward', (req, res) => {
 
     if (!result.success) return res.status(400).json(result);
 
-    io.to(`user:${user.id}`).to(`user:${toUserId}`).emit('dm_message', result.message);
+    emitDmMessage(result.message);
 
     return res.json(result);
 
@@ -1846,6 +1882,102 @@ function isUserOnline(userId) {
 // özel olarak presence'ı maskeler (Discord/Slack'teki standart anlamıyla).
 function isVisiblyOnline(userId, status) {
   return isUserOnline(userId) && status !== 'invisible';
+}
+
+// =====================================================
+// WEB PUSH (uygulama kapalıyken/arka plandayken telefon bildirimi)
+// =====================================================
+// Kullanıcının ekranda görünür bir Sauran sekmesi/uygulaması varsa push
+// GÖNDERİLMEZ (o durumda istemci kendi bildirimini/sesini gösteriyor);
+// aksi halde — bağlantı yoksa ya da uygulama arka plandaysa — abone olan
+// tüm cihazlarına gönderilir. Tercihler (kategori + masaüstü/mobil bildirim
+// anahtarı) her seferinde sunucuda kontrol edilir.
+
+function userHasVisibleSocket(userId) {
+  for (const sid of activeUsers.get(userId) || []) {
+    if (io.sockets.sockets.get(sid)?.data.visible) return true;
+  }
+  return false;
+}
+
+async function dispatchWebPush(userId, type, payload) {
+
+  if (!push.isConfigured()) return;
+
+  const prefs = getNotificationPreferences(userId);
+  const categoryColumn = NOTIFICATION_CATEGORY_MAP[type];
+  if (categoryColumn && prefs[categoryColumn] === 0) return;
+  if (prefs.desktop_enabled === 0) return;
+  if (userHasVisibleSocket(userId)) return;
+
+  const subscriptions = listPushSubscriptions(userId);
+
+  await Promise.all(subscriptions.map(async (sub) => {
+    try {
+      await push.sendNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        { ...payload, type }
+      );
+    } catch (error) {
+      // Süresi dolmuş/geçersiz abonelikleri temizle.
+      if (error.statusCode === 404 || error.statusCode === 410) removePushSubscription(sub.endpoint);
+      else console.error('Web push hatası:', error.statusCode || error.message);
+    }
+  }));
+
+}
+
+function messagePushPreview(message) {
+  const labels = {
+    dm_voice: '🎤 Sesli mesaj', voice: '🎤 Sesli mesaj',
+    dm_file: '📎 Dosya', file: '📎 Dosya',
+    dm_image: '🖼 Fotoğraf', image: '🖼 Fotoğraf',
+    dm_video: '🎬 Video', video: '🎬 Video',
+    dm_sticker: '🖼 Çıkartma', sticker: '🖼 Çıkartma',
+    poll: '📊 Anket', share: '🔗 Paylaşım'
+  };
+  return labels[message.kind] || String(message.content || 'Yeni mesaj').slice(0, 140);
+}
+
+// Tüm DM türleri (yazı, sesli, dosya, çıkartma, iletme) buradan geçer.
+function emitDmMessage(message) {
+
+  io.to(`user:${message.user_id}`).to(`user:${message.to_user_id}`).emit('dm_message', message);
+
+  if (!message.to_user_id || message.to_user_id === message.user_id) return;
+
+  dispatchWebPush(message.to_user_id, 'dm_message', {
+    title: message.username,
+    body: messagePushPreview(message),
+    url: `/?open_dm=${message.user_id}&name=${encodeURIComponent(message.username)}`,
+    tag: `dm-${message.user_id}`
+  }).catch(error => console.error('Web push gönderilemedi:', error));
+
+}
+
+// Lobi mesajı: gönderen hariç tüm üyelere (tercihleri dispatchWebPush'ta kontrol edilir).
+function emitHubMessage(hubId, message) {
+
+  io.to(`hub:${hubId}`).emit('hub_message', message);
+
+  if (!push.isConfigured() || !message?.user_id) return;
+
+  const info = getHubPushInfo(hubId);
+  if (!info) return;
+
+  const body = `${message.username}: ${messagePushPreview(message)}`;
+
+  for (const memberId of info.member_ids) {
+    if (memberId === message.user_id) continue;
+
+    dispatchWebPush(memberId, 'hub_message', {
+      title: info.name,
+      body,
+      url: `/?open_hub=${hubId}`,
+      tag: `hub-${hubId}`
+    }).catch(error => console.error('Web push gönderilemedi:', error));
+  }
+
 }
 
 // =====================================================
@@ -1884,6 +2016,17 @@ function pushNotification(userId, type, data) {
   // karar verir — böylece "uygulama içi bildirimleri kapat ama masaüstü
   // bildirimleri açık kalsın" gibi bağımsız tercihler çalışır.
   if (!categoryEnabled) return;
+
+  const webPushLabel = {
+    friend_request: `${data?.from_username || 'Biri'} sana arkadaşlık isteği gönderdi.`,
+    friend_request_accepted: `${data?.from_username || 'Biri'} arkadaşlık isteğini kabul etti.`,
+    hub_invite: `${data?.from_username || 'Biri'} seni ${data?.hub_name || 'bir'} lobisine davet etti.`
+  }[type];
+
+  if (webPushLabel) {
+    dispatchWebPush(userId, type, { title: 'Sauran', body: webPushLabel, url: '/', tag: `notif-${type}` })
+      .catch(error => console.error('Web push gönderilemedi:', error));
+  }
 
   const targetSockets = activeUsers.get(userId);
   if (targetSockets) {
@@ -2457,7 +2600,7 @@ io.on('connection', (socket) => {
         return;
       }
 
-      io.to(`user:${socket.userId}`).to(`user:${toUserId}`).emit('dm_message', result.message);
+      emitDmMessage(result.message);
 
     } catch (error) {
       console.error('DM kaydedilirken hata:', error);
@@ -2485,7 +2628,7 @@ io.on('connection', (socket) => {
         return;
       }
 
-      io.to(`user:${socket.userId}`).to(`user:${toUserId}`).emit('dm_message', result.message);
+      emitDmMessage(result.message);
 
     } catch (error) {
       console.error('Sesli DM kaydedilirken hata:', error);
@@ -2513,7 +2656,7 @@ io.on('connection', (socket) => {
         return;
       }
 
-      io.to(`user:${socket.userId}`).to(`user:${toUserId}`).emit('dm_message', result.message);
+      emitDmMessage(result.message);
 
     } catch (error) {
       console.error('Dosyalı DM kaydedilirken hata:', error);
@@ -2541,7 +2684,7 @@ io.on('connection', (socket) => {
         return;
       }
 
-      io.to(`user:${socket.userId}`).to(`user:${toUserId}`).emit('dm_message', result.message);
+      emitDmMessage(result.message);
 
     } catch (error) {
       console.error('Çıkartmalı DM kaydedilirken hata:', error);
@@ -2645,7 +2788,7 @@ io.on('connection', (socket) => {
       const replyToMessageId = data?.reply_to_message_id ? Number(data.reply_to_message_id) : null;
       const message = saveHubMessage(hubId, socket.userId, socket.username, content, replyToMessageId);
 
-      io.to(`hub:${hubId}`).emit('hub_message', message);
+      emitHubMessage(hubId, message);
 
     } catch (error) {
       console.error('Hub mesajı kaydedilirken hata:', error);
@@ -2743,6 +2886,10 @@ io.on('connection', (socket) => {
 
     entry.muted = muted;
     broadcastVoiceRoom(entry.hubId, roomId, { type: 'mute', user_id: socket.userId, muted });
+  });
+
+  socket.on('app_visibility', (data) => {
+    socket.data.visible = Boolean(data?.visible);
   });
 
   socket.on('voice_room_deafen', (data) => {

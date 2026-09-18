@@ -77,6 +77,9 @@ function playMessageSound() {
 
 // Sesli odaya biri katılınca yükselen, ayrılınca alçalan iki notalı kısa ses.
 let notifInappEnabled = true;
+let notifDesktopEnabled = true;
+let notifDmEnabled = true;
+let notifHubMessageEnabled = true;
 let notifVoicePresenceEnabled = true;
 let voiceJoinSoundEnabled = true;
 
@@ -2447,6 +2450,12 @@ async function loadNotificationPreferences() {
             input.checked = data.preferences[key] !== 0;
             if (key === 'sound_enabled') notifSoundEnabled = input.checked;
             if (key === 'inapp_enabled') notifInappEnabled = input.checked;
+        if (key === 'desktop_enabled') notifDesktopEnabled = input.checked;
+        if (key === 'notify_dm_message') notifDmEnabled = input.checked;
+        if (key === 'notify_hub_message') notifHubMessageEnabled = input.checked;
+            if (key === 'desktop_enabled') notifDesktopEnabled = input.checked;
+            if (key === 'notify_dm_message') notifDmEnabled = input.checked;
+            if (key === 'notify_hub_message') notifHubMessageEnabled = input.checked;
             if (key === 'notify_voice_presence') notifVoicePresenceEnabled = input.checked;
             if (key === 'voice_join_sound') voiceJoinSoundEnabled = input.checked;
         });
@@ -2542,6 +2551,8 @@ document.getElementById('browser-notif-permission-btn')?.addEventListener('click
                 credentials: 'include',
                 body: JSON.stringify({ desktop_enabled: true })
             });
+
+            ensurePushSubscription();
         }
 
     } catch (error) {
@@ -2550,19 +2561,187 @@ document.getElementById('browser-notif-permission-btn')?.addEventListener('click
 
 });
 
-// Sekme arka plandaysa/odakta değilse (kullanıcı zaten uygulama içi toast'u
-// göremeyeceği için) tarayıcı bildirimi de göster. İzin yoksa hiçbir şey
-// yapma — burada asla izin İSTEMİYORUZ, sadece zaten verilmişse kullanıyoruz.
+// ─── Sistem bildirimi + Web Push ─────────────────────────────────────────
+// Uygulama ekranda görünürken ama odakta değilken bildirimi bu sayfa kendisi
+// gösterir; uygulama arka plandayken / kapalıyken sunucu Web Push gönderir
+// (bkz. server/index.js dispatchWebPush) ve service worker (sw.js) gösterir.
+// Android Chrome `new Notification()` kurucusunu desteklemez — bu yüzden
+// bildirimler service worker kaydı üzerinden gösteriliyor.
+
+let pushSubscribed = false;
+
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch((error) => console.error('Service worker kaydedilemedi:', error));
+
+    navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data?.type === 'open-dm' && currentUser) {
+            openDm(event.data.userId, event.data.username || '');
+        }
+
+        if (event.data?.type === 'open-hub' && currentUser) {
+            openHub(event.data.hubId);
+        }
+    });
+}
+
+function urlBase64ToUint8Array(base64) {
+    const padded = (base64 + '='.repeat((4 - (base64.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(padded);
+    return Uint8Array.from(raw, (char) => char.charCodeAt(0));
+}
+
+async function ensurePushSubscription() {
+
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (getBrowserNotifState() !== 'granted') return;
+
+    try {
+
+        const keyResponse = await fetch('/api/push/public-key', { credentials: 'include' });
+        const keyData = await keyResponse.json();
+        if (!keyData.success || !keyData.configured) return;
+
+        const registration = await navigator.serviceWorker.ready;
+        const applicationServerKey = urlBase64ToUint8Array(keyData.public_key);
+
+        let subscription = await registration.pushManager.getSubscription();
+
+        if (!subscription) {
+            subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey });
+        }
+
+        const response = await fetch('/api/push/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ subscription: subscription.toJSON() })
+        });
+
+        pushSubscribed = (await response.json()).success === true;
+
+    } catch (error) {
+        console.error('Push aboneliği kurulamadı:', error);
+    }
+
+}
+
+async function removePushSubscriptionOnLogout() {
+
+    pushSubscribed = false;
+    if (!('serviceWorker' in navigator)) return;
+
+    try {
+        const registration = await navigator.serviceWorker.getRegistration();
+        const subscription = await registration?.pushManager?.getSubscription();
+        if (!subscription) return;
+
+        await fetch('/api/push/unsubscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ endpoint: subscription.endpoint })
+        });
+
+        await subscription.unsubscribe();
+    } catch (error) {
+        console.error('Push aboneliği kaldırılamadı:', error);
+    }
+
+}
+
+async function showSystemNotification(title, body, options = {}) {
+
+    const registration = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : null;
+
+    if (registration?.showNotification) {
+        await registration.showNotification(title, { body, ...options });
+        return;
+    }
+
+    new Notification(title, { body });
+
+}
+
+// Sekme odakta değilse (kullanıcı uygulama içi toast'u göremeyeceği için)
+// sistem bildirimi de göster. Sekme tamamen gizliyse ve push aboneliği varsa
+// bildirimi sunucudan gelen push gösterir (çift bildirim olmasın diye burada
+// gösterilmez). İzin yoksa hiçbir şey yapma — burada asla izin İSTEMİYORUZ.
 function maybeShowBrowserNotification(type, label) {
 
     if (getBrowserNotifState() !== 'granted') return;
     if (document.hasFocus()) return;
+    if (document.visibilityState === 'hidden' && pushSubscribed) return;
 
-    try {
-        new Notification('Sauran', { body: label });
-    } catch (error) {
+    showSystemNotification('Sauran', label).catch((error) => {
         console.error('Tarayıcı bildirimi gösterilemedi:', error);
-    }
+    });
+
+}
+
+function dmPreviewText(msg) {
+    const labels = {
+        dm_voice: '🎤 Sesli mesaj', voice: '🎤 Sesli mesaj',
+        dm_file: '📎 Dosya', file: '📎 Dosya',
+        dm_image: '🖼 Fotoğraf', image: '🖼 Fotoğraf',
+        dm_video: '🎬 Video', video: '🎬 Video',
+        dm_sticker: '🖼 Çıkartma', sticker: '🖼 Çıkartma',
+        poll: '📊 Anket', share: '🔗 Paylaşım'
+    };
+    return labels[msg.kind] || String(msg.content || '').slice(0, 140);
+}
+
+// Lobi mesajı: yalnızca "Yeni Lobi mesaj bildirimleri" açıksa (ve bildirimlere izin verilmişse).
+function maybeNotifyIncomingHubMessage(msg) {
+
+    if (!notifDesktopEnabled || !notifHubMessageEnabled || !currentHub) return;
+    if (getBrowserNotifState() !== 'granted') return;
+    if (document.hasFocus()) return;
+    if (document.visibilityState === 'hidden' && pushSubscribed) return;
+
+    showSystemNotification(currentHub.name, `${msg.username}: ${dmPreviewText(msg)}`, {
+        tag: `hub-${currentHub.id}`,
+        renotify: true,
+        data: { url: `/?open_hub=${currentHub.id}` }
+    }).catch((error) => console.error('Lobi bildirimi gösterilemedi:', error));
+
+}
+
+function maybeNotifyIncomingDm(msg) {
+
+    if (!notifDesktopEnabled || !notifDmEnabled) return;
+    if (getBrowserNotifState() !== 'granted') return;
+    if (document.hasFocus()) return;
+    if (document.visibilityState === 'hidden' && pushSubscribed) return;
+
+    showSystemNotification(msg.username, dmPreviewText(msg), {
+        tag: `dm-${msg.user_id}`,
+        renotify: true,
+        data: { url: `/?open_dm=${msg.user_id}&name=${encodeURIComponent(msg.username)}` }
+    }).catch((error) => console.error('DM bildirimi gösterilemedi:', error));
+
+}
+
+// Push sunucusu, uygulamanın ekranda görünür olup olmadığını buradan öğrenir.
+function reportAppVisibility() {
+    socket?.emit('app_visibility', { visible: document.visibilityState === 'visible' });
+}
+
+document.addEventListener('visibilitychange', reportAppVisibility);
+window.addEventListener('pagehide', () => socket?.emit('app_visibility', { visible: false }));
+
+// Bildirime dokununca (soğuk açılışta) URL'deki ?open_dm=<id>&name=<ad> ya da
+// ?open_hub=<id> ile ilgili sohbeti/lobiyi aç.
+function handlePendingNotificationOpen() {
+
+    const params = new URLSearchParams(location.search);
+    const userId = Number(params.get('open_dm'));
+    const hubId = Number(params.get('open_hub'));
+    if (!userId && !hubId) return;
+
+    history.replaceState(null, '', location.pathname);
+
+    if (userId) openDm(userId, params.get('name') || '');
+    else openHub(hubId);
 
 }
 
@@ -3363,6 +3542,8 @@ function connectToChat() {
 
             appendHubMessage(msg);
 
+            if (msg.user_id !== currentUser.id) maybeNotifyIncomingHubMessage(msg);
+
         }
     );
 
@@ -3474,6 +3655,8 @@ function connectToChat() {
                 playMessageSound();
 
             }
+
+            if (msg.user_id !== currentUser.id) maybeNotifyIncomingDm(msg);
 
         }
     );
@@ -3632,10 +3815,15 @@ function connectToChat() {
     });
 
 
+    socket.on('connect', reportAppVisibility);
+    reportAppVisibility();
+
     switchToView('hubs');
     loadHubList();
     refreshNotificationsBadge();
     loadNotificationPreferences();
+    ensurePushSubscription();
+    handlePendingNotificationOpen();
 
     maybeShowDevNotice();
 
@@ -3833,6 +4021,8 @@ async function checkExistingSession() {
 // =====================================================
 
 async function logout() {
+
+    await removePushSubscriptionOnLogout();
 
     try {
 

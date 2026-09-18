@@ -2487,6 +2487,72 @@ function createUser(username) {
 }
 
 // =====================================================
+// WEB PUSH ABONELİKLERİ (cihaz başına bir kayıt)
+// =====================================================
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    endpoint TEXT NOT NULL UNIQUE,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    user_agent TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+`);
+
+const MAX_PUSH_SUBSCRIPTIONS_PER_USER = 10;
+
+function getHubPushInfo(hubId) {
+  const hub = db.prepare(`SELECT name FROM hubs WHERE id = ?`).get(hubId);
+  if (!hub) return null;
+
+  const memberIds = db.prepare(`SELECT user_id FROM hub_members WHERE hub_id = ?`).all(hubId).map(row => row.user_id);
+  return { name: hub.name, member_ids: memberIds };
+}
+
+function savePushSubscription(userId, subscription, userAgent) {
+  const endpoint = subscription?.endpoint;
+  const p256dh = subscription?.keys?.p256dh;
+  const auth = subscription?.keys?.auth;
+
+  if (typeof endpoint !== 'string' || !/^https:\/\//.test(endpoint) || endpoint.length > 1000
+      || typeof p256dh !== 'string' || typeof auth !== 'string' || !p256dh || !auth
+      || p256dh.length > 200 || auth.length > 100) {
+    return { success: false, error: 'Geçersiz bildirim aboneliği.' };
+  }
+
+  // Aynı cihaz başka bir hesapla giriş yaptıysa abonelik yeni hesaba geçer.
+  db.prepare(`
+    INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, user_agent)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth, user_agent = excluded.user_agent
+  `).run(userId, endpoint, p256dh, auth, String(userAgent || '').slice(0, 300));
+
+  db.prepare(`
+    DELETE FROM push_subscriptions WHERE user_id = ? AND id NOT IN (
+      SELECT id FROM push_subscriptions WHERE user_id = ? ORDER BY id DESC LIMIT ?
+    )
+  `).run(userId, userId, MAX_PUSH_SUBSCRIPTIONS_PER_USER);
+
+  return { success: true };
+}
+
+function removePushSubscription(endpoint, userId) {
+  if (userId) {
+    db.prepare(`DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?`).run(endpoint, userId);
+  } else {
+    db.prepare(`DELETE FROM push_subscriptions WHERE endpoint = ?`).run(endpoint);
+  }
+}
+
+function listPushSubscriptions(userId) {
+  return db.prepare(`SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?`).all(userId);
+}
+
+// =====================================================
 // ÖNERİ / GERİ BİLDİRİM PANOSU
 // =====================================================
 // Kullanıcıların uygulama hakkında öneri/görüş paylaşabildiği, herkese açık,
@@ -2855,6 +2921,10 @@ module.exports = {
   markNotificationRead,
   MAX_VOICE_ROOM_PARTICIPANTS,
   MAX_VOICE_ROOMS_PER_HUB,
+  getHubPushInfo,
+  savePushSubscription,
+  removePushSubscription,
+  listPushSubscriptions,
   createFeedback,
   listFeedback,
   voteFeedback,
