@@ -726,8 +726,81 @@ const acceptPlatformRoleTx = db.transaction((userId, version) => {
     newValue: version
   });
 
-  return { role: user.platform_role, version };
+  // Moderasyon ekibine kısa bilgilendirme e-postası (outbox; gönderim transaction'a bağlı değildir).
+  const outboxId = enqueueRoleNoticeEmail({
+    userId, type: 'team_accepted', role: user.platform_role, version, payload: { result_role: user.platform_role }
+  });
+
+  return { role: user.platform_role, version, outbox_id: outboxId };
 });
+
+// Görevi REDDETME: kabul beklemeyen bir görev reddedilemez. Rol, reddedilen görevden
+// bir kademe aşağıdaki VE kullanıcının kabul edilmiş taban yetkisini aşmayan role döner:
+//   user -> moderator/admin reddi => user;  moderator -> admin reddi => moderator;
+//   admin -> moderator (düşürme) reddi => user (kullanıcı görevi hiç istemiyor).
+// Reddetmek için metnin sonuna kadar okumak gerekmez.
+const ROLE_ONE_BELOW = { moderator: 'user', admin: 'moderator' };
+
+const declinePlatformRoleTx = db.transaction((userId, version) => {
+  const user = db.prepare(`
+    SELECT id, platform_role, role_acceptance_pending, role_accepted_role FROM users WHERE id = ?
+  `).get(userId);
+
+  if (!user || user.platform_role === 'founder' || !isOfficialRole(user.platform_role) || !user.role_acceptance_pending) {
+    throw new AdminActionError(409, 'Reddedilecek bekleyen bir görev bildirimi yok.');
+  }
+  if (version !== ROLE_NOTICE_VERSIONS[user.platform_role]) {
+    throw new AdminActionError(409, 'Bildirim sürümü güncel değil. Sayfayı yenileyip tekrar dene.');
+  }
+
+  const declined = user.platform_role;
+  const base = PLATFORM_ROLES.includes(user.role_accepted_role) && user.role_accepted_role !== 'founder'
+    ? user.role_accepted_role
+    : 'user';
+  const below = ROLE_ONE_BELOW[declined];
+  const result = PLATFORM_ROLE_RANK[base] <= PLATFORM_ROLE_RANK[below] ? base : below;
+
+  db.prepare(`
+    UPDATE users
+    SET platform_role = ?, role_acceptance_pending = 0, role_acceptance_version = NULL, role_accepted_role = ?,
+        role_accepted_at = CASE WHEN ? = 'user' THEN NULL ELSE role_accepted_at END,
+        role_notice_kind = NULL, role_notice_at = NULL
+    WHERE id = ?
+  `).run(result, result, result, userId);
+
+  // Görev bildirimi artık geçersiz: sistem kendi bildirimini temizler.
+  deleteStalePlatformNotices(userId);
+
+  writeAuditLog({
+    actorUserId: userId,
+    action: 'platform_role_declined',
+    targetUserId: userId,
+    reason: `result_role=${result}`,
+    oldValue: declined,
+    newValue: version
+  });
+
+  const outboxId = enqueueRoleNoticeEmail({
+    userId, type: 'team_declined', role: declined, version, payload: { result_role: result }
+  });
+
+  return { role: declined, version, result_role: result, outbox_id: outboxId };
+});
+
+function declinePlatformRole(userId, { version } = {}) {
+  if (typeof version !== 'string' || !version) {
+    return { success: false, status: 400, error: 'Bildirim sürümü gerekli.' };
+  }
+
+  try {
+    return { success: true, ...declinePlatformRoleTx(userId, version) };
+  } catch (error) {
+    if (error instanceof AdminActionError) {
+      return { success: false, status: error.status, error: error.message };
+    }
+    throw error;
+  }
+}
 
 function acceptPlatformRole(userId, { version, scrolledToEnd, accepted } = {}) {
   if (accepted !== true || scrolledToEnd !== true) {
@@ -3218,7 +3291,7 @@ db.exec(`
   BEGIN SELECT RAISE(ABORT, 'admin_audit_log is append-only'); END;
 `);
 
-const AUDIT_ACTIONS = ['platform_role_changed', 'platform_role_accepted', 'account_suspended', 'account_unsuspended'];
+const AUDIT_ACTIONS = ['platform_role_changed', 'platform_role_accepted', 'platform_role_declined', 'account_suspended', 'account_unsuspended'];
 const AUDIT_REASON_MAX = 500;
 const AUDIT_VALUE_MAX = 100;
 const AUDIT_MAX_LIMIT = 50;
@@ -3725,6 +3798,7 @@ module.exports = {
   platformRoleFields,
   ROLE_NOTICE_VERSIONS,
   acceptPlatformRole,
+  declinePlatformRole,
   markRoleNoticeSeen,
   claimNextRoleNoticeEmail,
   getRoleNoticeEmailTarget,

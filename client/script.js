@@ -4014,6 +4014,8 @@ const ROLE_NOTICE_UI = {
         hint: 'Onay kutusunu etkinleştirmek için metnin sonuna kadar kaydırın.',
         check: 'Bildirim metnini okudum, anladım ve bu görev kapsamında belirtilen sorumlulukları kabul ediyorum.',
         accept: 'Okudum, Anladım ve Kabul Ediyorum',
+        decline: 'Reddet',
+        declineConfirm: 'Bu görevi reddedersen atanan rol geri alınır ve moderasyon ekibine bilgi gider. Reddetmek istediğine emin misin?',
         later: 'Daha sonra',
         working: 'Kaydediliyor…',
         error: 'Kabul kaydedilemedi. Lütfen tekrar dene.',
@@ -4035,6 +4037,8 @@ const ROLE_NOTICE_UI = {
         hint: 'Scroll to the end of the text to enable the confirmation box.',
         check: 'I have read and understood this notice and I accept the responsibilities described for this duty.',
         accept: 'I Have Read, Understood and Accept',
+        decline: 'Decline',
+        declineConfirm: 'If you decline this duty, the assigned role is withdrawn and the moderation team is informed. Are you sure you want to decline?',
         later: 'Later',
         working: 'Saving…',
         error: 'Could not save your acceptance. Please try again.',
@@ -4166,6 +4170,8 @@ function openRoleNotice() {
     document.getElementById('role-notice-hint').textContent = ui.hint;
     document.getElementById('role-notice-check-text').textContent = ui.check;
     document.getElementById('role-notice-accept').textContent = ui.accept;
+    document.getElementById('role-notice-decline').textContent = ui.decline;
+    document.getElementById('role-notice-decline').disabled = false;
     document.getElementById('role-notice-later').textContent = ui.later;
     document.getElementById('role-notice-error').textContent = '';
 
@@ -4252,6 +4258,43 @@ async function submitRoleAcceptance() {
         updateRoleNoticeScrollState();
     }
 }
+
+async function submitRoleDecline() {
+    const acceptance = currentUser && currentUser.role_acceptance;
+    if (!acceptance) return;
+
+    const ui = ROLE_NOTICE_UI[roleNoticeLang()];
+    if (!confirm(ui.declineConfirm)) return;
+
+    const declineBtn = document.getElementById('role-notice-decline');
+    const errorEl = document.getElementById('role-notice-error');
+    declineBtn.disabled = true;
+    errorEl.textContent = '';
+
+    try {
+        const response = await fetch('/api/me/role-decline', {
+            method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ version: acceptance.version })
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok || !data.success) {
+            errorEl.textContent = data.error || ui.error;
+            declineBtn.disabled = false;
+            await refreshCurrentUserRole();
+            return;
+        }
+
+        await refreshCurrentUserRole();
+        closeRoleNotice();
+        refreshNotificationsBadge();
+    } catch (e) {
+        errorEl.textContent = ui.error;
+        declineBtn.disabled = false;
+    }
+}
+
+document.getElementById('role-notice-decline').addEventListener('click', submitRoleDecline);
 
 document.getElementById('role-notice-scroll').addEventListener('scroll', updateRoleNoticeScrollState, { passive: true });
 window.addEventListener('resize', () => { if (roleNoticeIsOpen()) updateRoleNoticeScrollState(); });

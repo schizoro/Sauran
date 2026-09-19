@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail } = require('./mailer');
+const { sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail } = require('./mailer');
 const push = require('./push');
 const daily = require('./daily');
 const express = require('express');
@@ -107,6 +107,7 @@ const {
   hasAtLeastPlatformRole,
   platformRoleFields,
   acceptPlatformRole,
+  declinePlatformRole,
   markRoleNoticeSeen,
   claimNextRoleNoticeEmail,
   getRoleNoticeEmailTarget,
@@ -599,10 +600,32 @@ app.post('/api/me/role-acceptance', (req, res) => {
     }
 
     io.to(`user:${user.id}`).emit('platform_role_updated', { reason: 'accepted' });
+    if (result.outbox_id) scheduleRoleNoticeEmails();
     return res.json({ success: true, role: result.role, version: result.version });
   } catch (error) {
     console.error('Görev kabulü hatası:', error);
     return res.status(500).json({ success: false, error: 'Kabul kaydedilemedi.' });
+  }
+});
+
+// Görevi reddetme: bekleyen görev + sürüm sunucuda doğrulanır; okuma/kaydırma şartı yoktur.
+app.post('/api/me/role-decline', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    const result = declinePlatformRole(user.id, { version: req.body?.version });
+
+    if (!result.success) {
+      return res.status(result.status).json({ success: false, error: result.error });
+    }
+
+    io.to(`user:${user.id}`).emit('platform_role_updated', { reason: 'declined' });
+    if (result.outbox_id) scheduleRoleNoticeEmails();
+    return res.json({ success: true, role: result.role, version: result.version, result_role: result.result_role });
+  } catch (error) {
+    console.error('Görev reddi hatası:', error);
+    return res.status(500).json({ success: false, error: 'Ret kaydedilemedi.' });
   }
 });
 
@@ -1137,7 +1160,23 @@ async function processRoleNoticeEmails() {
       try {
         const target = getRoleNoticeEmailTarget(row.user_id);
 
-        if (!target || !target.email) {
+        if (row.type === 'team_accepted' || row.type === 'team_declined') {
+          // Moderasyon ekibine giden kısa bilgilendirme: alıcı kullanıcı değil, ekip adresi.
+          if (!target) {
+            markRoleNoticeEmailSkipped(row.id, 'kullanıcı yok');
+          } else {
+            await sendRoleDecisionTeamEmail({
+              username: target.username,
+              userId: target.id,
+              decision: row.type === 'team_accepted' ? 'accepted' : 'declined',
+              role: row.role,
+              version: row.version,
+              resultRole: row.payload?.result_role,
+              date: row.created_at
+            });
+            markRoleNoticeEmailSent(row.id);
+          }
+        } else if (!target || !target.email) {
           markRoleNoticeEmailSkipped(row.id, 'alıcı veya e-posta yok');
         } else if (target.account_status === 'suspended') {
           markRoleNoticeEmailSkipped(row.id, 'hesap askıda');

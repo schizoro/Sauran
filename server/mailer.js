@@ -150,4 +150,33 @@ async function sendRoleNoticeEmail({ toEmail, username, type, role, payload, dat
   });
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail };
+// Moderasyon ekibine kısa bilgilendirme: bir kullanıcı yönetim görevini kabul etti / reddetti.
+// Alıcı REPORT_EMAIL_TO (yoksa destek@sauran.online). Kullanıcının e-posta adresi eklenmez.
+async function sendRoleDecisionTeamEmail({ username, userId, decision, role, version, resultRole, date }) {
+  const accepted = decision === 'accepted';
+  const roleLabel = ROLE_LABELS_TR[role] || role;
+  const resultLabel = ROLE_LABELS_TR[resultRole] || resultRole;
+  const when = escapeHtml(String(date || '').slice(0, 16).replace('T', ' ') || '—');
+
+  await transporter.sendMail({
+    to: REPORT_EMAIL_TO,
+    from: MAIL_FROM,
+    subject: `[SAURAN] Yönetim Görevi ${accepted ? 'Kabul Edildi' : 'Reddedildi'} — ${username} (${roleLabel})`,
+    html: `
+      <div style="font-family: 'Segoe UI', sans-serif; background: #0b0c10; color: #c5c6c7; padding: 32px; max-width: 520px; margin: auto; border-radius: 4px;">
+        <h2 style="color: ${accepted ? '#57f287' : '#ff6b7d'}; letter-spacing: 1px;">Yönetim Görevi ${accepted ? 'Kabul Edildi' : 'Reddedildi'}</h2>
+        <table style="font-size: 13px; border-collapse: collapse; margin-top: 12px;">
+          <tr><td style="padding:3px 14px 3px 0; color:#45a29e;">Kullanıcı</td><td>${escapeHtml(username)} (#${escapeHtml(userId)})</td></tr>
+          <tr><td style="padding:3px 14px 3px 0; color:#45a29e;">Görev</td><td>${escapeHtml(roleLabel)}</td></tr>
+          <tr><td style="padding:3px 14px 3px 0; color:#45a29e;">Bildirim sürümü</td><td>${escapeHtml(version)}</td></tr>
+          <tr><td style="padding:3px 14px 3px 0; color:#45a29e;">Karar</td><td>${accepted ? 'Kabul etti' : 'Reddetti'}</td></tr>
+          <tr><td style="padding:3px 14px 3px 0; color:#45a29e;">Güncel rol</td><td>${escapeHtml(resultLabel)}</td></tr>
+          <tr><td style="padding:3px 14px 3px 0; color:#45a29e;">Tarih</td><td>${when}</td></tr>
+        </table>
+        <p style="color: #6b7280; font-size: 12px; margin-top: 20px;">Sauran tarafından otomatik gönderilmiştir. Ayrıntı için Audit Log'a bakın.</p>
+      </div>
+    `
+  });
+}
+
+module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail };

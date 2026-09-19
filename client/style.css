@@ -1826,3 +1826,9 @@ body.call-mini-active { padding-top: 42px; }
 .notification-card.notification-seen { opacity: 0.6; border-left-color: #3b4450; }
 .notification-delete { border-color: #4b5563; color: #9ca3af; }
 .notification-delete:hover { background: #ff2e46; border-color: #ff2e46; color: #0b0c10; }
+
+/* ─── Görev bildirisi: Reddet ───────────────────────────────────────────── */
+.role-notice-decline { padding: 11px 20px; cursor: pointer; font-size: 13px; font-weight: bold; letter-spacing: 0.4px; color: #ff6b7d; background: rgba(255, 46, 70, 0.08); border: 1px solid rgba(255, 46, 70, 0.55); border-radius: 0; }
+.role-notice-decline:hover { background: rgba(255, 46, 70, 0.18); }
+.role-notice-decline:disabled { opacity: 0.4; cursor: not-allowed; }
+@media (max-width: 480px) { .role-notice-actions .role-notice-decline { width: 100%; } }

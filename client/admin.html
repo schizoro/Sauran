@@ -179,7 +179,7 @@
                 auAllActions: 'Tüm işlemler', auActorPh: 'Yapan ID', auTargetPh: 'Hedef ID', auFrom: 'Başlangıç', auTo: 'Bitiş',
                 auEmpty: 'Kayıt bulunamadı.', auEntries: 'kayıt', auDeleted: 'silinmiş hesap',
                 auNote: 'Yönetim geçmişi yalnızca ekleme yapılarak tutulur; bu panelden değiştirilemez veya silinemez. Yalnızca yönetimsel değişiklikler kaydedilir, sayfa görüntülemeleri kaydedilmez.',
-                act_platform_role_changed: 'Rol değişikliği', act_platform_role_accepted: 'Görev kabulü', act_account_suspended: 'Hesap askıya alındı', act_account_unsuspended: 'Askı kaldırıldı'
+                act_platform_role_changed: 'Rol değişikliği', act_platform_role_accepted: 'Görev kabulü', act_platform_role_declined: 'Görev reddi', act_account_suspended: 'Hesap askıya alındı', act_account_unsuspended: 'Askı kaldırıldı'
             },
             en: {
                 title: '🛡️ SAURAN ADMIN PANEL', back: '← App', moderation: 'Moderation Panel',
@@ -211,7 +211,7 @@
                 auAllActions: 'All actions', auActorPh: 'Actor ID', auTargetPh: 'Target ID', auFrom: 'From', auTo: 'To',
                 auEmpty: 'No entries found.', auEntries: 'entries', auDeleted: 'deleted account',
                 auNote: 'The admin history is append-only; it cannot be changed or deleted from this panel. Only administrative changes are recorded, not page views.',
-                act_platform_role_changed: 'Role changed', act_platform_role_accepted: 'Duty accepted', act_account_suspended: 'Account suspended', act_account_unsuspended: 'Suspension lifted'
+                act_platform_role_changed: 'Role changed', act_platform_role_accepted: 'Duty accepted', act_platform_role_declined: 'Duty declined', act_account_suspended: 'Account suspended', act_account_unsuspended: 'Suspension lifted'
             }
         };
 
@@ -472,7 +472,7 @@
             }
         }
 
-        const AUDIT_ACTIONS = ['platform_role_changed', 'platform_role_accepted', 'account_suspended', 'account_unsuspended'];
+        const AUDIT_ACTIONS = ['platform_role_changed', 'platform_role_accepted', 'platform_role_declined', 'account_suspended', 'account_unsuspended'];
         const audit = { page: 1, limit: 20, total: 0, loaded: false };
 
         function who(id, username) {
