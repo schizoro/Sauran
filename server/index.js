@@ -50,6 +50,7 @@ const {
   voteHubPoll,
   createHubShare,
   deleteHub,
+  clearHubMessages,
   getHubDailyRoomName,
   listVoiceRooms,
   createVoiceRoom,
@@ -2297,6 +2298,29 @@ function clearVoiceRoom(roomId) {
 // =====================================================
 // HUB SİLME
 // =====================================================
+
+app.delete('/api/hubs/:id/messages', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const hubId = Number(req.params.id);
+
+  try {
+    const result = clearHubMessages(hubId, user.id);
+
+    if (!result.success) {
+      return res.status(403).json(result);
+    }
+
+    io.to(`hub:${hubId}`).emit('hub_chat_cleared', { hub_id: hubId });
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('Lobi sohbeti temizleme hatası:', error);
+    res.status(500).json({ success: false, error: 'Sohbet temizlenemedi.' });
+  }
+});
 
 app.delete('/api/hubs/:id', (req, res) => {
   const user = requireAuth(req, res);
