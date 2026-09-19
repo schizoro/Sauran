@@ -2662,7 +2662,90 @@ async function removePushSubscriptionOnLogout() {
 
 }
 
+// ── Yerel (Android) uygulama: arka plandayken sistem bildirimi ───────────────
+// WebView'da Notification API / Web Push yoktur. Uygulama çalışırken (arka planda) gelen
+// mesaj / arama / istek bildirimleri yerel köprü üzerinden Android bildirim çubuğuna gönderilir.
+// Uygulama tamamen kapalıyken bildirim için sunucudan gönderilen push (FCM) gerekir.
+let nativeNotifyPlugin = null;
+let nativeNotifyReady = false;
+
+function getNativeNotify() {
+    try {
+        const cap = window.Capacitor;
+        if (!cap || typeof cap.isNativePlatform !== 'function' || !cap.isNativePlatform()) return null;
+        if (!nativeNotifyPlugin) {
+            nativeNotifyPlugin = typeof cap.registerPlugin === 'function'
+                ? cap.registerPlugin('SauranNotify')
+                : (cap.Plugins && cap.Plugins.SauranNotify) || null;
+        }
+        return nativeNotifyPlugin;
+    } catch (_) {
+        return null;
+    }
+}
+
+// Aynı sohbetten gelen bildirimleri sayar ("3 yeni mesaj"): etiket -> adet. Bildirim kaldırılınca sıfırlanır.
+const nativeNotifyCounts = new Map();
+
+function nativeNotifyCancel(tag) {
+    nativeNotifyCounts.delete(tag);
+    const plugin = getNativeNotify();
+    if (!plugin) return;
+    try { Promise.resolve(plugin.cancel({ tag })).catch(() => {}); } catch (_) { /* yoksay */ }
+}
+
+// Uygulama öne gelince: açık sohbetin bildirimini ve genel bildirimleri temizle
+// (kullanıcı zaten uygulamada; diğer sohbetlerin kartları, o sohbetler açılana kadar kalır).
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !getNativeNotify()) return;
+    nativeNotifyCancel('sauran');
+    if (activeDmUserId) nativeNotifyCancel(`dm-${activeDmUserId}`);
+    if (currentHub) nativeNotifyCancel(`hub-${currentHub.id}`);
+});
+
+// Giriş sonrası bir kez: bildirim iznini iste ve bildirime dokunulunca ilgili sohbeti aç.
+function initNativeNotifications() {
+    const plugin = getNativeNotify();
+    if (!plugin || nativeNotifyReady) return;
+    nativeNotifyReady = true;
+
+    try {
+        Promise.resolve(plugin.requestPermission()).catch(() => {});
+
+        plugin.addListener('tap', (event) => {
+            if (!currentUser || !event?.url) return;
+            try {
+                const params = new URL(event.url, location.origin).searchParams;
+                const userId = Number(params.get('open_dm'));
+                const hubId = Number(params.get('open_hub'));
+                if (userId) openDm(userId, params.get('name') || '');
+                else if (hubId) openHub(hubId);
+            } catch (_) { /* yoksay */ }
+        });
+    } catch (error) {
+        console.warn('Yerel bildirim köprüsü başlatılamadı:', error);
+    }
+}
+
 async function showSystemNotification(title, body, options = {}) {
+
+    const nativePlugin = getNativeNotify();
+    if (nativePlugin) {
+        const tag = options.tag || 'sauran';
+
+        // Aynı sohbetten art arda gelen mesajlar tek kartta toplanır: "3 yeni mesaj · son mesaj".
+        if (tag.startsWith('dm-') || tag.startsWith('hub-')) {
+            const count = (nativeNotifyCounts.get(tag) || 0) + 1;
+            nativeNotifyCounts.set(tag, count);
+            if (count > 1) {
+                const label = localStorage.getItem('sauran_lang') === 'en' ? 'new messages' : 'yeni mesaj';
+                body = `${count} ${label} · ${body}`;
+            }
+        }
+
+        await nativePlugin.notify({ title, body, tag, url: options.data?.url || '/' });
+        return;
+    }
 
     const registration = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : null;
 
@@ -2681,7 +2764,7 @@ async function showSystemNotification(title, body, options = {}) {
 // gösterilmez). İzin yoksa hiçbir şey yapma — burada asla izin İSTEMİYORUZ.
 function maybeShowBrowserNotification(type, label) {
 
-    if (getBrowserNotifState() !== 'granted') return;
+    if (getBrowserNotifState() !== 'granted' && !getNativeNotify()) return;
     if (document.hasFocus()) return;
     if (document.visibilityState === 'hidden' && pushSubscribed) return;
 
@@ -2707,7 +2790,7 @@ function dmPreviewText(msg) {
 function maybeNotifyIncomingHubMessage(msg) {
 
     if (!notifDesktopEnabled || !notifHubMessageEnabled || !currentHub || currentHub.my_muted) return;
-    if (getBrowserNotifState() !== 'granted') return;
+    if (getBrowserNotifState() !== 'granted' && !getNativeNotify()) return;
     if (document.hasFocus()) return;
     if (document.visibilityState === 'hidden' && pushSubscribed) return;
 
@@ -2722,7 +2805,7 @@ function maybeNotifyIncomingHubMessage(msg) {
 function maybeNotifyIncomingDm(msg) {
 
     if (!notifDesktopEnabled || !notifDmEnabled) return;
-    if (getBrowserNotifState() !== 'granted') return;
+    if (getBrowserNotifState() !== 'granted' && !getNativeNotify()) return;
     if (document.hasFocus()) return;
     if (document.visibilityState === 'hidden' && pushSubscribed) return;
 
@@ -3682,6 +3765,7 @@ function connectToChat() {
             } else if (msg.user_id !== currentUser.id) {
 
                 unreadDmCounts.set(otherId, (unreadDmCounts.get(otherId) || 0) + 1);
+                updateFriendsToggleBadge();
                 refreshFriendsSidebar();
                 playMessageSound();
 
@@ -3874,6 +3958,7 @@ function connectToChat() {
     loadNotificationPreferences();
     ensurePushSubscription();
     handlePendingNotificationOpen();
+    initNativeNotifications();
 
     maybeShowDevNotice();
     maybeShowRoleNotices();
@@ -4676,6 +4761,18 @@ const friendsSidebar2 = document.getElementById('friends-sidebar');
 const friendsSidebarList = document.getElementById('friends-sidebar-list');
 const unreadDmCounts = new Map(); // userId -> count
 
+// Sağdaki "Arkadaşlar" düğmesinin üstünde toplam okunmamış özel mesaj sayısını göster.
+function updateFriendsToggleBadge() {
+    const badge = document.getElementById('friends-sidebar-toggle-badge');
+    if (!badge) return;
+
+    let total = 0;
+    unreadDmCounts.forEach((count) => { total += count; });
+
+    badge.textContent = total > 99 ? '99+' : String(total);
+    badge.style.display = total > 0 ? 'flex' : 'none';
+}
+
 friendsSidebarToggleBtn2.addEventListener('click', () => {
     friendsSidebar2.classList.toggle('open');
     friendsSidebarToggleBtn2.classList.toggle('open');
@@ -4753,6 +4850,7 @@ function renderFriendsSidebar(friends) {
 
         row.addEventListener('click', () => {
             unreadDmCounts.delete(userId);
+            updateFriendsToggleBadge();
             renderFriendsSidebar(friends);
             openDm(userId, username);
         });
@@ -5768,6 +5866,8 @@ async function openDm(userId, username) {
     dmFeed.innerHTML = '';
 
     unreadDmCounts.delete(userId);
+    updateFriendsToggleBadge();
+    nativeNotifyCancel(`dm-${userId}`);
     refreshFriendsSidebar();
 
     try {
@@ -8486,6 +8586,8 @@ hubCreateModal.addEventListener(
 
 async function openHub(hubId) {
 
+    nativeNotifyCancel(`hub-${hubId}`);
+
     try {
 
         const response = await fetch(`/api/hubs/${hubId}`, { credentials: 'include' });
@@ -8771,6 +8873,12 @@ callRingingCancelBtn.addEventListener('click', () => {
     endDmCallUi();
 });
 
+// Arayan kişi aramayı iptal ederken bizim soketimiz kopuksa (uygulama arka plana alınmış) 'iptal'
+// olayı kaçırılır ve zil sonsuza dek çalardı. Sunucu çağrı durumunu tutmadığı için istemci tarafında
+// gelen arama bu süre sonra kendiliğinden kapanır.
+const INCOMING_CALL_RING_TIMEOUT_MS = 45_000;
+let incomingCallRingTimer = null;
+
 function showIncomingCall(fromId, fromUsername) {
 
     if (callFrame || callMode) return; // zaten görüşmedeyse gelen aramayı gösterme
@@ -8782,13 +8890,26 @@ function showIncomingCall(fromId, fromUsername) {
     dmIncomingCallModal.style.display = 'flex';
     startRingtone();
 
+    clearTimeout(incomingCallRingTimer);
+    incomingCallRingTimer = setTimeout(() => {
+        if (incomingCallFromId === fromId) hideIncomingCall();
+    }, INCOMING_CALL_RING_TIMEOUT_MS);
+
+    // Uygulama arka plandaysa (yerel uygulama) gelen aramayı bildirim çubuğunda da göster.
+    if (getNativeNotify() && (document.visibilityState === 'hidden' || !document.hasFocus())) {
+        showSystemNotification(fromUsername, 'Seni arıyor', { tag: 'call', data: { url: '/' } }).catch(() => {});
+    }
+
 }
 
 function hideIncomingCall() {
+    clearTimeout(incomingCallRingTimer);
+    incomingCallRingTimer = null;
     dmIncomingCallModal.style.display = 'none';
     incomingCallFromId = null;
     incomingCallFromUsername = '';
     stopRingtone();
+    nativeNotifyCancel('call');
 }
 
 dmIncomingCallDeclineBtn.addEventListener('click', () => {

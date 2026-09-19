@@ -10,6 +10,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         // Sesli oda ön plan servisi köprüsü (web uygulaması: window.Capacitor.Plugins.SauranVoice).
         registerPlugin(SauranVoicePlugin.class);
+        registerPlugin(SauranNotifyPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
