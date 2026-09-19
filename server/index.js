@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail } = require('./mailer');
+const { sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail } = require('./mailer');
 const push = require('./push');
 const daily = require('./daily');
 const express = require('express');
@@ -102,6 +102,15 @@ const {
   updateNotificationPreferences,
   markNotificationRead,
   hasAtLeastPlatformRole,
+  platformRoleFields,
+  acceptPlatformRole,
+  markRoleNoticeSeen,
+  claimNextRoleNoticeEmail,
+  getRoleNoticeEmailTarget,
+  markRoleNoticeEmailSent,
+  markRoleNoticeEmailSkipped,
+  markRoleNoticeEmailFailed,
+  recoverStaleRoleNoticeEmails,
   getReportDetail,
   getModerationUserDetail,
   listAdminUsers,
@@ -302,6 +311,7 @@ function getUserFromSessionToken(token) {
     SELECT users.id, users.username, users.email, users.about_me,
            users.status, users.avatar_visibility, users.avatar_data, users.banner_data,
            users.birth_date, users.platform_role, users.dev_notice_seen, users.dev_notice_new, users.account_status,
+           users.role_acceptance_pending, users.role_accepted_role, users.role_notice_kind, users.role_notice_at,
            sessions.expires_at
     FROM sessions
     INNER JOIN users ON users.id = sessions.user_id
@@ -328,7 +338,7 @@ function getUserFromSessionToken(token) {
     avatar_data: user.avatar_data,
     banner_data: user.banner_data,
     is_minor: isMinorAge(calculateAge(user.birth_date)),
-    platform_role: user.platform_role || 'user',
+    ...platformRoleFields(user),
     dev_notice: devNoticeFor(user.dev_notice_seen, user.dev_notice_new)
   };
 }
@@ -478,6 +488,9 @@ app.post('/api/login', loginLimiter, (req, res) => {
         avatar_visibility: result.avatar_visibility,
         avatar_data: result.avatar_data,
         platform_role: result.platform_role,
+        assigned_platform_role: result.assigned_platform_role,
+        role_acceptance: result.role_acceptance,
+        role_notice: result.role_notice,
         dev_notice: result.dev_notice
       }
     });
@@ -564,6 +577,45 @@ app.post('/api/sessions/logout-all', (req, res) => {
 // =====================================================
 // HESABI SİL
 // =====================================================
+
+// Resmi görev kabulü. UI zorlamaları (scroll/checkbox) yalnızca kullanıcı deneyimidir;
+// sunucu bekleyen kabulü, sürümü ve accepted/scrolled_to_end alanlarını tekrar doğrular.
+app.post('/api/me/role-acceptance', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    const result = acceptPlatformRole(user.id, {
+      version: req.body?.version,
+      scrolledToEnd: req.body?.scrolled_to_end,
+      accepted: req.body?.accepted
+    });
+
+    if (!result.success) {
+      return res.status(result.status).json({ success: false, error: result.error });
+    }
+
+    io.to(`user:${user.id}`).emit('platform_role_updated', { reason: 'accepted' });
+    return res.json({ success: true, role: result.role, version: result.version });
+  } catch (error) {
+    console.error('Görev kabulü hatası:', error);
+    return res.status(500).json({ success: false, error: 'Kabul kaydedilemedi.' });
+  }
+});
+
+// Görevden alma bilgilendirme panelinin "bir kez gösterildi" işareti.
+app.post('/api/me/role-notice-seen', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    markRoleNoticeSeen(user.id);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Görev bilgilendirme durumu kaydedilemedi:', error);
+    return res.status(500).json({ success: false, error: 'Kaydedilemedi.' });
+  }
+});
 
 app.post('/api/me/dev-notice-seen', (req, res) => {
   const user = requireAuth(req, res);
@@ -1053,6 +1105,70 @@ app.get('/api/admin/stats', (req, res) => {
 // Platform rolü değiştirme: YALNIZCA founder. Hedef kullanıcı ID'si sadece URL'den,
 // yeni rol ve gerekçe sadece gövdeden okunur; gövdedeki başka alanlar (actor,
 // platform_role, id vb.) YOK SAYILIR. Rol + audit kaydı tek transaction'dadır.
+// Rol değişikliği commit edildikten SONRA: canlı bildirim (socket) + e-posta outbox işleme.
+// Hiçbiri rol değişikliğinin sonucunu etkilemez.
+function deliverRoleNotice(userId, notice) {
+  try {
+    if (notice?.notification && !notice.notification.suppressed) {
+      pushNotification(userId, notice.notification.type, notice.notification.data);
+    }
+    io.to(`user:${userId}`).emit('platform_role_updated', { reason: notice?.kind || 'changed' });
+  } catch (error) {
+    console.error('Rol bildirimi canlı iletilemedi:', error);
+  }
+
+  if (notice?.outbox_id) scheduleRoleNoticeEmails();
+}
+
+// E-posta outbox işleyicisi. Satırlar atomik olarak talep edilir (aynı satır iki kez
+// gönderilmez); hata durumunda satır 'pending' + geri çekilme ile kalır ve tekrar denenir.
+let roleEmailWorkerRunning = false;
+
+async function processRoleNoticeEmails() {
+  if (roleEmailWorkerRunning) return;
+  roleEmailWorkerRunning = true;
+
+  try {
+    let row;
+    while ((row = claimNextRoleNoticeEmail())) {
+      try {
+        const target = getRoleNoticeEmailTarget(row.user_id);
+
+        if (!target || !target.email) {
+          markRoleNoticeEmailSkipped(row.id, 'alıcı veya e-posta yok');
+        } else if (target.account_status === 'suspended') {
+          markRoleNoticeEmailSkipped(row.id, 'hesap askıda');
+        } else if (row.type === 'assigned' && target.platform_role !== row.role) {
+          // Aradan geçen sürede rol değişmiş: eski "görevlendirildiniz" e-postası yanıltıcı olur.
+          markRoleNoticeEmailSkipped(row.id, 'atama güncelliğini yitirdi');
+        } else {
+          await sendRoleNoticeEmail({
+            toEmail: target.email,
+            username: target.username,
+            type: row.type,
+            role: row.role,
+            version: row.version,
+            payload: row.payload,
+            date: row.created_at
+          });
+          markRoleNoticeEmailSent(row.id);
+        }
+      } catch (error) {
+        console.error(`Rol bildirimi e-postası gönderilemedi (outbox #${row.id}, deneme ${row.attempts}):`, error.message);
+        markRoleNoticeEmailFailed(row.id, error);
+      }
+    }
+  } catch (error) {
+    console.error('Rol e-postası işleyicisi hatası:', error);
+  } finally {
+    roleEmailWorkerRunning = false;
+  }
+}
+
+function scheduleRoleNoticeEmails() {
+  setImmediate(() => { processRoleNoticeEmails().catch(() => {}); });
+}
+
 app.patch('/api/admin/users/:id/role', adminWriteLimiter, (req, res) => {
   const actor = requirePlatformRole(req, res, 'founder');
   if (!actor) return;
@@ -1073,7 +1189,18 @@ app.patch('/api/admin/users/:id/role', adminWriteLimiter, (req, res) => {
       return res.status(result.status).json({ success: false, error: result.error });
     }
 
-    return res.json({ success: true, user: { id: result.id, platform_role: result.new_role } });
+    // Transaction (rol + audit + bildirim + outbox) commit edildi; bundan sonrası "en iyi
+    // çaba"dır ve başarısız olsa bile rol değişikliğini/yanıtı etkilemez.
+    deliverRoleNotice(result.id, result.notice);
+
+    return res.json({
+      success: true,
+      user: {
+        id: result.id,
+        platform_role: result.new_role,
+        role_acceptance_pending: result.acceptance_pending
+      }
+    });
   } catch (error) {
     console.error('Rol değiştirme hatası:', error);
     res.status(500).json({ success: false, error: 'Rol değiştirilemedi.' });
@@ -2166,7 +2293,9 @@ const NOTIFICATION_CATEGORY_MAP = {
   hub_message: 'notify_hub_message',
   incoming_call: 'notify_incoming_call',
   missed_call: 'notify_missed_call',
-  system: 'notify_system'
+  system: 'notify_system',
+  platform_role_notice: 'notify_system',
+  platform_role_revoked: 'notify_system'
 };
 
 // NOT: Bildirimin veritabanına yazılması bu fonksiyonun işi DEĞİL — o iş
@@ -2194,7 +2323,9 @@ function pushNotification(userId, type, data) {
   const webPushLabel = {
     friend_request: `${data?.from_username || 'Biri'} sana arkadaşlık isteği gönderdi.`,
     friend_request_accepted: `${data?.from_username || 'Biri'} arkadaşlık isteğini kabul etti.`,
-    hub_invite: `${data?.from_username || 'Biri'} seni ${data?.hub_name || 'bir'} lobisine davet etti.`
+    hub_invite: `${data?.from_username || 'Biri'} seni ${data?.hub_name || 'bir'} lobisine davet etti.`,
+    platform_role_notice: 'Sauran Yönetim: Yeni bir görev bildirimin var.',
+    platform_role_revoked: 'Sauran Yönetim: Yönetim görevin hakkında bir bilgilendirme var.'
   }[type];
 
   if (webPushLabel) {
@@ -3133,4 +3264,12 @@ const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
   console.log(`Sauran sunucusu çalışıyor → http://localhost:${PORT}`);
+
+  // Önceki çalışmadan kalan (gönderilememiş / yarıda kalmış) rol e-postalarını yeniden dene.
+  try { recoverStaleRoleNoticeEmails(); } catch (error) { console.error('Outbox toparlama hatası:', error); }
+  scheduleRoleNoticeEmails();
+  setInterval(() => {
+    try { recoverStaleRoleNoticeEmails(); } catch (error) { console.error('Outbox toparlama hatası:', error); }
+    scheduleRoleNoticeEmails();
+  }, 5 * 60 * 1000).unref();
 });

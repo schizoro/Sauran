@@ -1501,6 +1501,57 @@
         </div>
     </div>
 
+    <!-- ================================================= -->
+    <!-- RESMİ YÖNETİM GÖREVİ BİLDİRİSİ (kabul gerektirir) -->
+    <!-- ================================================= -->
+
+    <div id="role-notice-overlay" class="dev-notice-overlay" aria-hidden="true">
+        <div class="dev-notice-panel" role="dialog" aria-modal="true" aria-labelledby="role-notice-title" aria-describedby="role-notice-body">
+            <div class="dev-notice-scroll" id="role-notice-scroll" tabindex="0">
+                <div class="dev-notice-head">
+                    <span class="dev-notice-icon" aria-hidden="true">!</span>
+                    <div>
+                        <div id="role-notice-official" class="role-notice-official"></div>
+                        <h2 id="role-notice-title" class="dev-notice-title"></h2>
+                    </div>
+                </div>
+                <div id="role-notice-body" class="dev-notice-body"></div>
+                <div id="role-notice-sign" class="dev-notice-sign"></div>
+            </div>
+            <div class="dev-notice-footer role-notice-footer">
+                <p id="role-notice-hint" class="role-notice-hint"></p>
+                <label class="role-notice-check">
+                    <input type="checkbox" id="role-notice-check" disabled>
+                    <span id="role-notice-check-text"></span>
+                </label>
+                <div id="role-notice-error" class="role-notice-error" role="alert"></div>
+                <div class="role-notice-actions">
+                    <button id="role-notice-later" class="role-notice-later" type="button"></button>
+                    <button id="role-notice-accept" class="dev-notice-btn" type="button" disabled></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Görevden alma bilgilendirmesi: yalnızca bilgi, onay/kabul YOK, bir kez gösterilir -->
+    <div id="role-revoked-overlay" class="dev-notice-overlay" aria-hidden="true">
+        <div class="dev-notice-panel" role="dialog" aria-modal="true" aria-labelledby="role-revoked-title" aria-describedby="role-revoked-body">
+            <div class="dev-notice-scroll">
+                <div class="dev-notice-head">
+                    <span class="dev-notice-icon" aria-hidden="true">i</span>
+                    <div>
+                        <div id="role-revoked-official" class="role-notice-official"></div>
+                        <h2 id="role-revoked-title" class="dev-notice-title"></h2>
+                    </div>
+                </div>
+                <div id="role-revoked-body" class="dev-notice-body"></div>
+            </div>
+            <div class="dev-notice-footer">
+                <button id="role-revoked-btn" class="dev-notice-btn" type="button"></button>
+            </div>
+        </div>
+    </div>
+
     <script src="script.js"></script>
 
 </body>

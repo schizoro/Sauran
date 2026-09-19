@@ -163,7 +163,7 @@
                 moderationSec: 'Moderasyon', reportsAgainst: 'Hakkındaki rapor', reportsOpen: 'Açık', reportsResolved: 'Çözümlenen', reportsFiled: 'Açtığı rapor',
                 viewReports: 'Moderasyon panelinde incele →', readOnly: 'Bu panelden kullanıcı silinemez ve kullanıcı verisi dışa aktarılamaz.',
                 roleTitle: 'Platform rolü', roleNew: 'Yeni rol', roleReasonPh: 'Gerekçe (zorunlu)', roleApply: 'Rolü Değiştir',
-                roleFounderLocked: 'Founder rolü web panelinden değiştirilemez.', roleDone: 'Rol güncellendi.',
+                roleFounderLocked: 'Founder rolü web panelinden değiştirilemez.', roleDone: 'Rol güncellendi.', rolePending: 'Kullanıcı yeni yönetim görevi için kabul bekliyor.',
                 roleHint: 'Bu gerekçe yalnızca iç yönetim kaydına (audit log) yazılır, kullanıcıya gösterilmez.',
                 roleReasonRequired: 'Gerekçe zorunlu.', roleWorking: 'Uygulanıyor…',
                 accStatus: 'Hesap durumu', statusActive: 'Aktif', statusSuspended: 'Askıda', suspendedBadge: 'Askıda',
@@ -179,7 +179,7 @@
                 auAllActions: 'Tüm işlemler', auActorPh: 'Yapan ID', auTargetPh: 'Hedef ID', auFrom: 'Başlangıç', auTo: 'Bitiş',
                 auEmpty: 'Kayıt bulunamadı.', auEntries: 'kayıt', auDeleted: 'silinmiş hesap',
                 auNote: 'Yönetim geçmişi yalnızca ekleme yapılarak tutulur; bu panelden değiştirilemez veya silinemez. Yalnızca yönetimsel değişiklikler kaydedilir, sayfa görüntülemeleri kaydedilmez.',
-                act_platform_role_changed: 'Rol değişikliği', act_account_suspended: 'Hesap askıya alındı', act_account_unsuspended: 'Askı kaldırıldı'
+                act_platform_role_changed: 'Rol değişikliği', act_platform_role_accepted: 'Görev kabulü', act_account_suspended: 'Hesap askıya alındı', act_account_unsuspended: 'Askı kaldırıldı'
             },
             en: {
                 title: '🛡️ SAURAN ADMIN PANEL', back: '← App', moderation: 'Moderation Panel',
@@ -195,7 +195,7 @@
                 moderationSec: 'Moderation', reportsAgainst: 'Reports against', reportsOpen: 'Open', reportsResolved: 'Resolved', reportsFiled: 'Reports filed',
                 viewReports: 'Review in moderation panel →', readOnly: 'Users cannot be deleted and user data cannot be exported from this panel.',
                 roleTitle: 'Platform role', roleNew: 'New role', roleReasonPh: 'Reason (required)', roleApply: 'Change Role',
-                roleFounderLocked: 'The founder role cannot be changed from the web panel.', roleDone: 'Role updated.',
+                roleFounderLocked: 'The founder role cannot be changed from the web panel.', roleDone: 'Role updated.', rolePending: 'The user is awaiting acceptance of the new management duty.',
                 roleHint: 'This reason is written only to the internal admin record (audit log) and is not shown to the user.',
                 roleReasonRequired: 'A reason is required.', roleWorking: 'Applying…',
                 accStatus: 'Account status', statusActive: 'Active', statusSuspended: 'Suspended', suspendedBadge: 'Suspended',
@@ -211,7 +211,7 @@
                 auAllActions: 'All actions', auActorPh: 'Actor ID', auTargetPh: 'Target ID', auFrom: 'From', auTo: 'To',
                 auEmpty: 'No entries found.', auEntries: 'entries', auDeleted: 'deleted account',
                 auNote: 'The admin history is append-only; it cannot be changed or deleted from this panel. Only administrative changes are recorded, not page views.',
-                act_platform_role_changed: 'Role changed', act_account_suspended: 'Account suspended', act_account_unsuspended: 'Suspension lifted'
+                act_platform_role_changed: 'Role changed', act_platform_role_accepted: 'Duty accepted', act_account_suspended: 'Account suspended', act_account_unsuspended: 'Suspension lifted'
             }
         };
 
@@ -340,10 +340,10 @@
                 msg.style.color = '#9ca3af';
                 msg.textContent = t('roleWorking');
                 try {
-                    await send('PATCH', `/api/admin/users/${encodeURIComponent(a.id)}/role`, { role: $('rc-role').value, reason });
+                    const changed = await send('PATCH', `/api/admin/users/${encodeURIComponent(a.id)}/role`, { role: $('rc-role').value, reason });
                     await openDetail(a.id);
                     $('rc-msg').style.color = '#57f287';
-                    $('rc-msg').textContent = t('roleDone');
+                    $('rc-msg').textContent = t('roleDone') + (changed.user && changed.user.role_acceptance_pending ? ' ' + t('rolePending') : '');
                     loadUsers().catch(() => {});
                     if (audit.loaded) loadAudit().catch(() => {});
                 } catch (e) {
@@ -439,6 +439,7 @@
                         <div><div style="font-size:16px;font-weight:bold;color:#fff;">${esc(a.username)}</div>
                         <span class="adm-role ${esc(a.platform_role)}">${esc(a.platform_role)}</span></div>
                     </div>
+                    ${a.role_acceptance_pending ? `<p class="adm-muted" style="font-size:12px;margin:6px 0 0;">${esc(t('rolePending'))}</p>` : ''}
                     <div class="adm-section-title">${t('account')}</div>
                     ${row('ID', a.id)}
                     ${row(t('email'), a.email ? esc(a.email) : esc(t('noEmail')), !a.email)}
@@ -471,7 +472,7 @@
             }
         }
 
-        const AUDIT_ACTIONS = ['platform_role_changed', 'account_suspended', 'account_unsuspended'];
+        const AUDIT_ACTIONS = ['platform_role_changed', 'platform_role_accepted', 'account_suspended', 'account_unsuspended'];
         const audit = { page: 1, limit: 20, total: 0, loaded: false };
 
         function who(id, username) {

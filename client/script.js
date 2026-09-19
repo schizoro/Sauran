@@ -1682,18 +1682,23 @@ async function verify() {
 // KULLANICIYI AYARLA
 // =====================================================
 
-function setCurrentUser(user) {
-
-    currentUser =
-        user;
-
-    // Sadece bir GÖRÜNÜRLÜK kolaylığı — asıl yetki kontrolü sunucuda (requirePlatformRole).
+// Sadece bir GÖRÜNÜRLÜK kolaylığı — asıl yetki kontrolü sunucuda (requirePlatformRole).
+// user.platform_role sunucudan ETKİN rol olarak gelir (kabul bekleyen görev sayılmaz).
+function applyAdminLinkVisibility(user) {
     const adminLink = document.getElementById('admin-panel-link');
     if (adminLink) {
         const role = user.platform_role;
         adminLink.style.display = (role === 'moderator' || role === 'admin' || role === 'founder') ? 'flex' : 'none';
         adminLink.setAttribute('href', role === 'moderator' ? 'moderation.html' : 'admin.html');
     }
+}
+
+function setCurrentUser(user) {
+
+    currentUser =
+        user;
+
+    applyAdminLinkVisibility(user);
 
     currentUsername =
         user.username;
@@ -3019,6 +3024,8 @@ const I18N = {
     'suspended-reason': { tr: 'Gerekçe:', en: 'Reason:' },
     'suspended-support': { tr: 'Destek:', en: 'Support:' },
     'dev-notice-btn': { tr: 'Anladım, Devam Et', en: 'Got it, Continue' },
+    'notif-role-notice': { tr: 'Sauran Yönetim: yeni görev bildirimi', en: 'Sauran Management: new duty notice' },
+    'notif-role-revoked': { tr: 'Sauran Yönetim: görev bilgilendirmesi', en: 'Sauran Management: duty information' },
     'hubs-title': { tr: 'Ana Menü', en: 'Home' },
     'hubs-owned': { tr: 'OLUŞTURDUĞUM LOBİLER', en: 'LOBBIES I CREATED' },
     'hubs-joined': { tr: 'KATILDIĞIM LOBİLER', en: 'LOBBIES I JOINED' },
@@ -3692,7 +3699,9 @@ function connectToChat() {
             const labelByType = {
                 friend_request: t('notif-friend-request'),
                 friend_request_accepted: t('notif-friend-accepted'),
-                hub_invite: t('notif-hub-invite')
+                hub_invite: t('notif-hub-invite'),
+                platform_role_notice: t('notif-role-notice'),
+                platform_role_revoked: t('notif-role-revoked')
             };
             const label = labelByType[payload?.type] || t('notif-hub-invite');
             const channels = payload?.channels || {};
@@ -3702,6 +3711,14 @@ function connectToChat() {
             if (channels.sound !== false) playNotifSound();
         }
     );
+
+
+    // Platform rolü (görev / görevden alma / kabul) değişti: etkin rolü ve bildirimleri yenile.
+    socket.on('platform_role_updated', async () => {
+        await refreshCurrentUserRole();
+        roleNoticeDismissed = false;
+        maybeShowRoleNotices();
+    });
 
 
     // -------------------------------------------------
@@ -3852,6 +3869,7 @@ function connectToChat() {
     handlePendingNotificationOpen();
 
     maybeShowDevNotice();
+    maybeShowRoleNotices();
 
 }
 
@@ -3962,6 +3980,7 @@ function closeDevNotice() {
     setTimeout(() => {
         overlay.classList.remove('visible');
         if (devNoticeReturnFocus && typeof devNoticeReturnFocus.focus === 'function') devNoticeReturnFocus.focus();
+        maybeShowRoleNotices();
     }, 240);
 
 }
@@ -3977,6 +3996,339 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'Tab') { event.preventDefault(); document.getElementById('dev-notice-btn').focus(); }
 }, true);
 
+
+
+// =====================================================
+// RESMİ YÖNETİM GÖREVİ BİLDİRİSİ / GÖREVDEN ALMA BİLGİLENDİRMESİ
+// =====================================================
+// Görev bildirisi: kullanıcı metnin sonuna kadar kaydırmadan onay kutusu, onay kutusu
+// işaretlenmeden kabul düğmesi etkinleşmez. Bunlar yalnızca kullanıcı deneyimi
+// zorlamalarıdır; sunucu kabulü (bekleyen görev + sürüm + accepted + scrolled_to_end)
+// ayrıca doğrular. Metinler bir hukuki sözleşme değildir; görev kapsamını bildirir.
+
+const ROLE_NOTICE_UI = {
+    tr: {
+        official: 'Sauran Yönetim',
+        title: 'Sauran Yönetim Görevi Bildirimi',
+        hint: 'Onay kutusunu etkinleştirmek için metnin sonuna kadar kaydırın.',
+        check: 'Bildirim metnini okudum, anladım ve bu görev kapsamında belirtilen sorumlulukları kabul ediyorum.',
+        accept: 'Okudum, Anladım ve Kabul Ediyorum',
+        later: 'Daha sonra',
+        working: 'Kaydediliyor…',
+        error: 'Kabul kaydedilemedi. Lütfen tekrar dene.',
+        revokedTitle: 'Yönetim göreviniz sona erdirilmiştir.',
+        revokedRemoved: 'Kaldırılan görev',
+        revokedCurrent: 'Güncel rolünüz',
+        revokedBy: 'İşlemi yapan',
+        revokedByValue: 'Founder (Sauran Yönetim)',
+        revokedDate: 'Tarih',
+        revokedSupport: 'Destek için',
+        revokedInfo: 'Bu bilgilendirme için herhangi bir onay gerekmez.',
+        ok: 'Tamam',
+        roles: { moderator: 'Moderator', admin: 'Admin', user: 'Kullanıcı' },
+        sign: 'Sauran Yönetim'
+    },
+    en: {
+        official: 'Sauran Management',
+        title: 'Sauran Management Duty Notice',
+        hint: 'Scroll to the end of the text to enable the confirmation box.',
+        check: 'I have read and understood this notice and I accept the responsibilities described for this duty.',
+        accept: 'I Have Read, Understood and Accept',
+        later: 'Later',
+        working: 'Saving…',
+        error: 'Could not save your acceptance. Please try again.',
+        revokedTitle: 'Your management duty has been ended.',
+        revokedRemoved: 'Duty removed',
+        revokedCurrent: 'Your current role',
+        revokedBy: 'Action taken by',
+        revokedByValue: 'Founder (Sauran Management)',
+        revokedDate: 'Date',
+        revokedSupport: 'Support',
+        revokedInfo: 'No confirmation is needed for this notice.',
+        ok: 'OK',
+        roles: { moderator: 'Moderator', admin: 'Admin', user: 'User' },
+        sign: 'Sauran Management'
+    }
+};
+
+const ROLE_NOTICE_COPY = {
+    moderator: {
+        tr: [
+            'Sauran yönetimi tarafından <strong>Moderator</strong> olarak görevlendirildiniz. Bu görev, Sauran topluluğuna karşı bir sorumluluk içerir ve Sauran yönetim politikalarına tabidir.',
+            ['Moderasyon araçları ve yetkileri yalnızca size verilen görev kapsamında ve görev amacıyla kullanılabilir.',
+             'Kullanıcı güvenliğini gözetmeniz ve topluluk kurallarının tarafsız ve kurallara uygun biçimde uygulanmasını sağlamanız beklenir.',
+             'Kullanıcılara ait özel bilgileri ve göreviniz sırasında eriştiğiniz gizli yönetim bilgilerini korumanız gerekir.',
+             'Yetkilerinizi kişisel amaçlarla kullanmamanız ve kötüye kullanmamanız gerekir.',
+             'Gerektiğinde üst yönetimin (Founder/Admin) kararlarına uymanız beklenir.',
+             'Bu yetki, Founder veya Admin tarafından her zaman geri alınabilir.'],
+            'Bu bildirim, görevin kapsamını ve beklentileri bilgilendirme amacıyla hazırlanmıştır. Aşağıdaki onayı vermeden bu görev için yeni yönetim yetkileri etkin olmaz.'
+        ],
+        en: [
+            'You have been assigned by Sauran management as a <strong>Moderator</strong>. This duty carries responsibility toward the Sauran community and is subject to Sauran\'s management policies.',
+            ['Moderation tools and permissions may be used only within the scope and for the purpose of the duty given to you.',
+             'You are expected to look after user safety and to apply the community rules impartially and in accordance with the rules.',
+             'You must protect users\' private information and any confidential management information you access during this duty.',
+             'You must not use your permissions for personal purposes or misuse them.',
+             'You are expected to follow the decisions of senior management (Founder/Admin) when required.',
+             'This permission can be withdrawn at any time by the Founder or an Admin.'],
+            'This notice is prepared to inform you about the scope of the duty and what is expected. New management permissions for this duty will not become active until you give the confirmation below.'
+        ]
+    },
+    admin: {
+        tr: [
+            'Sauran yönetimi tarafından <strong>Admin</strong> olarak görevlendirildiniz. Admin görevi, moderatör görevinden daha geniş platform yetkileri ve sorumlulukları içerir ve Sauran yönetim politikalarına tabidir.',
+            ['Admin yetkileri yalnızca platform yönetimi amacıyla kullanılabilir.',
+             'Kullanıcı verilerini ve yönetimsel bilgileri korumanız, bunlara yalnızca görev gereği erişmeniz gerekir.',
+             'Moderasyon süreçlerinin düzenli, tarafsız ve kurallara uygun yürütülmesi konusunda yönetim sorumluluğu taşırsınız.',
+             'Diğer yöneticilerin ve moderatörlerin çalışmalarının politikalara uygunluğunu gözetmeniz beklenir.',
+             'Yetkilerinizi kişisel amaçlarla kullanmamanız ve kötüye kullanmamanız gerekir.',
+             'Mevcut Sauran yönetim politikalarına ve Founder\'ın kararlarına uymanız beklenir.',
+             'Bu yetki, Founder tarafından her zaman geri alınabilir.'],
+            'Bu bildirim, görevin kapsamını ve beklentileri bilgilendirme amacıyla hazırlanmıştır. Aşağıdaki onayı vermeden bu görev için yeni yönetim yetkileri etkin olmaz.'
+        ],
+        en: [
+            'You have been assigned by Sauran management as an <strong>Admin</strong>. The Admin duty carries broader platform permissions and responsibilities than the Moderator duty and is subject to Sauran\'s management policies.',
+            ['Admin permissions may be used only for the purpose of managing the platform.',
+             'You must protect user data and administrative information and access them only as your duty requires.',
+             'You carry management responsibility for ensuring that moderation processes are run in an orderly, impartial and rule-compliant way.',
+             'You are expected to look after whether the work of other administrators and moderators complies with the policies.',
+             'You must not use your permissions for personal purposes or misuse them.',
+             'You are expected to follow the current Sauran management policies and the Founder\'s decisions.',
+             'This permission can be withdrawn at any time by the Founder.'],
+            'This notice is prepared to inform you about the scope of the duty and what is expected. New management permissions for this duty will not become active until you give the confirmation below.'
+        ]
+    }
+};
+
+function roleNoticeLang() {
+    try { return localStorage.getItem('sauran_lang') === 'en' ? 'en' : 'tr'; } catch (e) { return 'tr'; }
+}
+
+let roleNoticeScrolled = false;
+let roleNoticeDismissed = false;
+let roleNoticeReturnFocus = null;
+let roleRevokedReturnFocus = null;
+
+function roleNoticeIsOpen() {
+    return document.getElementById('role-notice-overlay').classList.contains('open');
+}
+
+// Sırayla: önce bekleyen görev bildirisi, yoksa (bir kez) görevden alma bilgilendirmesi.
+// Geliştirme bilgilendirme penceresi açıkken beklenir; kapanınca tekrar çağrılır.
+function maybeShowRoleNotices() {
+    if (!currentUser) return;
+    if (document.getElementById('dev-notice-overlay').classList.contains('open')) return;
+    if (roleNoticeIsOpen() || document.getElementById('role-revoked-overlay').classList.contains('open')) return;
+
+    const acceptance = currentUser.role_acceptance;
+    if (acceptance && acceptance.pending) {
+        if (!roleNoticeDismissed) openRoleNotice();
+        return;
+    }
+    if (currentUser.role_notice && currentUser.role_notice.kind === 'revoked') openRoleRevoked();
+}
+
+function updateRoleNoticeScrollState() {
+    const box = document.getElementById('role-notice-scroll');
+    const check = document.getElementById('role-notice-check');
+    const accept = document.getElementById('role-notice-accept');
+    const hint = document.getElementById('role-notice-hint');
+
+    // Metin kaydırılabilir değilse (kısa içerik/büyük ekran) sonu zaten görünürdür.
+    if (!roleNoticeScrolled && box.scrollTop + box.clientHeight >= box.scrollHeight - 4) {
+        roleNoticeScrolled = true;
+    }
+
+    check.disabled = !roleNoticeScrolled;
+    if (!roleNoticeScrolled) check.checked = false;
+    hint.hidden = roleNoticeScrolled;
+    accept.disabled = !(roleNoticeScrolled && check.checked);
+}
+
+function openRoleNotice() {
+    const acceptance = currentUser && currentUser.role_acceptance;
+    if (!acceptance || !acceptance.pending) return;
+
+    const copy = ROLE_NOTICE_COPY[acceptance.role];
+    if (!copy) return;
+
+    const lang = roleNoticeLang();
+    const ui = ROLE_NOTICE_UI[lang];
+    const [intro, bullets, outro] = copy[lang];
+
+    document.getElementById('role-notice-official').textContent = ui.official;
+    document.getElementById('role-notice-title').textContent = ui.title;
+    // İçerik yukarıdaki sabit metinlerden gelir (kullanıcı girdisi değil), <strong> içerir.
+    document.getElementById('role-notice-body').innerHTML =
+        '<p>' + intro + '</p><ul class="role-notice-body-list">' + bullets.map((b) => '<li>' + b + '</li>').join('') + '</ul><p>' + outro + '</p>';
+    document.getElementById('role-notice-sign').textContent = ui.sign + ' · ' + acceptance.version;
+    document.getElementById('role-notice-hint').textContent = ui.hint;
+    document.getElementById('role-notice-check-text').textContent = ui.check;
+    document.getElementById('role-notice-accept').textContent = ui.accept;
+    document.getElementById('role-notice-later').textContent = ui.later;
+    document.getElementById('role-notice-error').textContent = '';
+
+    const box = document.getElementById('role-notice-scroll');
+    const check = document.getElementById('role-notice-check');
+    roleNoticeScrolled = false;
+    check.checked = false;
+    box.scrollTop = 0;
+
+    const overlay = document.getElementById('role-notice-overlay');
+    roleNoticeReturnFocus = document.activeElement;
+    chatScreen.inert = true;
+
+    overlay.classList.add('visible');
+    overlay.setAttribute('aria-hidden', 'false');
+    void overlay.offsetWidth;
+    overlay.classList.add('open');
+
+    updateRoleNoticeScrollState();
+    requestAnimationFrame(updateRoleNoticeScrollState);
+    setTimeout(() => { updateRoleNoticeScrollState(); box.focus(); }, 260);
+}
+
+function closeRoleNotice() {
+    const overlay = document.getElementById('role-notice-overlay');
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden', 'true');
+    chatScreen.inert = false;
+
+    setTimeout(() => {
+        overlay.classList.remove('visible');
+        if (roleNoticeReturnFocus && typeof roleNoticeReturnFocus.focus === 'function') roleNoticeReturnFocus.focus();
+    }, 240);
+}
+
+async function refreshCurrentUserRole() {
+    try {
+        const response = await fetch('/api/me', { credentials: 'include' });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!data.success || !currentUser) return;
+
+        currentUser.platform_role = data.user.platform_role;
+        currentUser.assigned_platform_role = data.user.assigned_platform_role;
+        currentUser.role_acceptance = data.user.role_acceptance;
+        currentUser.role_notice = data.user.role_notice;
+        applyAdminLinkVisibility(currentUser);
+    } catch (e) {}
+}
+
+async function submitRoleAcceptance() {
+    const acceptance = currentUser && currentUser.role_acceptance;
+    if (!acceptance) return;
+
+    const ui = ROLE_NOTICE_UI[roleNoticeLang()];
+    const accept = document.getElementById('role-notice-accept');
+    const errorEl = document.getElementById('role-notice-error');
+    accept.disabled = true;
+    errorEl.textContent = '';
+
+    try {
+        const response = await fetch('/api/me/role-acceptance', {
+            method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                version: acceptance.version,
+                scrolled_to_end: roleNoticeScrolled,
+                accepted: document.getElementById('role-notice-check').checked
+            })
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok || !data.success) {
+            errorEl.textContent = data.error || ui.error;
+            await refreshCurrentUserRole();
+            updateRoleNoticeScrollState();
+            return;
+        }
+
+        await refreshCurrentUserRole();
+        closeRoleNotice();
+        refreshNotificationsBadge();
+    } catch (e) {
+        errorEl.textContent = ui.error;
+        updateRoleNoticeScrollState();
+    }
+}
+
+document.getElementById('role-notice-scroll').addEventListener('scroll', updateRoleNoticeScrollState, { passive: true });
+window.addEventListener('resize', () => { if (roleNoticeIsOpen()) updateRoleNoticeScrollState(); });
+document.getElementById('role-notice-check').addEventListener('change', updateRoleNoticeScrollState);
+document.getElementById('role-notice-accept').addEventListener('click', submitRoleAcceptance);
+document.getElementById('role-notice-later').addEventListener('click', () => {
+    roleNoticeDismissed = true;
+    closeRoleNotice();
+});
+
+function openRoleRevoked() {
+    const notice = currentUser && currentUser.role_notice;
+    if (!notice) return;
+
+    const ui = ROLE_NOTICE_UI[roleNoticeLang()];
+    const roleName = (r) => ui.roles[r] || r;
+    const when = notice.at ? String(notice.at).replace('T', ' ').slice(0, 16) : '—';
+    const row = (label, value) => '<div class="role-revoked-row"><b>' + escapeHtml(label) + '</b><span>' + value + '</span></div>';
+
+    document.getElementById('role-revoked-official').textContent = ui.official;
+    document.getElementById('role-revoked-title').textContent = ui.revokedTitle;
+    document.getElementById('role-revoked-body').innerHTML =
+        row(ui.revokedRemoved, escapeHtml(roleName(notice.removed_role))) +
+        row(ui.revokedCurrent, escapeHtml(roleName(notice.current_role))) +
+        row(ui.revokedBy, escapeHtml(ui.revokedByValue)) +
+        row(ui.revokedDate, escapeHtml(when)) +
+        row(ui.revokedSupport, escapeHtml(notice.support_email || 'destek@sauran.online')) +
+        '<p style="margin-top:14px;">' + escapeHtml(ui.revokedInfo) + '</p>';
+    document.getElementById('role-revoked-btn').textContent = ui.ok;
+
+    const overlay = document.getElementById('role-revoked-overlay');
+    roleRevokedReturnFocus = document.activeElement;
+    chatScreen.inert = true;
+    overlay.classList.add('visible');
+    overlay.setAttribute('aria-hidden', 'false');
+    void overlay.offsetWidth;
+    overlay.classList.add('open');
+    setTimeout(() => document.getElementById('role-revoked-btn').focus(), 60);
+}
+
+function closeRoleRevoked() {
+    const overlay = document.getElementById('role-revoked-overlay');
+
+    // Bir kez gösterilir: sunucuda işaretlenir; başarısız olursa bir sonraki girişte tekrar çıkar.
+    fetch('/api/me/role-notice-seen', { method: 'POST', credentials: 'include' }).catch(() => {});
+    if (currentUser) currentUser.role_notice = null;
+
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden', 'true');
+    chatScreen.inert = false;
+    setTimeout(() => {
+        overlay.classList.remove('visible');
+        if (roleRevokedReturnFocus && typeof roleRevokedReturnFocus.focus === 'function') roleRevokedReturnFocus.focus();
+    }, 240);
+}
+
+document.getElementById('role-revoked-btn').addEventListener('click', closeRoleRevoked);
+
+document.addEventListener('keydown', (event) => {
+    const acceptOverlay = document.getElementById('role-notice-overlay');
+    if (acceptOverlay.classList.contains('open')) {
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); document.getElementById('role-notice-later').click(); return; }
+        if (event.key === 'Tab') {
+            const focusables = Array.from(acceptOverlay.querySelectorAll('#role-notice-scroll, input, button')).filter((el) => !el.disabled);
+            if (!focusables.length) return;
+            const first = focusables[0];
+            const last = focusables[focusables.length - 1];
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }
+        return;
+    }
+    const revokedOverlay = document.getElementById('role-revoked-overlay');
+    if (revokedOverlay.classList.contains('open')) {
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeRoleRevoked(); }
+        if (event.key === 'Tab') { event.preventDefault(); document.getElementById('role-revoked-btn').focus(); }
+    }
+}, true);
 
 
 // =====================================================
@@ -4752,9 +5104,69 @@ function renderNotifications(notifications) {
 
         }
 
+        if (n.type === 'platform_role_notice') {
+
+            const ui = ROLE_NOTICE_UI[roleNoticeLang()];
+            const roleLabel = ui.roles[n.data.role] || n.data.role;
+
+            return `
+                <div class="notification-card" data-notif-id="${n.id}" data-notif-type="platform_role_notice">
+                    <div class="notification-official-tag">${escapeHtml(ui.official)}</div>
+                    <div class="notification-text">
+                        <strong>${escapeHtml(ui.title)}</strong> — ${escapeHtml(roleLabel)}
+                    </div>
+                    <div class="notification-actions">
+                        <button class="notification-accept" data-open-role-notice type="button">${escapeHtml(ui.title)}</button>
+                    </div>
+                </div>
+            `;
+
+        }
+
+        if (n.type === 'platform_role_revoked') {
+
+            const ui = ROLE_NOTICE_UI[roleNoticeLang()];
+            const removed = ui.roles[n.data.removed_role] || n.data.removed_role;
+
+            return `
+                <div class="notification-card" data-notif-id="${n.id}" data-notif-type="platform_role_revoked">
+                    <div class="notification-official-tag">${escapeHtml(ui.official)}</div>
+                    <div class="notification-text">
+                        <strong>${escapeHtml(ui.revokedTitle)}</strong> (${escapeHtml(removed)})
+                    </div>
+                    <div class="notification-actions">
+                        <button class="notification-accept" data-dismiss type="button">${escapeHtml(ui.ok)}</button>
+                    </div>
+                </div>
+            `;
+
+        }
+
         return '';
 
     }).join('');
+
+    notificationsList.querySelectorAll('[data-notif-type="platform_role_notice"]').forEach((card) => {
+
+        card.querySelector('[data-open-role-notice]').addEventListener('click', async () => {
+            notificationsModal.style.display = 'none';
+            await refreshCurrentUserRole();
+            roleNoticeDismissed = false;
+            if (currentUser && currentUser.role_acceptance && currentUser.role_acceptance.pending) openRoleNotice();
+        });
+
+    });
+
+    notificationsList.querySelectorAll('[data-notif-type="platform_role_revoked"]').forEach((card) => {
+
+        card.querySelector('[data-dismiss]').addEventListener('click', async () => {
+            const notifId = card.dataset.notifId;
+            await fetch(`/api/notifications/${notifId}/read`, { method: 'POST', credentials: 'include' });
+            refreshNotificationsBadge();
+            card.remove();
+        });
+
+    });
 
     notificationsList.querySelectorAll('[data-notif-type="friend_request_accepted"]').forEach((card) => {
 

@@ -561,6 +561,263 @@ function hasAtLeastPlatformRole(platformRole, minRole) {
   return (PLATFORM_ROLE_RANK[platformRole] ?? 0) >= (PLATFORM_ROLE_RANK[minRole] ?? 0);
 }
 
+// =====================================================
+// RESMİ YÖNETİM GÖREVİ KABULÜ (role acceptance)
+// =====================================================
+// platform_role, founder'ın atadığı GERÇEK rolü tutmaya devam eder. Web üzerinden
+// yeni bir moderator/admin rolü verildiğinde kullanıcı görev bildirisini kabul
+// edene kadar (role_acceptance_pending = 1) yeni yetki KULLANILMAZ; kullanıcı
+// bu sürede önceki etkin yetkisiyle kalır (bkz. getEffectivePlatformRole).
+//   role_acceptance_pending : 1 = atanan görev henüz kabul edilmedi
+//   role_acceptance_version : bekleyen / son kabul edilen bildirim sürümü (ör. moderator-v1)
+//   role_accepted_role      : kullanıcının kabul EDİLMİŞ (etkin) taban yetkisi
+//   role_accepted_at        : son kabul zamanı
+//   role_notice_kind/at     : bir kez gösterilecek "görevden alma" bilgilendirmesi
+// Founder bu mekanizmanın dışındadır. CLI (admin.js set-role) bu akışı ATLAR:
+// CLI ile verilen rol bildirim/kabul üretmeden doğrudan geçerlidir.
+const ROLE_NOTICE_VERSIONS = { moderator: 'moderator-v1', admin: 'admin-v1' };
+const OFFICIAL_SENDER_LABEL = 'Sauran Yönetim';
+const SUPPORT_EMAIL_ADDRESS = 'destek@sauran.online';
+
+const usersAcceptanceColumns = db.prepare(`PRAGMA table_info(users)`).all().map(col => col.name);
+for (const [name, ddl] of [
+  ['role_acceptance_pending', 'INTEGER NOT NULL DEFAULT 0'],
+  ['role_acceptance_version', 'TEXT'],
+  ['role_accepted_role', 'TEXT'],
+  ['role_accepted_at', 'DATETIME'],
+  ['role_notice_kind', 'TEXT'],
+  ['role_notice_at', 'DATETIME']
+]) {
+  if (!usersAcceptanceColumns.includes(name)) {
+    db.exec(`ALTER TABLE users ADD COLUMN ${name} ${ddl}`);
+  }
+}
+
+// Güvenli backfill (idempotent): mevcut moderator/admin'ler yetkilerini KAYBETMEZ ve
+// kabul beklemeye alınmaz; founder asla kabul bekleyen duruma düşmez.
+db.exec(`
+  UPDATE users SET role_acceptance_pending = 0 WHERE platform_role = 'founder' AND role_acceptance_pending <> 0;
+  UPDATE users SET role_accepted_role = platform_role
+    WHERE role_accepted_role IS NULL AND role_acceptance_pending = 0 AND platform_role IN ('moderator', 'admin');
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS role_notice_email_outbox (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    role TEXT NOT NULL,
+    version TEXT,
+    payload TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    claimed_at DATETIME,
+    next_attempt_at DATETIME,
+    sent_at DATETIME,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_role_notice_outbox_status ON role_notice_email_outbox(status, next_attempt_at);
+`);
+
+function isOfficialRole(role) {
+  return role === 'moderator' || role === 'admin';
+}
+
+// TEK yetkili yer: "etkin" platform rolü. Kullanıcının atanmış rolü (platform_role)
+// henüz kabul edilmemişse yetki, kabul edilmiş taban yetkiyle sınırlanır:
+//   user -> moderator/admin (bekliyor)  => user
+//   moderator -> admin (bekliyor)        => moderator
+//   admin -> moderator (bekliyor)        => moderator (admin yetkisi anında biter)
+function getEffectivePlatformRole(row) {
+  const assigned = PLATFORM_ROLES.includes(row?.platform_role) ? row.platform_role : 'user';
+  if (assigned === 'founder') return 'founder';
+  if (!row.role_acceptance_pending) return assigned;
+
+  const base = PLATFORM_ROLES.includes(row.role_accepted_role) && row.role_accepted_role !== 'founder'
+    ? row.role_accepted_role
+    : 'user';
+  return PLATFORM_ROLE_RANK[assigned] <= PLATFORM_ROLE_RANK[base] ? assigned : base;
+}
+
+// Oturum / giriş / /api/me için kullanıcı nesnesine eklenen rol alanları.
+// platform_role BURADA etkin roldür — yetki kontrolleri bunun üzerinden çalışır.
+function platformRoleFields(row) {
+  const assigned = PLATFORM_ROLES.includes(row?.platform_role) ? row.platform_role : 'user';
+  const pending = assigned !== 'founder' && isOfficialRole(assigned) && Boolean(row.role_acceptance_pending);
+
+  let notice = null;
+  if (row.role_notice_kind && String(row.role_notice_kind).startsWith('revoked_')) {
+    notice = {
+      kind: 'revoked',
+      removed_role: String(row.role_notice_kind).slice('revoked_'.length),
+      current_role: assigned,
+      at: row.role_notice_at || null,
+      support_email: SUPPORT_EMAIL_ADDRESS
+    };
+  }
+
+  return {
+    platform_role: getEffectivePlatformRole(row),
+    assigned_platform_role: assigned,
+    role_acceptance: pending
+      ? { pending: true, role: assigned, version: ROLE_NOTICE_VERSIONS[assigned] }
+      : null,
+    role_notice: notice
+  };
+}
+
+// Kullanıcı bildirisini okuyup kabul eder. UI zorlamaları (scroll/checkbox) yalnızca
+// kullanıcı deneyimidir; asıl doğrulama burada: gerçekten bekleyen kabul, sürüm
+// eşleşmesi, accepted ve scrolled_to_end alanlarının kesin true olması. Bu bir
+// hukuki "okuma kanıtı" DEĞİLDİR; yalnızca istemci akışının kaydıdır.
+const acceptPlatformRoleTx = db.transaction((userId, version) => {
+  const user = db.prepare(`
+    SELECT id, platform_role, role_acceptance_pending FROM users WHERE id = ?
+  `).get(userId);
+
+  if (!user || user.platform_role === 'founder' || !isOfficialRole(user.platform_role) || !user.role_acceptance_pending) {
+    throw new AdminActionError(409, 'Kabul bekleyen bir görev bildirimi yok.');
+  }
+  if (version !== ROLE_NOTICE_VERSIONS[user.platform_role]) {
+    throw new AdminActionError(409, 'Bildirim sürümü güncel değil. Sayfayı yenileyip tekrar dene.');
+  }
+
+  db.prepare(`
+    UPDATE users
+    SET role_acceptance_pending = 0, role_acceptance_version = ?, role_accepted_role = platform_role,
+        role_accepted_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(version, userId);
+
+  db.prepare(`
+    UPDATE notifications SET status = 'read'
+    WHERE user_id = ? AND type = 'platform_role_notice' AND status = 'pending'
+  `).run(userId);
+
+  // Tam bildirim metni audit'e kopyalanmaz; yalnızca rol (old_value) ve sürüm (new_value).
+  writeAuditLog({
+    actorUserId: userId,
+    action: 'platform_role_accepted',
+    targetUserId: userId,
+    reason: null,
+    oldValue: user.platform_role,
+    newValue: version
+  });
+
+  return { role: user.platform_role, version };
+});
+
+function acceptPlatformRole(userId, { version, scrolledToEnd, accepted } = {}) {
+  if (accepted !== true || scrolledToEnd !== true) {
+    return { success: false, status: 400, error: 'Görev bildirimini sonuna kadar okuyup onay kutusunu işaretlemelisin.' };
+  }
+  if (typeof version !== 'string' || !version) {
+    return { success: false, status: 400, error: 'Bildirim sürümü gerekli.' };
+  }
+
+  try {
+    return { success: true, ...acceptPlatformRoleTx(userId, version) };
+  } catch (error) {
+    if (error instanceof AdminActionError) {
+      return { success: false, status: error.status, error: error.message };
+    }
+    throw error;
+  }
+}
+
+function markRoleNoticeSeen(userId) {
+  db.prepare(`
+    UPDATE users SET role_notice_kind = NULL, role_notice_at = NULL WHERE id = ? AND role_notice_kind IS NOT NULL
+  `).run(userId);
+}
+
+// ---- E-posta outbox ----
+// Rol değişikliği transaction'ı e-posta gönderimine BAĞLI DEĞİLDİR: satır transaction
+// içinde yazılır, gönderim sonradan yapılır; başarısız gönderimler kaybolmaz.
+// Aynı satırın iki kez gönderilmemesi için satır atomik olarak 'pending' -> 'sending'
+// durumuna alınır (koşullu UPDATE). Bir süreç gönderim sırasında çökerse takılı
+// kalan 'sending' satırları belirli süre sonra tekrar kuyruğa alınır; bu istisnai
+// durumda aynı e-posta nadiren iki kez gidebilir (at-least-once).
+const ROLE_EMAIL_MAX_ATTEMPTS = 8;
+const ROLE_EMAIL_STALE_MINUTES = 10;
+
+function enqueueRoleNoticeEmail({ userId, type, role, version, payload }) {
+  const info = db.prepare(`
+    INSERT INTO role_notice_email_outbox (user_id, type, role, version, payload)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(userId, type, role, version || null, payload ? JSON.stringify(payload) : null);
+  return info.lastInsertRowid;
+}
+
+const claimRoleNoticeEmailTx = db.transaction(() => {
+  const row = db.prepare(`
+    SELECT * FROM role_notice_email_outbox
+    WHERE status = 'pending' AND attempts < ? AND (next_attempt_at IS NULL OR next_attempt_at <= datetime('now'))
+    ORDER BY id LIMIT 1
+  `).get(ROLE_EMAIL_MAX_ATTEMPTS);
+  if (!row) return null;
+
+  const info = db.prepare(`
+    UPDATE role_notice_email_outbox
+    SET status = 'sending', attempts = attempts + 1, claimed_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND status = 'pending'
+  `).run(row.id);
+  if (info.changes !== 1) return null;
+
+  return { ...row, attempts: row.attempts + 1, payload: row.payload ? JSON.parse(row.payload) : null };
+});
+
+function claimNextRoleNoticeEmail() {
+  return claimRoleNoticeEmailTx();
+}
+
+function getRoleNoticeEmailTarget(userId) {
+  return db.prepare(`SELECT id, username, email, platform_role, account_status FROM users WHERE id = ?`).get(userId);
+}
+
+function markRoleNoticeEmailSent(id) {
+  db.prepare(`
+    UPDATE role_notice_email_outbox SET status = 'sent', sent_at = CURRENT_TIMESTAMP, last_error = NULL
+    WHERE id = ? AND status = 'sending'
+  `).run(id);
+}
+
+function markRoleNoticeEmailSkipped(id, reason) {
+  db.prepare(`
+    UPDATE role_notice_email_outbox SET status = 'skipped', last_error = ? WHERE id = ? AND status = 'sending'
+  `).run(String(reason || '').slice(0, 300), id);
+}
+
+function markRoleNoticeEmailFailed(id, error) {
+  const row = db.prepare(`SELECT attempts FROM role_notice_email_outbox WHERE id = ?`).get(id);
+  if (!row) return;
+
+  const message = String(error?.message || error || 'bilinmeyen hata').slice(0, 300);
+  if (row.attempts >= ROLE_EMAIL_MAX_ATTEMPTS) {
+    db.prepare(`
+      UPDATE role_notice_email_outbox SET status = 'failed', last_error = ? WHERE id = ? AND status = 'sending'
+    `).run(message, id);
+    return;
+  }
+
+  const backoffSeconds = Math.min(60 * 2 ** (row.attempts - 1), 3600);
+  db.prepare(`
+    UPDATE role_notice_email_outbox
+    SET status = 'pending', last_error = ?, next_attempt_at = datetime('now', ?)
+    WHERE id = ? AND status = 'sending'
+  `).run(message, `+${backoffSeconds} seconds`, id);
+}
+
+function recoverStaleRoleNoticeEmails() {
+  return db.prepare(`
+    UPDATE role_notice_email_outbox SET status = 'pending'
+    WHERE status = 'sending' AND claimed_at <= datetime('now', ?)
+  `).run(`-${ROLE_EMAIL_STALE_MINUTES} minutes`).changes;
+}
+
 function setPlatformRole(username, role) {
   if (!PLATFORM_ROLES.includes(role)) {
     return { success: false, error: `Geçersiz rol. Geçerli roller: ${PLATFORM_ROLES.join(', ')}` };
@@ -886,7 +1143,8 @@ function loginUser(username, password) {
     const user = db.prepare(`
       SELECT id, username, email, password_hash, password_salt,
              about_me, status, avatar_visibility, avatar_data, banner_data,
-             platform_role, dev_notice_seen, dev_notice_new, account_status, suspension_user_reason
+             platform_role, dev_notice_seen, dev_notice_new, account_status, suspension_user_reason,
+             role_acceptance_pending, role_accepted_role, role_notice_kind, role_notice_at
       FROM users WHERE LOWER(username) = LOWER(?)
     `).get(username);
 
@@ -920,7 +1178,7 @@ function loginUser(username, password) {
       avatar_visibility: user.avatar_visibility || 'public',
       avatar_data: user.avatar_data,
       banner_data: user.banner_data,
-      platform_role: user.platform_role || 'user',
+      ...platformRoleFields(user),
       dev_notice: devNoticeFor(user.dev_notice_seen, user.dev_notice_new)
     };
 
@@ -2776,7 +3034,8 @@ function listAdminUsers({ page = 1, limit = 20, search = '', role = '' } = {}) {
 function getAdminUserDetail(userId) {
   const user = db.prepare(`
     SELECT id, username, email, created_at, platform_role, about_me, avatar_data, avatar_visibility,
-           account_status, suspended_at, suspension_user_reason
+           account_status, suspended_at, suspension_user_reason,
+           role_acceptance_pending, role_acceptance_version
     FROM users WHERE id = ?
   `).get(userId);
 
@@ -2806,6 +3065,8 @@ function getAdminUserDetail(userId) {
       email: user.email,
       created_at: user.created_at,
       platform_role: user.platform_role,
+      role_acceptance_pending: isOfficialRole(user.platform_role) && Boolean(user.role_acceptance_pending),
+      role_acceptance_version: isOfficialRole(user.platform_role) && user.role_acceptance_pending ? user.role_acceptance_version : null,
       account_status: user.account_status,
       suspended_at: user.suspended_at,
       // Kullanıcıya gösterilen metin (iç gerekçe burada YOK; yalnızca audit log'da).
@@ -2899,7 +3160,7 @@ db.exec(`
   BEGIN SELECT RAISE(ABORT, 'admin_audit_log is append-only'); END;
 `);
 
-const AUDIT_ACTIONS = ['platform_role_changed', 'account_suspended', 'account_unsuspended'];
+const AUDIT_ACTIONS = ['platform_role_changed', 'platform_role_accepted', 'account_suspended', 'account_unsuspended'];
 const AUDIT_REASON_MAX = 500;
 const AUDIT_VALUE_MAX = 100;
 const AUDIT_MAX_LIMIT = 50;
@@ -3002,7 +3263,9 @@ const changePlatformRoleTx = db.transaction(({ actorId, targetId, newRole, reaso
     throw new AdminActionError(403, 'Kendi rolünü değiştiremezsin.');
   }
 
-  const target = db.prepare(`SELECT id, platform_role FROM users WHERE id = ?`).get(targetId);
+  const target = db.prepare(`
+    SELECT id, platform_role, role_acceptance_pending, role_accepted_role, account_status FROM users WHERE id = ?
+  `).get(targetId);
   if (!target) {
     throw new AdminActionError(404, 'Kullanıcı bulunamadı.');
   }
@@ -3014,6 +3277,9 @@ const changePlatformRoleTx = db.transaction(({ actorId, targetId, newRole, reaso
   if (target.platform_role === newRole) {
     throw new AdminActionError(409, 'Kullanıcı zaten bu rolde.');
   }
+
+  // Değişiklikten ÖNCEKİ etkin yetki, kabul edilmiş taban yetki olarak korunur.
+  const effectiveBefore = getEffectivePlatformRole(target);
 
   db.prepare(`UPDATE users SET platform_role = ? WHERE id = ?`).run(newRole, targetId);
 
@@ -3032,8 +3298,84 @@ const changePlatformRoleTx = db.transaction(({ actorId, targetId, newRole, reaso
     newValue: newRole
   });
 
-  return { id: targetId, old_role: target.platform_role, new_role: newRole };
+  // Resmi bildirim + e-posta outbox kaydı, rol ve audit ile AYNI transaction'da:
+  // biri başarısız olursa hepsi geri alınır. SMTP gönderimi burada YAPILMAZ.
+  const notice = recordRoleNotice({ target, newRole, effectiveBefore });
+
+  return {
+    id: targetId,
+    old_role: target.platform_role,
+    new_role: newRole,
+    acceptance_pending: isOfficialRole(newRole),
+    notice
+  };
 });
+
+function recordRoleNotice({ target, newRole, effectiveBefore }) {
+  const targetId = target.id;
+  const suspended = target.account_status === 'suspended';
+  let type;
+  let notificationType;
+  let notificationData;
+  let version = null;
+  let emailPayload = { previous_role: target.platform_role };
+
+  if (isOfficialRole(newRole)) {
+    // user->mod/admin, mod->admin, admin->mod: HER yeni atama yeni bir kabul gerektirir.
+    version = ROLE_NOTICE_VERSIONS[newRole];
+    db.prepare(`
+      UPDATE users
+      SET role_acceptance_pending = 1, role_acceptance_version = ?, role_accepted_role = ?,
+          role_accepted_at = CASE WHEN ? = 'user' THEN NULL ELSE role_accepted_at END,
+          role_notice_kind = NULL, role_notice_at = NULL
+      WHERE id = ?
+    `).run(version, effectiveBefore, effectiveBefore, targetId);
+
+    type = 'assigned';
+    notificationType = 'platform_role_notice';
+    notificationData = {
+      system: true, sender_label: OFFICIAL_SENDER_LABEL,
+      role: newRole, version, previous_role: target.platform_role
+    };
+  } else {
+    // mod/admin -> user: görevden alma; kabul İSTENMEZ, kabul beklemesi temizlenir.
+    db.prepare(`
+      UPDATE users
+      SET role_acceptance_pending = 0, role_acceptance_version = NULL, role_accepted_role = 'user',
+          role_accepted_at = NULL, role_notice_kind = ?, role_notice_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(`revoked_${target.platform_role}`, targetId);
+
+    type = 'revoked';
+    notificationType = 'platform_role_revoked';
+    notificationData = {
+      system: true, sender_label: OFFICIAL_SENDER_LABEL,
+      removed_role: target.platform_role, current_role: newRole, support_email: SUPPORT_EMAIL_ADDRESS
+    };
+    emailPayload = { removed_role: target.platform_role, current_role: newRole };
+  }
+
+  const notification = createNotification(targetId, notificationType, notificationData);
+
+  // Askıdaki hesaba yeni e-posta da çıkmaz; kabul durumu yine users üzerinde durur.
+  const outboxId = suspended
+    ? null
+    : enqueueRoleNoticeEmail({
+        userId: targetId,
+        type,
+        role: isOfficialRole(newRole) ? newRole : target.platform_role,
+        version,
+        payload: emailPayload
+      });
+
+  return {
+    kind: type,
+    role: isOfficialRole(newRole) ? newRole : target.platform_role,
+    version,
+    notification: { id: notification.id, type: notificationType, data: notificationData, suppressed: Boolean(notification.suppressed) },
+    outbox_id: outboxId
+  };
+}
 
 function changePlatformRole({ actorId, targetId, newRole, reason }) {
   if (typeof newRole !== 'string' || !ROLE_ASSIGNABLE.includes(newRole)) {
@@ -3314,6 +3656,17 @@ module.exports = {
   logModerationAction,
   listModerationHistory,
   hasAtLeastPlatformRole,
+  getEffectivePlatformRole,
+  platformRoleFields,
+  ROLE_NOTICE_VERSIONS,
+  acceptPlatformRole,
+  markRoleNoticeSeen,
+  claimNextRoleNoticeEmail,
+  getRoleNoticeEmailTarget,
+  markRoleNoticeEmailSent,
+  markRoleNoticeEmailSkipped,
+  markRoleNoticeEmailFailed,
+  recoverStaleRoleNoticeEmails,
   setPlatformRole,
   getReportDetail,
   getModerationUserDetail,

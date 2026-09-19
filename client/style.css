@@ -1782,3 +1782,37 @@ body.call-mini-active { padding-top: 42px; }
 }
 .auth-suspended strong { display: block; color: #ffc98f; font-size: 13px; }
 .auth-suspended p { margin: 6px 0 0; color: #c5c6c7; word-break: break-word; }
+
+/* ─── Resmi yönetim görevi bildirisi ─────────────────────────────────────── */
+.role-notice-official { font-size: 10.5px; font-weight: bold; letter-spacing: 1.2px; text-transform: uppercase; color: #ffb066; margin-bottom: 3px; }
+.role-notice-footer { flex-direction: column; align-items: stretch; gap: 10px; }
+.role-notice-hint { margin: 0; font-size: 12px; color: #9ca3af; }
+.role-notice-hint[hidden] { display: none; }
+.role-notice-check { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; line-height: 1.5; color: #e2f8f6; cursor: pointer; }
+.role-notice-check input { flex-shrink: 0; width: 18px; height: 18px; margin-top: 2px; accent-color: #66fcf1; cursor: pointer; }
+.role-notice-check input:disabled { cursor: not-allowed; }
+.role-notice-check:has(input:disabled) { opacity: 0.5; cursor: not-allowed; }
+.role-notice-error { min-height: 0; font-size: 12px; color: #ff6b7d; }
+.role-notice-error:empty { display: none; }
+.role-notice-actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; flex-wrap: wrap; }
+.role-notice-later { background: none; border: none; color: #9ca3af; font-size: 12.5px; cursor: pointer; padding: 8px 4px; text-decoration: underline; }
+.role-notice-later:hover { color: #e2f8f6; }
+.role-notice-actions .dev-notice-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+.role-notice-body-list { margin: 0 0 12px; padding-left: 18px; }
+.role-notice-body-list li { margin: 0 0 8px; font-size: 13.5px; line-height: 1.6; color: #c5c6c7; }
+.role-revoked-row { display: flex; gap: 10px; font-size: 13px; margin: 0 0 8px; color: #c5c6c7; }
+.role-revoked-row b { min-width: 120px; color: #9ca3af; font-weight: normal; }
+.notification-official-tag { font-size: 10px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; color: #ffb066; margin-bottom: 4px; }
+@media (max-width: 480px) {
+  .role-notice-actions { flex-direction: column-reverse; align-items: stretch; }
+  .role-notice-actions .dev-notice-btn { width: 100%; }
+  .role-notice-later { align-self: center; }
+  .role-revoked-row { flex-direction: column; gap: 2px; }
+}
+#role-notice-scroll { flex: 1 1 auto; min-height: 150px; outline: none; }
+#role-notice-overlay .dev-notice-panel { overflow-y: auto; }
+@media (max-height: 620px) {
+  .role-notice-footer { padding-top: 8px; padding-bottom: 10px; gap: 6px; }
+  .role-notice-check { font-size: 12px; line-height: 1.4; }
+  #role-notice-scroll { padding-top: 14px; }
+}

@@ -97,4 +97,57 @@ async function sendReportNotificationEmail(report) {
   });
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail };
+// Resmi yönetim görevi e-postaları (görev verildi / görevden alındı). Metinler bir
+// hukuki sözleşme değildir; Sauran yönetim politikalarına dayalı bilgilendirmedir.
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+const ROLE_LABELS_TR = { moderator: 'Moderator', admin: 'Admin', user: 'Kullanıcı' };
+
+async function sendRoleNoticeEmail({ toEmail, username, type, role, payload, date }) {
+  const roleLabel = ROLE_LABELS_TR[role] || role;
+  const when = escapeHtml(String(date || '').slice(0, 16).replace('T', ' ') || '—');
+  const wrapStart = `<div style="font-family: 'Segoe UI', sans-serif; background: #0b0c10; color: #c5c6c7; padding: 36px; max-width: 520px; margin: auto; border-radius: 4px;">
+        <h2 style="color: #66fcf1; letter-spacing: 2px; text-transform: uppercase;">Sauran Yönetim</h2>
+        <p style="margin-top: 20px;">Merhaba ${escapeHtml(username)},</p>`;
+  const wrapEnd = `<p style="color: #6b7280; font-size: 12px; margin-top: 24px;">Bu e-posta Sauran Yönetim tarafından otomatik gönderilmiştir. Destek: destek@sauran.online</p>
+      </div>`;
+
+  if (type === 'revoked') {
+    const removed = ROLE_LABELS_TR[payload?.removed_role] || roleLabel;
+    const current = ROLE_LABELS_TR[payload?.current_role] || 'Kullanıcı';
+    await transporter.sendMail({
+      to: toEmail,
+      from: MAIL_FROM,
+      subject: 'Sauran — Yönetim Göreviniz Sona Erdirilmiştir',
+      html: `${wrapStart}
+        <p><strong style="color:#e2f8f6;">Yönetim göreviniz sona erdirilmiştir.</strong></p>
+        <table style="font-size: 13px; border-collapse: collapse;">
+          <tr><td style="padding:3px 12px 3px 0; color:#45a29e;">Kaldırılan görev</td><td>${escapeHtml(removed)}</td></tr>
+          <tr><td style="padding:3px 12px 3px 0; color:#45a29e;">Güncel rol</td><td>${escapeHtml(current)}</td></tr>
+          <tr><td style="padding:3px 12px 3px 0; color:#45a29e;">İşlemi yapan</td><td>Founder (Sauran Yönetim)</td></tr>
+          <tr><td style="padding:3px 12px 3px 0; color:#45a29e;">Tarih</td><td>${when}</td></tr>
+        </table>
+        <p style="font-size: 13px;">Bu bilgilendirme için herhangi bir onay gerekmez. Sorularınız için destek@sauran.online adresine yazabilirsiniz.</p>
+      ${wrapEnd}`
+    });
+    return;
+  }
+
+  const intro = role === 'admin'
+    ? 'Sauran yönetiminde <strong style="color:#e2f8f6;">Admin</strong> olarak görevlendirildiniz. Bu görev, moderatörlerden daha geniş platform yetkileri ve sorumlulukları içerir.'
+    : 'Sauran yönetiminde <strong style="color:#e2f8f6;">Moderator</strong> olarak görevlendirildiniz. Bu görev, topluluk güvenliği ve kurallarına uyum konusunda sorumluluk içerir.';
+  await transporter.sendMail({
+    to: toEmail,
+    from: MAIL_FROM,
+    subject: `Sauran — Yönetim Görevi Bildirimi (${roleLabel})`,
+    html: `${wrapStart}
+        <p>${intro}</p>
+        <p style="font-size: 13px;">Görev bildiriminin tamamını okuyup kabul edebilmeniz için Sauran'a giriş yapmanız gerekir. <strong>Kabul edilene kadar yeni yönetim yetkileri etkin olmaz.</strong></p>
+        <p style="font-size: 12px; color:#45a29e;">Tarih: ${when}</p>
+      ${wrapEnd}`
+  });
+}
+
+module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail };
