@@ -9093,7 +9093,7 @@ callLeaveBtn.addEventListener('click', leaveCall);
 // tarayıcılar arka plana alınan / ekranı kilitlenen sayfada mikrofon yakalamayı ve sesi
 // askıya alabilir; ayrıca bunun ardından yerel mikrofon "kapalı" görünüp kullanıcının
 // kendi susturmasıymış gibi yansıtılıyordu. Bu bölüm elinden geleni yapar (best-effort):
-//  1) çağrı sırasında "medya oturumu" + duyulmayacak kadar kısık bir döngü sesi ile tarayıcıya bunun bir çağrı olduğunu bildirir,
+//  1) çağrı sırasında "medya oturumu" + sessiz döngü sesi ile tarayıcıya bunun bir çağrı olduğunu bildirir,
 //  2) çağrı sürerken ekranın kendiliğinden kilitlenmesini (Wake Lock) engeller,
 //  3) uygulama öne gelince, kullanıcı kendisi susturmadıysa mikrofonu ve sesi geri açar.
 // iOS Safari / ana ekran uygulaması (PWA) arka planda mikrofonu sistem düzeyinde durdurabilir;
@@ -9104,13 +9104,9 @@ let callKeepAliveUrl = null;
 let callWakeLock = null;
 let callRecoveryTimers = [];
 
-// Android Chrome, medya bildirimini (ve arka planda çalmayı) yalnızca YETERİNCE UZUN (>= ~5 sn) ve
-// gerçekten "duyulur" bir ses için sürdürür; tamamen sıfırlardan oluşan 1 sn'lik ses sessiz sayılır
-// ve bildirim/ses oturumu hiç oluşmaz. Bu yüzden 10 sn'lik, duyulma eşiğinin (~-72 dBFS) az üstünde
-// (RMS ~-61 dBFS) çok kısık gürültü kullanıyoruz: pratikte duyulmaz ama sistem "ses çalıyor" sayar.
 function buildSilentWavUrl() {
     const sampleRate = 8000;
-    const samples = sampleRate * 10; // 10 sn
+    const samples = sampleRate; // 1 sn
     const buffer = new ArrayBuffer(44 + samples * 2);
     const view = new DataView(buffer);
     const writeStr = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
@@ -9120,10 +9116,6 @@ function buildSilentWavUrl() {
     view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * 2, true);
     view.setUint16(32, 2, true); view.setUint16(34, 16, true);
     writeStr(36, 'data'); view.setUint32(40, samples * 2, true);
-
-    for (let i = 0; i < samples; i++) {
-        view.setInt16(44 + i * 2, Math.round((Math.random() * 2 - 1) * 48), true);
-    }
 
     return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
 }
@@ -9152,9 +9144,6 @@ function startCallBackgroundKeepAlive() {
             el.setAttribute('data-call-keepalive', '1');
             document.body.appendChild(el);
             callKeepAliveEl = el;
-            el.addEventListener('playing', () => {
-                if ('mediaSession' in navigator) { try { navigator.mediaSession.playbackState = 'playing'; } catch (_) { /* yoksay */ } }
-            });
             el.play().catch(() => {}); // otomatik oynatma engellenirse ilk dokunuşta tekrar denenir (tryPlayAllCallAudio)
         } catch (_) { /* yoksay */ }
     }
