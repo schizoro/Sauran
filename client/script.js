@@ -3129,6 +3129,9 @@ const I18N = {
     'hub-settings-invite-friend': { tr: 'Arkadaşını Davet Et', en: 'Invite a Friend' },
     'hub-settings-invite-code': { tr: 'Davet Kodu Oluştur', en: 'Create Invite Code' },
     'hub-settings-delete': { tr: 'Lobiyi Sil', en: 'Delete Lobby' },
+    'hub-settings-clear-chat': { tr: 'Lobi Sohbetini Temizle', en: 'Clear Lobby Chat' },
+    'hub-clear-chat-confirm': { tr: 'Bu lobideki TÜM mesajlar herkes için kalıcı olarak silinecek. Bu işlem geri alınamaz. Devam etmek istiyor musun?', en: 'ALL messages in this lobby will be permanently deleted for everyone. This cannot be undone. Continue?' },
+    'hub-chat-cleared': { tr: 'Lobi sohbeti temizlendi.', en: 'Lobby chat cleared.' },
     'call-ringing': { tr: 'Aranıyor...', en: 'Calling...' },
     'call-cancel': { tr: 'İptal Et', en: 'Cancel' },
     'call-decline': { tr: 'Reddet', en: 'Decline' },
@@ -3732,6 +3735,13 @@ function connectToChat() {
     socket.on('hub_members_changed', (data) => {
         if (currentHub && data.hub_id === currentHub.id) {
             openHub(currentHub.id);
+        }
+    });
+
+    socket.on('hub_chat_cleared', (data) => {
+        if (currentHub && data.hub_id === currentHub.id) {
+            loadHubMessages(currentHub.id);
+            showToast(t('hub-chat-cleared'));
         }
     });
 
@@ -7093,6 +7103,7 @@ hubSettingsOpenBtn.addEventListener('click', () => {
     const canModerate = currentHub.my_permission_tier === 'owner' || currentHub.my_permission_tier === 'moderator';
     const bansSection = document.getElementById('hub-settings-bans-section');
     bansSection.style.display = canModerate ? 'block' : 'none';
+    document.getElementById('hub-clear-chat-btn').style.display = canModerate ? 'flex' : 'none';
 
 
     document.getElementById('hub-ban-member-btn').style.display = canModerate ? 'flex' : 'none';
@@ -7105,6 +7116,30 @@ function showHubSettingsView(view) {
         document.getElementById(`hub-settings-${v}-view`).style.display = v === view ? 'flex' : 'none';
     });
 }
+
+document.getElementById('hub-clear-chat-btn').addEventListener('click', async () => {
+
+    if (!currentHub) return;
+    if (!confirm(t('hub-clear-chat-confirm'))) return;
+
+    try {
+
+        const response = await fetch(`/api/hubs/${currentHub.id}/messages`, { method: 'DELETE', credentials: 'include' });
+        const data = await response.json();
+
+        if (!data.success) {
+            showToast(data.error || 'Sohbet temizlenemedi.');
+            return;
+        }
+
+        hubSettingsModal.style.display = 'none';
+
+    } catch (error) {
+        console.error('Lobi sohbeti temizlenemedi:', error);
+        showToast('Sohbet temizlenemedi.');
+    }
+
+});
 
 document.getElementById('hub-bans-open-btn').addEventListener('click', () => {
     showHubSettingsView('bans');

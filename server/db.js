@@ -1698,6 +1698,17 @@ function deleteHub(hubId, userId) {
 
   const deleteVotes = db.prepare(`DELETE FROM hub_poll_votes WHERE message_id = ?`);
   messageIds.forEach(id => deleteVotes.run(id));
+// Lobi sohbetini tamamen temizler. Yalnızca Hub sahibi ve lobi moderatörleri.
+// Tepkiler ve anket oyları messages'a bağlı ON DELETE CASCADE ile birlikte silinir.
+function clearHubMessages(hubId, userId) {
+  if (!hasAtLeastTier(hubId, userId, 'moderator')) {
+    return { success: false, error: 'Bu işlem için yetkin yok.' };
+  }
+
+  const info = db.prepare(`DELETE FROM messages WHERE hub_id = ?`).run(hubId);
+  return { success: true, deleted: info.changes };
+}
+
 
   db.prepare(`DELETE FROM messages WHERE hub_id = ?`).run(hubId);
   db.prepare(`DELETE FROM hub_members WHERE hub_id = ?`).run(hubId);
@@ -3261,6 +3272,7 @@ module.exports = {
   pinMessage,
   unpinMessage,
   forwardMessageToDm,
+  clearHubMessages,
   getMessageById,
   findUserByUsername,
   blockUser,
