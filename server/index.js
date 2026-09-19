@@ -2068,6 +2068,11 @@ async function dispatchWebPush(userId, type, payload) {
 
   if (!push.isConfigured()) return;
 
+  // Askıdaki (veya artık var olmayan) hesabın cihazlarına — mesaj önizlemesi dahil —
+  // hiçbir bildirim gönderilmez. Abonelik satırları silinmez (askı geri alınabilir).
+  const acct = db.prepare(`SELECT account_status FROM users WHERE id = ?`).get(userId);
+  if (!acct || acct.account_status === 'suspended') return;
+
   const prefs = getNotificationPreferences(userId);
   const categoryColumn = NOTIFICATION_CATEGORY_MAP[type];
   if (categoryColumn && prefs[categoryColumn] === 0) return;
