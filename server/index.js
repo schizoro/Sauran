@@ -107,6 +107,7 @@ const {
   devNoticeFor,
   AUDIT_ACTIONS,
   listAuditLog,
+  changePlatformRole,
   markDevNoticeSeen,
   PLATFORM_ROLES,
   getAdminUserDetail,
@@ -206,6 +207,7 @@ const hubCreateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, keyFn: b
 const inviteCreateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla davet oluşturuldu. Biraz sonra tekrar dene.' });
 const reportLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, keyFn: byIp, message: 'Çok fazla bildirim gönderildi. Biraz sonra tekrar dene.' });
 const feedbackLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, keyFn: byIp, message: 'Çok fazla öneri gönderildi. Biraz sonra tekrar dene.' });
+const adminWriteLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla yönetim işlemi yapıldı. Biraz sonra tekrar dene.' });
 const fileUploadLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla dosya gönderildi. Biraz sonra tekrar dene.' });
 
 // Socket üzerinden gönderilen mesajlar için basit hız sınırlama (spam koruması).
@@ -1026,6 +1028,36 @@ app.get('/api/admin/stats', (req, res) => {
 });
 
 app.patch('/api/moderation/reports/:id', (req, res) => {
+// Platform rolü değiştirme: YALNIZCA founder. Hedef kullanıcı ID'si sadece URL'den,
+// yeni rol ve gerekçe sadece gövdeden okunur; gövdedeki başka alanlar (actor,
+// platform_role, id vb.) YOK SAYILIR. Rol + audit kaydı tek transaction'dadır.
+app.patch('/api/admin/users/:id/role', adminWriteLimiter, (req, res) => {
+  const actor = requirePlatformRole(req, res, 'founder');
+  if (!actor) return;
+
+  if (!/^[0-9]{1,15}$/.test(req.params.id)) {
+    return res.status(400).json({ success: false, error: 'Geçersiz kullanıcı ID.' });
+  }
+
+  try {
+    const result = changePlatformRole({
+      actorId: actor.id,
+      targetId: Number(req.params.id),
+      newRole: req.body?.role,
+      reason: req.body?.reason
+    });
+
+    if (!result.success) {
+      return res.status(result.status).json({ success: false, error: result.error });
+    }
+
+    return res.json({ success: true, user: { id: result.id, platform_role: result.new_role } });
+  } catch (error) {
+    console.error('Rol değiştirme hatası:', error);
+    res.status(500).json({ success: false, error: 'Rol değiştirilemedi.' });
+  }
+});
+
 // Audit Log: YALNIZCA founder okuyabilir. Kayıtlar bu API'den silinemez/düzenlenemez
 // (böyle bir endpoint yoktur); ilk sürümde sadece yönetimsel DEĞİŞİKLİKLER loglanır,
 // panel görüntülemeleri değil.

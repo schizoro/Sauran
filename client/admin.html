@@ -62,6 +62,8 @@
         .adm-row span:last-child { color: #e2f8f6; text-align: right; word-break: break-word; }
         .adm-muted { color: #6b7280 !important; font-style: italic; }
         .adm-about { font-size: 13px; color: #c5c6c7; white-space: pre-wrap; word-break: break-word; }
+        .adm-apply-btn { padding: 9px 16px; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 12.5px; color: #66fcf1; background: rgba(102,252,241,0.1); border: 1px solid rgba(102,252,241,0.4); }
+        .adm-apply-btn:disabled { opacity: 0.4; cursor: not-allowed; }
         .adm-mod-link { display: inline-block; margin-top: 14px; font-size: 12.5px; color: #66fcf1; }
         @media (max-width: 720px) {
             body { padding: 14px; }
@@ -159,7 +161,11 @@
                 avatarVisibility: 'Avatar görünürlüğü', activity: 'Aktivite', lastActivity: 'Son aktivite', notTracked: 'sistemde tutulmuyor',
                 hubMessages: 'Lobi mesajı', dmSent: 'Gönderilen DM', hubsOwned: 'Sahibi olduğu Lobi', hubsMember: 'Üye olduğu Lobi',
                 moderationSec: 'Moderasyon', reportsAgainst: 'Hakkındaki rapor', reportsOpen: 'Açık', reportsResolved: 'Çözümlenen', reportsFiled: 'Açtığı rapor',
-                viewReports: 'Moderasyon panelinde incele →', readOnly: 'Salt okunur görünüm — bu panelden veri değiştirilemez, silinemez veya dışa aktarılamaz.',
+                viewReports: 'Moderasyon panelinde incele →', readOnly: 'Bu panelden kullanıcı silinemez ve kullanıcı verisi dışa aktarılamaz.',
+                roleTitle: 'Platform rolü', roleNew: 'Yeni rol', roleReasonPh: 'Gerekçe (zorunlu)', roleApply: 'Rolü Değiştir',
+                roleFounderLocked: 'Founder rolü web panelinden değiştirilemez.', roleDone: 'Rol güncellendi.',
+                roleHint: 'Bu gerekçe yalnızca iç yönetim kaydına (audit log) yazılır, kullanıcıya gösterilmez.',
+                roleReasonRequired: 'Gerekçe zorunlu.', roleWorking: 'Uygulanıyor…',
                 tabUsers: 'Kullanıcılar', tabAudit: 'Audit Log',
                 auDate: 'Tarih', auActor: 'Yapan', auAction: 'İşlem', auTarget: 'Hedef', auReason: 'Gerekçe', auChange: 'Değişiklik',
                 auAllActions: 'Tüm işlemler', auActorPh: 'Yapan ID', auTargetPh: 'Hedef ID', auFrom: 'Başlangıç', auTo: 'Bitiş',
@@ -179,7 +185,11 @@
                 avatarVisibility: 'Avatar visibility', activity: 'Activity', lastActivity: 'Last activity', notTracked: 'not tracked by the system',
                 hubMessages: 'Lobby messages', dmSent: 'DMs sent', hubsOwned: 'Lobbies owned', hubsMember: 'Lobbies joined',
                 moderationSec: 'Moderation', reportsAgainst: 'Reports against', reportsOpen: 'Open', reportsResolved: 'Resolved', reportsFiled: 'Reports filed',
-                viewReports: 'Review in moderation panel →', readOnly: 'Read-only view — nothing can be changed, deleted or exported from this panel.',
+                viewReports: 'Review in moderation panel →', readOnly: 'Users cannot be deleted and user data cannot be exported from this panel.',
+                roleTitle: 'Platform role', roleNew: 'New role', roleReasonPh: 'Reason (required)', roleApply: 'Change Role',
+                roleFounderLocked: 'The founder role cannot be changed from the web panel.', roleDone: 'Role updated.',
+                roleHint: 'This reason is written only to the internal admin record (audit log) and is not shown to the user.',
+                roleReasonRequired: 'A reason is required.', roleWorking: 'Applying…',
                 tabUsers: 'Users', tabAudit: 'Audit Log',
                 auDate: 'Date', auActor: 'By', auAction: 'Action', auTarget: 'Target', auReason: 'Reason', auChange: 'Change',
                 auAllActions: 'All actions', auActorPh: 'Actor ID', auTargetPh: 'Target ID', auFrom: 'From', auTo: 'To',
@@ -215,6 +225,56 @@
             const data = await res.json();
             if (!data.success) throw new Error(data.error || 'error');
             return data;
+        }
+
+        async function send(method, path, body) {
+            const res = await fetch(path, { method, credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) throw Object.assign(new Error(data.error || 'error'), { status: res.status });
+            return data;
+        }
+
+        function roleControlsHtml(a) {
+            if (!isFounder) return '';
+            if (a.platform_role === 'founder') {
+                return `<div class="adm-section-title">${t('roleTitle')}</div><p class="adm-muted" style="font-size:12px;margin:0;">${esc(t('roleFounderLocked'))}</p>`;
+            }
+            const opts = ['user', 'moderator', 'admin'].map((r) => `<option value="${r}" ${r === a.platform_role ? 'selected' : ''}>${r}</option>`).join('');
+            return `
+                <div class="adm-section-title">${t('roleTitle')}</div>
+                <div class="adm-toolbar" style="flex-direction:column;gap:8px;margin-bottom:6px;">
+                    <select id="rc-role" aria-label="${esc(t('roleNew'))}">${opts}</select>
+                    <textarea id="rc-reason" maxlength="500" rows="2" placeholder="${esc(t('roleReasonPh'))}"
+                        style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);color:#c5c6c7;border-radius:10px;padding:9px 12px;font-size:13px;font-family:inherit;resize:vertical;outline:none;"></textarea>
+                    <button id="rc-apply" type="button" class="adm-apply-btn">${esc(t('roleApply'))}</button>
+                </div>
+                <p class="adm-muted" style="font-size:11px;margin:0 0 4px;">${esc(t('roleHint'))}</p>
+                <div id="rc-msg" style="font-size:12px;min-height:16px;" role="status"></div>`;
+        }
+
+        function wireRoleControls(a) {
+            const btn = $('rc-apply');
+            if (!btn) return;
+            btn.addEventListener('click', async () => {
+                const msg = $('rc-msg');
+                const reason = $('rc-reason').value.trim();
+                if (!reason) { msg.style.color = '#ff6b7d'; msg.textContent = t('roleReasonRequired'); return; }
+                btn.disabled = true;
+                msg.style.color = '#9ca3af';
+                msg.textContent = t('roleWorking');
+                try {
+                    await send('PATCH', `/api/admin/users/${encodeURIComponent(a.id)}/role`, { role: $('rc-role').value, reason });
+                    await openDetail(a.id);
+                    $('rc-msg').style.color = '#57f287';
+                    $('rc-msg').textContent = t('roleDone');
+                    loadUsers().catch(() => {});
+                    if (audit.loaded) loadAudit().catch(() => {});
+                } catch (e) {
+                    msg.style.color = '#ff6b7d';
+                    msg.textContent = e.message;
+                    btn.disabled = false;
+                }
+            });
         }
 
         function applyStaticText() {
@@ -306,6 +366,7 @@
                     ${row('ID', a.id)}
                     ${row(t('email'), a.email ? esc(a.email) : esc(t('noEmail')), !a.email)}
                     ${row(t('created'), fmtDate(a.created_at))}
+                    ${roleControlsHtml(a)}
                     <div class="adm-section-title">${t('profile')}</div>
                     ${row(t('avatarVisibility'), esc(p.avatar_visibility || '—'))}
                     <div class="adm-row" style="display:block;"><span>${t('about')}</span>
@@ -324,6 +385,7 @@
                     ${row(t('reportsFiled'), m.reports_filed)}
                     <a class="adm-mod-link" href="moderation.html">${esc(t('viewReports'))}</a>
                     <p class="adm-muted" style="font-size:11px;margin-top:18px;">${esc(t('readOnly'))}</p>`;
+                wireRoleControls(a);
             } catch (e) {
                 $('adm-detail').innerHTML = `<div class="adm-state">${esc(e.denied ? t('denied') : t('error'))}</div>`;
             }
@@ -384,11 +446,13 @@
             if (name === 'audit') loadAudit().then(() => { audit.loaded = true; }).catch(showError);
         }
 
+        let isFounder = false;
+
         async function detectFounder() {
             try {
                 const res = await fetch('/api/me', { credentials: 'include' });
                 const data = await res.json();
-                if (data.success && data.user.platform_role === 'founder') $('tab-audit').style.display = '';
+                if (data.success && data.user.platform_role === 'founder') { isFounder = true; $('tab-audit').style.display = ''; }
             } catch (e) {}
         }
 

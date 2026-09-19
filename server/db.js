@@ -2929,7 +2929,94 @@ function listAuditLog({ page = 1, limit = 20, action = '', actorUserId = null, t
   return { total, page, limit, entries };
 }
 
+// =====================================================
+// FOUNDER ROL YÖNETİMİ (AŞAMA C)
+// =====================================================
+// Yalnızca founder çağırabilir (route katmanı + burada DB'den tekrar doğrulanır).
+// Web'den atanabilecek roller sınırlıdır: founder ATANAMAZ (founder için güvenli
+// CLI mekanizması — admin.js set-role — aynen sürer). Founder ne kendi rolünü ne
+// başka bir founder'ın rolünü değiştirebilir; bu iki kural sayesinde web'den
+// founder sayısı azaltılamaz. Rol güncelleme ve audit kaydı TEK transaction'dadır:
+// audit yazılamazsa rol de değişmez.
+
+const ROLE_ASSIGNABLE = ['user', 'moderator', 'admin'];
+const ADMIN_REASON_MAX = 500;
+
+class AdminActionError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
+
+const changePlatformRoleTx = db.transaction(({ actorId, targetId, newRole, reason }) => {
+  const actor = db.prepare(`SELECT id, platform_role FROM users WHERE id = ?`).get(actorId);
+  if (!actor || actor.platform_role !== 'founder') {
+    throw new AdminActionError(403, 'Bu işlem için yetkin yok.');
+  }
+
+  if (actorId === targetId) {
+    throw new AdminActionError(403, 'Kendi rolünü değiştiremezsin.');
+  }
+
+  const target = db.prepare(`SELECT id, platform_role FROM users WHERE id = ?`).get(targetId);
+  if (!target) {
+    throw new AdminActionError(404, 'Kullanıcı bulunamadı.');
+  }
+
+  if (target.platform_role === 'founder') {
+    throw new AdminActionError(403, 'Founder rolü web panelinden değiştirilemez.');
+  }
+
+  if (target.platform_role === newRole) {
+    throw new AdminActionError(409, 'Kullanıcı zaten bu rolde.');
+  }
+
+  db.prepare(`UPDATE users SET platform_role = ? WHERE id = ?`).run(newRole, targetId);
+
+  // Savunma amaçlı: hiçbir koşulda founder sayısı 1'in altına inmemeli.
+  const founders = db.prepare(`SELECT COUNT(*) AS c FROM users WHERE platform_role = 'founder'`).get().c;
+  if (founders < 1) {
+    throw new AdminActionError(500, 'En az bir founder bulunmalı.');
+  }
+
+  writeAuditLog({
+    actorUserId: actorId,
+    action: 'platform_role_changed',
+    targetUserId: targetId,
+    reason,
+    oldValue: target.platform_role,
+    newValue: newRole
+  });
+
+  return { id: targetId, old_role: target.platform_role, new_role: newRole };
+});
+
+function changePlatformRole({ actorId, targetId, newRole, reason }) {
+  if (typeof newRole !== 'string' || !ROLE_ASSIGNABLE.includes(newRole)) {
+    return { success: false, status: 400, error: 'Geçersiz rol. Web panelinden yalnızca user, moderator veya admin atanabilir.' };
+  }
+
+  reason = typeof reason === 'string' ? reason.trim() : '';
+  if (!reason) {
+    return { success: false, status: 400, error: 'Gerekçe zorunlu.' };
+  }
+  if (reason.length > ADMIN_REASON_MAX) {
+    return { success: false, status: 400, error: `Gerekçe en fazla ${ADMIN_REASON_MAX} karakter olabilir.` };
+  }
+
+  try {
+    return { success: true, ...changePlatformRoleTx({ actorId, targetId, newRole, reason }) };
+  } catch (error) {
+    if (error instanceof AdminActionError) {
+      return { success: false, status: error.status, error: error.message };
+    }
+    throw error;
+  }
+}
+
 module.exports = {
+  changePlatformRole,
   devNoticeFor,
   markDevNoticeSeen,
   listAdminUsers,
