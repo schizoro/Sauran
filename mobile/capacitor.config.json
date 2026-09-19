@@ -1,0 +1,15 @@
+{
+  "appId": "online.sauran.app",
+  "appName": "Sauran",
+  "webDir": "www",
+  "server": {
+    "url": "https://sauran.onrender.com",
+    "androidScheme": "https",
+    "cleartext": false,
+    "allowNavigation": ["sauran.onrender.com"]
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#0d0f14"
+  }
+}

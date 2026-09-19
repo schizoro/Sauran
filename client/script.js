@@ -7054,6 +7054,9 @@ function syncLocalMuteState(muted) {
     if (muted) voiceLocalSpeaking = false;
     updateMuteButton();
 
+    // Yerel uygulamada bildirimdeki "Sustur / Mikrofonu aç" etiketini güncel tut.
+    try { getNativeVoice()?.setMuted({ muted }); } catch (_) { /* yoksay */ }
+
     if (voiceSessionConfirmed) socket?.emit('voice_room_mute', { muted });
 
     // Sunucu anlık görüntüsü gelene kadar kendi satırını hemen güncelle.
@@ -9099,6 +9102,60 @@ callLeaveBtn.addEventListener('click', leaveCall);
 // iOS Safari / ana ekran uygulaması (PWA) arka planda mikrofonu sistem düzeyinde durdurabilir;
 // bu, bir web uygulamasının aşamayacağı bir sınırdır.
 
+// ── Yerel (Android) uygulama köprüsü ──────────────────────────────────────
+// Sauran'ın Android uygulaması (Capacitor) bu web uygulamasını WebView'da açar ve sesli odadayken
+// mikrofonu arka planda canlı tutan bir ön plan servisi (bildirimde "Sustur / Ayrıl") çalıştırır.
+// Tarayıcıda ve iPhone'da bu köprü YOKTUR: aşağıdaki işlevler hiçbir şey yapmaz, eski davranış aynen sürer.
+let nativeVoicePlugin = null;
+let nativeVoiceActionsWired = false;
+
+function getNativeVoice() {
+    try {
+        const cap = window.Capacitor;
+        if (!cap || typeof cap.isNativePlatform !== 'function' || !cap.isNativePlatform()) return null;
+        if (!nativeVoicePlugin) {
+            nativeVoicePlugin = typeof cap.registerPlugin === 'function'
+                ? cap.registerPlugin('SauranVoice')
+                : (cap.Plugins && cap.Plugins.SauranVoice) || null;
+        }
+        return nativeVoicePlugin;
+    } catch (_) {
+        return null;
+    }
+}
+
+function wireNativeVoiceActions(plugin) {
+    if (nativeVoiceActionsWired || typeof plugin.addListener !== 'function') return;
+    nativeVoiceActionsWired = true;
+
+    plugin.addListener('action', (event) => {
+        if (event?.type === 'leave') leaveCall();
+        if (event?.type === 'toggle_mic' && callMode === 'hub-room') toggleLocalMute();
+    });
+}
+
+// Yerel servis başlatıldıysa true döner (web tarafındaki medya oturumu/sessiz ses hilesi gerekmez).
+function startNativeVoiceService() {
+    const plugin = getNativeVoice();
+    if (!plugin) return false;
+
+    try {
+        wireNativeVoiceActions(plugin);
+        Promise.resolve(plugin.start({ title: currentVoiceRoomName || 'Sesli görüşme', text: 'Sauran', muted: voiceLocalMuted }))
+            .catch((error) => console.warn('Yerel ses servisi başlatılamadı:', error));
+    } catch (error) {
+        console.warn('Yerel ses servisi başlatılamadı:', error);
+        return false;
+    }
+    return true;
+}
+
+function stopNativeVoiceService() {
+    const plugin = getNativeVoice();
+    if (!plugin) return;
+    try { Promise.resolve(plugin.stop()).catch(() => {}); } catch (_) { /* yoksay */ }
+}
+
 let callKeepAliveEl = null;
 let callKeepAliveUrl = null;
 let callWakeLock = null;
@@ -9133,6 +9190,9 @@ async function requestCallWakeLock() {
 }
 
 function startCallBackgroundKeepAlive() {
+
+    // Yerel uygulamada asıl koruma ön plan servisidir; web tarafındaki medya kartı gerekmez.
+    if (startNativeVoiceService()) return;
 
     if (!callKeepAliveEl) {
         try {
@@ -9172,6 +9232,8 @@ function startCallBackgroundKeepAlive() {
 }
 
 function stopCallBackgroundKeepAlive() {
+
+    stopNativeVoiceService();
 
     callRecoveryTimers.forEach(clearTimeout);
     callRecoveryTimers = [];

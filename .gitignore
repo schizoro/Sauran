@@ -7,3 +7,13 @@ data/sauran.db-wal
 .env
 server/.env
 *.env
+# Android kabuğu (mobile/) — üretilen ve yerel dosyalar
+mobile/node_modules/
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/local.properties
+mobile/android/capacitor-cordova-android-plugins/build/
+mobile/android/app/release/
+*.keystore
+*.jks
