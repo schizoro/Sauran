@@ -3783,6 +3783,7 @@ function connectToChat() {
 
     socket.on('hub_force_muted', () => {
         if (callFrame) {
+            voiceUserMuted = true;
             callFrame.setLocalAudio(false);
             if (callMode === 'hub-room') syncLocalMuteState(true);
         }
@@ -6935,6 +6936,11 @@ let currentVoiceParticipants = []; // [{ user_id, username, muted }]
 let voiceSessionConfirmed = false;
 let voiceRejoining = false;
 let voiceLocalMuted = false;
+// Kullanıcının (ya da moderatörün) BİLEREK yaptığı sessize alma. Tarayıcının/işletim sisteminin
+// mikrofonu askıya alması (arka plan, ekran kilidi, başka uygulama) bunu DEĞİŞTİRMEZ.
+let voiceUserMuted = false;
+// Bu çağrıda mikrofon en az bir kez çalışır durumda görüldü mü (izin reddedilmişse kurtarma denenmez).
+let callMicEverLive = false;
 let voiceDeafened = false; // dinleme kapalı: odadaki uzak sesler bu cihazda çalınmaz
 let voiceLocalSpeaking = false;
 let voiceRemoteSpeaking = new Set();
@@ -7035,6 +7041,7 @@ function syncLocalMuteState(muted) {
 function toggleLocalMute() {
     if (!callFrame || callMode !== 'hub-room') return;
     const nextMuted = !voiceLocalMuted;
+    voiceUserMuted = nextMuted;
     callFrame.setLocalAudio(!nextMuted);
     syncLocalMuteState(nextMuted);
 }
@@ -7087,7 +7094,15 @@ function wireHubRoomPresenceEvents() {
     if (!callFrame) return;
 
     callFrame.on('participant-updated', (event) => {
-        if (event?.participant?.local) syncLocalMuteState(!callFrame.localAudio());
+        if (!event?.participant?.local) return;
+
+        // Uygulama arka plana alınınca / ekran kilitlenince tarayıcı yerel mikrofonu askıya alabilir
+        // (Daily bunu 'interrupted' olarak bildirir). Bunu kullanıcının "sessize alması" sayıp
+        // durumu susturulmuş göstermeyiz; öne dönünce mikrofon geri açılır (bkz. recoverCallMedia).
+        const audioState = event.participant.tracks?.audio?.state;
+        if (document.visibilityState === 'hidden' || audioState === 'interrupted') return;
+
+        syncLocalMuteState(!callFrame.localAudio());
     });
 
     const useActiveSpeakerFallback = () => {
@@ -7409,6 +7424,8 @@ async function joinVoiceRoom(room) {
         voiceSessionConfirmed = false;
         voiceRejoining = false;
         voiceLocalMuted = false;
+        voiceUserMuted = false;
+        callMicEverLive = false;
         voiceDeafened = false;
         voiceLocalSpeaking = false;
         voiceRemoteSpeaking = new Set();
@@ -7432,6 +7449,7 @@ async function joinVoiceRoom(room) {
         wireHubRoomPresenceEvents();
 
         voiceLocalMuted = !callFrame.localAudio();
+        callMicEverLive = Boolean(callFrame.localAudio());
         updateMuteButton();
 
         const ack = await emitVoiceRoomJoin();
@@ -8840,6 +8858,11 @@ async function joinCallFrame(roomUrl, token) {
         if (event?.participant?.local && event.participant.video) {
             callFrame.setLocalVideo(false);
         }
+
+        // Tarayıcı mikrofonu askıya aldıysa ve uygulama görünürse (örn. kısa bir kesinti) kurtarmayı dene.
+        if (event?.participant?.local && event.participant.tracks?.audio?.state === 'interrupted' && document.visibilityState === 'visible') {
+            scheduleCallRecovery();
+        }
     });
 
     callFrame.on('joined-meeting', () => {
@@ -8887,6 +8910,9 @@ async function joinCallFrame(roomUrl, token) {
         if (dmStatusText) dmStatusText.textContent = t('call-connected');
         startCallTimer();
 
+        callMicEverLive = callMicEverLive || Boolean(callFrame.localAudio());
+        startCallBackgroundKeepAlive();
+
     } catch (error) {
         callFrame.destroy();
         callFrame = null;
@@ -8911,6 +8937,7 @@ function tryPlayAllCallAudio() {
     document.querySelectorAll('audio[data-call-audio]').forEach((el) => {
         el.play().catch(() => {});
     });
+    if (callKeepAliveEl && callKeepAliveEl.paused) callKeepAliveEl.play().catch(() => {});
 }
 
 // Çağrı ekranındaki herhangi bir dokunuş/tıklama, tarayıcının engellemiş
@@ -9004,6 +9031,171 @@ callScreenshareBtn.addEventListener('click', async () => {
 callLeaveBtn.addEventListener('click', leaveCall);
 
 
+// ─── ARKA PLANDA SES / MİKROFON DEVAMLILIĞI ─────────────────────────────
+// Kod, uygulama arka plana alındığında mikrofonu ya da sesi KENDİSİ susturmaz. Ancak mobil
+// tarayıcılar arka plana alınan / ekranı kilitlenen sayfada mikrofon yakalamayı ve sesi
+// askıya alabilir; ayrıca bunun ardından yerel mikrofon "kapalı" görünüp kullanıcının
+// kendi susturmasıymış gibi yansıtılıyordu. Bu bölüm elinden geleni yapar (best-effort):
+//  1) çağrı sırasında "medya oturumu" + sessiz döngü sesi ile tarayıcıya bunun bir çağrı olduğunu bildirir,
+//  2) çağrı sürerken ekranın kendiliğinden kilitlenmesini (Wake Lock) engeller,
+//  3) uygulama öne gelince, kullanıcı kendisi susturmadıysa mikrofonu ve sesi geri açar.
+// iOS Safari / ana ekran uygulaması (PWA) arka planda mikrofonu sistem düzeyinde durdurabilir;
+// bu, bir web uygulamasının aşamayacağı bir sınırdır.
+
+let callKeepAliveEl = null;
+let callKeepAliveUrl = null;
+let callWakeLock = null;
+let callRecoveryTimers = [];
+
+function buildSilentWavUrl() {
+    const sampleRate = 8000;
+    const samples = sampleRate; // 1 sn
+    const buffer = new ArrayBuffer(44 + samples * 2);
+    const view = new DataView(buffer);
+    const writeStr = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
+
+    writeStr(0, 'RIFF'); view.setUint32(4, 36 + samples * 2, true); writeStr(8, 'WAVE'); writeStr(12, 'fmt ');
+    view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+    writeStr(36, 'data'); view.setUint32(40, samples * 2, true);
+
+    return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
+}
+
+async function requestCallWakeLock() {
+    if (!callFrame || callWakeLock || !navigator.wakeLock || document.visibilityState !== 'visible') return;
+
+    try {
+        const lock = await navigator.wakeLock.request('screen');
+        callWakeLock = lock;
+        lock.addEventListener('release', () => { if (callWakeLock === lock) callWakeLock = null; });
+    } catch (_) {
+        callWakeLock = null;
+    }
+}
+
+function startCallBackgroundKeepAlive() {
+
+    if (!callKeepAliveEl) {
+        try {
+            callKeepAliveUrl = buildSilentWavUrl();
+            const el = document.createElement('audio');
+            el.src = callKeepAliveUrl;
+            el.loop = true;
+            el.playsInline = true;
+            el.setAttribute('data-call-keepalive', '1');
+            document.body.appendChild(el);
+            callKeepAliveEl = el;
+            el.play().catch(() => {}); // otomatik oynatma engellenirse ilk dokunuşta tekrar denenir (tryPlayAllCallAudio)
+        } catch (_) { /* yoksay */ }
+    }
+
+    if ('mediaSession' in navigator) {
+        const setHandler = (action, handler) => {
+            try { navigator.mediaSession.setActionHandler(action, handler); } catch (_) { /* bu tarayıcıda yok */ }
+        };
+
+        try {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: currentVoiceRoomName || 'Sesli görüşme',
+                artist: 'Sauran'
+            });
+            navigator.mediaSession.playbackState = 'playing';
+        } catch (_) { /* yoksay */ }
+
+        // Sistem "duraklat" derse çağrı sesini sürdür; kapatma ve mikrofon düğmeleri gerçek işlevini görür.
+        setHandler('play', () => { callKeepAliveEl?.play().catch(() => {}); });
+        setHandler('pause', () => { callKeepAliveEl?.play().catch(() => {}); });
+        setHandler('hangup', () => leaveCall());
+        setHandler('togglemicrophone', () => { if (callMode === 'hub-room') toggleLocalMute(); });
+    }
+
+    requestCallWakeLock();
+}
+
+function stopCallBackgroundKeepAlive() {
+
+    callRecoveryTimers.forEach(clearTimeout);
+    callRecoveryTimers = [];
+
+    if (callKeepAliveEl) {
+        try { callKeepAliveEl.pause(); } catch (_) { /* yoksay */ }
+        callKeepAliveEl.remove();
+        callKeepAliveEl = null;
+    }
+    if (callKeepAliveUrl) {
+        URL.revokeObjectURL(callKeepAliveUrl);
+        callKeepAliveUrl = null;
+    }
+
+    if ('mediaSession' in navigator) {
+        try {
+            navigator.mediaSession.playbackState = 'none';
+            navigator.mediaSession.metadata = null;
+            ['play', 'pause', 'hangup', 'togglemicrophone'].forEach((a) => {
+                try { navigator.mediaSession.setActionHandler(a, null); } catch (_) { /* yoksay */ }
+            });
+        } catch (_) { /* yoksay */ }
+    }
+
+    if (callWakeLock) {
+        try { callWakeLock.release(); } catch (_) { /* yoksay */ }
+        callWakeLock = null;
+    }
+}
+
+// Öne dönünce: uzak sesi tekrar oynat ve — kullanıcı KENDİSİ susturmadıysa — mikrofonu geri aç.
+async function recoverCallMedia() {
+
+    if (!callFrame || document.visibilityState !== 'visible') return;
+
+    tryPlayAllCallAudio();
+
+    // Kullanıcı (ya da moderatör) bilerek sessize aldıysa dokunma. İzin hiç verilmediyse de deneme.
+    if (voiceUserMuted || !callMicEverLive) return;
+
+    try {
+        const local = callFrame.participants()?.local;
+        const audio = local?.tracks?.audio;
+        const track = audio?.persistentTrack;
+
+        const interrupted = audio?.state === 'interrupted';
+        const ended = track?.readyState === 'ended';
+        const lost = !callFrame.localAudio() || interrupted || ended || Boolean(track?.muted);
+        if (!lost) return;
+
+        callFrame.setLocalAudio(true);
+
+        // Yakalama gerçekten sonlanmışsa (track kapanmış / kesintiye uğramış) mikrofonu yeniden al.
+        if ((interrupted || ended) && typeof callFrame.setInputDevicesAsync === 'function') {
+            await callFrame.setInputDevicesAsync({ audioSource: true });
+            callFrame.setLocalAudio(true);
+        }
+
+        if (callMode === 'hub-room' && voiceLocalMuted) syncLocalMuteState(false);
+
+    } catch (error) {
+        console.warn('Mikrofon geri açılamadı:', error);
+    }
+}
+
+function scheduleCallRecovery() {
+    callRecoveryTimers.forEach(clearTimeout);
+    // Öne dönüşten hemen sonra izler/aygıtlar hazır olmayabilir; kısa aralıklarla tekrar dene.
+    callRecoveryTimers = [0, 400, 1500, 4000].map((ms) => setTimeout(recoverCallMedia, ms));
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && callFrame) {
+        requestCallWakeLock();
+        scheduleCallRecovery();
+    }
+});
+window.addEventListener('pageshow', () => { if (callFrame) { requestCallWakeLock(); scheduleCallRecovery(); } });
+window.addEventListener('focus', () => { if (callFrame) scheduleCallRecovery(); });
+
+
 function leaveCall() {
 
     if ((callMode === 'dm' || callMode === 'dm-ringing') && (outgoingCallToId || incomingCallFromId) && socket) {
@@ -9021,6 +9213,7 @@ function leaveCall() {
     }
 
     clearRemoteCallAudio();
+    stopCallBackgroundKeepAlive();
     stopCallTimer();
 
     callOverlay.style.display = 'none';
@@ -9045,6 +9238,8 @@ function leaveCall() {
     voiceSessionConfirmed = false;
     voiceRejoining = false;
     voiceLocalMuted = false;
+    voiceUserMuted = false;
+    callMicEverLive = false;
     voiceDeafened = false;
     voiceLocalSpeaking = false;
     voiceRemoteSpeaking = new Set();
