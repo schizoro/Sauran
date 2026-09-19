@@ -880,7 +880,7 @@ function loginUser(username, password) {
     const user = db.prepare(`
       SELECT id, username, email, password_hash, password_salt,
              about_me, status, avatar_visibility, avatar_data, banner_data,
-             platform_role, dev_notice_seen, dev_notice_new
+             platform_role, dev_notice_seen, dev_notice_new, account_status, suspension_user_reason
       FROM users WHERE LOWER(username) = LOWER(?)
     `).get(username);
 
@@ -896,6 +896,12 @@ function loginUser(username, password) {
 
     if (!valid) {
       return { success: false, error: 'Kullanıcı adı veya şifre hatalı.' };
+    }
+
+    // Askı durumu YALNIZCA kimlik doğrulandıktan sonra bildirilir; böylece bir hesabın
+    // askıda olduğu şifre tahmin edilerek öğrenilemez.
+    if (user.account_status === 'suspended') {
+      return { success: false, suspended: true, user_reason: user.suspension_user_reason || null };
     }
 
     return {
@@ -2694,7 +2700,7 @@ function listAdminUsers({ page = 1, limit = 20, search = '', role = '' } = {}) {
   const total = db.prepare(`SELECT COUNT(*) AS c FROM users ${whereSql}`).get(...params).c;
 
   const users = db.prepare(`
-    SELECT id, username, platform_role, created_at
+    SELECT id, username, platform_role, account_status, created_at
     FROM users ${whereSql}
     ORDER BY id DESC LIMIT ? OFFSET ?
   `).all(...params, limit, (page - 1) * limit);
@@ -2726,6 +2732,7 @@ function listAdminUsers({ page = 1, limit = 20, search = '', role = '' } = {}) {
       id: u.id,
       username: u.username,
       platform_role: u.platform_role,
+      account_status: u.account_status,
       created_at: u.created_at,
       hub_count: hubCounts.get(u.id) || 0,
       friend_count: friendCounts.get(u.id) || 0,
@@ -2737,7 +2744,8 @@ function listAdminUsers({ page = 1, limit = 20, search = '', role = '' } = {}) {
 
 function getAdminUserDetail(userId) {
   const user = db.prepare(`
-    SELECT id, username, email, created_at, platform_role, about_me, avatar_data, avatar_visibility
+    SELECT id, username, email, created_at, platform_role, about_me, avatar_data, avatar_visibility,
+           account_status, suspended_at, suspension_user_reason
     FROM users WHERE id = ?
   `).get(userId);
 
@@ -2766,7 +2774,11 @@ function getAdminUserDetail(userId) {
       username: user.username,
       email: user.email,
       created_at: user.created_at,
-      platform_role: user.platform_role
+      platform_role: user.platform_role,
+      account_status: user.account_status,
+      suspended_at: user.suspended_at,
+      // Kullanıcıya gösterilen metin (iç gerekçe burada YOK; yalnızca audit log'da).
+      user_reason: user.suspension_user_reason
     },
     profile: {
       about_me: user.about_me,
@@ -3015,7 +3027,162 @@ function changePlatformRole({ actorId, targetId, newRole, reason }) {
   }
 }
 
+// =====================================================
+// HESAP ASKIYA ALMA (AŞAMA D)
+// =====================================================
+// Askıya alma GERİ ALINABİLİR bir erişim kısıtlamasıdır: hiçbir kullanıcı verisi
+// (mesaj, DM, Lobi, üyelik, arkadaşlık, bildirim, rapor, moderasyon/audit kaydı,
+// profil) silinmez veya değiştirilmez; yalnızca hesap "suspended" durumuna geçer
+// ve oturumları kapatılır.
+//
+// İKİ AYRI GEREKÇE:
+// - iç gerekçe (internal_reason): yalnızca admin_audit_log.reason'a yazılır,
+//   users tablosuna KOPYALANMAZ ve kullanıcıya asla gösterilmez.
+// - kullanıcı gerekçesi (user_reason): isteğe bağlı, kısa, sade metin; users
+//   tablosunda suspension_user_reason olarak tutulur ve yalnızca doğru kimlik
+//   doğrulamadan sonra kullanıcıya gösterilir. Audit'e KOPYALANMAZ.
+// Askı kalkınca users üzerindeki askı alanları temizlenir (tarihçe audit'te kalır).
+
+const usersSuspensionColumns = db.prepare(`PRAGMA table_info(users)`).all().map(col => col.name);
+if (!usersSuspensionColumns.includes('account_status')) {
+  db.exec(`ALTER TABLE users ADD COLUMN account_status TEXT NOT NULL DEFAULT 'active'`);
+}
+if (!usersSuspensionColumns.includes('suspended_at')) {
+  db.exec(`ALTER TABLE users ADD COLUMN suspended_at DATETIME`);
+}
+if (!usersSuspensionColumns.includes('suspended_by')) {
+  db.exec(`ALTER TABLE users ADD COLUMN suspended_by INTEGER`);
+}
+if (!usersSuspensionColumns.includes('suspension_user_reason')) {
+  db.exec(`ALTER TABLE users ADD COLUMN suspension_user_reason TEXT`);
+}
+
+const USER_REASON_MAX = 300;
+
+function loadFounderActor(actorId) {
+  const actor = db.prepare(`SELECT id, platform_role FROM users WHERE id = ?`).get(actorId);
+  if (!actor || actor.platform_role !== 'founder') {
+    throw new AdminActionError(403, 'Bu işlem için yetkin yok.');
+  }
+  return actor;
+}
+
+const suspendAccountTx = db.transaction(({ actorId, targetId, internalReason, userReason }) => {
+  loadFounderActor(actorId);
+
+  if (actorId === targetId) {
+    throw new AdminActionError(403, 'Kendi hesabını askıya alamazsın.');
+  }
+
+  const target = db.prepare(`SELECT id, platform_role, account_status FROM users WHERE id = ?`).get(targetId);
+  if (!target) {
+    throw new AdminActionError(404, 'Kullanıcı bulunamadı.');
+  }
+  if (target.platform_role === 'founder') {
+    throw new AdminActionError(403, 'Founder hesabı askıya alınamaz.');
+  }
+  if (target.account_status === 'suspended') {
+    throw new AdminActionError(409, 'Hesap zaten askıda.');
+  }
+
+  db.prepare(`
+    UPDATE users
+    SET account_status = 'suspended', suspended_at = CURRENT_TIMESTAMP, suspended_by = ?, suspension_user_reason = ?
+    WHERE id = ?
+  `).run(actorId, userReason, targetId);
+
+  // Yalnızca oturumlar kapatılır; başka hiçbir kullanıcı verisine dokunulmaz.
+  const revoked = db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(targetId).changes;
+
+  writeAuditLog({
+    actorUserId: actorId,
+    action: 'account_suspended',
+    targetUserId: targetId,
+    reason: internalReason,
+    oldValue: 'active',
+    newValue: 'suspended'
+  });
+
+  return { id: targetId, sessions_revoked: revoked };
+});
+
+const unsuspendAccountTx = db.transaction(({ actorId, targetId, internalReason }) => {
+  loadFounderActor(actorId);
+
+  if (actorId === targetId) {
+    throw new AdminActionError(403, 'Kendi hesabın için bu işlemi yapamazsın.');
+  }
+
+  const target = db.prepare(`SELECT id, platform_role, account_status FROM users WHERE id = ?`).get(targetId);
+  if (!target) {
+    throw new AdminActionError(404, 'Kullanıcı bulunamadı.');
+  }
+  if (target.platform_role === 'founder') {
+    throw new AdminActionError(403, 'Founder hesabı üzerinde bu işlem yapılamaz.');
+  }
+  if (target.account_status !== 'suspended') {
+    throw new AdminActionError(409, 'Hesap askıda değil.');
+  }
+
+  db.prepare(`
+    UPDATE users
+    SET account_status = 'active', suspended_at = NULL, suspended_by = NULL, suspension_user_reason = NULL
+    WHERE id = ?
+  `).run(targetId);
+
+  writeAuditLog({
+    actorUserId: actorId,
+    action: 'account_unsuspended',
+    targetUserId: targetId,
+    reason: internalReason,
+    oldValue: 'suspended',
+    newValue: 'active'
+  });
+
+  return { id: targetId };
+});
+
+function validateInternalReason(reason) {
+  reason = typeof reason === 'string' ? reason.trim() : '';
+  if (!reason) return { error: 'İç gerekçe zorunlu.' };
+  if (reason.length > ADMIN_REASON_MAX) return { error: `İç gerekçe en fazla ${ADMIN_REASON_MAX} karakter olabilir.` };
+  return { value: reason };
+}
+
+function suspendAccount({ actorId, targetId, internalReason, userReason }) {
+  const internal = validateInternalReason(internalReason);
+  if (internal.error) return { success: false, status: 400, error: internal.error };
+
+  // Kullanıcıya gösterilecek metin: tek satır, kontrol karakterleri temizlenir, isteğe bağlı.
+  let shown = typeof userReason === 'string' ? userReason.replace(/[ -]+/g, ' ').replace(/\s+/g, ' ').trim() : '';
+  if (shown.length > USER_REASON_MAX) {
+    return { success: false, status: 400, error: `Kullanıcı gerekçesi en fazla ${USER_REASON_MAX} karakter olabilir.` };
+  }
+  shown = shown || null;
+
+  try {
+    return { success: true, ...suspendAccountTx({ actorId, targetId, internalReason: internal.value, userReason: shown }), user_reason: shown };
+  } catch (error) {
+    if (error instanceof AdminActionError) return { success: false, status: error.status, error: error.message };
+    throw error;
+  }
+}
+
+function unsuspendAccount({ actorId, targetId, internalReason }) {
+  const internal = validateInternalReason(internalReason);
+  if (internal.error) return { success: false, status: 400, error: internal.error };
+
+  try {
+    return { success: true, ...unsuspendAccountTx({ actorId, targetId, internalReason: internal.value }) };
+  } catch (error) {
+    if (error instanceof AdminActionError) return { success: false, status: error.status, error: error.message };
+    throw error;
+  }
+}
+
 module.exports = {
+  suspendAccount,
+  unsuspendAccount,
   changePlatformRole,
   devNoticeFor,
   markDevNoticeSeen,

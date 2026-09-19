@@ -108,6 +108,8 @@ const {
   AUDIT_ACTIONS,
   listAuditLog,
   changePlatformRole,
+  suspendAccount,
+  unsuspendAccount,
   markDevNoticeSeen,
   PLATFORM_ROLES,
   getAdminUserDetail,
@@ -248,6 +250,8 @@ if (!sessionColumns.includes('user_agent')) {
   db.exec(`ALTER TABLE sessions ADD COLUMN user_agent TEXT`);
 }
 
+const SUPPORT_EMAIL = 'destek@sauran.online';
+
 const SESSION_DURATION = 7 * 24 * 60 * 60 * 1000;
 
 function hashSessionToken(token) {
@@ -255,6 +259,11 @@ function hashSessionToken(token) {
 }
 
 function createSession(userId, userAgent) {
+  const acct = db.prepare(`SELECT account_status FROM users WHERE id = ?`).get(userId);
+  if (acct && acct.account_status === 'suspended') {
+    throw new Error('Askıdaki hesap için oturum oluşturulamaz.');
+  }
+
   const token = crypto.randomBytes(32).toString('hex');
   const tokenHash = hashSessionToken(token);
   const expiresAt = new Date(Date.now() + SESSION_DURATION).toISOString();
@@ -290,7 +299,7 @@ function getUserFromSessionToken(token) {
   const user = db.prepare(`
     SELECT users.id, users.username, users.email, users.about_me,
            users.status, users.avatar_visibility, users.avatar_data, users.banner_data,
-           users.birth_date, users.platform_role, users.dev_notice_seen, users.dev_notice_new,
+           users.birth_date, users.platform_role, users.dev_notice_seen, users.dev_notice_new, users.account_status,
            sessions.expires_at
     FROM sessions
     INNER JOIN users ON users.id = sessions.user_id
@@ -298,6 +307,9 @@ function getUserFromSessionToken(token) {
   `).get(tokenHash);
 
   if (!user) return null;
+
+  // Askıdaki hesap: oturum satırı kalmış olsa bile doğrulanmaz.
+  if (user.account_status === 'suspended') return null;
 
   if (new Date(user.expires_at).getTime() <= Date.now()) {
     db.prepare(`DELETE FROM sessions WHERE token_hash = ?`).run(tokenHash);
@@ -433,6 +445,15 @@ app.post('/api/login', loginLimiter, (req, res) => {
     }
 
     const result = loginUser(actualUsername, password);
+
+    if (!result.success && result.suspended) {
+      return res.status(403).json({
+        success: false,
+        suspended: true,
+        error: 'Hesabınız geçici olarak askıya alındı.',
+        suspension: { user_reason: result.user_reason, support_email: SUPPORT_EMAIL }
+      });
+    }
 
     if (!result.success) {
       return res.status(401).json({
@@ -1055,6 +1076,73 @@ app.patch('/api/admin/users/:id/role', adminWriteLimiter, (req, res) => {
   } catch (error) {
     console.error('Rol değiştirme hatası:', error);
     res.status(500).json({ success: false, error: 'Rol değiştirilemedi.' });
+  }
+});
+
+// Hesap askıya alma / kaldırma: YALNIZCA founder. Hedef yalnızca URL'den, gerekçeler
+// yalnızca gövdeden okunur (gövdedeki account_status, actor_user_id vb. yok sayılır).
+// Askı transaction'ı (durum + oturum iptali + audit) başarıyla bittikten SONRA canlı
+// socket bağlantıları kontrollü bir olayla bilgilendirilip kapatılır.
+function terminateSuspendedUserSockets(userId, userReason) {
+  try {
+    const room = `user:${userId}`;
+    io.to(room).emit('account_suspended', { user_reason: userReason || null, support_email: SUPPORT_EMAIL });
+    io.in(room).disconnectSockets(true);
+  } catch (error) {
+    console.error('Askıdaki kullanıcının socket bağlantıları kapatılamadı:', error);
+  }
+}
+
+app.patch('/api/admin/users/:id/suspend', adminWriteLimiter, (req, res) => {
+  const actor = requirePlatformRole(req, res, 'founder');
+  if (!actor) return;
+
+  if (!/^[0-9]{1,15}$/.test(req.params.id)) {
+    return res.status(400).json({ success: false, error: 'Geçersiz kullanıcı ID.' });
+  }
+
+  try {
+    const targetId = Number(req.params.id);
+    const result = suspendAccount({
+      actorId: actor.id,
+      targetId,
+      internalReason: req.body?.internal_reason,
+      userReason: req.body?.user_reason
+    });
+
+    if (!result.success) {
+      return res.status(result.status).json({ success: false, error: result.error });
+    }
+
+    terminateSuspendedUserSockets(targetId, result.user_reason);
+
+    return res.json({ success: true, user: { id: targetId, account_status: 'suspended' } });
+  } catch (error) {
+    console.error('Hesap askıya alma hatası:', error);
+    res.status(500).json({ success: false, error: 'Hesap askıya alınamadı.' });
+  }
+});
+
+app.patch('/api/admin/users/:id/unsuspend', adminWriteLimiter, (req, res) => {
+  const actor = requirePlatformRole(req, res, 'founder');
+  if (!actor) return;
+
+  if (!/^[0-9]{1,15}$/.test(req.params.id)) {
+    return res.status(400).json({ success: false, error: 'Geçersiz kullanıcı ID.' });
+  }
+
+  try {
+    const targetId = Number(req.params.id);
+    const result = unsuspendAccount({ actorId: actor.id, targetId, internalReason: req.body?.internal_reason });
+
+    if (!result.success) {
+      return res.status(result.status).json({ success: false, error: result.error });
+    }
+
+    return res.json({ success: true, user: { id: targetId, account_status: 'active' } });
+  } catch (error) {
+    console.error('Askı kaldırma hatası:', error);
+    res.status(500).json({ success: false, error: 'Askı kaldırılamadı.' });
   }
 });
 

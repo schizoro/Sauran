@@ -1774,3 +1774,11 @@ body.call-mini-active { padding-top: 42px; }
 @media (prefers-reduced-motion: reduce) {
   .dev-notice-overlay, .dev-notice-panel { transition: none; }
 }
+
+/* Hesap askıda bildirimi (yalnızca doğru şifre sonrası gösterilir) */
+.auth-suspended {
+  margin-top: 16px; padding: 12px 14px; text-align: left; font-size: 12.5px; line-height: 1.55;
+  color: #ffb066; background: rgba(255, 159, 67, 0.08); border: 1px solid rgba(255, 159, 67, 0.35); border-radius: 12px;
+}
+.auth-suspended strong { display: block; color: #ffc98f; font-size: 13px; }
+.auth-suspended p { margin: 6px 0 0; color: #c5c6c7; word-break: break-word; }

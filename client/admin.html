@@ -166,6 +166,14 @@
                 roleFounderLocked: 'Founder rolü web panelinden değiştirilemez.', roleDone: 'Rol güncellendi.',
                 roleHint: 'Bu gerekçe yalnızca iç yönetim kaydına (audit log) yazılır, kullanıcıya gösterilmez.',
                 roleReasonRequired: 'Gerekçe zorunlu.', roleWorking: 'Uygulanıyor…',
+                accStatus: 'Hesap durumu', statusActive: 'Aktif', statusSuspended: 'Askıda', suspendedBadge: 'Askıda',
+                suspendTitle: 'Hesap askısı', suspendBtn: 'Hesabı Askıya Al', unsuspendBtn: 'Askıyı Kaldır',
+                internalReasonPh: 'İç gerekçe (zorunlu, kullanıcıya gösterilmez)', userReasonPh: 'Kullanıcıya gösterilecek gerekçe (isteğe bağlı)',
+                internalHint: 'İç gerekçe yalnızca yönetim kaydına (audit log) yazılır, kullanıcıya gösterilmez.',
+                userReasonWarn: 'Kullanıcıya gösterilebilecek kısa ve uygun bir gerekçe yazın. Başka kullanıcıların kişisel bilgilerini eklemeyin.',
+                internalReasonRequired: 'İç gerekçe zorunlu.', confirmSuspend: 'Bu hesap askıya alınsın mı? Kullanıcı oturumu kapatılır ve giriş yapamaz.',
+                suspendDone: 'Hesap askıya alındı.', unsuspendDone: 'Askı kaldırıldı.', suspendedSince: 'Askıya alındı:',
+                userSeesReason: 'Kullanıcının gördüğü gerekçe', noneGiven: 'belirtilmedi',
                 tabUsers: 'Kullanıcılar', tabAudit: 'Audit Log',
                 auDate: 'Tarih', auActor: 'Yapan', auAction: 'İşlem', auTarget: 'Hedef', auReason: 'Gerekçe', auChange: 'Değişiklik',
                 auAllActions: 'Tüm işlemler', auActorPh: 'Yapan ID', auTargetPh: 'Hedef ID', auFrom: 'Başlangıç', auTo: 'Bitiş',
@@ -190,6 +198,14 @@
                 roleFounderLocked: 'The founder role cannot be changed from the web panel.', roleDone: 'Role updated.',
                 roleHint: 'This reason is written only to the internal admin record (audit log) and is not shown to the user.',
                 roleReasonRequired: 'A reason is required.', roleWorking: 'Applying…',
+                accStatus: 'Account status', statusActive: 'Active', statusSuspended: 'Suspended', suspendedBadge: 'Suspended',
+                suspendTitle: 'Account suspension', suspendBtn: 'Suspend Account', unsuspendBtn: 'Lift Suspension',
+                internalReasonPh: 'Internal reason (required, not shown to the user)', userReasonPh: 'Reason shown to the user (optional)',
+                internalHint: 'The internal reason is written only to the admin record (audit log) and is not shown to the user.',
+                userReasonWarn: 'Write a short, appropriate reason the user may see. Do not include other users\' personal information.',
+                internalReasonRequired: 'An internal reason is required.', confirmSuspend: 'Suspend this account? The user will be signed out and unable to log in.',
+                suspendDone: 'Account suspended.', unsuspendDone: 'Suspension lifted.', suspendedSince: 'Suspended:',
+                userSeesReason: 'Reason shown to the user', noneGiven: 'not given',
                 tabUsers: 'Users', tabAudit: 'Audit Log',
                 auDate: 'Date', auActor: 'By', auAction: 'Action', auTarget: 'Target', auReason: 'Reason', auChange: 'Change',
                 auAllActions: 'All actions', auActorPh: 'Actor ID', auTargetPh: 'Target ID', auFrom: 'From', auTo: 'To',
@@ -232,6 +248,67 @@
             const data = await res.json().catch(() => ({}));
             if (!res.ok || !data.success) throw Object.assign(new Error(data.error || 'error'), { status: res.status });
             return data;
+        }
+
+        function statusBadge(a) {
+            return a.account_status === 'suspended'
+                ? `<span class="adm-role founder">${esc(t('statusSuspended'))}</span>`
+                : `<span class="adm-role">${esc(t('statusActive'))}</span>`;
+        }
+
+        function suspendControlsHtml(a) {
+            if (!isFounder || a.platform_role === 'founder') return '';
+            const area = 'background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);color:#c5c6c7;border-radius:10px;padding:9px 12px;font-size:13px;font-family:inherit;outline:none;';
+            if (a.account_status === 'suspended') {
+                return `
+                    <div class="adm-section-title">${t('suspendTitle')}</div>
+                    <p class="adm-muted" style="font-size:12px;margin:0 0 4px;">${esc(t('suspendedSince'))} ${fmtDate(a.suspended_at)}</p>
+                    <p class="adm-muted" style="font-size:12px;margin:0 0 8px;">${esc(t('userSeesReason'))}: ${a.user_reason ? esc(a.user_reason) : esc(t('noneGiven'))}</p>
+                    <div class="adm-toolbar" style="flex-direction:column;gap:8px;margin-bottom:6px;">
+                        <textarea id="sc-internal" maxlength="500" rows="2" placeholder="${esc(t('internalReasonPh'))}" style="${area}resize:vertical;"></textarea>
+                        <button id="sc-apply" type="button" class="adm-apply-btn">${esc(t('unsuspendBtn'))}</button>
+                    </div>
+                    <div id="sc-msg" style="font-size:12px;min-height:16px;" role="status"></div>`;
+            }
+            return `
+                <div class="adm-section-title">${t('suspendTitle')}</div>
+                <div class="adm-toolbar" style="flex-direction:column;gap:8px;margin-bottom:6px;">
+                    <textarea id="sc-internal" maxlength="500" rows="2" placeholder="${esc(t('internalReasonPh'))}" style="${area}resize:vertical;"></textarea>
+                    <input type="text" id="sc-user" maxlength="300" placeholder="${esc(t('userReasonPh'))}" style="${area}">
+                    <button id="sc-apply" type="button" class="adm-apply-btn" style="color:#ff6b7d;border-color:rgba(255,46,70,0.45);background:rgba(255,46,70,0.08);">${esc(t('suspendBtn'))}</button>
+                </div>
+                <p class="adm-muted" style="font-size:11px;margin:0 0 4px;">${esc(t('internalHint'))}</p>
+                <p class="adm-muted" style="font-size:11px;margin:0 0 4px;">${esc(t('userReasonWarn'))}</p>
+                <div id="sc-msg" style="font-size:12px;min-height:16px;" role="status"></div>`;
+        }
+
+        function wireSuspendControls(a) {
+            const btn = $('sc-apply');
+            if (!btn) return;
+            const suspended = a.account_status === 'suspended';
+            btn.addEventListener('click', async () => {
+                const msg = $('sc-msg');
+                const internal = $('sc-internal').value.trim();
+                if (!internal) { msg.style.color = '#ff6b7d'; msg.textContent = t('internalReasonRequired'); return; }
+                if (!suspended && !confirm(t('confirmSuspend'))) return;
+                btn.disabled = true;
+                msg.style.color = '#9ca3af';
+                msg.textContent = t('roleWorking');
+                try {
+                    const path = `/api/admin/users/${encodeURIComponent(a.id)}/${suspended ? 'unsuspend' : 'suspend'}`;
+                    const body = suspended ? { internal_reason: internal } : { internal_reason: internal, user_reason: $('sc-user').value.trim() };
+                    await send('PATCH', path, body);
+                    await openDetail(a.id);
+                    $('sc-msg').style.color = '#57f287';
+                    $('sc-msg').textContent = t(suspended ? 'unsuspendDone' : 'suspendDone');
+                    loadUsers().catch(() => {});
+                    if (audit.loaded) loadAudit().catch(() => {});
+                } catch (e) {
+                    msg.style.color = '#ff6b7d';
+                    msg.textContent = e.message;
+                    btn.disabled = false;
+                }
+            });
         }
 
         function roleControlsHtml(a) {
@@ -330,7 +407,7 @@
                 ${data.users.map((u) => `
                     <tr data-id="${u.id}">
                         <td data-label="${t('id')}">${u.id}</td>
-                        <td data-label="${t('username')}"><b>${esc(u.username)}</b></td>
+                        <td data-label="${t('username')}"><b>${esc(u.username)}</b>${u.account_status === 'suspended' ? ` <span class="adm-role founder">${esc(t('suspendedBadge'))}</span>` : ''}</td>
                         <td data-label="${t('role')}"><span class="adm-role ${esc(u.platform_role)}">${esc(u.platform_role)}</span></td>
                         <td data-label="${t('created')}">${fmtDate(u.created_at)}</td>
                         <td data-label="${t('hubs')}">${u.hub_count}</td>
@@ -366,7 +443,9 @@
                     ${row('ID', a.id)}
                     ${row(t('email'), a.email ? esc(a.email) : esc(t('noEmail')), !a.email)}
                     ${row(t('created'), fmtDate(a.created_at))}
+                    ${row(t('accStatus'), statusBadge(a))}
                     ${roleControlsHtml(a)}
+                    ${suspendControlsHtml(a)}
                     <div class="adm-section-title">${t('profile')}</div>
                     ${row(t('avatarVisibility'), esc(p.avatar_visibility || '—'))}
                     <div class="adm-row" style="display:block;"><span>${t('about')}</span>
@@ -386,6 +465,7 @@
                     <a class="adm-mod-link" href="moderation.html">${esc(t('viewReports'))}</a>
                     <p class="adm-muted" style="font-size:11px;margin-top:18px;">${esc(t('readOnly'))}</p>`;
                 wireRoleControls(a);
+                wireSuspendControls(a);
             } catch (e) {
                 $('adm-detail').innerHTML = `<div class="adm-state">${esc(e.denied ? t('denied') : t('error'))}</div>`;
             }

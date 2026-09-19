@@ -697,6 +697,9 @@ function clearAuthError() {
     authError.style.display =
         'none';
 
+    const suspendedBox = document.getElementById('auth-suspended');
+    if (suspendedBox) suspendedBox.style.display = 'none';
+
 }
 
 
@@ -1204,6 +1207,11 @@ async function login() {
             !response.ok ||
             !data.success
         ) {
+
+            if (response.status === 403 && data.suspended) {
+                showSuspensionNotice(data.suspension && data.suspension.user_reason);
+                return;
+            }
 
             showAuthError(
                 data.error ||
@@ -3007,6 +3015,9 @@ const I18N = {
     'menu-add-friend': { tr: 'Arkadaş Ekle', en: 'Add Friend' },
     'menu-settings': { tr: 'Ayarlar', en: 'Settings' },
     'menu-admin': { tr: 'Yönetim', en: 'Admin' },
+    'suspended-title': { tr: 'Hesabınız geçici olarak askıya alındı.', en: 'Your account has been temporarily suspended.' },
+    'suspended-reason': { tr: 'Gerekçe:', en: 'Reason:' },
+    'suspended-support': { tr: 'Destek:', en: 'Support:' },
     'dev-notice-btn': { tr: 'Anladım, Devam Et', en: 'Got it, Continue' },
     'hubs-title': { tr: 'Ana Menü', en: 'Home' },
     'hubs-owned': { tr: 'OLUŞTURDUĞUM LOBİLER', en: 'LOBBIES I CREATED' },
@@ -3501,6 +3512,11 @@ function connectToChat() {
     // -------------------------------------------------
     // Socket authentication başarılı
     // -------------------------------------------------
+
+    socket.on('account_suspended', (data) => {
+        handleAccountSuspended(data);
+    });
+
 
     socket.on(
         'login_success',
@@ -4019,6 +4035,55 @@ async function checkExistingSession() {
 // =====================================================
 // ÇIKIŞ
 // =====================================================
+
+// =====================================================
+// HESAP ASKIDA BİLDİRİMİ
+// =====================================================
+// İçerik (user_reason) sunucudan gelen düz metindir; textContent ile yazılır.
+// Rapor sahibi, moderasyon notu veya iç gerekçe bu ekrana hiçbir zaman gelmez.
+
+let accountSuspendedHandled = false;
+
+function showSuspensionNotice(userReason) {
+
+    const box = document.getElementById('auth-suspended');
+    if (!box) return;
+
+    document.getElementById('auth-suspended-title').textContent = t('suspended-title');
+
+    const reasonEl = document.getElementById('auth-suspended-reason');
+    if (userReason) {
+        reasonEl.textContent = t('suspended-reason') + ' ' + userReason;
+        reasonEl.style.display = 'block';
+    } else {
+        reasonEl.textContent = '';
+        reasonEl.style.display = 'none';
+    }
+
+    document.getElementById('auth-suspended-support').textContent = t('suspended-support') + ' destek@sauran.online';
+    box.style.display = 'block';
+
+}
+
+// Sunucu 'account_suspended' olayını gönderip bağlantıyı kapatır. Yeniden
+// bağlanma denemeleri KAPATILIR (oturum artık geçersiz) ve kullanıcı giriş
+// ekranına, askı bildirimiyle birlikte döner.
+async function handleAccountSuspended(data) {
+
+    if (accountSuspendedHandled) return;
+    accountSuspendedHandled = true;
+
+    try {
+        if (socket) socket.io.reconnection(false);
+    } catch (error) {}
+
+    await logout();
+
+    showSuspensionNotice(data && data.user_reason);
+
+    accountSuspendedHandled = false;
+
+}
 
 async function logout() {
 
