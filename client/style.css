@@ -1832,3 +1832,11 @@ body.call-mini-active { padding-top: 42px; }
 .role-notice-decline:hover { background: rgba(255, 46, 70, 0.18); }
 .role-notice-decline:disabled { opacity: 0.4; cursor: not-allowed; }
 @media (max-width: 480px) { .role-notice-actions .role-notice-decline { width: 100%; } }
+
+/* ─── iPhone Ana Ekran uygulaması: arka planda mikrofon uyarısı ───────────── */
+.ios-voice-hint {
+  display: flex; align-items: center; justify-content: center; gap: 12px 16px; flex-wrap: wrap; padding: 12px 18px; margin: 0 auto 16px; max-width: 560px;
+  border-radius: 16px; background: rgba(255, 196, 87, 0.09); border: 1px solid rgba(255, 196, 87, 0.30); color: #ffd58a; font-size: 12.5px; line-height: 1.55; text-align: center;
+}
+#ios-voice-hint-ok { padding: 6px 16px; border-radius: 999px; background: rgba(255, 196, 87, 0.16); border: 1px solid rgba(255, 196, 87, 0.4); color: #ffd58a; font-weight: bold; font-size: 11px; cursor: pointer; }
+#ios-voice-hint-ok:hover { background: rgba(255, 196, 87, 0.26); }

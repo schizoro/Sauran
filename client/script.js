@@ -3024,6 +3024,11 @@ const I18N = {
     'suspended-reason': { tr: 'Gerekçe:', en: 'Reason:' },
     'suspended-support': { tr: 'Destek:', en: 'Support:' },
     'dev-notice-btn': { tr: 'Anladım, Devam Et', en: 'Got it, Continue' },
+    'ios-voice-hint': {
+        tr: 'iPhone\'da Ana Ekran uygulamasında ekranı kilitlersen ya da başka uygulamaya geçersen mikrofonun kapanır. Arka planda konuşmak için Sauran\'ı Safari\'de aç.',
+        en: 'On iPhone, in the Home Screen app your microphone turns off when you lock the screen or switch to another app. To keep talking in the background, open Sauran in Safari.'
+    },
+    'ios-voice-hint-ok': { tr: 'Anladım', en: 'Got it' },
     'notif-role-notice': { tr: 'Sauran Yönetim: yeni görev bildirimi', en: 'Sauran Management: new duty notice' },
     'notif-role-revoked': { tr: 'Sauran Yönetim: görev bilgilendirmesi', en: 'Sauran Management: duty information' },
     'hubs-title': { tr: 'Ana Menü', en: 'Home' },
@@ -7187,6 +7192,32 @@ function handleVoicePresenceChange(change) {
 
 }
 
+// iPhone'da Ana Ekrana eklenmiş uygulama (standalone), ekran kilitlenince / başka uygulamaya geçilince
+// mikrofonu sistem düzeyinde kapatır; Safari sekmesinde bu kısıt yoktur. Kullanıcıyı bilgilendiririz.
+const IOS_VOICE_HINT_KEY = 'sauran_ios_voice_hint_seen';
+
+function isIosStandalonePwa() {
+    const ua = navigator.userAgent || '';
+    const isIos = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const standalone = navigator.standalone === true || Boolean(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    return isIos && standalone;
+}
+
+function updateIosVoiceHint() {
+    const el = document.getElementById('ios-voice-hint');
+    if (!el) return;
+
+    let seen = false;
+    try { seen = localStorage.getItem(IOS_VOICE_HINT_KEY) === '1'; } catch (_) { /* yoksay */ }
+
+    el.style.display = (callMode === 'hub-room' && isIosStandalonePwa() && !seen) ? 'flex' : 'none';
+}
+
+document.getElementById('ios-voice-hint-ok').addEventListener('click', () => {
+    try { localStorage.setItem(IOS_VOICE_HINT_KEY, '1'); } catch (_) { /* yoksay */ }
+    updateIosVoiceHint();
+});
+
 function canShareScreen() {
     const ua = navigator.userAgent || '';
     const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua)
@@ -7436,6 +7467,7 @@ async function joinVoiceRoom(room) {
 
         callFrameContainer.style.display = 'none';
         document.getElementById('call-hub-room-view').style.display = 'flex';
+        updateIosVoiceHint();
 
         // Sunucu onaylayana kadar geçici görünüm: mevcut liste + ben.
         currentVoiceParticipants = [
