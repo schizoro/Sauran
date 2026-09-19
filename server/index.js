@@ -1048,7 +1048,6 @@ app.get('/api/admin/stats', (req, res) => {
   }
 });
 
-app.patch('/api/moderation/reports/:id', (req, res) => {
 // Platform rolü değiştirme: YALNIZCA founder. Hedef kullanıcı ID'si sadece URL'den,
 // yeni rol ve gerekçe sadece gövdeden okunur; gövdedeki başka alanlar (actor,
 // platform_role, id vb.) YOK SAYILIR. Rol + audit kaydı tek transaction'dadır.
@@ -1188,6 +1187,7 @@ app.get('/api/admin/audit-log', (req, res) => {
   }
 });
 
+app.patch('/api/moderation/reports/:id', (req, res) => {
   const user = requirePlatformRole(req, res, 'moderator');
   if (!user) return;
 
