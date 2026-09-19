@@ -111,6 +111,7 @@ const {
   changePlatformRole,
   suspendAccount,
   unsuspendAccount,
+  isAccountSuspended,
   markDevNoticeSeen,
   PLATFORM_ROLES,
   getAdminUserDetail,
@@ -2174,6 +2175,9 @@ const NOTIFICATION_CATEGORY_MAP = {
 // Bildirimler panelinde geçmişte görünsün diye). Bu fonksiyon SADECE gerçek
 // zamanlı (socket) dağıtımı, kullanıcının tercihine göre kontrollü yapar.
 function pushNotification(userId, type, data) {
+
+  // Askıdaki hesap için ne uygulama içi ne de Web Push bildirimi üretilir.
+  if (isAccountSuspended(userId)) return;
 
   const prefs = getNotificationPreferences(userId);
   const categoryColumn = NOTIFICATION_CATEGORY_MAP[type];

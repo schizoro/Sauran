@@ -455,6 +455,12 @@ function updateNotificationPreferences(userId, patch) {
 // daveti, aramalar, vb.) bildirim oluşturmak için bunu kullanmalı, kendi
 // INSERT'ini yazmamalı.
 function createNotification(userId, type, data) {
+  // Askıdaki hesap için yeni bildirim üretilmez (geçmiş silinmez, askı kalkınca korunmuş kalır).
+  // isAccountSuspended aşağıda tanımlı (function bildirimi hoisted).
+  if (isAccountSuspended(userId)) {
+    return { id: null, user_id: userId, type, data, suppressed: true };
+  }
+
   const info = db.prepare(`
     INSERT INTO notifications (user_id, type, data) VALUES (?, ?, ?)
   `).run(userId, type, JSON.stringify(data || {}));
@@ -1612,6 +1618,9 @@ function saveDmSticker(fromId, fromUsername, toId, stickerId) {
     return { success: false, error: 'Sadece arkadaşlarınla mesajlaşabilirsin.' };
   }
 
+  // Askıdaki hesaba YENİ mesaj gönderilemez (mevcut DM geçmişi olduğu gibi durur).
+  if (isAccountSuspended(toId)) return { success: false, error: DM_UNAVAILABLE_ERROR };
+
   if (!STICKERS.includes(stickerId)) {
     return { success: false, error: 'Geçersiz çıkartma.' };
   }
@@ -2257,6 +2266,9 @@ function saveDmMessage(fromId, fromUsername, toId, content, replyToMessageId = n
     return { success: false, error: 'Sadece arkadaşlarınla mesajlaşabilirsin.' };
   }
 
+  // Askıdaki hesaba YENİ mesaj gönderilemez (mevcut DM geçmişi olduğu gibi durur).
+  if (isAccountSuspended(toId)) return { success: false, error: DM_UNAVAILABLE_ERROR };
+
   content = String(content || '').trim().slice(0, 500);
   if (!content) return { success: false, error: 'Boş mesaj gönderilemez.' };
 
@@ -2284,6 +2296,9 @@ function saveDmVoiceMessage(fromId, fromUsername, toId, audioData, duration) {
     return { success: false, error: 'Sadece arkadaşlarınla mesajlaşabilirsin.' };
   }
 
+  // Askıdaki hesaba YENİ mesaj gönderilemez (mevcut DM geçmişi olduğu gibi durur).
+  if (isAccountSuspended(toId)) return { success: false, error: DM_UNAVAILABLE_ERROR };
+
   if (typeof audioData !== 'string' || !/^data:audio\/(webm|ogg|mp4|mpeg|wav);base64,/.test(audioData)) {
     return { success: false, error: 'Geçersiz ses formatı.' };
   }
@@ -2309,6 +2324,9 @@ function createDmFileMessage(fromId, fromUsername, toId, file) {
   if (!areFriends(fromId, toId)) {
     return { success: false, error: 'Sadece arkadaşlarınla mesajlaşabilirsin.' };
   }
+
+  // Askıdaki hesaba YENİ mesaj gönderilemez (mevcut DM geçmişi olduğu gibi durur).
+  if (isAccountSuspended(toId)) return { success: false, error: DM_UNAVAILABLE_ERROR };
 
   const { data, name, mime, size } = file || {};
 
@@ -2483,6 +2501,7 @@ function forwardMessageToDm(messageId, fromUserId, fromUsername, toUserId) {
   if (!targetKind) return { success: false, error: 'Bu mesaj türü iletilemez.' };
 
   if (!areFriends(fromUserId, toUserId)) return { success: false, error: 'Sadece arkadaşlarına iletebilirsin.' };
+  if (isAccountSuspended(toUserId)) return { success: false, error: DM_UNAVAILABLE_ERROR };
 
   const fullOriginal = db.prepare(`SELECT content, payload FROM messages WHERE id = ?`).get(messageId);
 
@@ -3071,6 +3090,15 @@ if (!usersSuspensionColumns.includes('suspension_user_reason')) {
 
 const USER_REASON_MAX = 300;
 
+// Askıdaki (veya artık var olmayan) hesap mı? Yalnızca OKUR.
+function isAccountSuspended(userId) {
+  const row = db.prepare(`SELECT account_status FROM users WHERE id = ?`).get(userId);
+  return Boolean(row && row.account_status === 'suspended');
+}
+
+// Gönderene askı durumu açıklanmaz.
+const DM_UNAVAILABLE_ERROR = 'Bu kullanıcıya şu an mesaj gönderilemiyor.';
+
 function loadFounderActor(actorId) {
   const actor = db.prepare(`SELECT id, platform_role FROM users WHERE id = ?`).get(actorId);
   if (!actor || actor.platform_role !== 'founder') {
@@ -3193,6 +3221,7 @@ function unsuspendAccount({ actorId, targetId, internalReason }) {
 }
 
 module.exports = {
+  isAccountSuspended,
   suspendAccount,
   unsuspendAccount,
   changePlatformRole,
