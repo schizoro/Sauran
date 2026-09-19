@@ -628,6 +628,21 @@ function deleteStalePlatformNotices(userId) {
   db.prepare(`DELETE FROM notifications WHERE user_id = ? AND type = 'platform_role_notice'`).run(userId);
 }
 
+// Kendini onaran temizlik: kabul BEKLEMEYEN bir kullanıcının görev bildirimi geçersizdir
+// (ör. bu düzeltmeden önce kalmış eski kayıtlar). Kullanıcı sistem hatası yüzünden
+// bildirim silmek zorunda kalmamalı; sistem kendi bildirimini kendisi temizler.
+// userId verilmezse tüm kullanıcılar için çalışır (açılışta).
+function cleanupStalePlatformNotices(userId = null) {
+  const single = userId !== null && userId !== undefined;
+  return db.prepare(`
+    DELETE FROM notifications
+    WHERE type = 'platform_role_notice'
+      AND user_id NOT IN (
+        SELECT id FROM users WHERE role_acceptance_pending = 1 AND platform_role IN ('moderator', 'admin')
+      )${single ? ' AND user_id = ?' : ''}
+  `).run(...(single ? [userId] : [])).changes;
+}
+
 function isOfficialRole(role) {
   return role === 'moderator' || role === 'admin';
 }
@@ -2156,6 +2171,8 @@ const ACTIONABLE_NOTIFICATION_TYPES = ['friend_request', 'hub_invite', 'platform
 const ACTIONABLE_SQL = ACTIONABLE_NOTIFICATION_TYPES.map(t => `'${t}'`).join(',');
 
 function listNotifications(userId) {
+  cleanupStalePlatformNotices(userId);
+
   const rows = db.prepare(`
     SELECT id, type, data, status, created_at FROM notifications
     WHERE user_id = ? AND status IN ('pending', 'seen')
@@ -3607,6 +3624,9 @@ function unsuspendAccount({ actorId, targetId, internalReason }) {
   }
 }
 
+// Açılışta eski/geçersiz görev bildirimlerini temizle (idempotent).
+cleanupStalePlatformNotices();
+
 module.exports = {
   isAccountSuspended,
   suspendAccount,
@@ -3729,6 +3749,7 @@ module.exports = {
   getTopFriends,
   sendHubInviteNotification,
   listNotifications,
+  cleanupStalePlatformNotices,
   markAllNotificationsRead,
   deleteNotification,
   clearNotifications,

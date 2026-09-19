@@ -5195,10 +5195,15 @@ function renderNotifications(notifications) {
     notificationsList.querySelectorAll('[data-notif-type="platform_role_notice"]').forEach((card) => {
 
         card.querySelector('[data-open-role-notice]').addEventListener('click', async () => {
-            notificationsModal.style.display = 'none';
             await refreshCurrentUserRole();
             roleNoticeDismissed = false;
-            if (currentUser && currentUser.role_acceptance && currentUser.role_acceptance.pending) openRoleNotice();
+            if (currentUser && currentUser.role_acceptance && currentUser.role_acceptance.pending) {
+                notificationsModal.style.display = 'none';
+                openRoleNotice();
+            } else {
+                // Görev artık kabul beklemiyor: pencereyi kapatma, güncel listeyi göster (eski kart sunucuda temizlenir).
+                reloadNotifications();
+            }
         });
 
     });
