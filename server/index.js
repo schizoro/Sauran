@@ -94,6 +94,9 @@ const {
   getTopFriends,
   sendHubInviteNotification,
   listNotifications,
+  markAllNotificationsRead,
+  deleteNotification,
+  clearNotifications,
   respondHubInviteNotification,
   requestPasswordReset,
   confirmPasswordReset,
@@ -2659,6 +2662,49 @@ app.patch('/api/notifications/preferences', (req, res) => {
   } catch (error) {
     console.error('Bildirim tercihleri güncellenemedi:', error);
     res.status(500).json({ success: false, error: 'Güncellenemedi.' });
+  }
+});
+
+app.post('/api/notifications/read-all', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    return res.json(markAllNotificationsRead(user.id));
+  } catch (error) {
+    console.error('Bildirimleri okundu işaretleme hatası:', error);
+    res.status(500).json({ success: false, error: 'İşaretlenemedi.' });
+  }
+});
+
+// Kullanıcı kendi bildirimlerini siler; yanıt bekleyen bildirimler korunur.
+app.delete('/api/notifications', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  try {
+    return res.json(clearNotifications(user.id));
+  } catch (error) {
+    console.error('Bildirimleri silme hatası:', error);
+    res.status(500).json({ success: false, error: 'Silinemedi.' });
+  }
+});
+
+app.delete('/api/notifications/:id', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  if (!/^[0-9]{1,15}$/.test(req.params.id)) {
+    return res.status(400).json({ success: false, error: 'Geçersiz bildirim.' });
+  }
+
+  try {
+    const result = deleteNotification(Number(req.params.id), user.id);
+    if (!result.success) return res.status(404).json(result);
+    return res.json(result);
+  } catch (error) {
+    console.error('Bildirim silme hatası:', error);
+    res.status(500).json({ success: false, error: 'Silinemedi.' });
   }
 });
 

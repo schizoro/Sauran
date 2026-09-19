@@ -1816,3 +1816,13 @@ body.call-mini-active { padding-top: 42px; }
   .role-notice-check { font-size: 12px; line-height: 1.4; }
   #role-notice-scroll { padding-top: 14px; }
 }
+
+/* ─── Bildirim penceresi araç çubuğu / okundu / sil ─────────────────────── */
+.notifications-toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+.notifications-tool-btn { flex: 1; min-width: 120px; padding: 7px 10px; font-size: 11px; font-weight: bold; cursor: pointer; background: transparent; border: 1px solid #45a29e; color: #66fcf1; }
+.notifications-tool-btn:hover { background: rgba(102, 252, 241, 0.12); }
+.notifications-tool-btn.danger { border-color: #ff2e46; color: #ff6b7d; }
+.notifications-tool-btn.danger:hover { background: rgba(255, 46, 70, 0.14); }
+.notification-card.notification-seen { opacity: 0.6; border-left-color: #3b4450; }
+.notification-delete { border-color: #4b5563; color: #9ca3af; }
+.notification-delete:hover { background: #ff2e46; border-color: #ff2e46; color: #0b0c10; }

@@ -622,6 +622,12 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_role_notice_outbox_status ON role_notice_email_outbox(status, next_attempt_at);
 `);
 
+// Sistem (resmi yönetim) görev bildirimi: yalnızca kabul bekleyen görev için anlamlıdır.
+// Sistem bildirimleri sistem tarafından temizlenebilir; diğer bildirimler yalnızca kullanıcı silince gider.
+function deleteStalePlatformNotices(userId) {
+  db.prepare(`DELETE FROM notifications WHERE user_id = ? AND type = 'platform_role_notice'`).run(userId);
+}
+
 function isOfficialRole(role) {
   return role === 'moderator' || role === 'admin';
 }
@@ -692,10 +698,8 @@ const acceptPlatformRoleTx = db.transaction((userId, version) => {
     WHERE id = ?
   `).run(version, userId);
 
-  db.prepare(`
-    UPDATE notifications SET status = 'read'
-    WHERE user_id = ? AND type = 'platform_role_notice' AND status = 'pending'
-  `).run(userId);
+  // Görev bildirimi artık geçersiz: sistem bildirimini kendisi temizler.
+  deleteStalePlatformNotices(userId);
 
   // Tam bildirim metni audit'e kopyalanmaz; yalnızca rol (old_value) ve sürüm (new_value).
   writeAuditLog({
@@ -2147,11 +2151,15 @@ function sendHubInviteNotification(hubId, fromUserId, fromUsername, toUserId) {
   return { success: true, id: notification.id };
 }
 
+// Yanıt/eylem bekleyen bildirim türleri: bekledikleri sürece "okundu" yapılamaz ve silinemez.
+const ACTIONABLE_NOTIFICATION_TYPES = ['friend_request', 'hub_invite', 'platform_role_notice'];
+const ACTIONABLE_SQL = ACTIONABLE_NOTIFICATION_TYPES.map(t => `'${t}'`).join(',');
+
 function listNotifications(userId) {
   const rows = db.prepare(`
     SELECT id, type, data, status, created_at FROM notifications
-    WHERE user_id = ? AND status = 'pending'
-    ORDER BY created_at DESC
+    WHERE user_id = ? AND status IN ('pending', 'seen')
+    ORDER BY created_at DESC, id DESC
   `).all(userId);
 
   return rows.map(r => ({ ...r, data: JSON.parse(r.data) }));
@@ -2177,13 +2185,46 @@ function respondHubInviteNotification(notificationId, userId, accept) {
 
 // Aksiyon gerektirmeyen (salt bilgilendirici, ör. "isteğin kabul edildi")
 // bildirimleri listeden düşürmek için genel amaçlı okundu işaretleme.
+// "Okundu": bildirim listede KALIR ('seen'), silinmez. Eski 'read' değeri geçmişte
+// "kapatılmış" anlamındaydı ve listelenmez; bu yüzden yeni durum ayrı bir değerdir.
 function markNotificationRead(notificationId, userId) {
   const info = db.prepare(`
-    UPDATE notifications SET status = 'read' WHERE id = ? AND user_id = ? AND status = 'pending'
+    UPDATE notifications SET status = 'seen'
+    WHERE id = ? AND user_id = ? AND status = 'pending' AND type NOT IN (${ACTIONABLE_SQL})
   `).run(notificationId, userId);
 
   if (!info.changes) return { success: false, error: 'Bildirim bulunamadı.' };
   return { success: true };
+}
+
+function markAllNotificationsRead(userId) {
+  const info = db.prepare(`
+    UPDATE notifications SET status = 'seen'
+    WHERE user_id = ? AND status = 'pending' AND type NOT IN (${ACTIONABLE_SQL})
+  `).run(userId);
+  return { success: true, updated: info.changes };
+}
+
+// Bildirimleri YALNIZCA kullanıcı siler (sistem bildirimleri ayrıca sistem tarafından temizlenebilir).
+// Yanıt bekleyen (arkadaşlık isteği, lobi daveti, kabul bekleyen görev) bildirimler silinemez.
+function deleteNotification(notificationId, userId) {
+  const info = db.prepare(`
+    DELETE FROM notifications
+    WHERE id = ? AND user_id = ? AND status IN ('pending', 'seen')
+      AND NOT (status = 'pending' AND type IN (${ACTIONABLE_SQL}))
+  `).run(notificationId, userId);
+
+  if (!info.changes) return { success: false, error: 'Bildirim silinemedi.' };
+  return { success: true };
+}
+
+function clearNotifications(userId) {
+  const info = db.prepare(`
+    DELETE FROM notifications
+    WHERE user_id = ? AND status IN ('pending', 'seen')
+      AND NOT (status = 'pending' AND type IN (${ACTIONABLE_SQL}))
+  `).run(userId);
+  return { success: true, deleted: info.changes };
 }
 
 // =====================================================
@@ -3355,6 +3396,10 @@ function recordRoleNotice({ target, newRole, effectiveBefore }) {
     emailPayload = { removed_role: target.platform_role, current_role: newRole };
   }
 
+  // Eski görev bildirimi(leri) artık geçersiz (görev geri alındı ya da yerine yenisi atandı):
+  // sistem bildirimi olduğu için kullanıcı silmeden sistem tarafından temizlenir.
+  deleteStalePlatformNotices(targetId);
+
   const notification = createNotification(targetId, notificationType, notificationData);
 
   // Askıdaki hesaba yeni e-posta da çıkmaz; kabul durumu yine users üzerinde durur.
@@ -3684,6 +3729,9 @@ module.exports = {
   getTopFriends,
   sendHubInviteNotification,
   listNotifications,
+  markAllNotificationsRead,
+  deleteNotification,
+  clearNotifications,
   respondHubInviteNotification,
   requestPasswordReset,
   confirmPasswordReset,

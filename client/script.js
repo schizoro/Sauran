@@ -3718,6 +3718,7 @@ function connectToChat() {
         await refreshCurrentUserRole();
         roleNoticeDismissed = false;
         maybeShowRoleNotices();
+        if (notificationsModal.style.display === 'flex') reloadNotifications();
     });
 
 
@@ -4995,7 +4996,7 @@ async function refreshNotificationsBadge() {
 
         if (!data.success) return;
 
-        const count = data.notifications.length;
+        const count = data.notifications.filter((n) => n.status === 'pending').length;
         notificationsBadge.style.display = count > 0 ? 'flex' : 'none';
         notificationsBadge.textContent = count;
         topbarMenuBadge.style.display = count > 0 ? 'block' : 'none';
@@ -5047,14 +5048,63 @@ notificationsModal.addEventListener(
 );
 
 
+const NOTIF_UI = {
+    tr: {
+        readAll: 'Tümünü okundu say',
+        clearAll: 'Bildirimleri sil',
+        del: 'Sil',
+        confirmClear: 'Yanıt bekleyenler (arkadaşlık isteği, lobi daveti, kabul bekleyen görev) hariç tüm bildirimler kalıcı olarak silinecek. Emin misin?',
+        empty: 'Bildirim yok.',
+        openNotice: 'Görev Bildirimini Aç'
+    },
+    en: {
+        readAll: 'Mark all as read',
+        clearAll: 'Delete notifications',
+        del: 'Delete',
+        confirmClear: 'All notifications except those awaiting your response (friend requests, lobby invites, duty pending acceptance) will be permanently deleted. Are you sure?',
+        empty: 'No notifications.',
+        openNotice: 'Open Duty Notice'
+    }
+};
+
+async function reloadNotifications() {
+    try {
+        const response = await fetch('/api/notifications', { credentials: 'include' });
+        const data = await response.json();
+        if (!data.success) return;
+        renderNotifications(data.notifications);
+    } catch (error) {
+        console.error('Bildirimler alınamadı:', error);
+    }
+    refreshNotificationsBadge();
+}
+
 function renderNotifications(notifications) {
 
+    const nui = NOTIF_UI[roleNoticeLang()];
+
     if (notifications.length === 0) {
-        notificationsList.innerHTML = '<div class="notifications-empty">Bildirim yok.</div>';
+        notificationsList.innerHTML = '<div class="notifications-empty">' + escapeHtml(nui.empty) + '</div>';
         return;
     }
 
-    notificationsList.innerHTML = notifications.map((n) => {
+    const toolbar = `
+        <div class="notifications-toolbar">
+            <button type="button" class="notifications-tool-btn" data-notif-read-all>${escapeHtml(nui.readAll)}</button>
+            <button type="button" class="notifications-tool-btn danger" data-notif-clear-all>${escapeHtml(nui.clearAll)}</button>
+        </div>
+    `;
+
+    // Bilgi amaçlı (yanıt gerektirmeyen) kartlar: okundu yapılınca listeden KALKMAZ, yalnızca kullanıcı silince gider.
+    const infoActions = (n, okLabel) => `
+        <div class="notification-actions">
+            ${n.status === 'pending' ? `<button class="notification-accept" data-dismiss type="button">${escapeHtml(okLabel)}</button>` : ''}
+            <button class="notification-delete" data-delete type="button">${escapeHtml(nui.del)}</button>
+        </div>
+    `;
+    const seenClass = (n) => (n.status === 'seen' ? ' notification-seen' : '');
+
+    notificationsList.innerHTML = toolbar + notifications.map((n) => {
 
         if (n.type === 'hub_invite') {
 
@@ -5092,13 +5142,11 @@ function renderNotifications(notifications) {
         if (n.type === 'friend_request_accepted') {
 
             return `
-                <div class="notification-card" data-notif-id="${n.id}" data-notif-type="friend_request_accepted">
+                <div class="notification-card${seenClass(n)}" data-notif-id="${n.id}" data-notif-type="friend_request_accepted">
                     <div class="notification-text">
                         <strong>${escapeHtml(n.data.from_username)}</strong> ${t('friend-accepted-notif-text')}.
                     </div>
-                    <div class="notification-actions">
-                        <button class="notification-accept" data-dismiss type="button">${t('ok-got-it')}</button>
-                    </div>
+                    ${infoActions(n, t('ok-got-it'))}
                 </div>
             `;
 
@@ -5116,7 +5164,7 @@ function renderNotifications(notifications) {
                         <strong>${escapeHtml(ui.title)}</strong> — ${escapeHtml(roleLabel)}
                     </div>
                     <div class="notification-actions">
-                        <button class="notification-accept" data-open-role-notice type="button">${escapeHtml(ui.title)}</button>
+                        <button class="notification-accept" data-open-role-notice type="button">${escapeHtml(nui.openNotice)}</button>
                     </div>
                 </div>
             `;
@@ -5129,14 +5177,12 @@ function renderNotifications(notifications) {
             const removed = ui.roles[n.data.removed_role] || n.data.removed_role;
 
             return `
-                <div class="notification-card" data-notif-id="${n.id}" data-notif-type="platform_role_revoked">
+                <div class="notification-card${seenClass(n)}" data-notif-id="${n.id}" data-notif-type="platform_role_revoked">
                     <div class="notification-official-tag">${escapeHtml(ui.official)}</div>
                     <div class="notification-text">
                         <strong>${escapeHtml(ui.revokedTitle)}</strong> (${escapeHtml(removed)})
                     </div>
-                    <div class="notification-actions">
-                        <button class="notification-accept" data-dismiss type="button">${escapeHtml(ui.ok)}</button>
-                    </div>
+                    ${infoActions(n, ui.ok)}
                 </div>
             `;
 
@@ -5157,27 +5203,41 @@ function renderNotifications(notifications) {
 
     });
 
-    notificationsList.querySelectorAll('[data-notif-type="platform_role_revoked"]').forEach((card) => {
-
-        card.querySelector('[data-dismiss]').addEventListener('click', async () => {
-            const notifId = card.dataset.notifId;
-            await fetch(`/api/notifications/${notifId}/read`, { method: 'POST', credentials: 'include' });
+    // Ortak işleyiciler: okundu (kart listede kalır, soluklaşır) ve sil (kart gider).
+    notificationsList.querySelectorAll('.notification-card [data-dismiss]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            const card = btn.closest('.notification-card');
+            await fetch(`/api/notifications/${card.dataset.notifId}/read`, { method: 'POST', credentials: 'include' });
+            card.classList.add('notification-seen');
+            btn.remove();
             refreshNotificationsBadge();
-            card.remove();
         });
-
     });
 
-    notificationsList.querySelectorAll('[data-notif-type="friend_request_accepted"]').forEach((card) => {
-
-        card.querySelector('[data-dismiss]').addEventListener('click', async () => {
-            const notifId = card.dataset.notifId;
-            await fetch(`/api/notifications/${notifId}/read`, { method: 'POST', credentials: 'include' });
-            refreshNotificationsBadge();
-            card.remove();
+    notificationsList.querySelectorAll('.notification-card [data-delete]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            const card = btn.closest('.notification-card');
+            await fetch(`/api/notifications/${card.dataset.notifId}`, { method: 'DELETE', credentials: 'include' });
+            reloadNotifications();
         });
-
     });
+
+    const readAllBtn = notificationsList.querySelector('[data-notif-read-all]');
+    if (readAllBtn) {
+        readAllBtn.addEventListener('click', async () => {
+            await fetch('/api/notifications/read-all', { method: 'POST', credentials: 'include' });
+            reloadNotifications();
+        });
+    }
+
+    const clearAllBtn = notificationsList.querySelector('[data-notif-clear-all]');
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener('click', async () => {
+            if (!confirm(nui.confirmClear)) return;
+            await fetch('/api/notifications', { method: 'DELETE', credentials: 'include' });
+            reloadNotifications();
+        });
+    }
 
     notificationsList.querySelectorAll('[data-notif-type="friend_request"]').forEach((card) => {
 
