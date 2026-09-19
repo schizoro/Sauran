@@ -6176,17 +6176,42 @@ function openPortalPanel(panel, homeParent) {
         panel.style.bottom = '';
     } else {
         // Masaüstünde body'ye taşındığı için artık DOM konumundan bağımsız —
-        // orijinal çubuğun ekran konumuna göre elle hizalıyoruz.
-        const rect = homeParent.getBoundingClientRect();
+        // orijinal çubuğun ekran konumuna göre elle hizalıyoruz (aşağıda).
         panel.style.position = 'fixed';
-        panel.style.top = `${rect.bottom + 6}px`;
         panel.style.bottom = 'auto';
-        panel.style.left = 'auto';
-        panel.style.right = `${Math.max(8, window.innerWidth - rect.right)}px`;
+        panel.style.right = 'auto';
+        panel.style.top = '0px';
+        panel.style.left = '0px';
     }
 
     document.body.appendChild(panel);
     panel.style.display = 'flex';
+
+    if (!isMobile) placePortalPanel(panel, homeParent);
+}
+
+// Varsayılan: panel, çubuğun sağ kenarına hizalı açılır. Sol taraftaki
+// mesajlarda (çubuk sol kenara yakın) bu, paneli ekranın soluna taşırıp
+// kırpıyor ve sol kenardaki "Sesli Odalar" sekmesinin üstüne bindiriyordu —
+// sığmıyorsa mesajın sağına kaydırılır. Alta sığmıyorsa çubuğun üstüne açılır.
+function placePortalPanel(panel, anchor) {
+
+    const rect = anchor.getBoundingClientRect();
+    const width = panel.offsetWidth;
+    const height = panel.offsetHeight;
+    const edge = 8;
+    const leftTabClearance = 40;
+
+    let left = rect.right - width;
+    if (left < leftTabClearance) left = Math.max(leftTabClearance, rect.left);
+    left = Math.max(edge, Math.min(left, window.innerWidth - width - edge));
+
+    let top = rect.bottom + 6;
+    if (top + height > window.innerHeight - edge) top = Math.max(edge, rect.top - height - 6);
+
+    panel.style.left = `${left}px`;
+    panel.style.top = `${top}px`;
+
 }
 
 function closeAllMessageMenus() {
