@@ -1689,15 +1689,6 @@ function getVoiceRoom(roomId) {
   return db.prepare(`SELECT id, hub_id, name, created_by FROM hub_voice_rooms WHERE id = ?`).get(roomId);
 }
 
-function deleteHub(hubId, userId) {
-  const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
-  if (!hub) return { success: false, error: 'Hub bulunamadı.' };
-  if (hub.created_by !== userId) return { success: false, error: 'Yalnızca Hub sahibi silebilir.' };
-
-  const messageIds = db.prepare(`SELECT id FROM messages WHERE hub_id = ?`).all(hubId).map(r => r.id);
-
-  const deleteVotes = db.prepare(`DELETE FROM hub_poll_votes WHERE message_id = ?`);
-  messageIds.forEach(id => deleteVotes.run(id));
 // Lobi sohbetini tamamen temizler. Yalnızca Hub sahibi ve lobi moderatörleri.
 // Tepkiler ve anket oyları messages'a bağlı ON DELETE CASCADE ile birlikte silinir.
 function clearHubMessages(hubId, userId) {
@@ -1709,6 +1700,15 @@ function clearHubMessages(hubId, userId) {
   return { success: true, deleted: info.changes };
 }
 
+function deleteHub(hubId, userId) {
+  const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
+  if (!hub) return { success: false, error: 'Hub bulunamadı.' };
+  if (hub.created_by !== userId) return { success: false, error: 'Yalnızca Hub sahibi silebilir.' };
+
+  const messageIds = db.prepare(`SELECT id FROM messages WHERE hub_id = ?`).all(hubId).map(r => r.id);
+
+  const deleteVotes = db.prepare(`DELETE FROM hub_poll_votes WHERE message_id = ?`);
+  messageIds.forEach(id => deleteVotes.run(id));
 
   db.prepare(`DELETE FROM messages WHERE hub_id = ?`).run(hubId);
   db.prepare(`DELETE FROM hub_members WHERE hub_id = ?`).run(hubId);
