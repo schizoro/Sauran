@@ -2701,7 +2701,7 @@ function dmPreviewText(msg) {
 // Lobi mesajı: yalnızca "Yeni Lobi mesaj bildirimleri" açıksa (ve bildirimlere izin verilmişse).
 function maybeNotifyIncomingHubMessage(msg) {
 
-    if (!notifDesktopEnabled || !notifHubMessageEnabled || !currentHub) return;
+    if (!notifDesktopEnabled || !notifHubMessageEnabled || !currentHub || currentHub.my_muted) return;
     if (getBrowserNotifState() !== 'granted') return;
     if (document.hasFocus()) return;
     if (document.visibilityState === 'hidden' && pushSubscribed) return;

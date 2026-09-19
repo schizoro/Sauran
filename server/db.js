@@ -2526,7 +2526,8 @@ function getHubPushInfo(hubId) {
   const hub = db.prepare(`SELECT name FROM hubs WHERE id = ?`).get(hubId);
   if (!hub) return null;
 
-  const memberIds = db.prepare(`SELECT user_id FROM hub_members WHERE hub_id = ?`).all(hubId).map(row => row.user_id);
+  // "Bildirimleri Sustur" diyen üyeler (muted = 1) push almaz.
+  const memberIds = db.prepare(`SELECT user_id FROM hub_members WHERE hub_id = ? AND muted = 0`).all(hubId).map(row => row.user_id);
   return { name: hub.name, member_ids: memberIds };
 }
 
