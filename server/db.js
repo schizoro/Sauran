@@ -2,6 +2,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const authcodes = require('./authcodes');
 
 // DATA_DIR verilirse (örn. Render'da bağlı kalıcı disk) oraya, verilmezse
 // projenin kendi 'data' klasörüne yazar. Böylece kalıcı disk eklendiğinde
@@ -1768,6 +1769,48 @@ db.exec(`
   );
 `);
 
+// Kod deneme sayacı (kaba kuvvet koruması): kayıt başına en fazla authcodes.CODE_MAX_ATTEMPTS deneme.
+for (const table of ['pending_verifications', 'password_resets']) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name);
+  if (!columns.includes('attempts')) db.exec(`ALTER TABLE ${table} ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0`);
+}
+
+// Kod bağlamları: kod belirli bir kayda bağlanır (aynı kod başka kayıtta farklı hash üretir).
+const verifyCodeContext = (email) => `verify:${String(email || '').trim().toLowerCase()}`;
+const resetCodeContext = (userId) => `reset:${userId}`;
+
+// Bu güvenlik düzeltmesinden ÖNCE oluşmuş kayıtlarda kod düz metin (6 hane) olabilir: hash'e çevrilir; böylece veritabanında düz metin kod kalmaz
+// ve doğrulama yalnızca hash yolunu kullanır. Yeni kayıtlar hiçbir zaman düz metin yazılmaz. Silme sırasında secure_delete açılır.
+// Tekrar çalıştırmak zararsızdır (yalnızca hash biçiminde olmayan kayıtları dönüştürür).
+function hashLegacyPlaintextAuthCodes() {
+  const result = { pending: 0, resets: 0 };
+
+  const legacyPending = db.prepare(`SELECT id, email, code FROM pending_verifications WHERE code NOT LIKE 's1$%'`).all();
+  const legacyResets = db.prepare(`SELECT id, user_id, code FROM password_resets WHERE code NOT LIKE 's1$%'`).all();
+  if (!legacyPending.length && !legacyResets.length) return result;
+
+  db.pragma('secure_delete = ON');
+  try {
+    db.transaction(() => {
+      legacyPending.forEach((row) => {
+        db.prepare(`UPDATE pending_verifications SET code = ? WHERE id = ?`).run(authcodes.hashCode(row.code, verifyCodeContext(row.email)), row.id);
+        result.pending += 1;
+      });
+      legacyResets.forEach((row) => {
+        db.prepare(`UPDATE password_resets SET code = ? WHERE id = ?`).run(authcodes.hashCode(row.code, resetCodeContext(row.user_id)), row.id);
+        result.resets += 1;
+      });
+    })();
+  } finally {
+    db.pragma('secure_delete = OFF');
+  }
+
+  try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (_) { /* yoksay */ }
+  return result;
+}
+
+hashLegacyPlaintextAuthCodes();
+
 // =====================================================
 // ŞİFRE HASHLEME
 // =====================================================
@@ -1851,13 +1894,14 @@ function createVerification(username, email, password, birthDate, termsAccepted)
     db.prepare(`DELETE FROM pending_verifications WHERE LOWER(email) = LOWER(?)`).run(email);
 
     const { hash, salt } = hashPassword(password);
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    // Kod yalnızca e-postayla kullanıcıya gönderilmek üzere bellekte döner; veritabanına yalnızca hash'i yazılır.
+    const code = authcodes.generateNumericCode();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
     db.prepare(`
       INSERT INTO pending_verifications (username, email, password_hash, password_salt, code, expires_at, birth_date, terms_accepted)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(username, email, hash, salt, code, expiresAt, birthDate, termsAccepted ? 1 : 0);
+    `).run(username, email, hash, salt, authcodes.hashCode(code, verifyCodeContext(email)), expiresAt, birthDate, termsAccepted ? 1 : 0);
 
     return { success: true, code };
 
@@ -1877,11 +1921,26 @@ function verifyAndCreateUser(email, code) {
     code = String(code || '').trim();
 
     const pending = db.prepare(`
-      SELECT * FROM pending_verifications
-      WHERE LOWER(email) = LOWER(?) AND code = ?
-    `).get(email, code);
+      SELECT * FROM pending_verifications WHERE LOWER(email) = LOWER(?) ORDER BY id DESC LIMIT 1
+    `).get(email);
 
     if (!pending) {
+      return { success: false, error: 'Geçersiz kod.' };
+    }
+
+    // Her deneme (doğru ya da yanlış) ÖNCE sayılır; sınır aşılırsa kod yakılır (yeni kod istenmeli).
+    const attempts = pending.attempts + 1;
+    if (attempts > authcodes.CODE_MAX_ATTEMPTS) {
+      db.prepare(`DELETE FROM pending_verifications WHERE id = ?`).run(pending.id);
+      return { success: false, error: 'Çok fazla hatalı deneme. Tekrar kayıt ol.' };
+    }
+    db.prepare(`UPDATE pending_verifications SET attempts = ? WHERE id = ?`).run(attempts, pending.id);
+
+    if (!authcodes.verifyCode(code, pending.code, verifyCodeContext(pending.email))) {
+      if (attempts >= authcodes.CODE_MAX_ATTEMPTS) {
+        db.prepare(`DELETE FROM pending_verifications WHERE id = ?`).run(pending.id);
+        return { success: false, error: 'Çok fazla hatalı deneme. Tekrar kayıt ol.' };
+      }
       return { success: false, error: 'Geçersiz kod.' };
     }
 
@@ -3118,11 +3177,12 @@ function requestPasswordReset(email) {
   const user = db.prepare(`SELECT id FROM users WHERE LOWER(email) = LOWER(?)`).get(email);
   if (!user) return { success: false, error: 'Bu e-posta ile kayıtlı bir hesap yok.' };
 
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  // Kod yalnızca e-postayla kullanıcıya gönderilmek üzere bellekte döner; veritabanına yalnızca hash'i yazılır.
+  const code = authcodes.generateNumericCode();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
   db.prepare(`DELETE FROM password_resets WHERE user_id = ?`).run(user.id);
-  db.prepare(`INSERT INTO password_resets (user_id, code, expires_at) VALUES (?, ?, ?)`).run(user.id, code, expiresAt);
+  db.prepare(`INSERT INTO password_resets (user_id, code, expires_at) VALUES (?, ?, ?)`).run(user.id, authcodes.hashCode(code, resetCodeContext(user.id)), expiresAt);
 
   return { success: true, code, userId: user.id };
 }
@@ -3134,8 +3194,24 @@ function confirmPasswordReset(email, code, newPassword) {
   const user = db.prepare(`SELECT id FROM users WHERE LOWER(email) = LOWER(?)`).get(email);
   if (!user) return { success: false, error: 'Geçersiz istek.' };
 
-  const reset = db.prepare(`SELECT * FROM password_resets WHERE user_id = ? AND code = ?`).get(user.id, code);
+  const reset = db.prepare(`SELECT * FROM password_resets WHERE user_id = ? ORDER BY id DESC LIMIT 1`).get(user.id);
   if (!reset) return { success: false, error: 'Geçersiz kod.' };
+
+  // Her deneme ÖNCE sayılır; sınır aşılırsa kod yakılır (yeni kod istenmeli).
+  const attempts = reset.attempts + 1;
+  if (attempts > authcodes.CODE_MAX_ATTEMPTS) {
+    db.prepare(`DELETE FROM password_resets WHERE id = ?`).run(reset.id);
+    return { success: false, error: 'Çok fazla hatalı deneme. Yeni bir kod iste.' };
+  }
+  db.prepare(`UPDATE password_resets SET attempts = ? WHERE id = ?`).run(attempts, reset.id);
+
+  if (!authcodes.verifyCode(code, reset.code, resetCodeContext(user.id))) {
+    if (attempts >= authcodes.CODE_MAX_ATTEMPTS) {
+      db.prepare(`DELETE FROM password_resets WHERE id = ?`).run(reset.id);
+      return { success: false, error: 'Çok fazla hatalı deneme. Yeni bir kod iste.' };
+    }
+    return { success: false, error: 'Geçersiz kod.' };
+  }
 
   if (new Date(reset.expires_at).getTime() <= Date.now()) {
     db.prepare(`DELETE FROM password_resets WHERE id = ?`).run(reset.id);
@@ -4814,6 +4890,7 @@ module.exports = {
   saveFcmToken,
   purgeExpiredRetention,
   purgeExpiredAuthRecords,
+  hashLegacyPlaintextAuthCodes,
   purgeExpiredNotificationData,
   listDeletedDmThreads,
   getDeletedDmMessages,

@@ -233,6 +233,15 @@ const byIp = (req) => req.ip;
 const byIpAndUser = (req) => `${req.ip}:${(req.body?.username || req.body?.email || '').toLowerCase()}`;
 
 const loginLimiter = rateLimit({ windowMs: 5 * 60 * 1000, max: 8, keyFn: byIpAndUser, message: 'Çok fazla giriş denemesi. 5 dakika sonra tekrar dene.' });
+// Kod doğrulama uçları: kod 6 haneli olduğundan tahmin edilmesi (kaba kuvvet) zorlaştırılır. Kayıt başına deneme sayısı ayrıca db.js'de sınırlıdır
+// (5 hatalı denemeden sonra kod yanar); bu limitler IP başına istek sayısını ve scrypt maliyetini sınırlar. Her uç kendi sayaçlarını kullanır.
+const makeCodeLimiters = () => [
+  rateLimit({ windowMs: 10 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla doğrulama denemesi. Biraz sonra tekrar dene.' }),
+  rateLimit({ windowMs: 10 * 60 * 1000, max: 10, keyFn: byIpAndUser, message: 'Çok fazla doğrulama denemesi. Biraz sonra tekrar dene.' })
+];
+const verifyLimiters = makeCodeLimiters();
+const resetConfirmLimiters = makeCodeLimiters();
+
 const registerLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyFn: byIp, message: 'Çok fazla kayıt denemesi. Biraz sonra tekrar dene.' });
 const passwordResetLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyFn: byIp, message: 'Çok fazla istek. Biraz sonra tekrar dene.' });
 const friendRequestLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla arkadaşlık isteği gönderildi. Biraz sonra tekrar dene.' });
@@ -430,7 +439,7 @@ app.post('/api/register', registerLimiter, async (req, res) => {
   }
 });
 
-app.post('/api/verify', (req, res) => {
+app.post('/api/verify', ...verifyLimiters, (req, res) => {
   try {
     const { email, code } = req.body;
 
@@ -2889,7 +2898,7 @@ app.post('/api/password-reset/request', passwordResetLimiter, async (req, res) =
   }
 });
 
-app.post('/api/password-reset/confirm', (req, res) => {
+app.post('/api/password-reset/confirm', ...resetConfirmLimiters, (req, res) => {
   try {
     const result = confirmPasswordReset(req.body?.email, req.body?.code, req.body?.new_password);
 
