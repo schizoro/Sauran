@@ -85,6 +85,8 @@ const {
   removePushSubscription,
   listPushSubscriptions,
   saveFcmToken,
+  purgeExpiredRetention,
+  unlinkReportDataForDeletedUser,
   removeFcmToken,
   listFcmTokens,
   createFeedback,
@@ -703,6 +705,9 @@ app.delete('/api/account', (req, res) => {
   if (!user) return;
 
   try {
+
+    // Rapor/kanıt kayıtları fiziksel olarak silinmez (süreli saklama); yalnızca bu hesapla olan bağlantıları koparılır.
+    unlinkReportDataForDeletedUser(user.id);
 
     const ownedHubs = db.prepare(`SELECT id FROM hubs WHERE created_by = ?`).all(user.id);
     ownedHubs.forEach(h => db.prepare(`DELETE FROM hubs WHERE id = ?`).run(h.id));
@@ -3411,6 +3416,19 @@ server.listen(PORT, () => {
   // Önceki çalışmadan kalan (gönderilememiş / yarıda kalmış) rol e-postalarını yeniden dene.
   try { recoverStaleRoleNoticeEmails(); } catch (error) { console.error('Outbox toparlama hatası:', error); }
   scheduleRoleNoticeEmails();
+
+  // retention_until'i dolan rapor medyası / kanıtı / rapor kaydını temizle (açılışta ve günde bir).
+  const runEvidencePurge = () => {
+    try {
+      const purged = purgeExpiredRetention();
+      if (purged.media || purged.evidence || purged.reports) {
+        console.log(`Saklama süresi dolanlar silindi: medya=${purged.media}, kanıt=${purged.evidence}, rapor=${purged.reports}.`);
+      }
+    } catch (error) { console.error('Saklama süresi temizleme hatası:', error); }
+  };
+  runEvidencePurge();
+  setInterval(runEvidencePurge, 24 * 60 * 60 * 1000).unref();
+
   setInterval(() => {
     try { recoverStaleRoleNoticeEmails(); } catch (error) { console.error('Outbox toparlama hatası:', error); }
     scheduleRoleNoticeEmails();

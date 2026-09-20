@@ -190,7 +190,7 @@
                     <span class="mod-priority ${esc(r.priority)}">${esc(priorityLabel(r.priority))}</span>
                     <div class="mod-card-main">
                         <div class="mod-card-title">#${r.id} — ${esc(reasonLabel(r.reason))} — ${esc(r.target_label)}</div>
-                        <div class="mod-card-meta">Bildiren: ${esc(r.reporter_username)} · ${esc(r.created_at)}</div>
+                        <div class="mod-card-meta">Bildiren: ${esc(r.reporter_username || '(hesap silinmiş)')} · ${esc(r.created_at)}</div>
                     </div>
                     <span class="mod-status-badge">${esc(statusLabel(r.status))}</span>
                 </div>
@@ -260,6 +260,40 @@
             return esc(ctx.content || '(boş)');
         }
 
+        // Mesaj raporlarında içerik, raporlandığı andaki kanıt kaydından gösterilir; mesaj sonradan silinse,
+        // düzenlense ya da lobi temizlense bile kaybolmaz. Kanıt yoksa (eski rapor / süresi dolmuş) canlı mesaja düşülür.
+        function renderMessageEvidence(r) {
+            const ev = r.evidence || { state: 'none' };
+            const badge = (text, color) => `<div style="margin:4px 6px 4px 0; padding:6px 10px; border-radius:8px; font-size:12px; background:${color}; color:#fff; display:inline-block;">${text}</div>`;
+            const field = (label, html) => `<div class="mod-field"><span class="mod-field-label">${label}</span><span class="mod-field-value">${html}</span></div>`;
+
+            if (ev.state === 'none') {
+                return field('İleti İçeriği', `${badge('Kanıt kaydı bulunmuyor (rapor, kanıt özelliğinden önce açılmış)', '#6b7280')}<br>${renderMessageContent(r.target_context)}`);
+            }
+            if (ev.state === 'expired') {
+                return field('İleti İçeriği', `${badge('Kanıt saklama süresi doldu, kanıt imha edildi', '#6b7280')}<br>${renderMessageContent(r.target_context)}`);
+            }
+
+            const notices = [];
+            if (ev.message_state === 'deleted') notices.push(badge('⚠️ Mesaj daha sonra silindi', '#b45309'));
+            else if (ev.message_state === 'edited') notices.push(badge('✏️ Mesaj raporlandıktan sonra düzenlendi — aşağıdaki, raporlandığı andaki içeriktir', '#4b5563'));
+            else if (ev.message_state === 'hub_removed') notices.push(badge('⚠️ Lobi kaldırıldı', '#b45309'));
+            else if (ev.message_state === 'chat_cleared') notices.push(badge('⚠️ Lobi sohbeti temizlendi', '#b45309'));
+            else if (ev.message_state === 'removed') notices.push(badge('⚠️ Mesaj artık mevcut değil', '#b45309'));
+            else notices.push(badge('Mesaj mevcut', '#047857'));
+            if (ev.flags.sender_account_deleted) notices.push(badge('👤 Gönderen hesabı silindi', '#7c3aed'));
+            if (ev.flags.recipient_account_deleted) notices.push(badge('👤 Alıcı hesabı silindi', '#7c3aed'));
+            if (ev.flags.reporter_account_deleted) notices.push(badge('👤 Raporlayan hesabı silindi', '#7c3aed'));
+            if (ev.media_state === 'purged') notices.push(badge('🗑️ Medya saklama süresi doldu, medya imha edildi', '#6b7280'));
+            if (ev.media_state === 'too_large') notices.push(badge('Ek dosya çok büyük olduğu için kopyalanmadı', '#6b7280'));
+
+            const ctx = { exists: true, kind: ev.kind, content: ev.content, payload: ev.payload };
+            const where = ev.context.type === 'hub' ? `Lobi: ${esc(ev.context.hub_name || 'bilinmiyor')}` : 'Özel Mesaj (DM)';
+
+            return field('İleti İçeriği (raporlandığı an)', `${notices.join('')}<br>${renderMessageContent(ctx)}`) +
+                field('Kanıt Bilgisi', `Mesaj #${ev.message_id} · Gönderen: ${ev.sender_username ? esc(ev.sender_username) : '<em>(hesap silinmiş)</em>'} · ${where}<br>Mesaj tarihi: ${esc(ev.message_created_at || '—')} · Kanıt alındı: ${esc(ev.captured_at)}<br>Kanıt saklama sonu: ${esc(ev.retention_until)}${ev.media_retention_until ? ' · Medya saklama sonu: ' + esc(ev.media_retention_until) : ''} · Rapor kaydı saklama sonu: ${esc(ev.report_retention_until)}`);
+        }
+
         // Kullanıcı profili raporlarında moderatörün hesabı doğrudan bu panelden
         // inceleyebilmesi için — ayrı bir sayfaya gitmesine gerek kalmıyor.
         async function loadAccountDetail(userId) {
@@ -322,9 +356,9 @@
                 <h2>Rapor #${r.id}</h2>
                 <div class="mod-field"><span class="mod-field-label">Rapor Türü</span><span class="mod-field-value">${esc(TARGET_TYPE_LABELS[r.target_type] || r.target_type)}</span></div>
                 <div class="mod-field"><span class="mod-field-label">Kategori</span><span class="mod-field-value">${esc(reasonLabel(r.reason))} · ${esc(priorityLabel(r.priority))}</span></div>
-                <div class="mod-field"><span class="mod-field-label">Bildiren</span><span class="mod-field-value">${esc(r.reporter_username)}</span></div>
+                <div class="mod-field"><span class="mod-field-label">Bildiren</span><span class="mod-field-value">${r.reporter_username ? esc(r.reporter_username) : '<em>Raporlayan hesabı silinmiş</em>'}</span></div>
                 <div class="mod-field"><span class="mod-field-label">Bağlam</span><span class="mod-field-value">${describeContext(r)}</span></div>
-                ${r.target_type === 'message' ? `<div class="mod-field"><span class="mod-field-label">İleti İçeriği</span><span class="mod-field-value">${renderMessageContent(r.target_context)}</span></div>` : ''}
+                ${r.target_type === 'message' ? renderMessageEvidence(r) : ''}
                 <div class="mod-field"><span class="mod-field-label">Açıklama</span><span class="mod-field-value">${esc(r.description || '—')}</span></div>
                 <div class="mod-field"><span class="mod-field-label">Tarih</span><span class="mod-field-value">${esc(r.created_at)}</span></div>
                 <div class="mod-field"><span class="mod-field-label">Durum</span><span class="mod-field-value">${esc(statusLabel(r.status))}</span></div>

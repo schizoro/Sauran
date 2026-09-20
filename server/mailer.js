@@ -86,7 +86,7 @@ async function sendReportNotificationEmail(report) {
           <tr><td style="padding:4px 0; color:#45a29e;">Öncelik</td><td>${priorityLabel}</td></tr>
           <tr><td style="padding:4px 0; color:#45a29e;">Kategori</td><td>${report.reason}</td></tr>
           <tr><td style="padding:4px 0; color:#45a29e;">Hedef türü</td><td>${report.target_type}</td></tr>
-          <tr><td style="padding:4px 0; color:#45a29e;">Bildiren</td><td>${report.reporter_username}</td></tr>
+          <tr><td style="padding:4px 0; color:#45a29e;">Bildiren</td><td>${report.reporter_username || '(hesap silinmiş)'}</td></tr>
           <tr><td style="padding:4px 0; color:#45a29e;">Bağlam</td><td style="white-space:pre-wrap;">${describeReportContext(report)}</td></tr>
           <tr><td style="padding:4px 0; color:#45a29e;">Açıklama</td><td>${report.description ? String(report.description).slice(0, 300) : '—'}</td></tr>
           <tr><td style="padding:4px 0; color:#45a29e;">Tarih</td><td>${report.created_at}</td></tr>

@@ -493,6 +493,358 @@ db.exec(`
   );
 `);
 
+// =====================================================
+// RAPOR SAKLAMA (RETENTION) + MESAJ KANIT KAYDI
+// =====================================================
+// Amaç: raporlanan mesajın, mesaj silinse / hesap kapansa bile moderasyon incelemesi için gerekli MİNİMUM kanıtını
+// süreli olarak korumak; ama hiçbir şeyi süresiz saklamamak. Ayrıntılı gerekçe: docs/rapor-kaniti-saklama-politikasi.md
+//
+// Tablolar (birbirinden bağımsız retention_until alanları):
+//   reports                 rapor kaydı (metadata)           -> retention_until
+//   report_evidence         mesajın raporlandığı an metni    -> retention_until   (mesajlar tablosundan AYRI)
+//   report_evidence_media   ses/görsel/video/dosya verisi    -> retention_until   (metinden AYRI, daha kısa)
+//   evidence_lifecycle_log  imha/anonimleştirme olayları     (olay + zaman + rapor id + sayılar; içerik/kişisel veri YOK;
+//                                                             rapor/kanıt silinince SİLİNMEZ, en az 3 yıl korunur)
+
+// Süreler GÜN. Bunlar TEKNİK VARSAYILANLARDIR; KVKK'ya uygunluk garantisi değildir (bkz. docs).
+const RETENTION_POLICY = {
+  evidence_media: { open: 90, dismissed: 7, action_taken: 180 },   // en hassas / en ağır veri: en kısa
+  evidence_text: { open: 180, dismissed: 30, action_taken: 365 },
+  report_record: { open: 365, dismissed: 90, action_taken: 730 },
+  // Silme/yok etme/anonimleştirme kayıtları (evidence_lifecycle_log) rapor ve kanıttan BAĞIMSIZ bir yaşam döngüsüne sahiptir:
+  // rapor/kanıt/medya temizliği bu kayda dokunmaz; kayıt en az 3 TAKVİM YILI korunur (sabit gün sayısı değil: artık yıllarda
+  // 1095 gün üç yılı garanti etmez). max_days bu kayda UYGULANMAZ.
+  lifecycle_log_years: 3,
+  max_days: 730,           // rapor/kanıt/medya için üst sınır: bunları aşamaz, süresiz saklama YOK
+  // Migration sırasında, bu özellikten ÖNCE açılmış raporlara tanınan operasyonel ek süre (gün). Hukuki bir gerekçesi yoktur;
+  // bu nedenle varsayılan 0'dır: politika eski raporlara da kendi tarihlerinden uygulanır, ek saklama verilmez. Tarihi
+  // geçmiş eski raporlar ilk açılışta silinir (geri alınamaz) — deploy ÖNCESİ veritabanı yedeği alınması ayrı bir operasyonel önlemdir.
+  legacy_migration_grace_days: 0
+};
+// NOT: Rapor nedenine (taciz, tehdit, çocuk güvenliği vb.) göre süre UZATAN bir mekanizma bilerek YOKTUR. Tüm nedenler
+// aynı süreleri kullanır. İleride bir kategori için ayrı süre gerekirse, önce hukuki dayanağı belgelenip bu tabloya AÇIKÇA
+// (ör. ayrı bir nedene özel tablo + docs güncellemesiyle) eklenmelidir; kodda "daha uzun sakla" varsayımı yapılmaz.
+
+const EVIDENCE_MEDIA_MAX_CHARS = 6 * 1024 * 1024; // daha büyük medya kopyalanmaz (metin + metadata yine saklanır)
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// `years` takvim yılı önceki an (UTC). 29 Şubat'ın olmadığı yıla düşerse 28 Şubat'a çekilir (daha UZUN saklama tarafında kalır).
+function subtractCalendarYears(date, years) {
+  const d = new Date(date.getTime());
+  const month = d.getUTCMonth();
+  d.setUTCFullYear(d.getUTCFullYear() - years);
+  if (d.getUTCMonth() !== month) d.setUTCDate(0);
+  return d;
+}
+
+// Yaşam döngüsü logunda bu tarihten ÖNCE (kesinlikle) oluşmuş kayıtlar silinebilir: tam 3 takvim yılı henüz aşılmamış kayıt korunur.
+function lifecycleLogCutoff(now = new Date()) {
+  return subtractCalendarYears(now, RETENTION_POLICY.lifecycle_log_years).toISOString().replace('T', ' ').slice(0, 19);
+}
+
+function retentionBucket(status) {
+  return status === 'dismissed' ? 'dismissed' : status === 'action_taken' ? 'action_taken' : 'open';
+}
+
+// Bir raporun üç saklama bitiş tarihini (ISO) hesaplar. Açık raporda süre rapor tarihinden, kapanmış raporda kapanıştan sayılır.
+function computeRetention(status, createdAt, closedAt) {
+  const bucket = retentionBucket(status);
+  const pick = (category) => Math.min(Math.max(1, Number(RETENTION_POLICY[category][bucket]) || 1), RETENTION_POLICY.max_days);
+
+  const record = pick('report_record');
+  const text = Math.min(pick('evidence_text'), record);   // kanıt, rapor kaydından uzun yaşayamaz
+  const media = Math.min(pick('evidence_media'), text);   // medya, kanıt metninden uzun yaşayamaz
+
+  // SQLite CURRENT_TIMESTAMP 'YYYY-MM-DD HH:MM:SS' (UTC) döndürür; ISO biçimiyle aynı şekilde yorumlanır.
+  const ms = (v) => new Date(String(v).includes('T') ? v : String(v).replace(' ', 'T') + 'Z').getTime();
+  const base = bucket === 'open' ? ms(createdAt) : (closedAt ? ms(closedAt) : Date.now());
+  const at = (days) => new Date((Number.isFinite(base) ? base : Date.now()) + days * DAY_MS).toISOString();
+
+  return { record: at(record), text: at(text), media: at(media) };
+}
+
+// ---- Şema ------------------------------------------------------------------------------------------------------
+// reports.reporter_user_id eskiden NOT NULL + ON DELETE CASCADE idi: raporlayan hesabını silince rapor ve kanıt yok oluyordu.
+// SQLite kısıtı yerinde değiştiremez; SQLite'ın önerdiği tablo yeniden oluşturma prosedürü uygulanır (idempotent, transaction içinde).
+let legacyRetentionAssigned = 0; // migration sonunda yaşam döngüsü loguna yazılır (tablo daha sonra oluşur)
+(function migrateReportsForRetention() {
+  const cols = db.prepare(`PRAGMA table_info(reports)`).all();
+  const reporterCol = cols.find(c => c.name === 'reporter_user_id');
+
+  if (reporterCol && reporterCol.notnull === 1) {
+    db.pragma('foreign_keys = OFF'); // transaction dışında olmalı
+    try {
+      db.transaction(() => {
+        db.exec(`
+          CREATE TABLE reports_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            reporter_user_id INTEGER,
+            target_type TEXT NOT NULL,
+            target_id INTEGER NOT NULL,
+            reason TEXT NOT NULL,
+            description TEXT,
+            status TEXT NOT NULL DEFAULT 'new',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            reviewed_by INTEGER,
+            reviewed_at DATETIME,
+            priority TEXT NOT NULL DEFAULT 'normal',
+            retention_until TEXT,
+            evidence_status TEXT,
+            reporter_account_deleted INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY (reporter_user_id) REFERENCES users(id) ON DELETE SET NULL
+          );
+
+          INSERT INTO reports_new (id, reporter_user_id, target_type, target_id, reason, description, status, created_at, reviewed_by, reviewed_at, priority)
+          SELECT id, reporter_user_id, target_type, target_id, reason, description, status, created_at, reviewed_by, reviewed_at, priority FROM reports;
+
+          DROP TABLE reports;
+          ALTER TABLE reports_new RENAME TO reports;
+        `);
+
+        const broken = db.prepare(`PRAGMA foreign_key_check`).all();
+        if (broken.length) throw new Error('reports migration: foreign_key_check başarısız');
+      })();
+    } finally {
+      db.pragma('foreign_keys = ON');
+    }
+  } else {
+    // Yeniden oluşturma gerekmiyorsa (yeni kurulum ya da yarım kalmış eski sürüm) eksik kolonları ekle.
+    const names = cols.map(c => c.name);
+    if (!names.includes('retention_until')) db.exec(`ALTER TABLE reports ADD COLUMN retention_until TEXT`);
+    if (!names.includes('evidence_status')) db.exec(`ALTER TABLE reports ADD COLUMN evidence_status TEXT`);
+    if (!names.includes('reporter_account_deleted')) db.exec(`ALTER TABLE reports ADD COLUMN reporter_account_deleted INTEGER NOT NULL DEFAULT 0`);
+  }
+
+  // Bu özellikten önce açılmış raporlar için retention_until, politika kendi tarihlerinden uygulanarak hesaplanır.
+  // Varsayılan (legacy_migration_grace_days = 0): ek süre YOK; tarihi geçmiş eski raporlar ilk açılıştaki temizlikte silinir.
+  // Ek süre yalnızca operasyonel bir tercih olarak (>0) ve hukuki gerekçesi olmadan tanınabilir; belgelenmiştir.
+  // Eski raporlar için geriye dönük KANIT üretilmez (evidence_status boş kalır).
+  const legacy = db.prepare(`SELECT id, status, created_at, reviewed_at FROM reports WHERE retention_until IS NULL`).all();
+  const setUntil = db.prepare(`UPDATE reports SET retention_until = ? WHERE id = ?`);
+  const grace = Math.max(0, Number(RETENTION_POLICY.legacy_migration_grace_days) || 0);
+  const floor = Date.now() + grace * DAY_MS;
+  legacy.forEach(r => {
+    const until = new Date(computeRetention(r.status, r.created_at, r.reviewed_at || r.created_at).record).getTime();
+    setUntil.run(new Date(grace > 0 ? Math.max(until, floor) : until).toISOString(), r.id);
+  });
+  legacyRetentionAssigned = legacy.length;
+})();
+
+// Kanıt tablosu eski (yayınlanmamış) taslak şemayla oluşmuşsa yeniden kur; retention_until yoksa eski şemadır.
+(function dropDraftEvidenceSchema() {
+  const cols = db.prepare(`PRAGMA table_info(report_evidence)`).all().map(c => c.name);
+  // Yayınlanmamış taslak şemalar (retention_until yok ya da kullanıcı adı kopyası var) yeniden kurulur.
+  if (cols.length && (!cols.includes('retention_until') || cols.includes('sender_username'))) {
+    db.exec(`DROP TABLE IF EXISTS report_evidence_media; DROP TABLE report_evidence`);
+  }
+})();
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS report_evidence (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    report_id INTEGER NOT NULL UNIQUE,
+    message_id INTEGER NOT NULL,
+    sender_id INTEGER,
+    sender_account_deleted INTEGER NOT NULL DEFAULT 0,
+    kind TEXT,
+    content TEXT,
+    payload TEXT,
+    media_status TEXT,
+    integrity_sha256 TEXT,
+    was_edited INTEGER NOT NULL DEFAULT 0,
+    message_created_at DATETIME,
+    context_type TEXT NOT NULL,
+    hub_id INTEGER,
+    hub_name TEXT,
+    to_user_id INTEGER,
+    recipient_account_deleted INTEGER NOT NULL DEFAULT 0,
+    captured_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    retention_until TEXT NOT NULL,
+    FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_report_evidence_retention ON report_evidence(retention_until);
+
+  CREATE TABLE IF NOT EXISTS report_evidence_media (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    evidence_id INTEGER NOT NULL UNIQUE,
+    field TEXT NOT NULL,
+    mime TEXT,
+    size_chars INTEGER NOT NULL,
+    sha256 TEXT NOT NULL,
+    data TEXT NOT NULL,
+    retention_until TEXT NOT NULL,
+    FOREIGN KEY (evidence_id) REFERENCES report_evidence(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_report_evidence_media_retention ON report_evidence_media(retention_until);
+
+  CREATE TABLE IF NOT EXISTS evidence_lifecycle_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event TEXT NOT NULL,
+    report_id INTEGER,
+    detail TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TRIGGER IF NOT EXISTS evidence_lifecycle_log_no_update
+  BEFORE UPDATE ON evidence_lifecycle_log
+  BEGIN SELECT RAISE(ABORT, 'evidence_lifecycle_log is append-only'); END;
+`);
+
+// Yalnızca olay türü, rapor id'si ve sayılar yazılır. Mesaj içeriği, kullanıcı adı/id'si ASLA yazılmaz.
+function logEvidenceLifecycle(event, reportId, detail) {
+  db.prepare(`INSERT INTO evidence_lifecycle_log (event, report_id, detail) VALUES (?, ?, ?)`)
+    .run(event, reportId || null, detail ? JSON.stringify(detail) : null);
+}
+
+// ---- Yakalama --------------------------------------------------------------------------------------------------
+if (legacyRetentionAssigned) {
+  logEvidenceLifecycle('legacy_retention_assigned', null, { reports: legacyRetentionAssigned, grace_days: RETENTION_POLICY.legacy_migration_grace_days });
+}
+
+const MEDIA_FIELDS = ['audio', 'data']; // payload içindeki ağır (base64 data URI) alanlar
+
+// Rapor edilen mesajın o anki halini yazar (createReport'un transaction'ı içinde çağrılır).
+// Yalnızca gerekli minimum: mesaj içeriği + bağlam. Kullanıcı ADI kopyalanmaz (gönderen/alıcı/raporlayan): yalnızca iç
+// kimlik (id) tutulur, panel adı canlı çözer; hesap silinince id NULL olur ve ad hiçbir yerde kalmaz.
+function captureMessageEvidence(reportId, message, retention) {
+  const hub = message.hub_id ? db.prepare(`SELECT name FROM hubs WHERE id = ?`).get(message.hub_id) : null;
+
+  let light = null;
+  let mediaField = null;
+  let mediaData = null;
+
+  if (message.payload) {
+    try { light = JSON.parse(message.payload); } catch (_) { light = null; }
+    if (light && typeof light === 'object') {
+      for (const f of MEDIA_FIELDS) {
+        if (typeof light[f] === 'string' && light[f].startsWith('data:')) {
+          mediaField = f; mediaData = light[f];
+          delete light[f];
+          break;
+        }
+      }
+    }
+  }
+
+  let mediaStatus = null;
+  if (mediaData) mediaStatus = mediaData.length > EVIDENCE_MEDIA_MAX_CHARS ? 'too_large' : 'stored';
+
+  const lightJson = light ? JSON.stringify(light) : null;
+  const mediaSha = mediaData ? crypto.createHash('sha256').update(mediaData).digest('hex') : '';
+  const integrity = crypto.createHash('sha256')
+    .update(`${message.kind || 'text'}\n${message.content || ''}\n${lightJson || ''}\n${mediaSha}`).digest('hex');
+
+  const info = db.prepare(`
+    INSERT INTO report_evidence
+      (report_id, message_id, sender_id, kind, content, payload, media_status, integrity_sha256, was_edited,
+       message_created_at, context_type, hub_id, hub_name, to_user_id, retention_until)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    reportId, message.id, message.user_id, message.kind || 'text', message.content || '',
+    lightJson, mediaStatus, integrity, message.edited ? 1 : 0, message.created_at,
+    message.hub_id ? 'hub' : 'dm', message.hub_id || null, hub ? hub.name : null,
+    !message.hub_id ? (message.to_user_id || null) : null, retention.text
+  );
+
+  if (mediaStatus === 'stored') {
+    const mime = (/^data:([^;,]+)/.exec(mediaData) || [])[1] || null;
+    db.prepare(`
+      INSERT INTO report_evidence_media (evidence_id, field, mime, size_chars, sha256, data, retention_until)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(info.lastInsertRowid, mediaField, mime, mediaData.length, mediaSha, mediaData, retention.media);
+  }
+
+  logEvidenceLifecycle('evidence_captured', reportId, { kind: message.kind || 'text', media: mediaStatus || 'none' });
+}
+
+// Rapor durumu değişince üç saklama tarihi yeniden hesaplanır.
+function refreshRetention(reportId) {
+  const r = db.prepare(`SELECT status, created_at, reviewed_at FROM reports WHERE id = ?`).get(reportId);
+  if (!r) return;
+  const t = computeRetention(r.status, r.created_at, r.reviewed_at);
+
+  db.prepare(`UPDATE reports SET retention_until = ? WHERE id = ?`).run(t.record, reportId);
+  db.prepare(`UPDATE report_evidence SET retention_until = ? WHERE report_id = ?`).run(t.text, reportId);
+  db.prepare(`
+    UPDATE report_evidence_media SET retention_until = ?
+    WHERE evidence_id IN (SELECT id FROM report_evidence WHERE report_id = ?)
+  `).run(t.media, reportId);
+}
+
+// ---- Hesap silme: rapor/kanıt bağlantılarını koparır (kaydı silmez; süresi dolunca temizlik siler) ------------------
+// Silinen hesabın kimliği (id) raporlarda/kanıtlarda kalmaz; hesap ile bağlantı NULL'a çekilir ve bayrak konur.
+function unlinkReportDataForDeletedUser(userId) {
+  const run = db.transaction(() => {
+    const asReporter = db.prepare(`
+      UPDATE reports SET reporter_user_id = NULL, reporter_account_deleted = 1 WHERE reporter_user_id = ?
+    `).run(userId).changes;
+
+    const asSender = db.prepare(`
+      UPDATE report_evidence SET sender_id = NULL, sender_account_deleted = 1 WHERE sender_id = ?
+    `).run(userId).changes;
+
+    const asRecipient = db.prepare(`
+      UPDATE report_evidence SET to_user_id = NULL, recipient_account_deleted = 1 WHERE to_user_id = ?
+    `).run(userId).changes;
+
+    if (asReporter || asSender || asRecipient) {
+      logEvidenceLifecycle('account_unlinked', null, { as_reporter: asReporter, as_sender: asSender, as_recipient: asRecipient });
+    }
+  });
+  run();
+}
+
+// ---- Temizlik (retention_until üzerinden) ----------------------------------------------------------------------------
+// Sıra: medya -> kanıt metni -> rapor kaydı. Silmede SQLite secure_delete açılır (içerik sayfada sıfırlanır) ve WAL kırpılır.
+// Not: Render/yedek/disk anlık görüntüleri gibi veritabanı dışındaki kopyalar bu işlemin kapsamı dışındadır.
+function purgeExpiredRetention(now = new Date()) {
+  const iso = now.toISOString();
+  const result = { media: 0, evidence: 0, reports: 0, log: 0 };
+
+  db.pragma('secure_delete = ON');
+  try {
+    db.transaction(() => {
+      const media = db.prepare(`
+        SELECT report_evidence_media.id AS mid, report_evidence.id AS eid, report_evidence.report_id AS rid
+        FROM report_evidence_media JOIN report_evidence ON report_evidence.id = report_evidence_media.evidence_id
+        WHERE report_evidence_media.retention_until <= ?
+      `).all(iso);
+      media.forEach(m => {
+        db.prepare(`DELETE FROM report_evidence_media WHERE id = ?`).run(m.mid);
+        db.prepare(`UPDATE report_evidence SET media_status = 'purged' WHERE id = ?`).run(m.eid);
+        logEvidenceLifecycle('media_purged', m.rid, null);
+      });
+      result.media = media.length;
+
+      const evidence = db.prepare(`SELECT id, report_id FROM report_evidence WHERE retention_until <= ?`).all(iso);
+      evidence.forEach(e => {
+        db.prepare(`DELETE FROM report_evidence WHERE id = ?`).run(e.id); // medya varsa CASCADE ile gider
+        db.prepare(`UPDATE reports SET evidence_status = 'expired' WHERE id = ?`).run(e.report_id);
+        logEvidenceLifecycle('evidence_purged', e.report_id, null);
+      });
+      result.evidence = evidence.length;
+
+      const reports = db.prepare(`SELECT id FROM reports WHERE retention_until <= ?`).all(iso);
+      reports.forEach(r => {
+        db.prepare(`DELETE FROM reports WHERE id = ?`).run(r.id); // moderation_actions + varsa kanıt CASCADE
+        logEvidenceLifecycle('report_purged', r.id, null);
+      });
+      result.reports = reports.length;
+
+      result.log = db.prepare(`DELETE FROM evidence_lifecycle_log WHERE created_at < ?`).run(lifecycleLogCutoff(now)).changes;
+    })();
+  } finally {
+    db.pragma('secure_delete = OFF');
+  }
+
+  if (result.media || result.evidence || result.reports) {
+    try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (_) { /* yoksay */ }
+  }
+  return result;
+}
+
 function logModerationAction(reportId, moderatorId, action, reason) {
   db.prepare(`
     INSERT INTO moderation_actions (report_id, moderator_id, action, reason) VALUES (?, ?, ?, ?)
@@ -1013,16 +1365,80 @@ function getReportTargetContext(targetType, targetId) {
 function getReportDetail(reportId) {
   const report = db.prepare(`
     SELECT reports.*, users.username AS reporter_username
-    FROM reports INNER JOIN users ON users.id = reports.reporter_user_id
+    FROM reports LEFT JOIN users ON users.id = reports.reporter_user_id
     WHERE reports.id = ?
   `).get(reportId);
 
   if (!report) return null;
 
-  return {
+  const detail = {
     ...report,
     target_context: getReportTargetContext(report.target_type, report.target_id),
     history: listModerationHistory(reportId)
+  };
+
+  if (report.target_type === 'message') detail.evidence = getReportEvidence(report, detail.target_context);
+
+  return detail;
+}
+
+// Moderasyon paneli için kanıt (YALNIZCA moderasyon uçlarından döner). Panelde ayrı ayrı gösterilebilmesi için durumlar:
+//   state         : 'captured' (kanıt var) | 'expired' (saklama süresi doldu, imha edildi) | 'none' (bu özellikten önceki rapor)
+//   message_state : 'available' | 'edited' | 'deleted' (kullanıcı sildi) | 'hub_removed' (lobi silindi)
+//                   | 'chat_cleared' (lobi sohbeti temizlendi) | 'removed' (mesaj başka nedenle yok: ör. hesap silme)
+//   flags         : sender_account_deleted / recipient_account_deleted / reporter_account_deleted / hub_removed
+//   media_state   : 'none' | 'available' | 'purged' (retention doldu) | 'too_large' (kopyalanmadı)
+function getReportEvidence(report, liveContext) {
+  const row = db.prepare(`SELECT * FROM report_evidence WHERE report_id = ?`).get(report.id);
+  if (!row) return { state: report.evidence_status === 'expired' ? 'expired' : 'none' };
+
+  let payload = null;
+  if (row.payload) { try { payload = JSON.parse(row.payload); } catch (_) { payload = null; } }
+
+  let mediaState = 'none';
+  const media = row.media_status === 'stored'
+    ? db.prepare(`SELECT field, data, mime, sha256, retention_until FROM report_evidence_media WHERE evidence_id = ?`).get(row.id)
+    : null;
+  if (media) {
+    payload = { ...(payload || {}), [media.field]: media.data };
+    mediaState = 'available';
+  } else if (row.media_status === 'purged') mediaState = 'purged';
+  else if (row.media_status === 'too_large') mediaState = 'too_large';
+  else if (row.media_status === 'stored') mediaState = 'purged';
+
+  const hubRemoved = row.context_type === 'hub' && !db.prepare(`SELECT 1 FROM hubs WHERE id = ?`).get(row.hub_id);
+
+  let messageState = 'available';
+  if (!liveContext || !liveContext.exists) {
+    messageState = hubRemoved ? 'hub_removed' : (row.context_type === 'hub' && !row.sender_account_deleted ? 'chat_cleared' : 'removed');
+  } else if (liveContext.kind === 'deleted') messageState = 'deleted';
+  else if (liveContext.content !== row.content) messageState = 'edited';
+
+  return {
+    state: 'captured',
+    message_state: messageState,
+    flags: {
+      sender_account_deleted: Boolean(row.sender_account_deleted),
+      recipient_account_deleted: Boolean(row.recipient_account_deleted),
+      reporter_account_deleted: Boolean(report.reporter_account_deleted),
+      hub_removed: hubRemoved
+    },
+    media_state: mediaState,
+    captured_at: row.captured_at,
+    retention_until: row.retention_until,
+    media_retention_until: media ? media.retention_until : null,
+    report_retention_until: report.retention_until,
+    integrity_sha256: row.integrity_sha256,
+    message_id: row.message_id,
+    sender_username: row.sender_id ? (db.prepare(`SELECT username FROM users WHERE id = ?`).get(row.sender_id)?.username || null) : null, // canlı çözüm; kopya değil
+    kind: row.kind,
+    content: row.content,
+    payload,
+    was_edited_before_report: Boolean(row.was_edited),
+    message_created_at: row.message_created_at,
+    context: row.context_type === 'hub'
+      ? { type: 'hub', hub_id: row.hub_id, hub_name: row.hub_name }
+      : { type: 'dm' }
   };
 }
 
@@ -2455,12 +2871,40 @@ function createReport(reporterId, { target_type, target_id, reason, description 
     }
   }
 
-  const info = db.prepare(`
-    INSERT INTO reports (reporter_user_id, target_type, target_id, reason, description, priority)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(reporterId, target_type, targetId, reason, String(description || '').trim().slice(0, 500), priorityForReason(reason));
+  // Mesaj raporunda kanıt alınacak mesaj gerçekten var, silinmemiş ve raporlayan tarafından görülebilir olmalı.
+  let evidenceMessage = null;
+  if (target_type === 'message') {
+    evidenceMessage = db.prepare(`
+      SELECT id, user_id, username, content, kind, payload, hub_id, to_user_id, edited, created_at
+      FROM messages WHERE id = ?
+    `).get(targetId);
 
-  return { success: true, id: info.lastInsertRowid };
+    if (!evidenceMessage || evidenceMessage.kind === 'deleted') {
+      return { success: false, error: 'Bu mesaj artık mevcut değil.' };
+    }
+
+    const canSee = evidenceMessage.hub_id
+      ? isHubMember(evidenceMessage.hub_id, reporterId)
+      : (evidenceMessage.user_id === reporterId || evidenceMessage.to_user_id === reporterId);
+
+    if (!canSee) return { success: false, error: 'Bu mesajı bildirme yetkin yok.' };
+    if (evidenceMessage.user_id === reporterId) return { success: false, error: 'Kendi mesajını bildiremezsin.' };
+  }
+
+  // Rapor ve kanıt tek transaction'da yazılır: kanıt alınamazsa rapor da oluşmaz (kanıtsız mesaj raporu olmaz).
+  const retention = computeRetention('new', new Date().toISOString(), null);
+  const insert = db.transaction(() => {
+    const info = db.prepare(`
+      INSERT INTO reports (reporter_user_id, target_type, target_id, reason, description, priority, retention_until, evidence_status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(reporterId, target_type, targetId, reason, String(description || '').trim().slice(0, 500), priorityForReason(reason),
+      retention.record, evidenceMessage ? 'captured' : null);
+
+    if (evidenceMessage) captureMessageEvidence(info.lastInsertRowid, evidenceMessage, retention);
+    return info.lastInsertRowid;
+  });
+
+  return { success: true, id: insert() };
 }
 
 function listReports(status, filters) {
@@ -2484,7 +2928,7 @@ function listReports(status, filters) {
 
   const rows = db.prepare(`
     SELECT reports.*, users.username AS reporter_username
-    FROM reports INNER JOIN users ON users.id = reports.reporter_user_id
+    FROM reports LEFT JOIN users ON users.id = reports.reporter_user_id
     ${whereClause}
     ORDER BY reports.created_at DESC
   `).all(...params);
@@ -2543,6 +2987,7 @@ function updateReportStatus(reportId, reviewerId, status, reason) {
   if (!info.changes) return { success: false, error: 'Rapor bulunamadı.' };
 
   logModerationAction(reportId, reviewerId, status, reason);
+  refreshRetention(reportId);
 
   return { success: true };
 }
@@ -3890,6 +4335,10 @@ module.exports = {
   removePushSubscription,
   listPushSubscriptions,
   saveFcmToken,
+  purgeExpiredRetention,
+  lifecycleLogCutoff,
+  unlinkReportDataForDeletedUser,
+  RETENTION_POLICY,
   removeFcmToken,
   listFcmTokens,
   createFeedback,
