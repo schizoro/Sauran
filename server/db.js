@@ -341,15 +341,39 @@ if (!usersAgeColumns.includes('birth_date')) {
   db.exec(`ALTER TABLE users ADD COLUMN birth_date TEXT`);
 }
 
-function calculateAge(birthDateStr) {
-  const birthDate = new Date(birthDateStr);
-  if (Number.isNaN(birthDate.getTime())) return null;
+// minor_until: 18. doğum günü tarihi (yalnızca 18 yaş altı hesaplarda; NULL = reşit). birth_date sütunu ESKİ şemadan kalır ve her zaman NULL'dır.
+if (!usersAgeColumns.includes('minor_until')) {
+  db.exec(`ALTER TABLE users ADD COLUMN minor_until TEXT`);
+}
+if (!pendingVerificationColumns.includes('minor_until')) {
+  db.exec(`ALTER TABLE pending_verifications ADD COLUMN minor_until TEXT`);
+}
 
-  const now = new Date();
-  let age = now.getFullYear() - birthDate.getFullYear();
-  const monthDiff = now.getMonth() - birthDate.getMonth();
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birthDate.getDate())) {
+function todayLocal(now = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
+}
+
+// Geçerli bir YYYY-MM-DD takvim tarihi mi (ör. 2001-02-30 değil)?
+function parseIsoDate(str) {
+  const m = ISO_DATE.exec(String(str || '').trim());
+  if (!m) return null;
+  const y = Number(m[1]), mo = Number(m[2]), da = Number(m[3]);
+  const dt = new Date(Date.UTC(y, mo - 1, da));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== da) return null;
+  return { y, mo, da };
+}
+
+function calculateAge(birthDateStr, now = new Date()) {
+  const b = parseIsoDate(birthDateStr);
+  if (!b) return null;
+
+  let age = now.getFullYear() - b.y;
+  const monthDiff = (now.getMonth() + 1) - b.mo;
+
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < b.da)) {
     age -= 1;
   }
 
@@ -359,6 +383,72 @@ function calculateAge(birthDateStr) {
 function isMinorAge(age) {
   return typeof age === 'number' && age < MINOR_AGE_THRESHOLD;
 }
+
+// VERİ MİNİMİZASYONU (doğum tarihi): Tam doğum tarihi VERİTABANINDA HİÇ SAKLANMAZ. Doğum tarihi yalnızca kayıt anında (a) 13 yaş alt sınırını doğrulamak ve
+// (b) reşit olma (18. yaş günü) tarihini hesaplamak için kullanılır; sonuç `minor_until` (18. doğum günü tarihi) olarak yalnızca 18 yaş altı hesaplarda saklanır.
+// 18+ hesaplarda minor_until NULL'dır (NULL = reşit); 18. yaş günü gelince NULL yapılır. is_minor her istekte minor_until'e göre dinamik hesaplanır.
+// NOT: minor_until, doğum tarihinin 18 yıl sonrasıdır; yani 18 yaş altı hesapta doğum gün/ay bilgisi dolaylı olarak çıkarılabilir — bu, korumalı modun
+// gün doğruluğuyla bitmesi için gereken en az veridir. Bu alan hiçbir kullanıcıya, moderasyona ya da dışa aktarmaya gösterilmez (yalnızca yaş grubu gösterilir).
+function computeMinorUntil(birthDateStr) {
+  const b = parseIsoDate(birthDateStr);
+  if (!b) return null;
+  const y = b.y + MINOR_AGE_THRESHOLD;
+  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  let mo = b.mo, da = b.da;
+  if (mo === 2 && da === 29 && !leap) { mo = 3; da = 1; } // 29 Şubat doğumlular: artık olmayan yılda 1 Mart (calculateAge ile tutarlı)
+  const p = (n) => String(n).padStart(2, '0');
+  return `${String(y).padStart(4, '0')}-${p(mo)}-${p(da)}`;
+}
+
+const isMinorUntil = (minorUntil, now = new Date()) => Boolean(minorUntil) && String(minorUntil) > todayLocal(now);
+const ageGroupOf = (minorUntil) => (isMinorUntil(minorUntil) ? 'minor' : 'adult');
+
+// Tek seferlik geçiş + günlük temizlik. 1) Eski birth_date değerlerinden (varsa) minor_until hesaplanır ve birth_date her zaman NULL'lanır;
+// 2) bekleyen kayıtlarda tam tarih hiç tutulmaz; 3) süresi (18. yaş günü) gelen minor_until NULL'lanır.
+// Eski tam tarihler diskte kalmasın diye secure_delete açık güncellenir, ardından WAL kontrol noktasıyla kesilir (bkz. scrubFreedPages).
+function scrubFreedPages() {
+  try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (e) { /* WAL yoksa/kilitliyse geç */ }
+}
+
+function purgeAdultBirthDates(now = new Date()) {
+  const today = todayLocal(now);
+  db.pragma('secure_delete = ON');
+  let result;
+  try {
+    result = db.transaction(() => {
+      let legacy = 0, expired = 0, pending = 0;
+
+      // Eski satırlar: birth_date -> minor_until (yalnızca hâlâ 18 yaş altıysa), sonra birth_date NULL.
+      for (const r of db.prepare(`SELECT id, birth_date FROM users WHERE birth_date IS NOT NULL`).all()) {
+        const mu = computeMinorUntil(r.birth_date);
+        const keep = mu && mu > today ? mu : null;
+        db.prepare(`UPDATE users SET birth_date = NULL, minor_until = COALESCE(minor_until, ?) WHERE id = ?`).run(keep, r.id);
+        legacy++;
+      }
+
+      // Bekleyen doğrulama kayıtları: tam tarih hiç tutulmaz.
+      for (const r of db.prepare(`SELECT id, birth_date FROM pending_verifications WHERE birth_date IS NOT NULL`).all()) {
+        const mu = computeMinorUntil(r.birth_date);
+        db.prepare(`UPDATE pending_verifications SET birth_date = NULL, minor_until = COALESCE(minor_until, ?) WHERE id = ?`).run(mu && mu > today ? mu : null, r.id);
+        pending++;
+      }
+
+      // 18. yaş günü gelenler: minor_until NULL (= reşit).
+      expired = db.prepare(`UPDATE users SET minor_until = NULL WHERE minor_until IS NOT NULL AND minor_until <= ?`).run(today).changes;
+      db.prepare(`UPDATE pending_verifications SET minor_until = NULL WHERE minor_until IS NOT NULL AND minor_until <= ?`).run(today);
+
+      return { users: legacy + expired, legacy, expired, pending };
+    })();
+  } finally {
+    db.pragma('secure_delete = OFF');
+  }
+
+  if (result.legacy || result.pending) scrubFreedPages();
+  return result;
+}
+
+// Modül yüklenirken bir kez: eski birth_date verileri sunucu istek almadan ÖNCE minor_until'e çevrilip silinir.
+purgeAdultBirthDates();
 
 // =====================================================
 // v1.22 MIGRATION — KVKK / KULLANIM ŞARTLARI ONAYI
@@ -1565,11 +1655,15 @@ function setPlatformRole(username, role) {
 // bu ise sadece requirePlatformRole('moderator') arkasında kullanılan ayrı bir görünüm.
 function getModerationUserDetail(userId) {
   const user = db.prepare(`
-    SELECT id, username, email, created_at, birth_date, platform_role, status, about_me, avatar_data
+    SELECT id, username, email, created_at, minor_until, platform_role, status, about_me, avatar_data
     FROM users WHERE id = ?
   `).get(userId);
 
   if (!user) return null;
+
+  // Moderasyon tarafında tam doğum tarihi gösterilmez; yalnızca yaş grubu (reşit / reşit değil).
+  user.age_group = ageGroupOf(user.minor_until);
+  delete user.minor_until;
 
   const reportsAgainst = db.prepare(`
     SELECT COUNT(*) AS count FROM reports WHERE target_type = 'user' AND target_id = ?
@@ -1899,9 +1993,9 @@ function createVerification(username, email, password, birthDate, termsAccepted)
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
     db.prepare(`
-      INSERT INTO pending_verifications (username, email, password_hash, password_salt, code, expires_at, birth_date, terms_accepted)
+      INSERT INTO pending_verifications (username, email, password_hash, password_salt, code, expires_at, minor_until, terms_accepted)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(username, email, hash, salt, authcodes.hashCode(code, verifyCodeContext(email)), expiresAt, birthDate, termsAccepted ? 1 : 0);
+    `).run(username, email, hash, salt, authcodes.hashCode(code, verifyCodeContext(email)), expiresAt, isMinorAge(age) ? computeMinorUntil(birthDate) : null, termsAccepted ? 1 : 0); // tam doğum tarihi HİÇ saklanmaz; yalnızca 18 yaş altıysa 18. yaş günü
 
     return { success: true, code };
 
@@ -1949,13 +2043,12 @@ function verifyAndCreateUser(email, code) {
       return { success: false, error: 'Kodun süresi dolmuş. Tekrar kayıt ol.' };
     }
 
-    const age = calculateAge(pending.birth_date);
-    const minor = isMinorAge(age);
+    const minor = isMinorUntil(pending.minor_until);
 
     const result = db.prepare(`
-      INSERT INTO users (username, email, password_hash, password_salt, birth_date, avatar_visibility, terms_accepted_at, dev_notice_new)
+      INSERT INTO users (username, email, password_hash, password_salt, minor_until, avatar_visibility, terms_accepted_at, dev_notice_new)
       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 1)
-    `).run(pending.username, pending.email, pending.password_hash, pending.password_salt, pending.birth_date, minor ? 'friends' : 'public');
+    `).run(pending.username, pending.email, pending.password_hash, pending.password_salt, minor ? pending.minor_until : null, minor ? 'friends' : 'public');
 
     db.prepare(`DELETE FROM pending_verifications WHERE id = ?`).run(pending.id);
 
@@ -3488,12 +3581,17 @@ const EXPORT_MEDIA_BUDGET_CHARS = 40 * 1024 * 1024; // toplam ek dosya verisi bu
 
 function getAccountExport(userId) {
   const profile = db.prepare(`
-    SELECT id, username, email, about_me, status, avatar_visibility, birth_date,
+    SELECT id, username, email, about_me, status, avatar_visibility, minor_until,
            terms_accepted_at, created_at, avatar_data, banner_data
     FROM users WHERE id = ?
   `).get(userId);
 
   if (!profile) return null;
+
+  // Tam doğum tarihi hiçbir yerde saklanmaz; dışa aktarımda yalnızca sonuç (yaş grubu / reşit olmama durumu) yer alır.
+  profile.age_group = ageGroupOf(profile.minor_until);
+  profile.is_minor = profile.age_group === 'minor';
+  delete profile.minor_until;
 
   const account = db.prepare(`
     SELECT platform_role, account_status, suspended_at, suspension_user_reason,
@@ -4954,6 +5052,9 @@ module.exports = {
   REPORT_PRIORITIES,
   calculateAge,
   isMinorAge,
+  isMinorUntil,
+  computeMinorUntil,
+  purgeAdultBirthDates,
   MIN_SIGNUP_AGE,
   getAccountExport,
   isBlocked,

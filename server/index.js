@@ -88,6 +88,7 @@ const {
   purgeExpiredRetention,
   purgeExpiredAuthRecords,
   purgeExpiredAuditLog,
+  purgeAdultBirthDates,
   purgeExpiredNotificationData,
   listDeletedDmThreads,
   getDeletedDmMessages,
@@ -105,6 +106,7 @@ const {
   voteFeedback,
   calculateAge,
   isMinorAge,
+  isMinorUntil,
   getAccountExport,
   updateUsername,
   updatePassword,
@@ -361,7 +363,7 @@ function getUserFromSessionToken(token) {
   const user = db.prepare(`
     SELECT users.id, users.username, users.email, users.about_me,
            users.status, users.avatar_visibility, users.avatar_data, users.banner_data,
-           users.birth_date, users.platform_role, users.dev_notice_seen, users.dev_notice_new, users.account_status,
+           users.minor_until, users.platform_role, users.dev_notice_seen, users.dev_notice_new, users.account_status,
            users.role_acceptance_pending, users.role_accepted_role, users.role_notice_kind, users.role_notice_at,
            sessions.expires_at
     FROM sessions
@@ -388,7 +390,7 @@ function getUserFromSessionToken(token) {
     avatar_visibility: user.avatar_visibility || 'public',
     avatar_data: user.avatar_data,
     banner_data: user.banner_data,
-    is_minor: isMinorAge(calculateAge(user.birth_date)),
+    is_minor: isMinorUntil(user.minor_until),
     ...platformRoleFields(user),
     dev_notice: devNoticeFor(user.dev_notice_seen, user.dev_notice_new)
   };
@@ -3521,6 +3523,16 @@ server.listen(PORT, () => {
     } catch (error) { console.error('Audit log temizleme hatası:', error); }
   };
   runAuditPurge();
+
+  // Doğum tarihi minimizasyonu: 18 yaşını dolduran (ve eski) hesaplarda tam tarih silinir; açılışta ve günde bir.
+  const runBirthDatePurge = () => {
+    try {
+      const purged = purgeAdultBirthDates();
+      if (purged.users || purged.pending) console.log(`Doğum tarihi minimizasyonu: eski kayıt=${purged.legacy}, reşit olan=${purged.expired}, bekleyen kayıt=${purged.pending}.`);
+    } catch (error) { console.error('Doğum tarihi temizleme hatası:', error); }
+  };
+  runBirthDatePurge();
+  setInterval(runBirthDatePurge, 24 * 60 * 60 * 1000).unref();
   setInterval(runAuditPurge, 24 * 60 * 60 * 1000).unref();
 
   // Süresi dolmuş doğrulama kodları, şifre sıfırlama kodları ve oturumlar: açılışta (yeniden başlatma sonrası birikmiş kayıtlar) ve

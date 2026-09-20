@@ -324,7 +324,7 @@
                     </div>
                     <div class="mod-field"><span class="mod-field-label">E-posta</span><span class="mod-field-value">${esc(u.email || '—')}</span></div>
                     <div class="mod-field"><span class="mod-field-label">Kayıt Tarihi</span><span class="mod-field-value">${esc(u.created_at)}</span></div>
-                    <div class="mod-field"><span class="mod-field-label">Doğum Tarihi</span><span class="mod-field-value">${esc(u.birth_date || '—')}</span></div>
+                    <div class="mod-field"><span class="mod-field-label">Yaş Grubu</span><span class="mod-field-value">${u.age_group === 'minor' ? '18 yaş altı' : '18 yaş ve üzeri'}</span></div>
                     <div class="mod-field"><span class="mod-field-label">Hakkımda</span><span class="mod-field-value">${esc(u.about_me || '—')}</span></div>
                     <div class="mod-field">
                         <span class="mod-field-label">İstatistikler</span>
