@@ -2730,6 +2730,21 @@ function openFromNotificationUrl(url) {
     } catch (_) { /* yoksay */ }
 }
 
+// FCM bildirimine dokunma: kullanıcıya/sohbete özgü bilgi olmadığından tür bazlı genel ekran açılır.
+async function openGeneralScreenForNotificationType(type) {
+    if (!currentUser) return;
+
+    if (['friend_request', 'friend_request_accepted', 'hub_invite', 'platform_role_notice', 'platform_role_revoked'].includes(type)) {
+        await reloadNotifications();
+        notificationsModal.style.display = 'flex';
+    } else if (type === 'dm_message' || type === 'incoming_call') {
+        friendsSidebar2.classList.add('open');
+        friendsSidebarToggleBtn2.classList.add('open');
+        loadFriendsSidebar();
+    }
+    // hub_message ve bilinmeyen türler: uygulama zaten lobi listesiyle açılır.
+}
+
 // ── FCM: uygulama tamamen kapalıyken bile bildirim ─────────────────────────────
 // Sunucu FCM'i gerçekten yapılandırmışsa (kayıt yanıtındaki delivery) yerel bildirimler bırakılır;
 // aksi halde çift bildirim olmasın diye ikisinden yalnızca biri kullanılır.
@@ -2765,8 +2780,9 @@ async function initNativeFcm() {
 
         plugin.addListener('registrationError', (error) => console.warn('FCM kaydı başarısız:', error));
 
-        // Uygulama kapalıyken gelen bildirime dokunulunca ilgili sohbeti aç.
-        plugin.addListener('pushNotificationActionPerformed', (event) => openFromNotificationUrl(event?.notification?.data?.url));
+        // FCM bildirimi (Google altyapısı) kullanıcıya/sohbete özgü hiçbir bilgi taşımaz: dokununca yalnızca tür bazlı GENEL ekran açılır;
+        // gerçek mesajlar ve adlar uygulama açıldıktan sonra oturumlu API/Socket.io ile gelir.
+        plugin.addListener('pushNotificationActionPerformed', (event) => openGeneralScreenForNotificationType(event?.notification?.data?.type));
 
         const permission = await plugin.requestPermissions();
         if (permission?.receive === 'granted') await plugin.register();

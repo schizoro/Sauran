@@ -43,22 +43,48 @@ const INVALID_TOKEN_CODES = new Set([
   'messaging/invalid-argument'
 ]);
 
-// Verilen cihaz anahtarlarına bildirim gönderir; artık geçersiz olan anahtarları döndürür.
-async function sendToTokens(tokens, { title, body, url, tag, type }) {
+// VERİ MİNİMİZASYONU: FCM (Google altyapısı) üzerinden mesaj İÇERİĞİ, gönderen ADI, lobi adı ve kullanıcıya ya da konuşmaya özgü HİÇBİR tanımlayıcı
+// (kullanıcı/sohbet/lobi numarası, o numaralarla kurulan bildirim etiketi, yönlendirme URL'si) ASLA gönderilmez. Yük yalnızca bildirim TÜRÜNÜ ve o türe ait
+// sabit, genel bir cümleyi taşır. Çağıranın verdiği title/body/url/tag bilerek YOK SAYILIR: bir çağıran hatası bile bir şey sızdıramaz.
+// Bildirime dokunulunca uygulama tür bazlı GENEL bir ekranı açar (mesaj/arkadaş listesi ya da bildirim paneli); gerçek kullanıcı ve mesaj bilgileri
+// uygulama açıldıktan sonra oturumlu mevcut API'lerden ve Socket.io'dan alınır.
+const GENERIC_BODY = {
+  dm_message: 'Yeni mesajınız var',
+  hub_message: 'Lobide yeni mesaj var',
+  incoming_call: 'Gelen arama',
+  friend_request: 'Yeni bir arkadaşlık isteğin var',
+  friend_request_accepted: 'Bir arkadaşlık isteğin kabul edildi',
+  hub_invite: 'Yeni bir lobi davetin var',
+  platform_role_notice: 'Sauran Yönetim: Yeni bir görev bildirimin var.',
+  platform_role_revoked: 'Sauran Yönetim: Yönetim görevin hakkında bir bilgilendirme var.'
+};
+const GENERIC_FALLBACK = 'Yeni bir bildirimin var';
+
+// Google'a giden içeriği üretir (sınanabilirlik için dışa açık). Yalnızca tür + sabit metin; başka hiçbir alan yoktur.
+function buildGenericContent({ type } = {}) {
+  const known = Object.prototype.hasOwnProperty.call(GENERIC_BODY, type);
+  return {
+    title: 'Sauran',
+    body: known ? GENERIC_BODY[type] : GENERIC_FALLBACK,
+    data: { type: known ? String(type) : 'generic' }
+  };
+}
+
+// Verilen cihaz anahtarlarına GENEL bir bildirim gönderir; artık geçersiz olan anahtarları döndürür.
+async function sendToTokens(tokens, { type } = {}) {
   if (!configured || !tokens.length) return [];
+
+  const content = buildGenericContent({ type });
 
   const response = await messaging.sendEachForMulticast({
     tokens,
-    notification: { title: String(title || 'Sauran'), body: String(body || '') },
-    data: { url: String(url || '/'), tag: String(tag || ''), type: String(type || '') },
+    notification: { title: content.title, body: content.body },
+    data: content.data,
     android: {
       priority: 'high',
       ttl: 60 * 60 * 1000,
-      notification: {
-        channelId: 'sauran_messages',
-        icon: 'ic_stat_message',
-        ...(tag ? { tag: String(tag) } : {})
-      }
+      // Etiket yalnızca bildirim TÜRÜdür (kişiye/sohbete özgü değil): aynı türden bildirimler birikmek yerine tek bildirimde birleşir.
+      notification: { channelId: 'sauran_messages', icon: 'ic_stat_message', tag: content.data.type }
     }
   });
 
@@ -75,5 +101,6 @@ async function sendToTokens(tokens, { title, body, url, tag, type }) {
 
 module.exports = {
   isConfigured: () => configured,
-  sendToTokens
+  sendToTokens,
+  buildGenericContent
 };
