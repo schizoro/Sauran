@@ -2023,7 +2023,10 @@ app.delete('/api/hubs/:id/voice-rooms/:roomId', (req, res) => {
   io.to(`hub:${hubId}`).to(`voiceroom:${roomId}`).emit('voice_room_deleted', { id: roomId });
   clearVoiceRoom(roomId);
 
-  return res.json(result);
+  // Daily odası, DB transaction'ı içinde kuyruğa yazıldı; silme DB işlemi bittikten sonra (yanıtı geciktirmeden) denenir, başarısızsa kuyruk yeniden dener.
+  finalizeHubPurge({ daily_room_names: result.daily_room_names });
+
+  return res.json({ success: true });
 });
 
 app.post('/api/hubs/:id/voice-rooms/:roomId/join', async (req, res) => {

@@ -2788,10 +2788,21 @@ function deleteVoiceRoom(hubId, userId, roomId) {
   if (!hub) return { success: false, error: 'Hub bulunamadı.' };
   if (hub.created_by !== userId) return { success: false, error: 'Yalnızca Hub sahibi sesli odayı silebilir.' };
 
-  const info = db.prepare(`DELETE FROM hub_voice_rooms WHERE id = ? AND hub_id = ?`).run(roomId, hubId);
-  if (!info.changes) return { success: false, error: 'Oda bulunamadı.' };
+  // Oda kaydı silinirken ilgili Daily odasının adı AYNI transaction'da kalıcı silme kuyruğuna (daily_room_cleanup) yazılır; Daily çağrısı transaction'a
+  // katılmaz, DB işlemi başarılı olduktan sonra çağıran tarafından denenir (başarısızsa kuyruk yeniden dener). Adı olmayan oda hiç açılmamıştır.
+  const removed = db.transaction(() => {
+    const room = db.prepare(`SELECT daily_room_name FROM hub_voice_rooms WHERE id = ? AND hub_id = ?`).get(roomId, hubId);
+    if (!room) return null;
 
-  return { success: true };
+    db.prepare(`DELETE FROM hub_voice_rooms WHERE id = ? AND hub_id = ?`).run(roomId, hubId);
+    const names = room.daily_room_name ? [room.daily_room_name] : [];
+    names.forEach(name => db.prepare(`INSERT OR IGNORE INTO daily_room_cleanup (room_name) VALUES (?)`).run(name));
+    return names;
+  })();
+
+  if (!removed) return { success: false, error: 'Oda bulunamadı.' };
+
+  return { success: true, daily_room_names: removed };
 }
 
 function getVoiceRoomDailyName(roomId) {
@@ -2891,12 +2902,34 @@ function deleteHub(hubId, userId) {
 // Raporlanan mesajların kanıtları silinmez: rapor/kanıt kayıtlarının yalnızca bu hesapla bağlantısı koparılır (retention aynen sürer).
 // Sahip olunan lobiler deleteHub ile aynı temizlik yolundan (purgeHubData) silinir. Üçüncü taraf çağrıları (Daily) transaction DIŞINDADIR:
 // silinecek oda adları kuyruğa yazılır, çağıran transaction'dan sonra işler.
+// Hesabın olası DM çağrı odaları: arkadaşları ve DM yazıştığı kişilerle. Yalnızca oda adı kuyruğa yazılır (kişisel veri: adda geçen sayısal numaralar).
+function enqueueDmCallRoomsForDeletedUser(userId) {
+  const partnerIds = new Set([
+    ...db.prepare(`SELECT CASE WHEN user_low = ? THEN user_high ELSE user_low END AS other FROM friendships WHERE user_low = ? OR user_high = ?`).all(userId, userId, userId).map(r => r.other),
+    ...db.prepare(`
+      SELECT DISTINCT CASE WHEN user_id = ? THEN to_user_id ELSE user_id END AS other
+      FROM messages WHERE hub_id IS NULL AND to_user_id IS NOT NULL AND (user_id = ? OR to_user_id = ?)
+    `).all(userId, userId, userId).map(r => r.other)
+  ]);
+  partnerIds.delete(userId);
+  partnerIds.delete(null);
+
+  const insert = db.prepare(`INSERT OR IGNORE INTO daily_room_cleanup (room_name) VALUES (?)`);
+  const names = [...partnerIds].filter(Boolean).map(other => `sauran-dm-${Math.min(userId, other)}-${Math.max(userId, other)}`);
+  names.forEach(name => insert.run(name));
+  return names;
+}
+
 function deleteAccount(userId) {
   const run = db.transaction(() => {
     unlinkReportDataForDeletedUser(userId);
 
     const owned = db.prepare(`SELECT id FROM hubs WHERE created_by = ?`).all(userId);
     const purgedHubs = owned.map(h => purgeHubData(h.id));
+
+    // DM çağrı odaları Daily'de çağrıya katılınca tembel oluşturulur (sauran-dm-<küçük no>-<büyük no>) ve hiçbir yerde silinmez; hesap silinince adında bu
+    // hesabın numarası geçen odalar artık öksüzdür. Odanın var olup olmadığı bilinmez: Daily'de yoksa (404) silme başarılı sayılır.
+    const dmCallRooms = enqueueDmCallRoomsForDeletedUser(userId);
 
     // DM'ler: kendi mesajların silinir (mezar taşı bırakılır), karşı tarafın mesajları korunur (bkz. handleDmsOnAccountDeletion).
     const dmPartners = handleDmsOnAccountDeletion(userId);
@@ -2913,16 +2946,16 @@ function deleteAccount(userId) {
     const info = db.prepare(`DELETE FROM users WHERE id = ?`).run(userId);
     if (info.changes !== 1) throw new Error('Hesap silinemedi (kullanıcı satırı silinmedi).');
 
-    return { purgedHubs, dmPartners };
+    return { purgedHubs, dmPartners, dmCallRooms };
   });
 
-  const { purgedHubs, dmPartners } = run();
+  const { purgedHubs, dmPartners, dmCallRooms } = run();
 
   return {
     success: true,
     hub_ids: purgedHubs.map(h => h.hubId),
     voice_room_ids: purgedHubs.flatMap(h => h.voiceRoomIds),
-    daily_room_names: purgedHubs.flatMap(h => h.dailyRoomNames),
+    daily_room_names: [...purgedHubs.flatMap(h => h.dailyRoomNames), ...dmCallRooms],
     dm_partners: dmPartners
   };
 }
