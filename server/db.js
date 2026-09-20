@@ -3081,25 +3081,82 @@ function updateReportStatus(reportId, reviewerId, status, reason) {
 // VERİ İHRACI (KVKK md. 11 — erişim / taşınabilirlik hakkı)
 // =====================================================
 
+// "Verilerimi İndir": kullanıcının KENDİ verileri. Dahil edilmeyenler (bilerek): başkalarının kişisel verileri ve içerikleri (ör. alınan
+// DM'lerin içeriği, lobi üyelerinin listesi), rapor kanıtları ve moderasyon iç kayıtları, bildirim listesi (başka kullanıcıların adlarını
+// içerebilir) ve güvenlik sırları (parola özeti/tuzu, doğrulama ve sıfırlama kodları, oturum belirteci, push/FCM anahtarları).
+const EXPORT_MEDIA_BUDGET_CHARS = 40 * 1024 * 1024; // toplam ek dosya verisi bunu aşarsa yalnızca metadata verilir
+
 function getAccountExport(userId) {
   const profile = db.prepare(`
     SELECT id, username, email, about_me, status, avatar_visibility, birth_date,
-           terms_accepted_at, created_at
+           terms_accepted_at, created_at, avatar_data, banner_data
     FROM users WHERE id = ?
   `).get(userId);
 
   if (!profile) return null;
 
+  const account = db.prepare(`
+    SELECT platform_role, account_status, suspended_at, suspension_user_reason,
+           role_acceptance_pending, role_acceptance_version, role_accepted_role, role_accepted_at
+    FROM users WHERE id = ?
+  `).get(userId);
+
+  // Kullanıcının gönderdiği mesajlar (alınanlar hariç). Ek dosyalar (base64) mesaj metninden ayrılır; bütçe aşılırsa yalnızca metadata.
+  let mediaBudget = EXPORT_MEDIA_BUDGET_CHARS;
   const messages = db.prepare(`
-    SELECT id, content, room, to_user_id, kind, created_at
-    FROM messages WHERE user_id = ? ORDER BY id
-  `).all(userId);
+    SELECT messages.id, messages.content, messages.room, messages.hub_id, hubs.name AS hub_name, messages.to_user_id,
+           messages.kind, messages.payload, messages.edited, messages.reply_to_message_id, messages.created_at
+    FROM messages LEFT JOIN hubs ON hubs.id = messages.hub_id
+    WHERE messages.user_id = ? ORDER BY messages.id
+  `).all(userId).map((row) => {
+    const { payload, ...message } = row;
+    let light = null;
+    let attachment = null;
+
+    if (payload) {
+      try { light = JSON.parse(payload); } catch (_) { light = null; }
+      if (light && typeof light === 'object') {
+        for (const field of MEDIA_FIELDS) {
+          if (typeof light[field] === 'string' && light[field].startsWith('data:')) {
+            const data = light[field];
+            delete light[field];
+            attachment = {
+              field,
+              mime: (/^data:([^;,]+)/.exec(data) || [])[1] || null,
+              name: light.name || null,
+              size_chars: data.length
+            };
+            if (data.length <= mediaBudget) { attachment.data = data; mediaBudget -= data.length; }
+            else attachment.data_omitted = 'size_limit';
+            break;
+          }
+        }
+      }
+    }
+
+    return { ...message, payload: light, attachment };
+  });
 
   const hubs = db.prepare(`
-    SELECT hubs.id, hubs.name, hub_members.permission_tier, hub_members.joined_at
-    FROM hub_members INNER JOIN hubs ON hubs.id = hub_members.hub_id
+    SELECT hubs.id, hubs.name, hub_members.permission_tier, hub_members.joined_at,
+           hub_members.muted, hub_roles.name AS role_name
+    FROM hub_members
+    INNER JOIN hubs ON hubs.id = hub_members.hub_id
+    LEFT JOIN hub_roles ON hub_roles.id = hub_members.role_id
     WHERE hub_members.user_id = ?
   `).all(userId);
+
+  // Kullanıcının oluşturduğu lobilere ait KENDİ verisi (ayarlar, roller, sesli odalar, davet istatistikleri). Üye listesi/ban listesi
+  // başkalarının verisi olduğundan yalnızca sayı olarak verilir; davet kodları erişim sırrı olduğundan verilmez.
+  const ownedHubs = db.prepare(`
+    SELECT id, name, type, template, icon, description, image_data, created_at FROM hubs WHERE created_by = ?
+  `).all(userId).map((hub) => ({
+    ...hub,
+    member_count: db.prepare(`SELECT COUNT(*) AS c FROM hub_members WHERE hub_id = ?`).get(hub.id).c,
+    roles: db.prepare(`SELECT name, icon, slot_limit, position FROM hub_roles WHERE hub_id = ? ORDER BY position`).all(hub.id),
+    voice_rooms: db.prepare(`SELECT name, created_at FROM hub_voice_rooms WHERE hub_id = ? ORDER BY id`).all(hub.id),
+    invites: db.prepare(`SELECT created_at, max_uses, uses FROM hub_invites WHERE hub_id = ? ORDER BY id`).all(hub.id)
+  }));
 
   const friendships = db.prepare(`
     SELECT users.username, friendships.status, friendships.created_at
@@ -3119,18 +3176,63 @@ function getAccountExport(userId) {
   `).all(userId);
 
   const reportsFiled = db.prepare(`
-    SELECT target_type, target_id, reason, status, created_at FROM reports WHERE reporter_user_id = ?
+    SELECT target_type, target_id, reason, description, status, created_at FROM reports WHERE reporter_user_id = ?
   `).all(userId);
+
+  // Yalnızca KENDİ tepkileri/oyları (hangi mesaja, ne): mesaj içeriği ya da başkalarının verisi yok.
+  const reactions = db.prepare(`
+    SELECT message_id, emoji, created_at FROM message_reactions WHERE user_id = ? ORDER BY id
+  `).all(userId);
+
+  const pollVotes = db.prepare(`
+    SELECT hub_poll_votes.message_id, hub_poll_votes.option_index, messages.hub_id
+    FROM hub_poll_votes LEFT JOIN messages ON messages.id = hub_poll_votes.message_id
+    WHERE hub_poll_votes.user_id = ?
+  `).all(userId);
+
+  const feedback = db.prepare(`
+    SELECT id, title, body, created_at FROM feedback WHERE user_id = ? ORDER BY id
+  `).all(userId);
+
+  const feedbackVotes = db.prepare(`
+    SELECT feedback_id, created_at FROM feedback_votes WHERE user_id = ?
+  `).all(userId);
+
+  const notificationPreferences = db.prepare(`
+    SELECT * FROM notification_preferences WHERE user_id = ?
+  `).get(userId) || null;
+  if (notificationPreferences) delete notificationPreferences.user_id;
+
+  // Bildirim cihazları: yalnızca tür + cihaz bilgisi + kayıt zamanı. Uç nokta URL'si, anahtarlar ve FCM anahtarı GÜVENLİK SIRRIDIR, verilmez.
+  const notificationDevices = [
+    ...db.prepare(`SELECT user_agent, created_at FROM push_subscriptions WHERE user_id = ?`).all(userId).map(r => ({ type: 'web_push', ...r })),
+    ...db.prepare(`SELECT user_agent, created_at FROM fcm_tokens WHERE user_id = ?`).all(userId).map(r => ({ type: 'android_fcm', ...r }))
+  ];
 
   return {
     exported_at: new Date().toISOString(),
     profile,
+    account,
     messages,
     hub_memberships: hubs,
+    owned_hubs: ownedHubs,
     friendships,
     blocked_users: blocked,
+    reactions,
+    poll_votes: pollVotes,
+    feedback,
+    feedback_votes: feedbackVotes,
+    notification_preferences: notificationPreferences,
+    notification_devices: notificationDevices,
     sessions,
-    reports_filed: reportsFiled
+    reports_filed: reportsFiled,
+    not_included: [
+      'Başkalarından aldığın mesajların içeriği (yalnızca senin gönderdiklerin dahildir)',
+      'Başka kullanıcıların kişisel verileri (lobi üyeleri, banlananlar vb.)',
+      'Rapor kanıtları ve moderasyon/yönetim iç kayıtları',
+      'Bildirim listesi (başka kullanıcıların adlarını içerebilir)',
+      'Güvenlik sırları: parola özeti/tuzu, doğrulama ve sıfırlama kodları, oturum belirteci, push/FCM anahtarları, lobi davet kodları'
+    ]
   };
 }
 

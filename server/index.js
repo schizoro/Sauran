@@ -922,7 +922,8 @@ app.post('/api/reports', reportLimiter, (req, res) => {
     try {
       const detail = getReportDetail(result.id);
       if (detail) {
-        sendReportNotificationEmail(detail).catch((error) => {
+        // Yalnızca minimum teknik alanlar geçirilir (mesaj içeriği/kullanıcı adı/açıklama e-postaya girmez).
+        sendReportNotificationEmail({ id: detail.id, reason: detail.reason, priority: detail.priority, target_type: detail.target_type }).catch((error) => {
           console.error(`Rapor #${result.id} e-posta bildirimi gönderilemedi:`, error);
         });
       }

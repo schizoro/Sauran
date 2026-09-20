@@ -56,42 +56,42 @@ async function sendPasswordResetEmail(toEmail, code) {
 // kullanılıyor).
 const REPORT_EMAIL_TO = process.env.REPORT_EMAIL_TO || 'destek@sauran.online';
 
-function describeReportContext(report) {
-  const ctx = report.target_context;
-  if (!ctx || !ctx.exists) return 'Hedef bulunamadı (silinmiş olabilir).';
+// Rapor bildirim e-postası bilerek MİNİMUMDUR: yalnızca yeni bir rapor açıldığını, rapor numarasını, kategorisini ve önceliğini
+// bildirir ve kimlik doğrulaması gerektiren moderasyon paneline yönlendirir. Mesaj içeriği, medya, kullanıcı adı, e-posta, rapor
+// açıklaması ya da başka kullanıcı verisi İÇERMEZ: e-posta, kanıt saklama (retention) sisteminin dışında süresiz bir kopya oluşturmamalıdır.
+// HTML'e girebilen her değer sabit bir beyaz listeden (etiket tabloları) ya da tam sayıdan gelir; kullanıcıdan gelen serbest metin
+// hiçbir yerde render edilmez.
+const PANEL_URL = `${String(process.env.PUBLIC_BASE_URL || 'https://sauran.online').replace(/\/+$/, '')}/moderation.html`;
 
-  if (report.target_type === 'user') return `Kullanıcı: ${ctx.username} (#${ctx.user_id})`;
-  if (report.target_type === 'hub') return `Hub: ${ctx.hub_name} (sahibi: ${ctx.owner_username || 'bilinmiyor'})`;
-  if (report.target_type === 'voice_room') return `Sesli Oda: ${ctx.room_name} — Hub: ${ctx.hub_name || 'bilinmiyor'}`;
-  if (report.target_type === 'message') {
-    const where = ctx.context?.type === 'hub'
-      ? `Hub: ${ctx.context.hub_name || 'bilinmiyor'}`
-      : 'Özel Mesaj (DM)';
-    return `Mesaj gönderen: ${ctx.sender_username} — ${where}\nİçerik: ${String(ctx.content || '').slice(0, 200)}`;
-  }
-  return `${report.target_type} #${report.target_id}`;
-}
+const REPORT_REASON_LABELS = {
+  harassment: 'Taciz / Rahatsız Etme', threat: 'Tehdit', spam: 'Spam', scam: 'Dolandırıcılık',
+  inappropriate: 'Uygunsuz içerik', hate: 'Nefret / Ayrımcılık', child_safety: 'Çocuk güvenliği',
+  impersonation: 'Sahte hesap / Taklit', other: 'Diğer'
+};
+const REPORT_TARGET_LABELS = { message: 'İleti', user: 'Kullanıcı', hub: 'Lobi', voice_room: 'Sesli oda' };
+const REPORT_PRIORITY_LABELS = { normal: 'NORMAL', high: 'YÜKSEK', critical: 'KRİTİK' };
 
 async function sendReportNotificationEmail(report) {
-  const priorityLabel = String(report.priority || 'normal').toUpperCase();
+  const reportId = Number.parseInt(report && report.id, 10) || 0;
+  const priorityLabel = REPORT_PRIORITY_LABELS[report && report.priority] || REPORT_PRIORITY_LABELS.normal;
+  const reasonLabel = REPORT_REASON_LABELS[report && report.reason] || REPORT_REASON_LABELS.other;
+  const targetLabel = REPORT_TARGET_LABELS[report && report.target_type] || 'Diğer';
 
   await transporter.sendMail({
     to: REPORT_EMAIL_TO,
     from: MAIL_FROM,
-    subject: `[SAURAN] Yeni Rapor #${report.id} — ${priorityLabel}`,
+    subject: `[SAURAN] Yeni Rapor #${reportId} — ${priorityLabel}`,
     html: `
       <div style="font-family: 'Segoe UI', sans-serif; background: #0b0c10; color: #c5c6c7; padding: 32px; max-width: 560px; margin: auto; border-radius: 4px;">
-        <h2 style="color: #66fcf1; letter-spacing: 1px;">Yeni Moderasyon Raporu #${report.id}</h2>
+        <h2 style="color: #66fcf1; letter-spacing: 1px;">Yeni Moderasyon Raporu #${reportId}</h2>
         <table style="width:100%; border-collapse: collapse; font-size: 13px; margin-top: 16px;">
           <tr><td style="padding:4px 0; color:#45a29e;">Öncelik</td><td>${priorityLabel}</td></tr>
-          <tr><td style="padding:4px 0; color:#45a29e;">Kategori</td><td>${report.reason}</td></tr>
-          <tr><td style="padding:4px 0; color:#45a29e;">Hedef türü</td><td>${report.target_type}</td></tr>
-          <tr><td style="padding:4px 0; color:#45a29e;">Bildiren</td><td>${report.reporter_username || '(hesap silinmiş)'}</td></tr>
-          <tr><td style="padding:4px 0; color:#45a29e;">Bağlam</td><td style="white-space:pre-wrap;">${describeReportContext(report)}</td></tr>
-          <tr><td style="padding:4px 0; color:#45a29e;">Açıklama</td><td>${report.description ? String(report.description).slice(0, 300) : '—'}</td></tr>
-          <tr><td style="padding:4px 0; color:#45a29e;">Tarih</td><td>${report.created_at}</td></tr>
+          <tr><td style="padding:4px 0; color:#45a29e;">Kategori</td><td>${reasonLabel}</td></tr>
+          <tr><td style="padding:4px 0; color:#45a29e;">Hedef türü</td><td>${targetLabel}</td></tr>
         </table>
-        <p style="color: #6b7280; font-size: 12px; margin-top: 20px;">İncelemek için moderasyon paneline giriş yap.</p>
+        <p style="margin-top: 20px;">Yeni bir rapor oluşturuldu. Ayrıntılar bu e-postada yer almaz; incelemek için moderasyon paneline giriş yapın:</p>
+        <p><a href="${PANEL_URL}" style="color: #66fcf1;">${PANEL_URL}</a></p>
+        <p style="color: #6b7280; font-size: 12px; margin-top: 20px;">Panel giriş gerektirir. Bu e-posta rapor içeriği, kullanıcı adı veya açıklama içermez.</p>
       </div>
     `
   });
