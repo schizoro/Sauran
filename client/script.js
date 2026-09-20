@@ -2597,6 +2597,11 @@ if ('serviceWorker' in navigator) {
         if (event.data?.type === 'open-hub' && currentUser) {
             openHub(event.data.hubId);
         }
+
+        // Web Push bildirimi kullanıcıya/sohbete özgü bilgi taşımaz: dokununca tür bazlı genel ekran açılır.
+        if (event.data?.type === 'open-general' && currentUser) {
+            openGeneralScreenForNotificationType(event.data.notificationType);
+        }
     });
 }
 
@@ -2929,6 +2934,15 @@ window.addEventListener('pagehide', () => socket?.emit('app_visibility', { visib
 function handlePendingNotificationOpen() {
 
     const params = new URLSearchParams(location.search);
+
+    // Web Push bildirimiyle soğuk açılış: yalnızca genel tür (?notif_type=...) gelir; tür bazlı genel ekran açılır.
+    const notifType = params.get('notif_type');
+    if (notifType) {
+        history.replaceState(null, '', location.pathname);
+        openGeneralScreenForNotificationType(notifType);
+        return;
+    }
+
     const userId = Number(params.get('open_dm'));
     const hubId = Number(params.get('open_hub'));
     if (!userId && !hubId) return;
