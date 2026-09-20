@@ -87,6 +87,7 @@ const {
   saveFcmToken,
   purgeExpiredRetention,
   purgeExpiredAuthRecords,
+  purgeExpiredNotificationData,
   unlinkReportDataForDeletedUser,
   deleteAccount,
   listDueDailyRoomCleanups,
@@ -3477,6 +3478,18 @@ server.listen(PORT, () => {
   };
   runAuthCleanup();
   setInterval(runAuthCleanup, 10 * 60 * 1000).unref();
+
+  // Bildirimler ve e-posta kuyruğu (outbox): saklama süresi dolanlar açılışta ve saatte bir temizlenir (bkz. docs/bildirim-outbox-saklama-politikasi.md).
+  const runNotificationCleanup = () => {
+    try {
+      const r = purgeExpiredNotificationData();
+      if (r.notifications || r.orphan_sources || r.outbox_deleted || r.outbox_scrubbed) {
+        console.log(`Bildirim/e-posta kuyruğu temizliği: bildirim=${r.notifications}, kaynağı silinmiş bildirim=${r.orphan_sources}, kuyruk silinen=${r.outbox_deleted}, kuyruk içeriği temizlenen=${r.outbox_scrubbed}.`);
+      }
+    } catch (error) { console.error('Bildirim/kuyruk temizleme hatası:', error); }
+  };
+  runNotificationCleanup();
+  setInterval(runNotificationCleanup, 60 * 60 * 1000).unref();
 
   // Daily oda silme kuyruğu: açılışta ve 5 dakikada bir (başarısız silmeler geri çekilmeyle yeniden denenir).
   processDailyRoomCleanup().catch(() => {});

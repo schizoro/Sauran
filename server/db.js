@@ -882,6 +882,94 @@ function purgeExpiredAuthRecords(now = new Date()) {
   return result;
 }
 
+// ---- Bildirim ve e-posta kuyruğu (outbox) yaşam döngüsü ---------------------------------------------------------------------
+// Süreler GÜN ve TEKNİK VARSAYILANLARDIR; KVKK Kurumu ya da başka bir makamca belirlenmiş süreler DEĞİLDİR (bkz. docs/bildirim-outbox-saklama-politikasi.md).
+const NOTIFICATION_RETENTION_DAYS = {
+  resolved: 7,              // yanıtlanmış / kapatılmış (accepted, declined, read): kullanıcıya zaten listelenmez
+  seen: 30,                 // okunmuş ("seen") bilgilendirme bildirimi
+  pending: 60,              // okunmamış bilgilendirme bildirimi
+  pending_actionable: 90    // yanıt bekleyen arkadaşlık isteği / lobi daveti
+};
+const OUTBOX_RETENTION_DAYS = {
+  finished: 7,              // gönderilmiş / atlanmış / kalıcı başarısız: yalnızca teknik metadata, içerik yok
+  unfinished: 7             // hâlâ pending/sending: yeniden deneme penceresini (en çok 8 deneme, en çok 1 saat geri çekilme) aşan kayıt bırakılır
+};
+const DELETED_ACCOUNT_LABEL = 'Silinmiş hesap';
+
+// E-posta hata metni alıcı adresini içerebilir (ör. SMTP "Recipient address rejected: x@y.com"): saklamadan önce e-posta benzeri
+// ifadeler çıkarılır.
+function sanitizeMailError(message) {
+  return String(message == null ? '' : message).replace(/[^\s<>()"',;:]+@[^\s<>()"',;:]+/g, '[e-posta]').slice(0, 300);
+}
+
+// Silinmiş hesaba ait (kimliği artık users tablosunda olmayan) kaynaklı bildirimlerdeki ad/kimliği temizler. Yanıtlanamaz hâle gelen
+// arkadaşlık istekleri ve "kabul etti" bildirimleri silinir; yaşayan bir lobinin daveti ise işlevsel kalsın diye ad "Silinmiş hesap"
+// olarak anonimleştirilir ve kaynak kimliği kaldırılır. json_valid ile bozuk JSON'lar atlanır. Tekrar çalıştırmak zararsızdır.
+const NOTIFICATION_SOURCE_SQL = `CASE WHEN json_valid(data) THEN json_extract(data, '$.from_user_id') END`;
+function scrubNotificationsFromUsers(whereSourceSql, params) {
+  const removed = db.prepare(`
+    DELETE FROM notifications
+    WHERE type IN ('friend_request', 'friend_request_accepted') AND ${NOTIFICATION_SOURCE_SQL} ${whereSourceSql}
+  `).run(...params).changes;
+
+  const anonymized = db.prepare(`
+    UPDATE notifications
+    SET data = json_set(data, '$.from_user_id', json('null'), '$.from_username', ?)
+    WHERE json_valid(data) AND ${NOTIFICATION_SOURCE_SQL} IS NOT NULL AND ${NOTIFICATION_SOURCE_SQL} ${whereSourceSql}
+  `).run(DELETED_ACCOUNT_LABEL, ...params).changes;
+
+  return { removed, anonymized };
+}
+
+function purgeExpiredNotificationData(now = new Date()) {
+  const cut = (days) => new Date(now.getTime() - days * DAY_MS).toISOString().replace('T', ' ').slice(0, 19);
+  const actionableSql = ACTIONABLE_NOTIFICATION_TYPES.map(t => `'${t}'`).join(',');
+  const result = { notifications: 0, orphan_sources: 0, outbox_deleted: 0, outbox_scrubbed: 0 };
+
+  db.pragma('secure_delete = ON');
+  try {
+    db.transaction(() => {
+      // 1) bildirimler
+      const n = NOTIFICATION_RETENTION_DAYS;
+      result.notifications += db.prepare(`DELETE FROM notifications WHERE status NOT IN ('pending', 'seen') AND created_at <= ?`).run(cut(n.resolved)).changes;
+      result.notifications += db.prepare(`DELETE FROM notifications WHERE status = 'seen' AND created_at <= ?`).run(cut(n.seen)).changes;
+      result.notifications += db.prepare(`DELETE FROM notifications WHERE status = 'pending' AND type NOT IN (${actionableSql}) AND created_at <= ?`).run(cut(n.pending)).changes;
+      // kabul bekleyen görev bildirimi (platform_role_notice) kullanıcının rol kabul durumuna bağlıdır; süreyle silinmez.
+      result.notifications += db.prepare(`DELETE FROM notifications WHERE status = 'pending' AND type IN ('friend_request', 'hub_invite') AND created_at <= ?`).run(cut(n.pending_actionable)).changes;
+
+      // 2) hesabı artık olmayan kaynaklı bildirimler (hesap silme dışında kalmış / eski kayıtlar)
+      const orphan = scrubNotificationsFromUsers('NOT IN (SELECT id FROM users)', []);
+      result.orphan_sources = orphan.removed + orphan.anonymized;
+
+      // 3) e-posta kuyruğu: bitmiş satırlarda içerik (payload) gereksiz; hata metninden e-posta adresi çıkar
+      result.outbox_scrubbed += db.prepare(`
+        UPDATE role_notice_email_outbox SET payload = NULL WHERE status IN ('sent', 'skipped', 'failed') AND payload IS NOT NULL
+      `).run().changes;
+      db.prepare(`SELECT id, last_error FROM role_notice_email_outbox WHERE last_error LIKE '%@%'`).all().forEach((row) => {
+        db.prepare(`UPDATE role_notice_email_outbox SET last_error = ? WHERE id = ?`).run(sanitizeMailError(row.last_error), row.id);
+        result.outbox_scrubbed += 1;
+      });
+
+      // 4) yeniden denemesi bitmiş / gereksiz kalmış satırlar
+      const o = OUTBOX_RETENTION_DAYS;
+      result.outbox_deleted += db.prepare(`
+        DELETE FROM role_notice_email_outbox
+        WHERE status IN ('sent', 'skipped', 'failed') AND COALESCE(sent_at, claimed_at, created_at) <= ?
+      `).run(cut(o.finished)).changes;
+      result.outbox_deleted += db.prepare(`
+        DELETE FROM role_notice_email_outbox WHERE status IN ('pending', 'sending') AND created_at <= ?
+      `).run(cut(o.unfinished)).changes;
+    })();
+  } finally {
+    db.pragma('secure_delete = OFF');
+  }
+
+  if (result.notifications || result.orphan_sources || result.outbox_deleted || result.outbox_scrubbed) {
+    try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (_) { /* yoksay */ }
+  }
+  return result;
+}
+
 function logModerationAction(reportId, moderatorId, action, reason) {
   db.prepare(`
     INSERT INTO moderation_actions (report_id, moderator_id, action, reason) VALUES (?, ?, ?, ?)
@@ -1261,25 +1349,26 @@ function getRoleNoticeEmailTarget(userId) {
 
 function markRoleNoticeEmailSent(id) {
   db.prepare(`
-    UPDATE role_notice_email_outbox SET status = 'sent', sent_at = CURRENT_TIMESTAMP, last_error = NULL
+    UPDATE role_notice_email_outbox SET status = 'sent', sent_at = CURRENT_TIMESTAMP, last_error = NULL, payload = NULL
     WHERE id = ? AND status = 'sending'
   `).run(id);
 }
 
 function markRoleNoticeEmailSkipped(id, reason) {
   db.prepare(`
-    UPDATE role_notice_email_outbox SET status = 'skipped', last_error = ? WHERE id = ? AND status = 'sending'
-  `).run(String(reason || '').slice(0, 300), id);
+    UPDATE role_notice_email_outbox SET status = 'skipped', last_error = ?, payload = NULL WHERE id = ? AND status = 'sending'
+  `).run(sanitizeMailError(reason), id);
 }
 
 function markRoleNoticeEmailFailed(id, error) {
   const row = db.prepare(`SELECT attempts FROM role_notice_email_outbox WHERE id = ?`).get(id);
   if (!row) return;
 
-  const message = String(error?.message || error || 'bilinmeyen hata').slice(0, 300);
+  const message = sanitizeMailError(error?.message || error || 'bilinmeyen hata');
   if (row.attempts >= ROLE_EMAIL_MAX_ATTEMPTS) {
+    // Yeniden deneme bitti: içerik (payload) artık gerekli değil.
     db.prepare(`
-      UPDATE role_notice_email_outbox SET status = 'failed', last_error = ? WHERE id = ? AND status = 'sending'
+      UPDATE role_notice_email_outbox SET status = 'failed', last_error = ?, payload = NULL WHERE id = ? AND status = 'sending'
     `).run(message, id);
     return;
   }
@@ -2596,6 +2685,8 @@ function deleteAccount(userId) {
     db.prepare(`DELETE FROM friendships WHERE user_low = ? OR user_high = ?`).run(userId, userId);
     db.prepare(`DELETE FROM blocked_users WHERE user_id = ? OR blocked_user_id = ?`).run(userId, userId);
     db.prepare(`DELETE FROM notifications WHERE user_id = ?`).run(userId);
+    // Başkalarının bildirimlerinde bu hesabın adı/kimliği kalmasın (silinir ya da anonimleştirilir).
+    scrubNotificationsFromUsers('= ?', [userId]);
     db.prepare(`DELETE FROM hub_members WHERE user_id = ?`).run(userId);
     db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(userId);
 
@@ -4561,6 +4652,9 @@ module.exports = {
   saveFcmToken,
   purgeExpiredRetention,
   purgeExpiredAuthRecords,
+  purgeExpiredNotificationData,
+  NOTIFICATION_RETENTION_DAYS,
+  OUTBOX_RETENTION_DAYS,
   lifecycleLogCutoff,
   unlinkReportDataForDeletedUser,
   RETENTION_POLICY,
