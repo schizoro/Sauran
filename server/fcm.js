@@ -24,9 +24,10 @@ try {
   const credentials = readCredentials();
 
   if (credentials) {
-    const admin = require('firebase-admin');
-    const app = admin.initializeApp({ credential: admin.credential.cert(credentials) }, 'sauran-fcm');
-    messaging = admin.messaging(app);
+    const { initializeApp, cert } = require('firebase-admin/app');
+    const { getMessaging } = require('firebase-admin/messaging');
+    const app = initializeApp({ credential: cert(credentials) }, 'sauran-fcm');
+    messaging = getMessaging(app);
     configured = true;
     console.log(`FCM açık (proje: ${credentials.project_id || 'bilinmiyor'}).`);
   } else {
