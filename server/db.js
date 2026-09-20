@@ -2923,6 +2923,7 @@ function enqueueDmCallRoomsForDeletedUser(userId) {
 function deleteAccount(userId) {
   const run = db.transaction(() => {
     unlinkReportDataForDeletedUser(userId);
+    anonymizeAuditLogForDeletedUser(userId);
 
     const owned = db.prepare(`SELECT id FROM hubs WHERE created_by = ?`).all(userId);
     const purgedHubs = owned.map(h => purgeHubData(h.id));
@@ -4362,6 +4363,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_admin_audit_actor ON admin_audit_log(actor_user_id);
   CREATE INDEX IF NOT EXISTS idx_admin_audit_action ON admin_audit_log(action);
 
+`);
+
+const AUDIT_TRIGGERS_SQL = `
   CREATE TRIGGER IF NOT EXISTS admin_audit_log_no_update
   BEFORE UPDATE ON admin_audit_log
   BEGIN SELECT RAISE(ABORT, 'admin_audit_log is append-only'); END;
@@ -4369,11 +4373,27 @@ db.exec(`
   CREATE TRIGGER IF NOT EXISTS admin_audit_log_no_delete
   BEFORE DELETE ON admin_audit_log
   BEGIN SELECT RAISE(ABORT, 'admin_audit_log is append-only'); END;
-`);
+`;
+db.exec(AUDIT_TRIGGERS_SQL);
+
+// SAKLAMA (TEKNİK VARSAYILAN — KVKK/hukuk tarafından BELİRLENMİŞ bir süre DEĞİLDİR; yayın öncesi hukuki onay gerekir):
+// - reason (iç yönetim gerekçesi, serbest metin) 90 gün sonra silinir (satırın kendisi kalır); olay/zaman/rol-durum değerleri duruyor.
+// - satırın kendisi 365 gün sonra silinir (kötüye kullanım/itiraz incelemesi için makul bir pencere olarak seçildi).
+// Bu, uygulama düzeyinde append-only tetikleyicilerin YALNIZCA bu bakım fonksiyonlarında (tek transaction'da) geçici kaldırılmasıyla yapılır.
+const AUDIT_REASON_RETENTION_DAYS = 90;
+const AUDIT_RETENTION_DAYS = 365;
+
+// Tetikleyicileri aynı transaction içinde kaldırır, işi yapar, geri kurar; hata olursa DDL de geri alınır.
+function withAuditMaintenance(fn) {
+  return db.transaction(() => {
+    db.exec(`DROP TRIGGER IF EXISTS admin_audit_log_no_update; DROP TRIGGER IF EXISTS admin_audit_log_no_delete;`);
+    try { return fn(); } finally { db.exec(AUDIT_TRIGGERS_SQL); }
+  })();
+}
 
 const AUDIT_ACTIONS = ['platform_role_changed', 'platform_role_accepted', 'platform_role_declined', 'account_suspended', 'account_unsuspended'];
-const AUDIT_REASON_MAX = 500;
-const AUDIT_VALUE_MAX = 100;
+const AUDIT_REASON_MAX = 200;
+const AUDIT_VALUE_MAX = 40;
 const AUDIT_MAX_LIMIT = 50;
 
 // Bir yazma işleminin içinde (db.transaction ile) çağrılmak üzere tasarlandı:
@@ -4389,6 +4409,16 @@ function writeAuditLog({ actorUserId, action, targetUserId, reason, oldValue, ne
 
   const clip = (v, max) => (v == null ? null : String(v).slice(0, max));
 
+  // Serbest metin gerekçeden kişisel veri kalıntıları maskelenir (e-posta, URL, IP, uzun token benzeri diziler).
+  const scrubReason = (v) => v == null ? null : String(v)
+    .replace(/[^\s@]+@[^\s@]+\.[^\s@]+/g, '[gizlendi]')
+    .replace(/https?:\/\/\S+/gi, '[gizlendi]')
+    .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, '[gizlendi]')
+    .replace(/\b[A-Za-z0-9_\-]{32,}\b/g, '[gizlendi]');
+
+  // old/new değerler yalnızca kısa teknik etiketler olabilir (rol, durum, sürüm); başka her şey kaydedilmez.
+  const label = (v) => (v != null && /^[A-Za-z0-9_.\-]{1,40}$/.test(String(v))) ? String(v) : null;
+
   const info = db.prepare(`
     INSERT INTO admin_audit_log (actor_user_id, action, target_user_id, reason, old_value, new_value, report_id)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -4396,13 +4426,42 @@ function writeAuditLog({ actorUserId, action, targetUserId, reason, oldValue, ne
     actorUserId,
     action,
     targetUserId,
-    clip(reason, AUDIT_REASON_MAX),
-    clip(oldValue, AUDIT_VALUE_MAX),
-    clip(newValue, AUDIT_VALUE_MAX),
+    clip(scrubReason(reason), AUDIT_REASON_MAX),
+    label(oldValue),
+    label(newValue),
     Number.isInteger(reportId) ? reportId : null
   );
 
   return info.lastInsertRowid;
+}
+
+// Süresi dolan audit kayıtlarını temizler: önce serbest metin gerekçeler, sonra satırların kendisi. Açılışta ve günde bir çağrılır.
+function purgeExpiredAuditLog(now = new Date()) {
+  const fmt = (days) => new Date(now.getTime() - days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+  const reasonCutoff = fmt(AUDIT_REASON_RETENTION_DAYS);
+  const rowCutoff = fmt(AUDIT_RETENTION_DAYS);
+
+  db.pragma('secure_delete = ON');
+  try {
+    return withAuditMaintenance(() => ({
+      reasons: db.prepare(`UPDATE admin_audit_log SET reason = NULL WHERE reason IS NOT NULL AND created_at < ?`).run(reasonCutoff).changes,
+      rows: db.prepare(`DELETE FROM admin_audit_log WHERE created_at < ?`).run(rowCutoff).changes
+    }));
+  } finally {
+    db.pragma('secure_delete = OFF');
+  }
+}
+
+// Hesap silinince o hesabı gösteren audit bağlantıları kaldırılır (hesap silme transaction'ı İÇİNDE çağrılır). Diğer taraf (ör. işlemi yapan
+// yönetici) hesap verebilirlik için kalır; serbest metin gerekçe de silinir. İki tarafı da silinen hesap olan (kendi kabul/ret) kayıtlar bilgi taşımaz, silinir.
+function anonymizeAuditLogForDeletedUser(userId) {
+  return withAuditMaintenance(() => {
+    const touched = db.prepare(`SELECT COUNT(*) AS c FROM admin_audit_log WHERE actor_user_id = ? OR target_user_id = ?`).get(userId, userId).c;
+    if (!touched) return 0;
+    db.prepare(`UPDATE admin_audit_log SET actor_user_id = NULLIF(actor_user_id, ?), target_user_id = NULLIF(target_user_id, ?), reason = NULL WHERE actor_user_id = ? OR target_user_id = ?`).run(userId, userId, userId, userId);
+    db.prepare(`DELETE FROM admin_audit_log WHERE actor_user_id IS NULL AND target_user_id IS NULL`).run();
+    return touched;
+  });
 }
 
 function nextDayStart(dateStr) {
@@ -4923,6 +4982,9 @@ module.exports = {
   saveFcmToken,
   purgeExpiredRetention,
   purgeExpiredAuthRecords,
+  purgeExpiredAuditLog,
+  AUDIT_REASON_RETENTION_DAYS,
+  AUDIT_RETENTION_DAYS,
   hashLegacyPlaintextAuthCodes,
   purgeExpiredNotificationData,
   listDeletedDmThreads,

@@ -87,6 +87,7 @@ const {
   saveFcmToken,
   purgeExpiredRetention,
   purgeExpiredAuthRecords,
+  purgeExpiredAuditLog,
   purgeExpiredNotificationData,
   listDeletedDmThreads,
   getDeletedDmMessages,
@@ -3511,6 +3512,16 @@ server.listen(PORT, () => {
   };
   runEvidencePurge();
   setInterval(runEvidencePurge, 24 * 60 * 60 * 1000).unref();
+
+  // Admin audit log saklama temizliği (açılışta ve günde bir): eski serbest metin gerekçeler ve süresi dolan kayıtlar silinir.
+  const runAuditPurge = () => {
+    try {
+      const purged = purgeExpiredAuditLog();
+      if (purged.reasons || purged.rows) console.log(`Audit log temizliği: gerekçe=${purged.reasons}, kayıt=${purged.rows}.`);
+    } catch (error) { console.error('Audit log temizleme hatası:', error); }
+  };
+  runAuditPurge();
+  setInterval(runAuditPurge, 24 * 60 * 60 * 1000).unref();
 
   // Süresi dolmuş doğrulama kodları, şifre sıfırlama kodları ve oturumlar: açılışta (yeniden başlatma sonrası birikmiş kayıtlar) ve
   // 10 dakikada bir silinir. Yalnızca süresi dolmuş satırlar etkilenir; hata olursa uygulamanın çalışmasını etkilemez.
