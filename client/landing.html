@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sauran — Sesli Sohbet ve Topluluk Uygulaması</title>
+    <meta name="description" content="Sauran, arkadaşlarınla sesli odalarda buluşabileceğin, özel mesajlaşabileceğin ve kendi topluluğunu kurabileceğin modern bir sohbet uygulamasıdır. Resmi site.">
+    <link rel="canonical" href="https://sauran.online/">
+    <meta name="robots" content="index, follow">
+    <meta name="theme-color" content="#0d0f14">
+
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icons/icon.svg">
+
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Sauran">
+    <meta property="og:locale" content="tr_TR">
+    <meta property="og:title" content="Sauran — Sesli Sohbet ve Topluluk Uygulaması">
+    <meta property="og:description" content="Sesli odalar, özel mesajlar ve topluluklar. Sauran'ın resmi sitesi.">
+    <meta property="og:url" content="https://sauran.online/">
+    <meta property="og:image" content="https://sauran.online/icons/icon.svg">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Sauran — Sesli Sohbet ve Topluluk Uygulaması">
+    <meta name="twitter:description" content="Sesli odalar, özel mesajlar ve topluluklar. Sauran'ın resmi sitesi.">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        { "@type": "WebSite", "name": "Sauran", "alternateName": "Sauran Online", "url": "https://sauran.online/", "inLanguage": "tr" },
+        { "@type": "Organization", "name": "Sauran", "url": "https://sauran.online/", "logo": "https://sauran.online/icons/icon.svg" },
+        { "@type": "WebApplication", "name": "Sauran", "url": "https://sauran.online/app", "applicationCategory": "SocialNetworkingApplication", "operatingSystem": "Web, Android" }
+      ]
+    }
+    </script>
+
+    <style>
+        :root { --bg:#0d0f14; --text:#eef0f3; --muted:#9aa0ac; --accent:#66fcf1; --accent2:#b366f5; --line:rgba(255,255,255,.12); }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        html { scroll-behavior:smooth; }
+        body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,-apple-system,Roboto,sans-serif; line-height:1.55; min-height:100vh; overflow-x:hidden; }
+        a { color:inherit; text-decoration:none; }
+
+        .orb { position:fixed; border-radius:50%; filter:blur(90px); opacity:.5; pointer-events:none; z-index:0; }
+        .orb.o1 { width:480px; height:480px; background:#1fb7ad; top:-140px; left:-120px; }
+        .orb.o2 { width:520px; height:520px; background:#6a2fc0; bottom:-180px; right:-140px; }
+        .orb.o3 { width:300px; height:300px; background:#2a5bd7; top:45%; left:55%; opacity:.28; }
+
+        .wrap { position:relative; z-index:1; max-width:1080px; margin:0 auto; padding:0 20px; }
+
+        .glass { background:rgba(255,255,255,.06); border:1px solid var(--line); border-radius:22px;
+                 -webkit-backdrop-filter:blur(22px) saturate(140%); backdrop-filter:blur(22px) saturate(140%);
+                 box-shadow:0 8px 32px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.12); }
+
+        nav { display:flex; align-items:center; justify-content:space-between; padding:18px 0; }
+        .brand { display:flex; align-items:center; gap:10px; font-weight:700; font-size:1.2rem; letter-spacing:.3px; }
+        .brand img { width:34px; height:34px; border-radius:10px; }
+        .nav-links { display:flex; gap:10px; align-items:center; }
+
+        .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:12px 22px; border-radius:14px; font-weight:600; font-size:1rem;
+               border:1px solid var(--line); background:rgba(255,255,255,.07); color:var(--text); cursor:pointer; transition:transform .15s, background .15s; }
+        .btn:hover { transform:translateY(-2px); background:rgba(255,255,255,.12); }
+        .btn.primary { background:linear-gradient(135deg,#66fcf1,#3fd0c6); color:#06201e; border-color:transparent; box-shadow:0 6px 24px rgba(102,252,241,.3); }
+        .btn.primary:hover { background:linear-gradient(135deg,#8afff6,#55ddd3); }
+        .btn.sm { padding:8px 16px; font-size:.92rem; border-radius:12px; }
+
+        .hero { text-align:center; padding:70px 0 60px; }
+        .pill { display:inline-block; padding:6px 14px; border-radius:999px; font-size:.85rem; color:var(--accent); background:rgba(102,252,241,.1); border:1px solid rgba(102,252,241,.25); margin-bottom:22px; }
+        h1 { font-size:clamp(2.4rem,7vw,4.4rem); line-height:1.08; font-weight:800; letter-spacing:-1px; }
+        h1 span { background:linear-gradient(120deg,var(--accent),var(--accent2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+        .lead { max-width:600px; margin:22px auto 0; color:var(--muted); font-size:1.15rem; }
+        .cta { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:34px; }
+        .hint { margin-top:14px; font-size:.85rem; color:var(--muted); }
+
+        .features { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; padding:20px 0 60px; }
+        .card { padding:26px; }
+        .card .ic { font-size:1.8rem; margin-bottom:12px; }
+        .card h3 { font-size:1.1rem; margin-bottom:6px; }
+        .card p { color:var(--muted); font-size:.95rem; }
+
+        .band { text-align:center; padding:38px 24px; margin-bottom:50px; }
+        .band h2 { font-size:clamp(1.5rem,4vw,2.2rem); margin-bottom:10px; }
+        .band p { color:var(--muted); max-width:560px; margin:0 auto 22px; }
+
+        .trust { padding:10px 0 50px; }
+        .trust h2 { font-size:clamp(1.5rem,4vw,2.2rem); text-align:center; }
+        .trust-lead { text-align:center; color:var(--muted); max-width:640px; margin:10px auto 24px; }
+        .chips { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-bottom:24px; }
+        .chip { padding:10px 16px; border-radius:999px; font-size:.92rem; border:1px solid var(--line); background:rgba(255,255,255,.07); transition:background .15s, border-color .15s; }
+        .chip:hover { background:rgba(102,252,241,.14); border-color:rgba(102,252,241,.4); }
+        .panels { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr)); gap:14px; align-items:start; }
+        .panel { padding:0; overflow:hidden; scroll-margin-top:16px; }
+        .panel:target { border-color:rgba(102,252,241,.5); }
+        .panel summary { cursor:pointer; padding:18px 22px; font-weight:600; font-size:1.05rem; list-style:none; display:flex; justify-content:space-between; gap:10px; }
+        .panel summary::-webkit-details-marker { display:none; }
+        .panel summary::after { content:'+'; color:var(--accent); font-size:1.4rem; line-height:1; }
+        .panel[open] summary::after { content:'–'; }
+        .panel ul { list-style:none; padding:0 22px 6px; }
+        .panel li { position:relative; padding:0 0 10px 18px; color:var(--muted); font-size:.95rem; }
+        .panel li::before { content:''; position:absolute; left:0; top:.6em; width:7px; height:7px; border-radius:50%; background:var(--accent); opacity:.8; }
+        .panel li strong { color:var(--text); }
+        .panel .note, .panel .more { display:inline-block; padding:0 22px 18px; font-size:.9rem; color:var(--muted); }
+        .panel .note a, .panel li a { color:var(--accent); }
+        .panel .more { color:var(--accent); }
+        .panel .more:hover { text-decoration:underline; }
+
+        footer { text-align:center; color:var(--muted); font-size:.88rem; padding:10px 0 40px; }
+        footer .fl { display:flex; gap:18px; justify-content:center; flex-wrap:wrap; margin-bottom:10px; }
+        footer a:hover { color:var(--accent); }
+
+        @media (max-width:520px) { .nav-links .btn:not(.primary) { display:none; } .hero { padding-top:44px; } }
+        @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } .btn { transition:none; } }
+    </style>
+</head>
+<body>
+    <div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div>
+
+    <div class="wrap">
+        <nav>
+            <a class="brand" href="/"><img src="icons/icon.svg" alt="Sauran logosu" width="34" height="34">Sauran</a>
+            <div class="nav-links">
+                <a class="btn sm" href="/app">Giriş Yap</a>
+                <a class="btn sm primary" href="/app#kayit">Kayıt Ol</a>
+            </div>
+        </nav>
+
+        <header class="hero">
+            <span class="pill">Resmi Sauran sitesi</span>
+            <h1>Sesin, <span>topluluğun</span>,<br>tek yerde.</h1>
+            <p class="lead">Sauran; arkadaşlarınla sesli odalarda buluşabildiğin, özel mesajlaşabildiğin ve kendi topluluğunu kurabildiğin modern bir sohbet uygulaması.</p>
+            <div class="cta">
+                <a class="btn primary" href="/app">Sauran'ı Kullan</a>
+                <a class="btn" href="/app">Giriş Yap</a>
+                <a class="btn" href="/app#kayit">Kayıt Ol</a>
+            </div>
+            <p class="hint">Tarayıcıdan hemen kullan · Android uygulaması da mevcut</p>
+        </header>
+
+        <section class="features" aria-label="Özellikler">
+            <article class="glass card"><div class="ic">🎙️</div><h3>Sesli odalar</h3><p>Topluluğunla tek tıkla sesli odaya katıl; konuşmak hiç bu kadar kolay olmamıştı.</p></article>
+            <article class="glass card"><div class="ic">💬</div><h3>Özel mesajlar</h3><p>Arkadaşlarınla birebir yaz, sesli mesaj gönder, doğrudan ara.</p></article>
+            <article class="glass card"><div class="ic">🏠</div><h3>Kendi topluluğun</h3><p>Lobi kur, roller ver, kuralları sen belirle. Herkes için düzenli bir alan.</p></article>
+            <article class="glass card"><div class="ic">🔔</div><h3>Bildirimler</h3><p>Mesaj ve aramalardan haberdar ol; uygulama kapalıyken bile.</p></article>
+        </section>
+
+        <section class="trust" id="guven" aria-labelledby="guven-baslik">
+            <h2 id="guven-baslik">Gizlilik ve güvenliğe verdiğimiz önem</h2>
+            <p class="trust-lead">Sauran'ı, verini gereksiz yere toplamadan ve seni kontrolde tutarak tasarlıyoruz. Aşağıda yalnızca bugün uygulamada gerçekten bulunan önlemleri anlatıyoruz.</p>
+
+            <div class="chips" role="navigation" aria-label="Gizlilik ve güvenlik bölümleri">
+                <a class="chip" href="#s-gizlilik">🔒 Gizlilik ve Veri Koruma</a>
+                <a class="chip" href="#s-guvenlik">🛡️ Güvenlik</a>
+                <a class="chip" href="#s-haklar">🧾 Kullanıcı Hakları</a>
+                <a class="chip" href="#s-topluluk">🤝 Topluluk ve Güvenli İletişim</a>
+                <a class="chip" href="#s-kvkk">📄 KVKK</a>
+                <a class="chip" href="#s-kosullar">📜 Kullanım Koşulları</a>
+                <a class="chip" href="#s-destek">💌 Destek</a>
+            </div>
+
+            <div class="panels">
+                <details class="glass panel" id="s-gizlilik">
+                    <summary>🔒 Gizlilik ve Veri Koruma</summary>
+                    <ul>
+                        <li>Yalnızca hizmeti sunmak için gereken bilgileri işleriz: kullanıcı adı, e-posta, şifre, yaş doğrulaması için doğum tarihi, profil bilgilerin ve gönderdiğin içerikler.</li>
+                        <li>Şifren düz metin olarak saklanmaz; tuzlanmış ve özetlenmiş (hash) hâlde tutulur.</li>
+                        <li>IP adresini veritabanımızda kalıcı olarak saklamayız; yalnızca kötüye kullanımı önleyen hız sınırlaması için anlık olarak bellekte kullanılır.</li>
+                        <li>Sesli görüşmelerin ses akışı Sauran veritabanında saklanmaz. Sesli oda altyapısı için üçüncü taraf bir sağlayıcı (Daily.co) kullanılır.</li>
+                        <li>Profil görünürlüğünü sen belirlersin; 13–17 yaş arası hesaplarda varsayılan görünürlük daha kısıtlıdır.</li>
+                    </ul>
+                    <a class="more" href="/gizlilik-politikasi.html">Gizlilik Politikası'nın tamamı →</a>
+                </details>
+
+                <details class="glass panel" id="s-guvenlik">
+                    <summary>🛡️ Güvenlik</summary>
+                    <ul>
+                        <li>Kayıt sırasında e-postana gönderilen doğrulama kodu istenir; şifre sıfırlama da e-posta üzerinden yapılır.</li>
+                        <li>Oturum belirteçleri rastgele üretilir ve veritabanında yalnızca özet (hash) hâliyle tutulur; çerez tarayıcı komutlarından okunamaz (HttpOnly) ve oturumlar süreli olarak sona erer.</li>
+                        <li>Giriş, kayıt, şifre sıfırlama, arkadaşlık isteği, dosya gönderimi, rapor ve mesaj gönderimi için hız sınırları uygulanır; bu, deneme-yanılma ve spam saldırılarını zorlaştırır.</li>
+                        <li>Açık oturumlarını görebilir, tek tek ya da hepsini kapatabilir, şifreni değiştirebilirsin.</li>
+                        <li>Askıya alınan hesaplar oturum açamaz. Yönetim ve moderasyon araçlarına yalnızca yetkilendirilmiş roller erişebilir.</li>
+                    </ul>
+                    <p class="note">Hiçbir sistem için mutlak güvenlik garanti edilemez; bir güvenlik sorunu fark edersen <a href="mailto:destek@sauran.online">destek@sauran.online</a> adresine yazmanı rica ederiz.</p>
+                </details>
+
+                <details class="glass panel" id="s-haklar">
+                    <summary>🧾 Kullanıcı Hakları</summary>
+                    <ul>
+                        <li><strong>Verilerimi İndir:</strong> Ayarlar'dan profil, mesaj, lobi üyeliği, arkadaşlık, engelleme ve oturum bilgilerinin bir kopyasını JSON olarak indirebilirsin.</li>
+                        <li><strong>Hesabımı Sil:</strong> Ayarlar'dan hesabını kalıcı olarak silebilirsin; hesabın, mesajların, arkadaşlıkların, üyeliklerin ve oturumların silinir. Bu işlem geri alınamaz.</li>
+                        <li>Profil görünürlüğünü, bildirim tercihlerini ve engellediğin kişileri kendin yönetirsin.</li>
+                        <li>Düzeltme gibi diğer veri talepleri için destek adresimize yazabilirsin.</li>
+                    </ul>
+                </details>
+
+                <details class="glass panel" id="s-topluluk">
+                    <summary>🤝 Topluluk ve Güvenli İletişim</summary>
+                    <ul>
+                        <li>Mesaj, kullanıcı, lobi veya sesli odayı 🚩 Bildir ile raporlayabilirsin: taciz, tehdit, spam, dolandırıcılık, uygunsuz içerik, nefret söylemi, çocuk güvenliği, sahte hesap ve diğer.</li>
+                        <li>Raporlar yetkili moderasyon ekibi tarafından insan gözüyle incelenir. Çocuk güvenliği raporları otomatik olarak yüksek öncelikle işaretlenir. Otomatik içerik tespit sistemimiz yoktur.</li>
+                        <li>İhlaller ciddiyetine göre uyarı, geçici kısıtlama, hesap dondurma veya kalıcı kapatma ile sonuçlanabilir. Bir rapor tek başına otomatik ceza anlamına gelmez.</li>
+                        <li>İstemediğin kişileri engelleyebilirsin. Sauran'ı kullanmak için en az 13 yaşında olmak gerekir.</li>
+                    </ul>
+                    <a class="more" href="/topluluk-kurallari.html">Topluluk Kuralları →</a> · <a class="more" href="/cocuk-guvenligi.html">Çocuk Güvenliği →</a>
+                </details>
+
+                <details class="glass panel" id="s-kvkk">
+                    <summary>📄 KVKK</summary>
+                    <ul>
+                        <li>Hangi kişisel verilerin hangi amaçla işlendiğini, saklandığını ve haklarını "Gizlilik Politikası ve KVKK Aydınlatma Metni" sayfamızda okuyabilirsin.</li>
+                        <li>Metin, uygulamanın mevcut veri işleme uygulamalarına göre hazırlanmıştır; şu an taslak sürümdür ve kesin hukuki uygunluk beyanı değildir.</li>
+                        <li>KVKK kapsamındaki başvurularını <a href="mailto:destek@sauran.online">destek@sauran.online</a> adresine iletebilirsin.</li>
+                    </ul>
+                    <a class="more" href="/gizlilik-politikasi.html">KVKK Aydınlatma Metni →</a>
+                </details>
+
+                <details class="glass panel" id="s-kosullar">
+                    <summary>📜 Kullanım Koşulları</summary>
+                    <ul>
+                        <li>Sauran'ı kullanmak için en az 13 yaşında olmalısın; hesabının güvenliği senin sorumluluğundadır.</li>
+                        <li>Taciz, tehdit, nefret söylemi, spam, dolandırıcılık, kimlik taklidi ve çocuk istismarı içeren davranışlar yasaktır.</li>
+                        <li>Hesabını dilediğin zaman silebilirsin.</li>
+                    </ul>
+                    <a class="more" href="/kullanim-sartlari.html">Kullanım Koşulları'nın tamamı →</a>
+                </details>
+
+                <details class="glass panel" id="s-destek">
+                    <summary>💌 Destek</summary>
+                    <ul>
+                        <li>Hesap sorunları, gizlilik talepleri, güvenlik bildirimleri ve şikayetler için tek adres: <a href="mailto:destek@sauran.online">destek@sauran.online</a>.</li>
+                        <li>Küçük bir ekibiz; talepleri makul sürede yanıtlamaya çalışırız, kesin yanıt süresi taahhüt etmeyiz.</li>
+                        <li>Acil bir tehlike varsa uygulama içi bildirimi beklemeden yerel acil durum hatlarını ara.</li>
+                    </ul>
+                    <a class="more" href="/destek.html">Destek sayfası →</a>
+                </details>
+            </div>
+        </section>
+
+        <section class="glass band">
+            <h2>Hazırsan başlayalım.</h2>
+            <p>Hesap oluşturmak birkaç saniye sürer. Zaten hesabın varsa kaldığın yerden devam et.</p>
+            <div class="cta" style="margin-top:0">
+                <a class="btn primary" href="/app#kayit">Kayıt Ol</a>
+                <a class="btn" href="/app">Giriş Yap</a>
+            </div>
+        </section>
+
+        <footer>
+            <div class="fl">
+                <a href="/kullanim-sartlari.html">Kullanım Şartları</a>
+                <a href="/gizlilik-politikasi.html">Gizlilik Politikası</a>
+                <a href="/topluluk-kurallari.html">Topluluk Kuralları</a>
+                <a href="/cocuk-guvenligi.html">Çocuk Güvenliği</a>
+                <a href="/destek.html">Destek</a>
+            </div>
+            © Sauran · sauran.online
+        </footer>
+    </div>
+
+    <script>
+        // Ana ekran uygulaması (PWA) veya yerel uygulama açılışında tanıtım sayfası atlanır.
+        // Bölüm düğmesine basılınca ilgili panel açılır.
+        (function () {
+            function openFromHash() {
+                var el = location.hash && document.querySelector(location.hash);
+                if (el && el.tagName === 'DETAILS') el.open = true;
+            }
+            addEventListener('hashchange', openFromHash);
+            openFromHash();
+        })();
+
+        (function () {
+            try {
+                var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+                var native = window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform();
+                if (standalone || native) location.replace('/app' + location.search);
+            } catch (e) { /* yoksay */ }
+        })();
+    </script>
+</body>
+</html>

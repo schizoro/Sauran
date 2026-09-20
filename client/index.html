@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sauran</title>
+    <meta name="robots" content="noindex">
 
     <!-- PWA / iOS "Ana Ekrana Ekle" desteği (AŞAMA 2) -->
     <link rel="manifest" href="manifest.json">
@@ -1560,6 +1561,10 @@
     </div>
 
     <script src="script.js"></script>
+    <script>
+        // Tanıtım sayfasındaki "Kayıt Ol" bağlantısı (/app#kayit) doğrudan kayıt formunu açar.
+        if (location.hash === '#kayit') { const b = document.getElementById('show-register-btn'); if (b) b.click(); }
+    </script>
 
 </body>
 </html>

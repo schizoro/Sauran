@@ -245,6 +245,27 @@ function isSocketMessageRateLimited(socket) {
   socket.data.msgTimestamps.push(now);
   return false;
 }
+// Tanıtım sayfası (landing) ve uygulama ayrımı:
+//  - /app : uygulamanın kendisi (giriş/kayıt dahil), eskisi gibi çalışır.
+//  - /    : oturumu olan kullanıcı, Android WebView ya da bildirimle açılış -> uygulama (mevcut davranış korunur);
+//           diğer herkes (arama motorları dahil) -> herkese açık tanıtım sayfası.
+const CLIENT_DIR = path.join(__dirname, '..', 'client');
+
+app.get('/app', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.sendFile(path.join(CLIENT_DIR, 'index.html'));
+});
+
+app.get('/', (req, res) => {
+  const hasSession = /(?:^|;\s*)sauran_session=/.test(req.headers.cookie || '');
+  const isNativeWebView = /;\s*wv\)/.test(req.headers['user-agent'] || '');
+  const opensChat = 'open_dm' in req.query || 'open_hub' in req.query;
+
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Vary', 'Cookie, User-Agent');
+  res.sendFile(path.join(CLIENT_DIR, hasSession || isNativeWebView || opensChat ? 'index.html' : 'landing.html'));
+});
+
 app.use(express.static(path.join(__dirname, '..', 'client'), {
   etag: false,
   lastModified: false,
@@ -372,10 +393,6 @@ function clearSessionCookie(res) {
 // =====================================================
 // ANA SAYFA
 // =====================================================
-
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'client', 'index.html'));
-});
 
 // =====================================================
 // KAYIT (YENİ)

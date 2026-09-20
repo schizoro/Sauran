@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /app
+Disallow: /api/
+Disallow: /admin.html
+Disallow: /moderation.html
+
+Sitemap: https://sauran.online/sitemap.xml
