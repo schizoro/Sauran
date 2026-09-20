@@ -2978,6 +2978,55 @@ function listPushSubscriptions(userId) {
   return db.prepare(`SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?`).all(userId);
 }
 
+// ---- Android uygulaması (FCM) cihaz anahtarları --------------------------------
+// Web Push abonelikleriyle (push_subscriptions) AYRI tutulur; ikisi birbirini etkilemez.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS fcm_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    token TEXT NOT NULL UNIQUE,
+    user_agent TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_fcm_tokens_user ON fcm_tokens(user_id);
+`);
+
+const MAX_FCM_TOKENS_PER_USER = 10;
+
+function saveFcmToken(userId, token, userAgent) {
+  if (typeof token !== 'string' || token.length < 20 || token.length > 4096 || /\s/.test(token)) {
+    return { success: false, error: 'Geçersiz cihaz anahtarı.' };
+  }
+
+  // Aynı cihaz başka bir hesapla giriş yaptıysa anahtar yeni hesaba geçer.
+  db.prepare(`
+    INSERT INTO fcm_tokens (user_id, token, user_agent) VALUES (?, ?, ?)
+    ON CONFLICT(token) DO UPDATE SET user_id = excluded.user_id, user_agent = excluded.user_agent
+  `).run(userId, token, String(userAgent || '').slice(0, 300));
+
+  db.prepare(`
+    DELETE FROM fcm_tokens WHERE user_id = ? AND id NOT IN (
+      SELECT id FROM fcm_tokens WHERE user_id = ? ORDER BY id DESC LIMIT ?
+    )
+  `).run(userId, userId, MAX_FCM_TOKENS_PER_USER);
+
+  return { success: true };
+}
+
+function removeFcmToken(token, userId) {
+  if (userId) {
+    db.prepare(`DELETE FROM fcm_tokens WHERE token = ? AND user_id = ?`).run(token, userId);
+  } else {
+    db.prepare(`DELETE FROM fcm_tokens WHERE token = ?`).run(token);
+  }
+}
+
+function listFcmTokens(userId) {
+  return db.prepare(`SELECT token FROM fcm_tokens WHERE user_id = ?`).all(userId).map(row => row.token);
+}
+
 // =====================================================
 // ÖNERİ / GERİ BİLDİRİM PANOSU
 // =====================================================
@@ -3840,6 +3889,9 @@ module.exports = {
   savePushSubscription,
   removePushSubscription,
   listPushSubscriptions,
+  saveFcmToken,
+  removeFcmToken,
+  listFcmTokens,
   createFeedback,
   listFeedback,
   voteFeedback,

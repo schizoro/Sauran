@@ -45,6 +45,9 @@ public class SauranNotifyPlugin extends Plugin {
 
     @PluginMethod
     public void requestPermission(PluginCall call) {
+        // FCM bildirimleri "sauran_messages" kanalını kullanır; uygulama kapalıyken gelen ilk bildirimden önce oluşsun.
+        createChannel(getContext());
+
         if (Build.VERSION.SDK_INT >= 33 && getPermissionState("notifications") != PermissionState.GRANTED) {
             requestPermissionForAlias("notifications", call, "onPermissionResult");
             return;

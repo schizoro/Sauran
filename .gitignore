@@ -17,3 +17,6 @@ mobile/android/capacitor-cordova-android-plugins/build/
 mobile/android/app/release/
 *.keystore
 *.jks
+
+# Firebase istemci yapılandırması (proje/API kimlikleri) — depoya konmaz
+mobile/android/app/google-services.json

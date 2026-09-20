@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail } = require('./mailer');
 const push = require('./push');
+const fcm = require('./fcm');
 const daily = require('./daily');
 const express = require('express');
 const http = require('http');
@@ -83,6 +84,9 @@ const {
   savePushSubscription,
   removePushSubscription,
   listPushSubscriptions,
+  saveFcmToken,
+  removeFcmToken,
+  listFcmTokens,
   createFeedback,
   listFeedback,
   voteFeedback,
@@ -929,6 +933,24 @@ app.post('/api/push/subscribe', (req, res) => {
 
   const result = savePushSubscription(user.id, req.body?.subscription, req.headers['user-agent']);
   return res.status(result.success ? 200 : 400).json(result);
+});
+
+// Android uygulaması (FCM): cihaz anahtarını kaydet / kaldır. Web Push'tan ayrıdır.
+app.post('/api/fcm/register', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const result = saveFcmToken(user.id, req.body?.token, req.headers['user-agent']);
+  // delivery: sunucu tarafında FCM gerçekten yapılandırılmış mı (istemci yerel bildirimi buna göre bırakır).
+  return res.status(result.success ? 200 : 400).json({ ...result, delivery: fcm.isConfigured() });
+});
+
+app.post('/api/fcm/unregister', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  if (typeof req.body?.token === 'string') removeFcmToken(req.body.token, user.id);
+  return res.json({ success: true });
 });
 
 app.post('/api/push/unsubscribe', (req, res) => {
@@ -2237,7 +2259,9 @@ function userHasVisibleSocket(userId) {
 
 async function dispatchWebPush(userId, type, payload) {
 
-  if (!push.isConfigured()) return;
+  const webPushOn = push.isConfigured();
+  const fcmOn = fcm.isConfigured();
+  if (!webPushOn && !fcmOn) return;
 
   // Askıdaki (veya artık var olmayan) hesabın cihazlarına — mesaj önizlemesi dahil —
   // hiçbir bildirim gönderilmez. Abonelik satırları silinmez (askı geri alınabilir).
@@ -2250,20 +2274,33 @@ async function dispatchWebPush(userId, type, payload) {
   if (prefs.desktop_enabled === 0) return;
   if (userHasVisibleSocket(userId)) return;
 
-  const subscriptions = listPushSubscriptions(userId);
+  if (webPushOn) {
+    const subscriptions = listPushSubscriptions(userId);
 
-  await Promise.all(subscriptions.map(async (sub) => {
+    await Promise.all(subscriptions.map(async (sub) => {
+      try {
+        await push.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          { ...payload, type }
+        );
+      } catch (error) {
+        // Süresi dolmuş/geçersiz abonelikleri temizle.
+        if (error.statusCode === 404 || error.statusCode === 410) removePushSubscription(sub.endpoint);
+        else console.error('Web push hatası:', error.statusCode || error.message);
+      }
+    }));
+  }
+
+  // Android uygulaması (FCM): aynı kurallardan (askı, tercihler, ekranda görünür mü) sonra gönderilir.
+  if (fcmOn) {
     try {
-      await push.sendNotification(
-        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        { ...payload, type }
-      );
+      const tokens = listFcmTokens(userId);
+      const invalid = await fcm.sendToTokens(tokens, { ...payload, type });
+      invalid.forEach((token) => removeFcmToken(token));
     } catch (error) {
-      // Süresi dolmuş/geçersiz abonelikleri temizle.
-      if (error.statusCode === 404 || error.statusCode === 410) removePushSubscription(sub.endpoint);
-      else console.error('Web push hatası:', error.statusCode || error.message);
+      console.error('FCM hatası:', error.message);
     }
-  }));
+  }
 
 }
 
@@ -3121,6 +3158,10 @@ io.on('connection', (socket) => {
         from_user_id: socket.userId,
         from_username: socket.username
       });
+
+      // Alıcı uygulamayı görmüyorsa (arka plan / kapalı) gelen aramayı bildirim olarak da ilet.
+      dispatchWebPush(toUserId, 'incoming_call', { title: socket.username, body: 'Seni arıyor', url: '/', tag: 'call' })
+        .catch((error) => console.error('Arama bildirimi gönderilemedi:', error));
 
     } catch (error) {
       console.error('DM arama daveti hatası:', error);

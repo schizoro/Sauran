@@ -2640,6 +2640,7 @@ async function ensurePushSubscription() {
 
 async function removePushSubscriptionOnLogout() {
 
+    removeNativeFcmOnLogout();
     pushSubscribed = false;
     if (!('serviceWorker' in navigator)) return;
 
@@ -2690,7 +2691,7 @@ let nativeAppActive = true;
 // Sistem bildirimi gösterilmeli mi? Tarayıcıda: sekme odakta değilse (ve push yoksa). Yerel uygulamada:
 // uygulama arka plandaysa.
 function shouldShowSystemNotification() {
-    if (getNativeNotify()) return !nativeAppActive;
+    if (getNativeNotify()) return !nativeAppActive && !nativeFcmActive;
     if (document.hasFocus()) return false;
     if (document.visibilityState === 'hidden' && pushSubscribed) return false;
     return true;
@@ -2715,6 +2716,76 @@ document.addEventListener('visibilitychange', () => {
     if (currentHub) nativeNotifyCancel(`hub-${currentHub.id}`);
 });
 
+function openFromNotificationUrl(url) {
+    if (!currentUser || !url) return;
+    try {
+        const params = new URL(url, location.origin).searchParams;
+        const userId = Number(params.get('open_dm'));
+        const hubId = Number(params.get('open_hub'));
+        if (userId) openDm(userId, params.get('name') || '');
+        else if (hubId) openHub(hubId);
+    } catch (_) { /* yoksay */ }
+}
+
+// ── FCM: uygulama tamamen kapalıyken bile bildirim ─────────────────────────────
+// Sunucu FCM'i gerçekten yapılandırmışsa (kayıt yanıtındaki delivery) yerel bildirimler bırakılır;
+// aksi halde çift bildirim olmasın diye ikisinden yalnızca biri kullanılır.
+let nativeFcmActive = false;
+const FCM_TOKEN_KEY = 'sauran_fcm_token';
+
+async function initNativeFcm() {
+    const cap = window.Capacitor;
+    if (!cap || typeof cap.isNativePlatform !== 'function' || !cap.isNativePlatform() || typeof cap.registerPlugin !== 'function') return;
+
+    let plugin;
+    try { plugin = cap.registerPlugin('PushNotifications'); } catch (_) { return; }
+
+    try {
+        plugin.addListener('registration', async (token) => {
+            const value = token?.value;
+            if (!value) return;
+
+            try {
+                const response = await fetch('/api/fcm/register', {
+                    method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: value })
+                });
+                const data = await response.json().catch(() => ({}));
+                if (response.ok && data.success) {
+                    nativeFcmActive = data.delivery === true;
+                    try { localStorage.setItem(FCM_TOKEN_KEY, value); } catch (_) { /* yoksay */ }
+                }
+            } catch (error) {
+                console.warn('FCM anahtarı sunucuya iletilemedi:', error);
+            }
+        });
+
+        plugin.addListener('registrationError', (error) => console.warn('FCM kaydı başarısız:', error));
+
+        // Uygulama kapalıyken gelen bildirime dokunulunca ilgili sohbeti aç.
+        plugin.addListener('pushNotificationActionPerformed', (event) => openFromNotificationUrl(event?.notification?.data?.url));
+
+        const permission = await plugin.requestPermissions();
+        if (permission?.receive === 'granted') await plugin.register();
+    } catch (error) {
+        console.warn('FCM başlatılamadı:', error);
+    }
+}
+
+async function removeNativeFcmOnLogout() {
+    nativeFcmActive = false;
+    let token = null;
+    try { token = localStorage.getItem(FCM_TOKEN_KEY); localStorage.removeItem(FCM_TOKEN_KEY); } catch (_) { /* yoksay */ }
+    if (!token) return;
+
+    try {
+        await fetch('/api/fcm/unregister', {
+            method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token })
+        });
+    } catch (_) { /* yoksay */ }
+}
+
 // Giriş sonrası bir kez: bildirim iznini iste ve bildirime dokunulunca ilgili sohbeti aç.
 function initNativeNotifications() {
     const plugin = getNativeNotify();
@@ -2726,21 +2797,15 @@ function initNativeNotifications() {
 
         plugin.addListener('appState', (event) => {
             nativeAppActive = event?.active !== false;
+            reportAppVisibility(); // sunucu, uygulama görünmüyorsa (FCM ile) bildirim gönderir
         });
 
-        plugin.addListener('tap', (event) => {
-            if (!currentUser || !event?.url) return;
-            try {
-                const params = new URL(event.url, location.origin).searchParams;
-                const userId = Number(params.get('open_dm'));
-                const hubId = Number(params.get('open_hub'));
-                if (userId) openDm(userId, params.get('name') || '');
-                else if (hubId) openHub(hubId);
-            } catch (_) { /* yoksay */ }
-        });
+        plugin.addListener('tap', (event) => openFromNotificationUrl(event?.url));
     } catch (error) {
         console.warn('Yerel bildirim köprüsü başlatılamadı:', error);
     }
+
+    initNativeFcm();
 }
 
 async function showSystemNotification(title, body, options = {}) {
@@ -2832,7 +2897,9 @@ function maybeNotifyIncomingDm(msg) {
 
 // Push sunucusu, uygulamanın ekranda görünür olup olmadığını buradan öğrenir.
 function reportAppVisibility() {
-    socket?.emit('app_visibility', { visible: document.visibilityState === 'visible' });
+    // Yerel uygulamada WebView'ın visibilityState'i arka planda güvenilir değildir: Activity durumuna güven.
+    const visible = getNativeNotify() ? nativeAppActive : document.visibilityState === 'visible';
+    socket?.emit('app_visibility', { visible });
 }
 
 document.addEventListener('visibilitychange', reportAppVisibility);
