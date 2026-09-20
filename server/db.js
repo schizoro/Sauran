@@ -970,6 +970,164 @@ function purgeExpiredNotificationData(now = new Date()) {
   return result;
 }
 
+// ---- Hesap silme: özel mesajlar (DM) -------------------------------------------------------------------------------------------
+// Kural: HESABINI SİLENİN kendi mesajları (kişisel veri) silinir; KARŞI TARAFIN yazdığı mesajlar yalnızca bu yüzden yok edilmez.
+//  - Karşı tarafın (Y) silinen hesaba (X) yazdığı mesajlar (metin + medya) aynen korunur; X ile bağlantısı (to_user_id, oda anahtarı)
+//    kaldırılır ve mesajlar Y'nin "silinmiş hesap" sohbetine (oda: dmdel_<Y>_<jeton>) taşınır.
+//  - X'in Y'ye yazdığı mesajlar "mezar taşı"na (kind='deleted') çevrilir: içerik, ek dosya, kullanıcı adı ve gönderen bağlantısı silinir;
+//    yalnızca konuşmanın sırasını korumak için zaman damgası ve alıcı (Y) kalır. Arayüz bunları "Silinmiş hesabın mesajı" diye gösterir.
+//  - Y'nin o konuşmada hiç (silinmemiş) mesajı yoksa korunacak bir şey yoktur: X'in mesajları da tamamen silinir.
+//  - Y de hesabını silerse, o "silinmiş hesap" sohbeti (Y'nin mesajları + mezar taşları) tamamen silinir.
+// Lobi mesajları bu fonksiyonun konusu DEĞİLDİR (hub_id NULL olmayan satırlara dokunulmaz). Rapor kanıtları (report_evidence*) ayrı tablolardır ve
+// etkilenmez. Transaction'ı çağıran (deleteAccount) yönetir.
+function handleDmsOnAccountDeletion(userId) {
+  const results = []; // karşı taraflara canlı bildirim için: { partner_id, token | null }
+  const deletedAtEpoch = Math.floor(Date.now() / 1000);
+  // X'in kendi "silinmiş hesap" sohbetleri (X karşı taraftı): X ayrılıyor, kimse kalmıyor -> tamamen sil (tepkiler CASCADE ile gider)
+  db.prepare(`DELETE FROM messages WHERE room LIKE ? ESCAPE '\\'`).run(`dmdel\\_${userId}\\_%`);
+
+  const partners = db.prepare(`
+    SELECT DISTINCT CASE WHEN user_id = ? THEN to_user_id ELSE user_id END AS other
+    FROM messages
+    WHERE hub_id IS NULL AND to_user_id IS NOT NULL AND (user_id = ? OR to_user_id = ?)
+  `).all(userId, userId, userId).map(r => r.other).filter(o => o && o !== userId);
+
+  partners.forEach((partnerId) => {
+    const partnerExists = db.prepare(`SELECT 1 FROM users WHERE id = ?`).get(partnerId);
+    const partnerMessages = db.prepare(`
+      SELECT COUNT(*) AS c FROM messages
+      WHERE hub_id IS NULL AND user_id = ? AND to_user_id = ? AND kind != 'deleted'
+    `).get(partnerId, userId).c;
+
+    if (!partnerExists || partnerMessages === 0) {
+      db.prepare(`
+        DELETE FROM messages
+        WHERE hub_id IS NULL AND ((user_id = ? AND to_user_id = ?) OR (user_id = ? AND to_user_id = ?))
+      `).run(userId, partnerId, partnerId, userId);
+      if (partnerExists) results.push({ partner_id: partnerId, token: null });
+      return;
+    }
+
+    const token = crypto.randomBytes(6).toString('hex');
+    const room = deletedDmRoom(partnerId, token, deletedAtEpoch);
+
+    // Karşı tarafın mesajları: içerik ve medya AYNEN kalır; yalnızca silinen hesapla bağlantı (alıcı, oda, sabitleyen) kaldırılır.
+    db.prepare(`
+      UPDATE messages
+      SET room = ?, to_user_id = NULL,
+          pinned_at = CASE WHEN pinned_by = ? THEN NULL ELSE pinned_at END,
+          pinned_by = CASE WHEN pinned_by = ? THEN NULL ELSE pinned_by END
+      WHERE hub_id IS NULL AND user_id = ? AND to_user_id = ?
+    `).run(room, userId, userId, partnerId, userId);
+
+    // Silinen hesabın mesajları: mezar taşı (kişisel veri yok).
+    db.prepare(`
+      UPDATE messages
+      SET room = ?, content = '', payload = NULL, kind = 'deleted', user_id = NULL, username = ?, edited = 0,
+          reply_to_message_id = NULL, forwarded_from_message_id = NULL, pinned_at = NULL, pinned_by = NULL, to_user_id = ?
+      WHERE hub_id IS NULL AND user_id = ? AND to_user_id = ?
+    `).run(room, DELETED_ACCOUNT_LABEL, partnerId, userId, partnerId);
+
+    // Karşı tarafın içeriği kalmayan mezar taşlarına bıraktığı tepkiler anlamsız
+    db.prepare(`
+      DELETE FROM message_reactions WHERE message_id IN (SELECT id FROM messages WHERE room = ? AND user_id IS NULL)
+    `).run(room);
+
+    results.push({ partner_id: partnerId, token });
+  });
+
+  return results;
+}
+
+// "Silinmiş hesap" sohbetinin saklama süresi (GÜN): hesap silme anından itibaren. TEKNİK ÜRÜN VARSAYILANIDIR; KVKK Kurumu ya da başka bir makamca
+// belirlenmiş bir süre DEĞİLDİR ve hukuki incelemeye tabidir (bkz. docs/silinmis-hesap-dm-saklama-politikasi.md). Yalnızca hesabı silinmiş kullanıcı
+// nedeniyle salt okunur kalan bu özel sohbete uygulanır; normal aktif DM'ler için saklama süresi tanımlanmamıştır.
+const DELETED_DM_RETENTION_DAYS = 90;
+
+const DELETED_DM_TOKEN = /^[a-f0-9]{12}$/;
+// Oda anahtarı: dmdel_<karşı taraf id>_<jeton>_<hesap silme anı (epoch sn)>. Silme anı yalnızca sayıdır; kişisel veri taşımaz.
+const DELETED_DM_ROOM = /^dmdel_(\d+)_([a-f0-9]{12})_(\d{9,12})$/;
+function deletedDmRoom(userId, token, deletedAtEpoch) { return `dmdel_${userId}_${token}_${deletedAtEpoch}`; }
+
+function findDeletedDmRoom(userId, token) {
+  if (!DELETED_DM_TOKEN.test(String(token))) return null;
+  const found = db.prepare(`SELECT room FROM messages WHERE hub_id IS NULL AND room LIKE ? ESCAPE '\\' LIMIT 1`).get(`dmdel\\_${userId}\\_${token}\\_%`);
+  return found && DELETED_DM_ROOM.test(found.room) ? found.room : null;
+}
+
+// Kullanıcının, hesabı silinmiş kişilerle olan korunmuş sohbetleri (silinme ve otomatik silinme zamanıyla)
+function listDeletedDmThreads(userId) {
+  return db.prepare(`
+    SELECT room, COUNT(*) AS message_count, MAX(created_at) AS last_at
+    FROM messages WHERE hub_id IS NULL AND room LIKE ? ESCAPE '\\'
+    GROUP BY room ORDER BY last_at DESC
+  `).all(`dmdel\\_${userId}\\_%`).map((r) => {
+    const m = DELETED_DM_ROOM.exec(r.room);
+    if (!m) return null;
+    const deletedAt = Number(m[3]) * 1000;
+    return {
+      token: m[2],
+      message_count: r.message_count,
+      last_at: r.last_at,
+      deleted_at: new Date(deletedAt).toISOString(),
+      expires_at: new Date(deletedAt + DELETED_DM_RETENTION_DAYS * DAY_MS).toISOString()
+    };
+  }).filter(Boolean);
+}
+
+function getDeletedDmMessages(userId, token, limit = 50) {
+  const room = findDeletedDmRoom(userId, token);
+  if (!room) return null;
+
+  const rows = db.prepare(`
+    SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
+           messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
+           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
+    FROM messages LEFT JOIN users ON users.id = messages.user_id
+    WHERE messages.room = ? AND messages.hub_id IS NULL
+    ORDER BY messages.id DESC LIMIT ?
+  `).all(room, limit);
+
+  if (!rows.length) return null;
+
+  return rows.reverse().map((row) => ({ ...hydrateMessage(row, userId), sender_deleted: row.user_id === null }));
+}
+
+// Kullanıcı, silinmiş hesapla olan korunmuş sohbeti (kendi mesajları ve mezar taşları dahil) süre dolmadan da tamamen silebilir (mevcut manuel silme).
+function deleteDeletedDmThread(userId, token) {
+  const room = findDeletedDmRoom(userId, token);
+  if (!room) return { success: false, error: 'Sohbet bulunamadı.' };
+  const info = db.prepare(`DELETE FROM messages WHERE room = ? AND hub_id IS NULL`).run(room);
+  return info.changes ? { success: true, deleted: info.changes } : { success: false, error: 'Sohbet bulunamadı.' };
+}
+
+// Süresi (hesap silme anından 90 gün) dolan "silinmiş hesap" sohbetlerini tamamen siler: karşı tarafın korunan mesajları (metin + medya),
+// mezar taşları ve tepkiler. YALNIZCA dmdel_ odalarına dokunur; karşı tarafın diğer mesajlarına, diğer DM'lerine, lobi mesajlarına ve
+// rapor kanıtlarına (ayrı tablolar) dokunmaz. Oda anahtarı çözümlenemeyen satırlar silinmez. Tekrar çalıştırmak zararsızdır.
+function purgeExpiredDeletedDmThreads(now = new Date()) {
+  const result = { threads: 0, messages: 0 };
+  const expired = db.prepare(`SELECT DISTINCT room FROM messages WHERE hub_id IS NULL AND room LIKE 'dmdel\\_%' ESCAPE '\\'`).all()
+    .map(r => r.room)
+    .filter((room) => { const m = DELETED_DM_ROOM.exec(room); return m && now.getTime() >= (Number(m[3]) + DELETED_DM_RETENTION_DAYS * 86400) * 1000; });
+
+  if (!expired.length) return result;
+
+  db.pragma('secure_delete = ON');
+  try {
+    db.transaction(() => {
+      expired.forEach((room) => {
+        result.messages += db.prepare(`DELETE FROM messages WHERE room = ? AND hub_id IS NULL`).run(room).changes;
+        result.threads += 1;
+      });
+    })();
+  } finally {
+    db.pragma('secure_delete = OFF');
+  }
+
+  try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (_) { /* yoksay */ }
+  return result;
+}
+
 function logModerationAction(reportId, moderatorId, action, reason) {
   db.prepare(`
     INSERT INTO moderation_actions (report_id, moderator_id, action, reason) VALUES (?, ?, ?, ?)
@@ -2681,7 +2839,10 @@ function deleteAccount(userId) {
     const owned = db.prepare(`SELECT id FROM hubs WHERE created_by = ?`).all(userId);
     const purgedHubs = owned.map(h => purgeHubData(h.id));
 
-    db.prepare(`DELETE FROM messages WHERE user_id = ? OR to_user_id = ?`).run(userId, userId);
+    // DM'ler: kendi mesajların silinir (mezar taşı bırakılır), karşı tarafın mesajları korunur (bkz. handleDmsOnAccountDeletion).
+    const dmPartners = handleDmsOnAccountDeletion(userId);
+    // Geriye kalan (lobi vb.) mesajları silinir; DM satırları yukarıda işlendi.
+    db.prepare(`DELETE FROM messages WHERE user_id = ?`).run(userId);
     db.prepare(`DELETE FROM friendships WHERE user_low = ? OR user_high = ?`).run(userId, userId);
     db.prepare(`DELETE FROM blocked_users WHERE user_id = ? OR blocked_user_id = ?`).run(userId, userId);
     db.prepare(`DELETE FROM notifications WHERE user_id = ?`).run(userId);
@@ -2693,16 +2854,17 @@ function deleteAccount(userId) {
     const info = db.prepare(`DELETE FROM users WHERE id = ?`).run(userId);
     if (info.changes !== 1) throw new Error('Hesap silinemedi (kullanıcı satırı silinmedi).');
 
-    return purgedHubs;
+    return { purgedHubs, dmPartners };
   });
 
-  const purgedHubs = run();
+  const { purgedHubs, dmPartners } = run();
 
   return {
     success: true,
     hub_ids: purgedHubs.map(h => h.hubId),
     voice_room_ids: purgedHubs.flatMap(h => h.voiceRoomIds),
-    daily_room_names: purgedHubs.flatMap(h => h.dailyRoomNames)
+    daily_room_names: purgedHubs.flatMap(h => h.dailyRoomNames),
+    dm_partners: dmPartners
   };
 }
 
@@ -4653,6 +4815,11 @@ module.exports = {
   purgeExpiredRetention,
   purgeExpiredAuthRecords,
   purgeExpiredNotificationData,
+  listDeletedDmThreads,
+  getDeletedDmMessages,
+  deleteDeletedDmThread,
+  purgeExpiredDeletedDmThreads,
+  DELETED_DM_RETENTION_DAYS,
   NOTIFICATION_RETENTION_DAYS,
   OUTBOX_RETENTION_DAYS,
   lifecycleLogCutoff,

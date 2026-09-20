@@ -452,6 +452,9 @@ const dmCallBtn =
 
 let activeDmUserId = null;
 let activeDmUsername = '';
+// Hesabı silinmiş kişilerle korunmuş (salt okunur) sohbetler
+let deletedDmThreads = [];
+let dmReadOnly = false;
 
 wireAttachMenu('dm', async (file) => {
 
@@ -3357,6 +3360,12 @@ const I18N = {
     'remove-photo': { tr: 'Kaldır', en: 'Remove' },
     'confirm-delete-message': { tr: 'Bu mesajı silmek istediğine emin misin?', en: 'Are you sure you want to delete this message?' },
     'message-deleted': { tr: 'Bu mesaj silindi', en: 'This message was deleted' },
+    'deleted-account-label': { tr: 'Silinmiş hesap', en: 'Deleted account' },
+    'deleted-account-message': { tr: 'Silinmiş hesabın mesajı', en: 'Message from a deleted account' },
+    'deleted-dm-readonly': { tr: 'Bu kişi hesabını sildi. Bu sohbet salt okunurdur.', en: 'This person deleted their account. This conversation is read-only.' },
+    'deleted-dm-expires': { tr: 'Bu sohbet {date} tarihinde otomatik olarak silinecek.', en: 'This conversation will be deleted automatically on {date}.' },
+    'deleted-dm-delete': { tr: 'Sohbeti sil', en: 'Delete conversation' },
+    'deleted-dm-delete-confirm': { tr: 'Bu sohbetteki tüm mesajlar (senin mesajların dahil) kalıcı olarak silinsin mi?', en: 'Permanently delete all messages in this conversation (including your own)?' },
     'edited-tag': { tr: '(düzenlendi)', en: '(edited)' },
     'hub-feed-empty': { tr: 'Henüz bir şey olmadı. İlk hareketi sen yap.', en: "Nothing here yet. Make the first move." },
     'connecting': { tr: 'Bağlanıyor...', en: 'Connecting...' },
@@ -3908,6 +3917,22 @@ function connectToChat() {
     socket.on('dm_call_accepted', (data) => {
         if (data.from_user_id === outgoingCallToId) joinDmCall(outgoingCallToId, outgoingCallToUsername);
     });
+    // Karşı taraf hesabını sildi: açık DM penceresi sayfa yenilemeden "Silinmiş hesap / salt okunur" görünümüne geçer (ya da korunacak
+    // mesaj yoksa kapanır); arkadaş listesi de yenilenir.
+    socket.on('dm_partner_deleted', async (data) => {
+        await loadFriendsSidebar();
+
+        if (dmModal.style.display !== 'none' && activeDmUserId && activeDmUserId === data.user_id) {
+            if (data.token) {
+                openDeletedDm(data.token);
+            } else {
+                dmModal.style.display = 'none';
+                activeDmUserId = null;
+                activeDmUsername = '';
+            }
+        }
+    });
+
     socket.on('dm_call_ended', (data) => {
         // Arayan çalarken kapattıysa (henüz bir çağrı çerçevemiz yok) gelen arama zili de durmalı.
         if (!callFrame && data.from_user_id === incomingCallFromId) hideIncomingCall();
@@ -4869,6 +4894,12 @@ async function loadFriendsSidebar() {
         const data = await response.json();
         if (!data.success) return;
 
+        try {
+            const deletedRes = await fetch('/api/dm/deleted', { credentials: 'include' });
+            const deletedData = await deletedRes.json();
+            deletedDmThreads = deletedData.success ? deletedData.threads : [];
+        } catch (_) { deletedDmThreads = []; }
+
         renderFriendsSidebar(data.friends);
 
     } catch (error) {
@@ -4881,9 +4912,21 @@ function refreshFriendsSidebar() {
     if (hubListView.style.display !== 'none') loadFriendsSidebar();
 }
 
+// Hesabı silinmiş kişilerle olan korunmuş sohbetler (salt okunur): listenin sonunda "Silinmiş hesap" olarak görünür.
+function buildDeletedDmRowsHtml() {
+    return (deletedDmThreads || []).map((thread) => `
+        <div class="friends-sidebar-row deleted-account" data-deleted-thread="${escapeAttr(thread.token)}">
+            <span class="friends-sidebar-presence" aria-hidden="true"></span>
+            <span class="friends-sidebar-avatar-wrap"><span class="friends-sidebar-avatar" style="--user-color:#6b7280;">?</span></span>
+            <span class="friends-sidebar-name">${escapeHtml(t('deleted-account-label'))}</span>
+            <button type="button" class="friends-sidebar-deleted-del" data-deleted-del="${escapeAttr(thread.token)}" title="${escapeAttr(t('deleted-dm-delete'))}">🗑</button>
+        </div>
+    `).join('');
+}
+
 function renderFriendsSidebar(friends) {
 
-    if (!friends || friends.length === 0) {
+    if ((!friends || friends.length === 0) && (!deletedDmThreads || deletedDmThreads.length === 0)) {
         friendsSidebarList.innerHTML = `<div class="friends-sidebar-empty">${t('friends-empty')}</div>`;
         return;
     }
@@ -4916,12 +4959,12 @@ function renderFriendsSidebar(friends) {
             </div>
         `;
 
-    }).join('');
+    }).join('') + buildDeletedDmRowsHtml();
 
     // Avatara tıklama → profil penceresi (mesaj gönder seçeneği olmadan, çünkü
     // buradan zaten tek tıkla sohbete geçilebiliyor). Satırın geri kalanına
     // tıklama → doğrudan sohbet penceresi. stopPropagation ile ikisi ayrılıyor.
-    friendsSidebarList.querySelectorAll('.friends-sidebar-row').forEach((row) => {
+    friendsSidebarList.querySelectorAll('.friends-sidebar-row:not(.deleted-account)').forEach((row) => {
 
         const userId = Number(row.dataset.friendId);
         const username = row.dataset.friendName;
@@ -4936,6 +4979,28 @@ function renderFriendsSidebar(friends) {
             updateFriendsToggleBadge();
             renderFriendsSidebar(friends);
             openDm(userId, username);
+        });
+
+    });
+
+    friendsSidebarList.querySelectorAll('.friends-sidebar-row.deleted-account').forEach((row) => {
+
+        const token = row.dataset.deletedThread;
+
+        row.addEventListener('click', () => openDeletedDm(token));
+
+        row.querySelector('[data-deleted-del]').addEventListener('click', async (event) => {
+            event.stopPropagation();
+            if (!window.confirm(t('deleted-dm-delete-confirm'))) return;
+
+            try {
+                await fetch(`/api/dm/deleted/${encodeURIComponent(token)}`, { method: 'DELETE', credentials: 'include' });
+            } catch (error) {
+                console.error('Sohbet silinemedi:', error);
+            }
+
+            if (dmReadOnly) dmModal.style.display = 'none';
+            loadFriendsSidebar();
         });
 
     });
@@ -5941,8 +6006,74 @@ otherProfileModal.addEventListener(
 // DM PANELİ
 // =====================================================
 
+function setDmReadOnlyMode(on, expiresAt) {
+
+    dmReadOnly = on;
+    dmForm.style.display = on ? 'none' : '';
+    dmCallBtn.style.display = on ? 'none' : '';
+    document.getElementById('dm-reply-preview').style.display = 'none';
+
+    let note = document.getElementById('dm-readonly-note');
+    if (on && !note) {
+        note = document.createElement('div');
+        note.id = 'dm-readonly-note';
+        note.className = 'dm-readonly-note';
+        dmForm.parentNode.insertBefore(note, dmForm);
+    }
+    if (note) {
+        const when = expiresAt ? new Date(expiresAt).toLocaleDateString(localStorage.getItem('sauran_lang') === 'en' ? 'en-GB' : 'tr-TR') : '';
+        note.textContent = t('deleted-dm-readonly') + (when ? ' ' + t('deleted-dm-expires').replace('{date}', when) : '');
+        note.style.display = on ? '' : 'none';
+    }
+
+}
+
+
+// Hesabı silinmiş kişiyle olan korunmuş sohbeti (yalnızca karşı tarafın kendi mesajları + "silinmiş hesabın mesajı") salt okunur açar.
+async function openDeletedDm(token) {
+
+    activeDmUserId = null;
+    activeDmUsername = '';
+
+    let thread = deletedDmThreads.find((x) => x.token === token);
+    if (!thread) {
+        try {
+            const listRes = await fetch('/api/dm/deleted', { credentials: 'include' });
+            const listData = await listRes.json();
+            deletedDmThreads = listData.success ? listData.threads : [];
+            thread = deletedDmThreads.find((x) => x.token === token);
+        } catch (_) { /* yoksay */ }
+    }
+
+    setDmReadOnlyMode(true, thread && thread.expires_at);
+    dmModalTitle.textContent = `💬 ${t('deleted-account-label')}`;
+    dmFeed.innerHTML = '';
+
+    try {
+
+        const response = await fetch(`/api/dm/deleted/${encodeURIComponent(token)}/messages`, { credentials: 'include' });
+        const data = await response.json();
+
+        if (data.success) {
+            data.messages.forEach(appendDmMessage);
+        } else {
+            loadFriendsSidebar();
+        }
+
+    } catch (error) {
+
+        console.error('Silinmiş hesap sohbeti alınamadı:', error);
+
+    }
+
+    dmModal.style.display = 'flex';
+
+}
+
+
 async function openDm(userId, username) {
 
+    setDmReadOnlyMode(false);
     activeDmUserId = userId;
     activeDmUsername = username;
     dmModalTitle.textContent = `💬 ${username}`;
@@ -5981,7 +6112,7 @@ function appendDmMessage(msg) {
     const isMine = msg.user_id === currentUser.id;
     row.className = `dm-msg-row ${isMine ? 'msg-mine' : ''}`;
 
-    row.innerHTML = avatarButtonHtml(msg.user_id, msg.avatar_data, msg.username);
+    row.innerHTML = avatarButtonHtml(msg.sender_deleted ? null : msg.user_id, msg.avatar_data, msg.sender_deleted ? t('deleted-account-label') : msg.username);
 
     const wrap = document.createElement('div');
     wrap.className = `dm-msg ${isMine ? 'dm-msg-mine' : 'dm-msg-theirs'}`;
@@ -6006,7 +6137,7 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
 
     const editedTag = msg.edited ? ` <span class="edited-tag">(${t('edited-tag')})</span>` : '';
     const forwardedTag = msg.forwarded_from_message_id ? `<div class="msg-forwarded-tag">↗ ${t('message-forwarded')}</div>` : '';
-    const opts = { context: 'dm' };
+    const opts = { context: 'dm', readOnly: dmReadOnly };
     const actions = buildMsgActionsBarHtml(msg, opts);
     const replyQuote = buildMsgReplyQuoteHtml(msg);
     const reactionsRow = buildMsgReactionsRowHtml(msg);
@@ -6015,7 +6146,7 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
 
     if (msg.kind === 'deleted') {
 
-        body = `<span class="hub-msg-deleted">${t('message-deleted')}</span>`;
+        body = `<span class="hub-msg-deleted">${t(msg.sender_deleted ? 'deleted-account-message' : 'message-deleted')}</span>`;
 
     } else if (msg.kind === 'dm_voice' && msg.payload) {
 
@@ -6170,17 +6301,19 @@ function getMessagePermissions(msg, opts) {
     const canPin = opts.context === 'hub' && !isDeleted && currentHub &&
         (currentHub.my_permission_tier === 'owner' || currentHub.my_permission_tier === 'moderator');
 
+    const readOnly = Boolean(opts.readOnly);
+
     return {
         isMine, isDeleted, isPinned,
-        canReply: !isDeleted,
-        canReact: !isDeleted,
+        canReply: !isDeleted && !readOnly,
+        canReact: !isDeleted && !readOnly,
         canCopy: !isDeleted && Boolean(msg.content),
         canCopyLink: !isDeleted && Boolean(msg.payload?.url),
-        canForward: !isDeleted && FORWARDABLE_KINDS.includes(msg.kind),
-        canEdit: isMine && !isDeleted && (msg.kind === 'text' || msg.kind === 'dm'),
+        canForward: !isDeleted && !readOnly && FORWARDABLE_KINDS.includes(msg.kind),
+        canEdit: isMine && !isDeleted && !readOnly && (msg.kind === 'text' || msg.kind === 'dm'),
         canDelete: isMine && !isDeleted,
         canPin,
-        canReport: !isMine
+        canReport: !isMine && !msg.sender_deleted
     };
 
 }

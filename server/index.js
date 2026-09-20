@@ -88,6 +88,10 @@ const {
   purgeExpiredRetention,
   purgeExpiredAuthRecords,
   purgeExpiredNotificationData,
+  listDeletedDmThreads,
+  getDeletedDmMessages,
+  deleteDeletedDmThread,
+  purgeExpiredDeletedDmThreads,
   unlinkReportDataForDeletedUser,
   deleteAccount,
   listDueDailyRoomCleanups,
@@ -725,6 +729,10 @@ app.delete('/api/account', (req, res) => {
     activeUserNames.delete(user.id);
 
     finalizeHubPurge(result);
+
+    // DM karşı tarafları: sohbet penceresi açıksa sayfa yenilemeden "Silinmiş hesap / salt okunur" durumuna geçsin (mevcut user:<id> odaları).
+    // Yalnızca DB işlemi başarıyla tamamlandıktan sonra gönderilir.
+    (result.dm_partners || []).forEach((p) => io.to(`user:${p.partner_id}`).emit('dm_partner_deleted', { user_id: user.id, token: p.token }));
 
     clearSessionCookie(res);
     return res.json({ success: true });
@@ -3016,6 +3024,32 @@ app.get('/api/users/:id/profile', (req, res) => {
 // ÖZEL MESAJLAR (DM)
 // =====================================================
 
+// Hesabı silinmiş kişilerle olan korunmuş (salt okunur) sohbetler: karşı tarafın kendi mesajları burada kalır.
+app.get('/api/dm/deleted', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  return res.json({ success: true, threads: listDeletedDmThreads(user.id) });
+});
+
+app.get('/api/dm/deleted/:token/messages', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const messages = getDeletedDmMessages(user.id, req.params.token, 50);
+  if (!messages) return res.status(404).json({ success: false, error: 'Sohbet bulunamadı.' });
+
+  return res.json({ success: true, messages });
+});
+
+app.delete('/api/dm/deleted/:token', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const result = deleteDeletedDmThread(user.id, req.params.token);
+  return res.status(result.success ? 200 : 404).json(result);
+});
+
 app.get('/api/dm/:userId/messages', (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
@@ -3490,6 +3524,16 @@ server.listen(PORT, () => {
   };
   runNotificationCleanup();
   setInterval(runNotificationCleanup, 60 * 60 * 1000).unref();
+
+  // Süresi (hesap silme anından 90 gün, teknik varsayılan) dolan "silinmiş hesap" DM sohbetleri: açılışta ve saatte bir.
+  const runDeletedDmCleanup = () => {
+    try {
+      const r = purgeExpiredDeletedDmThreads();
+      if (r.threads) console.log(`Süresi dolan silinmiş-hesap DM sohbetleri silindi: sohbet=${r.threads}, mesaj=${r.messages}.`);
+    } catch (error) { console.error('Silinmiş-hesap DM temizleme hatası:', error); }
+  };
+  runDeletedDmCleanup();
+  setInterval(runDeletedDmCleanup, 60 * 60 * 1000).unref();
 
   // Daily oda silme kuyruğu: açılışta ve 5 dakikada bir (başarısız silmeler geri çekilmeyle yeniden denenir).
   processDailyRoomCleanup().catch(() => {});

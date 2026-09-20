@@ -1848,3 +1848,10 @@ body.call-mini-active { padding-top: 42px; }
   display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; line-height: 1;
   color: #0b0c10; background: #66fcf1; border: 2px solid #0d0f14; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); pointer-events: none;
 }
+
+/* Hesabı silinmiş kişilerle korunmuş, salt okunur DM sohbeti */
+.friends-sidebar-row.deleted-account { opacity: 0.8; }
+.friends-sidebar-row.deleted-account .friends-sidebar-name { font-style: italic; }
+.friends-sidebar-deleted-del { margin-left: auto; background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 14px; padding: 2px 6px; opacity: 0.6; }
+.friends-sidebar-deleted-del:hover { opacity: 1; }
+.dm-readonly-note { padding: 10px 14px; font-size: 12.5px; color: var(--text-secondary); text-align: center; border-top: 1px solid var(--border-soft); }
