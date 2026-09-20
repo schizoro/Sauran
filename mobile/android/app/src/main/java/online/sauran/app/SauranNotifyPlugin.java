@@ -115,6 +115,26 @@ public class SauranNotifyPlugin extends Plugin {
         call.resolve();
     }
 
+    /**
+     * Uygulamanın ön/arka plan durumunu Activity yaşam döngüsünden bildirir. WebView'da document.hasFocus() /
+     * visibilityState arka planda güvenilir değildir; bildirim gösterme kararı bu bilgiye dayanır.
+     */
+    @Override
+    protected void handleOnPause() {
+        super.handleOnPause();
+        JSObject data = new JSObject();
+        data.put("active", false);
+        notifyListeners("appState", data, true);
+    }
+
+    @Override
+    protected void handleOnResume() {
+        super.handleOnResume();
+        JSObject data = new JSObject();
+        data.put("active", true);
+        notifyListeners("appState", data, true);
+    }
+
     /** Uygulama açıkken bir bildirime dokunulduğunda (singleTask -> onNewIntent). */
     @Override
     protected void handleOnNewIntent(Intent intent) {

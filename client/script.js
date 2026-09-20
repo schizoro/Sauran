@@ -2684,6 +2684,18 @@ function getNativeNotify() {
     }
 }
 
+// Yerel uygulamada ön/arka plan durumu Activity yaşam döngüsünden gelir (SauranNotify 'appState').
+let nativeAppActive = true;
+
+// Sistem bildirimi gösterilmeli mi? Tarayıcıda: sekme odakta değilse (ve push yoksa). Yerel uygulamada:
+// uygulama arka plandaysa.
+function shouldShowSystemNotification() {
+    if (getNativeNotify()) return !nativeAppActive;
+    if (document.hasFocus()) return false;
+    if (document.visibilityState === 'hidden' && pushSubscribed) return false;
+    return true;
+}
+
 // Aynı sohbetten gelen bildirimleri sayar ("3 yeni mesaj"): etiket -> adet. Bildirim kaldırılınca sıfırlanır.
 const nativeNotifyCounts = new Map();
 
@@ -2711,6 +2723,10 @@ function initNativeNotifications() {
 
     try {
         Promise.resolve(plugin.requestPermission()).catch(() => {});
+
+        plugin.addListener('appState', (event) => {
+            nativeAppActive = event?.active !== false;
+        });
 
         plugin.addListener('tap', (event) => {
             if (!currentUser || !event?.url) return;
@@ -2765,8 +2781,7 @@ async function showSystemNotification(title, body, options = {}) {
 function maybeShowBrowserNotification(type, label) {
 
     if (getBrowserNotifState() !== 'granted' && !getNativeNotify()) return;
-    if (document.hasFocus()) return;
-    if (document.visibilityState === 'hidden' && pushSubscribed) return;
+    if (!shouldShowSystemNotification()) return;
 
     showSystemNotification('Sauran', label).catch((error) => {
         console.error('Tarayıcı bildirimi gösterilemedi:', error);
@@ -2791,8 +2806,7 @@ function maybeNotifyIncomingHubMessage(msg) {
 
     if (!notifDesktopEnabled || !notifHubMessageEnabled || !currentHub || currentHub.my_muted) return;
     if (getBrowserNotifState() !== 'granted' && !getNativeNotify()) return;
-    if (document.hasFocus()) return;
-    if (document.visibilityState === 'hidden' && pushSubscribed) return;
+    if (!shouldShowSystemNotification()) return;
 
     showSystemNotification(currentHub.name, `${msg.username}: ${dmPreviewText(msg)}`, {
         tag: `hub-${currentHub.id}`,
@@ -2806,8 +2820,7 @@ function maybeNotifyIncomingDm(msg) {
 
     if (!notifDesktopEnabled || !notifDmEnabled) return;
     if (getBrowserNotifState() !== 'granted' && !getNativeNotify()) return;
-    if (document.hasFocus()) return;
-    if (document.visibilityState === 'hidden' && pushSubscribed) return;
+    if (!shouldShowSystemNotification()) return;
 
     showSystemNotification(msg.username, dmPreviewText(msg), {
         tag: `dm-${msg.user_id}`,
@@ -3829,6 +3842,9 @@ function connectToChat() {
         if (data.from_user_id === outgoingCallToId) joinDmCall(outgoingCallToId, outgoingCallToUsername);
     });
     socket.on('dm_call_ended', (data) => {
+        // Arayan çalarken kapattıysa (henüz bir çağrı çerçevemiz yok) gelen arama zili de durmalı.
+        if (!callFrame && data.from_user_id === incomingCallFromId) hideIncomingCall();
+
         if (callFrame && (data.from_user_id === outgoingCallToId || data.from_user_id === incomingCallFromId)) {
             leaveCall();
         }
@@ -8863,7 +8879,7 @@ dmCallBtn.addEventListener('click', () => {
     callScreenshareBtn.style.display = 'none';
     callFrameContainer.style.display = 'none';
     callRingingText.textContent = `${activeDmUsername} aranıyor...`;
-    callRingingState.style.display = 'flex';
+    setRingingUi(true);
     callOverlay.style.display = 'flex';
 
 });
@@ -8878,6 +8894,13 @@ callRingingCancelBtn.addEventListener('click', () => {
 // gelen arama bu süre sonra kendiliğinden kapanır.
 const INCOMING_CALL_RING_TIMEOUT_MS = 45_000;
 let incomingCallRingTimer = null;
+
+// "Aranıyor" ekranında yalnızca "İptal Et" vardır; "Ayrıl" düğmesi çalma sırasında anlamsızdı
+// (karşı taraf çalmaya devam ediyordu). Çalma ekranını tek yerden aç/kapat.
+function setRingingUi(on) {
+    callRingingState.style.display = on ? 'flex' : 'none';
+    callLeaveBtn.style.display = on ? 'none' : '';
+}
 
 function showIncomingCall(fromId, fromUsername) {
 
@@ -8896,7 +8919,7 @@ function showIncomingCall(fromId, fromUsername) {
     }, INCOMING_CALL_RING_TIMEOUT_MS);
 
     // Uygulama arka plandaysa (yerel uygulama) gelen aramayı bildirim çubuğunda da göster.
-    if (getNativeNotify() && (document.visibilityState === 'hidden' || !document.hasFocus())) {
+    if (getNativeNotify() && !nativeAppActive) {
         showSystemNotification(fromUsername, 'Seni arıyor', { tag: 'call', data: { url: '/' } }).catch(() => {});
     }
 
@@ -8932,7 +8955,7 @@ async function joinDmCall(userId, username) {
 
     callHubName.textContent = `📞 ${username}`;
     callScreenshareBtn.style.display = 'none';
-    callRingingState.style.display = 'none';
+    setRingingUi(false);
     callFrameContainer.style.display = 'none';
     document.getElementById('call-hub-room-view').style.display = 'none';
     callOverlay.style.display = 'flex';
@@ -8993,7 +9016,7 @@ async function joinDmCall(userId, username) {
 
 function endDmCallUi() {
     callOverlay.style.display = 'none';
-    callRingingState.style.display = 'none';
+    setRingingUi(false);
     callFrameContainer.style.display = 'block';
     document.getElementById('call-dm-profile').style.display = 'none';
     callMode = null;
@@ -9438,6 +9461,11 @@ window.addEventListener('focus', () => { if (callFrame) scheduleCallRecovery(); 
 
 function leaveCall() {
 
+    // Çalarken herhangi bir yoldan çıkılırsa karşı tarafın zili de durmalı (iptal olayı).
+    if (callMode === 'dm-ringing' && outgoingCallToId && socket) {
+        socket.emit('dm_call_cancel', { to_user_id: outgoingCallToId });
+    }
+
     if ((callMode === 'dm' || callMode === 'dm-ringing') && (outgoingCallToId || incomingCallFromId) && socket) {
         socket.emit('dm_call_end', { to_user_id: outgoingCallToId || incomingCallFromId });
     }
@@ -9459,7 +9487,7 @@ function leaveCall() {
     callOverlay.style.display = 'none';
     callMiniBar.style.display = 'none';
     document.body.classList.remove('call-mini-active');
-    callRingingState.style.display = 'none';
+    setRingingUi(false);
     callFrameContainer.style.display = 'block';
     document.getElementById('call-dm-profile').style.display = 'none';
     document.getElementById('call-hub-room-view').style.display = 'none';
