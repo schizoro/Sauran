@@ -86,6 +86,7 @@ const {
   listPushSubscriptions,
   saveFcmToken,
   purgeExpiredRetention,
+  purgeExpiredAuthRecords,
   unlinkReportDataForDeletedUser,
   deleteAccount,
   listDueDailyRoomCleanups,
@@ -3463,6 +3464,19 @@ server.listen(PORT, () => {
   };
   runEvidencePurge();
   setInterval(runEvidencePurge, 24 * 60 * 60 * 1000).unref();
+
+  // Süresi dolmuş doğrulama kodları, şifre sıfırlama kodları ve oturumlar: açılışta (yeniden başlatma sonrası birikmiş kayıtlar) ve
+  // 10 dakikada bir silinir. Yalnızca süresi dolmuş satırlar etkilenir; hata olursa uygulamanın çalışmasını etkilemez.
+  const runAuthCleanup = () => {
+    try {
+      const purged = purgeExpiredAuthRecords();
+      if (purged.pending || purged.resets || purged.sessions) {
+        console.log(`Süresi dolan geçici kayıtlar silindi: doğrulama=${purged.pending}, şifre sıfırlama=${purged.resets}, oturum=${purged.sessions}.`);
+      }
+    } catch (error) { console.error('Geçici kayıt temizleme hatası:', error); }
+  };
+  runAuthCleanup();
+  setInterval(runAuthCleanup, 10 * 60 * 1000).unref();
 
   // Daily oda silme kuyruğu: açılışta ve 5 dakikada bir (başarısız silmeler geri çekilmeyle yeniden denenir).
   processDailyRoomCleanup().catch(() => {});

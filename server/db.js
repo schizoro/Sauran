@@ -845,6 +845,43 @@ function purgeExpiredRetention(now = new Date()) {
   return result;
 }
 
+// ---- Süresi dolmuş geçici kimlik doğrulama kayıtları ---------------------------------------------------------------------
+// pending_verifications (e-posta, parola özeti+tuzu, doğum tarihi, kod), password_resets (kod) ve sessions (oturum özeti, cihaz bilgisi)
+// süresi dolduktan sonra da kullanılmadıkça satır olarak kalıyordu. Uygulamanın kendi süre kontrolüyle AYNI kural kullanılır
+// (`new Date(expires_at).getTime() <= Date.now()`): yalnızca gerçekten süresi dolmuş satırlar silinir; süresi dolmamış ya da
+// tarihi çözümlenemeyen satırlar (uygulama bunları geçerli sayar) korunur. Başka hiçbir tabloya dokunulmaz.
+// Silme sırasında secure_delete açılır (parola özeti/kod gibi içerik sayfada sıfırlanır) ve WAL kırpılır.
+const AUTH_EXPIRY_TABLES = { pending: 'pending_verifications', resets: 'password_resets', sessions: 'sessions' }; // sabit adlar
+
+function purgeExpiredAuthRecords(now = new Date()) {
+  const nowMs = now.getTime();
+  const result = { pending: 0, resets: 0, sessions: 0 };
+
+  db.pragma('secure_delete = ON');
+  try {
+    db.transaction(() => {
+      for (const [key, table] of Object.entries(AUTH_EXPIRY_TABLES)) {
+        if (!db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`).get(table)) continue;
+
+        const expiredIds = db.prepare(`SELECT id, expires_at FROM ${table}`).all()
+          .filter((row) => { const t = new Date(row.expires_at).getTime(); return Number.isFinite(t) && t <= nowMs; })
+          .map((row) => row.id);
+
+        const remove = db.prepare(`DELETE FROM ${table} WHERE id = ?`);
+        expiredIds.forEach((id) => remove.run(id));
+        result[key] = expiredIds.length;
+      }
+    })();
+  } finally {
+    db.pragma('secure_delete = OFF');
+  }
+
+  if (result.pending || result.resets || result.sessions) {
+    try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (_) { /* yoksay */ }
+  }
+  return result;
+}
+
 function logModerationAction(reportId, moderatorId, action, reason) {
   db.prepare(`
     INSERT INTO moderation_actions (report_id, moderator_id, action, reason) VALUES (?, ?, ?, ?)
@@ -4523,6 +4560,7 @@ module.exports = {
   listPushSubscriptions,
   saveFcmToken,
   purgeExpiredRetention,
+  purgeExpiredAuthRecords,
   lifecycleLogCutoff,
   unlinkReportDataForDeletedUser,
   RETENTION_POLICY,
