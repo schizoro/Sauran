@@ -87,6 +87,10 @@ const {
   saveFcmToken,
   purgeExpiredRetention,
   unlinkReportDataForDeletedUser,
+  deleteAccount,
+  listDueDailyRoomCleanups,
+  completeDailyRoomCleanup,
+  failDailyRoomCleanup,
   removeFcmToken,
   listFcmTokens,
   createFeedback,
@@ -706,19 +710,19 @@ app.delete('/api/account', (req, res) => {
 
   try {
 
-    // Rapor/kanıt kayıtları fiziksel olarak silinmez (süreli saklama); yalnızca bu hesapla olan bağlantıları koparılır.
-    unlinkReportDataForDeletedUser(user.id);
+    // Tüm DB silme/güncelleme adımları tek transaction'da (bkz. deleteAccount): hata olursa hiçbir şey silinmez, başarı dönülmez.
+    // Rapor/kanıt kayıtları fiziksel olarak silinmez (süreli saklama); yalnızca bu hesapla bağlantıları koparılır.
+    const result = deleteAccount(user.id);
 
-    const ownedHubs = db.prepare(`SELECT id FROM hubs WHERE created_by = ?`).all(user.id);
-    ownedHubs.forEach(h => db.prepare(`DELETE FROM hubs WHERE id = ?`).run(h.id));
+    // --- Transaction SONRASI (DB artık kalıcı olarak silindi) ---
+    // Açık soketler kapatılır (oturumlar zaten silindi; yeniden bağlanma da reddedilir).
+    for (const sid of Array.from(activeUsers.get(user.id) || [])) {
+      io.sockets.sockets.get(sid)?.disconnect(true);
+    }
+    activeUsers.delete(user.id);
+    activeUserNames.delete(user.id);
 
-    db.prepare(`DELETE FROM messages WHERE user_id = ? OR to_user_id = ?`).run(user.id, user.id);
-    db.prepare(`DELETE FROM friendships WHERE user_low = ? OR user_high = ?`).run(user.id, user.id);
-    db.prepare(`DELETE FROM blocked_users WHERE user_id = ? OR blocked_user_id = ?`).run(user.id, user.id);
-    db.prepare(`DELETE FROM notifications WHERE user_id = ?`).run(user.id);
-    db.prepare(`DELETE FROM hub_members WHERE user_id = ?`).run(user.id);
-    db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(user.id);
-    db.prepare(`DELETE FROM users WHERE id = ?`).run(user.id);
+    finalizeHubPurge(result);
 
     clearSessionCookie(res);
     return res.json({ success: true });
@@ -2535,6 +2539,34 @@ function clearVoiceRoom(roomId) {
 // HUB SİLME
 // =====================================================
 
+// Lobi(ler) DB'den silindikten SONRA: bellekteki sesli oda katılımcılarını temizle ve Daily oda silmelerini başlat.
+// Daily çağrıları DB transaction'ının dışındadır; oda adları transaction içinde kalıcı kuyruğa yazılmıştır (daily_room_cleanup).
+function finalizeHubPurge(result) {
+  (result.voice_room_ids || []).forEach(roomId => clearVoiceRoom(roomId));
+  if ((result.daily_room_names || []).length) processDailyRoomCleanup().catch(() => {});
+}
+
+let dailyCleanupRunning = false;
+
+async function processDailyRoomCleanup() {
+  if (dailyCleanupRunning || !daily.isConfigured()) return;
+  dailyCleanupRunning = true;
+
+  try {
+    for (const row of listDueDailyRoomCleanups(20)) {
+      try {
+        await daily.deleteRoom(row.room_name);
+        completeDailyRoomCleanup(row.room_name);
+      } catch (error) {
+        failDailyRoomCleanup(row.room_name, error.message);
+        console.error(`Daily oda temizliği başarısız (yeniden denenecek): ${row.room_name}:`, error.message);
+      }
+    }
+  } finally {
+    dailyCleanupRunning = false;
+  }
+}
+
 app.delete('/api/hubs/:id/messages', (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
@@ -2569,7 +2601,9 @@ app.delete('/api/hubs/:id', (req, res) => {
       return res.status(400).json(result);
     }
 
-    return res.json(result);
+    finalizeHubPurge({ voice_room_ids: result.voice_room_ids, daily_room_names: result.daily_room_names });
+
+    return res.json({ success: true });
 
   } catch (error) {
     console.error('Hub silme API hatası:', error);
@@ -3428,6 +3462,10 @@ server.listen(PORT, () => {
   };
   runEvidencePurge();
   setInterval(runEvidencePurge, 24 * 60 * 60 * 1000).unref();
+
+  // Daily oda silme kuyruğu: açılışta ve 5 dakikada bir (başarısız silmeler geri çekilmeyle yeniden denenir).
+  processDailyRoomCleanup().catch(() => {});
+  setInterval(() => processDailyRoomCleanup().catch(() => {}), 5 * 60 * 1000).unref();
 
   setInterval(() => {
     try { recoverStaleRoleNoticeEmails(); } catch (error) { console.error('Outbox toparlama hatası:', error); }

@@ -81,4 +81,18 @@ async function createMeetingToken(roomName, userName, userId) {
   return data.token;
 }
 
-module.exports = { createRoom, getRoom, getOrCreateRoom, createMeetingToken, isConfigured: () => Boolean(DAILY_API_KEY) };
+// Odayı Daily tarafında siler. Oda zaten yoksa (404) başarılı sayılır (idempotent); diğer hatalarda fırlatır.
+async function deleteRoom(roomName) {
+  const response = await fetch(`${DAILY_API_BASE}/rooms/${encodeURIComponent(roomName)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${DAILY_API_KEY}` }
+  });
+
+  if (response.ok || response.status === 404) return true;
+
+  let info = '';
+  try { info = (await response.json())?.info || ''; } catch (_) { /* yoksay */ }
+  throw new Error(info || `Daily API hatası (${response.status})`);
+}
+
+module.exports = { createRoom, getRoom, getOrCreateRoom, createMeetingToken, deleteRoom, isConfigured: () => Boolean(DAILY_API_KEY) };

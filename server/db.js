@@ -2475,22 +2475,107 @@ function clearHubMessages(hubId, userId) {
   return { success: true, deleted: info.changes };
 }
 
+// ---- Daily.co oda temizlik kuyruğu ------------------------------------------------------------------------------------
+// Lobi silinirken DB temizliği tek transaction'da yapılır; Daily (üçüncü taraf) çağrısı o transaction'a KATILMAZ. Silinecek Daily
+// oda adları aynı transaction içinde bu kuyruğa yazılır (DB kalıcıdır); silme işlemi transaction'dan sonra yapılır ve başarısız olursa
+// üstel geri çekilmeyle yeniden denenir (açılışta ve periyodik). Kuyrukta kişisel veri yoktur (yalnızca oda adı + deneme bilgisi).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS daily_room_cleanup (
+    room_name TEXT PRIMARY KEY,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    next_attempt_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+const isoNoMs = (ms) => new Date(ms).toISOString().replace(/\.\d+Z$/, 'Z');
+
+function listDueDailyRoomCleanups(limit = 20) {
+  return db.prepare(`
+    SELECT room_name, attempts FROM daily_room_cleanup WHERE next_attempt_at <= ? ORDER BY created_at LIMIT ?
+  `).all(isoNoMs(Date.now()), limit);
+}
+
+function completeDailyRoomCleanup(roomName) {
+  db.prepare(`DELETE FROM daily_room_cleanup WHERE room_name = ?`).run(roomName);
+}
+
+function failDailyRoomCleanup(roomName, message) {
+  const row = db.prepare(`SELECT attempts FROM daily_room_cleanup WHERE room_name = ?`).get(roomName);
+  const attempts = (row ? row.attempts : 0) + 1;
+  const backoffMs = Math.min(6 * 60 * 60 * 1000, Math.pow(2, Math.min(attempts, 12)) * 60 * 1000); // 2 dk ... en çok 6 saat
+  db.prepare(`
+    UPDATE daily_room_cleanup SET attempts = ?, last_error = ?, next_attempt_at = ? WHERE room_name = ?
+  `).run(attempts, String(message || '').slice(0, 200), isoNoMs(Date.now() + backoffMs), roomName);
+}
+
+// Bir lobiye bağlı TÜM veriyi siler (yetki kontrolü YOK; çağıran yetkiyi doğrular). Ayrı bir transaction başlatmaz:
+// çağıran (deleteHub / deleteAccount) transaction içinde çalıştırır, böylece kısmi silme olmaz.
+// Dokunmadıkları: rapor kanıtları (report_evidence / report_evidence_media mesajlardan bağımsızdır), başka lobiler, DM'ler.
+function purgeHubData(hubId) {
+  const hub = db.prepare(`SELECT daily_room_name FROM hubs WHERE id = ?`).get(hubId);
+  const voiceRooms = db.prepare(`SELECT id, daily_room_name FROM hub_voice_rooms WHERE hub_id = ?`).all(hubId);
+  const dailyRoomNames = [hub && hub.daily_room_name, ...voiceRooms.map(r => r.daily_room_name)].filter(Boolean);
+
+  const enqueue = db.prepare(`INSERT OR IGNORE INTO daily_room_cleanup (room_name) VALUES (?)`);
+  dailyRoomNames.forEach(name => enqueue.run(name));
+
+  db.prepare(`DELETE FROM hub_poll_votes WHERE message_id IN (SELECT id FROM messages WHERE hub_id = ?)`).run(hubId);
+  db.prepare(`DELETE FROM message_reactions WHERE message_id IN (SELECT id FROM messages WHERE hub_id = ?)`).run(hubId);
+  db.prepare(`DELETE FROM messages WHERE hub_id = ?`).run(hubId);
+  db.prepare(`DELETE FROM hub_invites WHERE hub_id = ?`).run(hubId);
+  db.prepare(`DELETE FROM hub_bans WHERE hub_id = ?`).run(hubId);
+  db.prepare(`DELETE FROM hub_voice_rooms WHERE hub_id = ?`).run(hubId);
+  db.prepare(`DELETE FROM hub_members WHERE hub_id = ?`).run(hubId);
+  db.prepare(`DELETE FROM hub_roles WHERE hub_id = ?`).run(hubId);
+  db.prepare(`DELETE FROM hubs WHERE id = ?`).run(hubId);
+
+  return { hubId, voiceRoomIds: voiceRooms.map(r => r.id), dailyRoomNames };
+}
+
 function deleteHub(hubId, userId) {
   const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
   if (!hub) return { success: false, error: 'Hub bulunamadı.' };
   if (hub.created_by !== userId) return { success: false, error: 'Yalnızca Hub sahibi silebilir.' };
 
-  const messageIds = db.prepare(`SELECT id FROM messages WHERE hub_id = ?`).all(hubId).map(r => r.id);
+  const purged = db.transaction(() => purgeHubData(hubId))();
 
-  const deleteVotes = db.prepare(`DELETE FROM hub_poll_votes WHERE message_id = ?`);
-  messageIds.forEach(id => deleteVotes.run(id));
+  return { success: true, hub_id: purged.hubId, voice_room_ids: purged.voiceRoomIds, daily_room_names: purged.dailyRoomNames };
+}
 
-  db.prepare(`DELETE FROM messages WHERE hub_id = ?`).run(hubId);
-  db.prepare(`DELETE FROM hub_members WHERE hub_id = ?`).run(hubId);
-  db.prepare(`DELETE FROM hub_roles WHERE hub_id = ?`).run(hubId);
-  db.prepare(`DELETE FROM hubs WHERE id = ?`).run(hubId);
+// Hesap silme: TEK transaction. Herhangi bir adım başarısız olursa hepsi geri alınır (yarım silinmiş hesap kalmaz).
+// Raporlanan mesajların kanıtları silinmez: rapor/kanıt kayıtlarının yalnızca bu hesapla bağlantısı koparılır (retention aynen sürer).
+// Sahip olunan lobiler deleteHub ile aynı temizlik yolundan (purgeHubData) silinir. Üçüncü taraf çağrıları (Daily) transaction DIŞINDADIR:
+// silinecek oda adları kuyruğa yazılır, çağıran transaction'dan sonra işler.
+function deleteAccount(userId) {
+  const run = db.transaction(() => {
+    unlinkReportDataForDeletedUser(userId);
 
-  return { success: true };
+    const owned = db.prepare(`SELECT id FROM hubs WHERE created_by = ?`).all(userId);
+    const purgedHubs = owned.map(h => purgeHubData(h.id));
+
+    db.prepare(`DELETE FROM messages WHERE user_id = ? OR to_user_id = ?`).run(userId, userId);
+    db.prepare(`DELETE FROM friendships WHERE user_low = ? OR user_high = ?`).run(userId, userId);
+    db.prepare(`DELETE FROM blocked_users WHERE user_id = ? OR blocked_user_id = ?`).run(userId, userId);
+    db.prepare(`DELETE FROM notifications WHERE user_id = ?`).run(userId);
+    db.prepare(`DELETE FROM hub_members WHERE user_id = ?`).run(userId);
+    db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(userId);
+
+    const info = db.prepare(`DELETE FROM users WHERE id = ?`).run(userId);
+    if (info.changes !== 1) throw new Error('Hesap silinemedi (kullanıcı satırı silinmedi).');
+
+    return purgedHubs;
+  });
+
+  const purgedHubs = run();
+
+  return {
+    success: true,
+    hub_ids: purgedHubs.map(h => h.hubId),
+    voice_room_ids: purgedHubs.flatMap(h => h.voiceRoomIds),
+    daily_room_names: purgedHubs.flatMap(h => h.dailyRoomNames)
+  };
 }
 
 // =====================================================
@@ -4339,6 +4424,11 @@ module.exports = {
   lifecycleLogCutoff,
   unlinkReportDataForDeletedUser,
   RETENTION_POLICY,
+  deleteAccount,
+  purgeHubData,
+  listDueDailyRoomCleanups,
+  completeDailyRoomCleanup,
+  failDailyRoomCleanup,
   removeFcmToken,
   listFcmTokens,
   createFeedback,
