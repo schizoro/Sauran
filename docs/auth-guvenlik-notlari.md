@@ -31,3 +31,9 @@ Bu belge, oturum-açma/kayıt/şifre sıfırlama/hesap silme akışlarındaki **
 * Hız sınırları süreç belleğindedir (yeniden başlatmada sıfırlanır; çok örnekli ölçeklemede paylaşılmaz).
 * Hesap başına (IP'den bağımsız) kilitleme bilinçli olarak eklenmedi: bir saldırganın meşru kullanıcıyı kilitlemesine (DoS) yol açar.
 * E-posta teslimatı/spam davranışı e-posta sağlayıcısına bağlıdır (bkz. üçüncü taraf belgesi).
+
+## Aşama 7 güncellemesi
+
+- Profil ucu (`/api/users/:id/profile`) artık giriş şartlı ve hız sınırlı; davet katılımı ve kullanıcı arama ayrı hız sınırlarına sahip.
+- Üretimde CORS varsayılanı aynı-origin (soket dahil).
+- `server/preflight.js`: yapılandırma ve ilk açılış etkisi kontrolü (bkz. `uretim-oncesi-kontrol.md`).

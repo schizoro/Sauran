@@ -183,38 +183,28 @@ const server = http.createServer(app);
 const isProduction = process.env.NODE_ENV === 'production';
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean);
 
-function isOriginAllowed(origin) {
+// Üretimde VARSAYILAN: yalnızca AYNI ORIGIN (Origin başlığı, isteğin Host'uyla eşleşir) + ALLOWED_ORIGINS listesi. Eskiden ALLOWED_ORIGINS boşken her origin
+// kabul ediliyordu (credentials: true ile birlikte gereksiz geniş). Çerez SameSite=Lax olduğundan yine de çapraz-site istekle gönderilmezdi; bu, ek savunmadır.
+// origin başlığı olmayan istekler (sunucu-sunucu, aynı-site GET) etkilenmez.
+function isRequestOriginAllowed(originHeader, hostHeader) {
   if (!isProduction) return true; // yerel geliştirmede kısıtlama yok
-  if (!origin) return true; // Origin header'ı olmayan istekler (ör. sunucu-sunucu)
-  // Tarayıcılar aynı origin'den yapılan fetch/XHR/socket.io isteklerinde de
-  // Origin header'ı gönderir. ALLOWED_ORIGINS ayarlanmadıysa varsayılan
-  // olarak kısıtlama uygulanmaz — aksi halde canlıdaki kendi sitesi bile
-  // (kendi Origin'i beyaz listede olmadığı için) engellenmiş olur.
-  if (allowedOrigins.length === 0) return true;
-  return allowedOrigins.includes(origin);
+  if (!originHeader) return true;
+  if (allowedOrigins.includes(originHeader)) return true;
+  try { return new URL(originHeader).host === String(hostHeader || '').toLowerCase(); } catch (_) { return false; }
 }
 
-const corsOptions = {
-  origin: (origin, callback) => {
-    if (isOriginAllowed(origin)) return callback(null, true);
-    return callback(new Error('CORS: bu origin izinli değil.'));
-  },
-  credentials: true
+const corsOptionsDelegate = (req, callback) => {
+  callback(null, { origin: isRequestOriginAllowed(req.headers.origin, req.headers.host), credentials: true });
 };
 
 const io = new Server(server, {
-  cors: {
-    origin: (origin, callback) => {
-      if (isOriginAllowed(origin)) return callback(null, true);
-      return callback(new Error('CORS: bu origin izinli değil.'));
-    },
-    credentials: true,
-    methods: ['GET', 'POST']
-  },
+  cors: { origin: true, credentials: true, methods: ['GET', 'POST'] },
+  // Bağlantı (el sıkışma) yalnızca izinli origin'den kabul edilir; izinsiz origin'e CORS başlığı olsa bile bağlantı REDDEDİLİR.
+  allowRequest: (req, callback) => callback(null, isRequestOriginAllowed(req.headers.origin, req.headers.host)),
   maxHttpBufferSize: 15_000_000
 });
 
-app.use(cors(corsOptions));
+app.use(cors(corsOptionsDelegate));
 app.use(express.json({ limit: '15mb' }));
 
 // =====================================================
@@ -257,6 +247,10 @@ const resetConfirmLimiters = makeCodeLimiters();
 const registerLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyFn: byIp, message: 'Çok fazla kayıt denemesi. Biraz sonra tekrar dene.' });
 const passwordChangeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, keyFn: byIp, message: 'Çok fazla şifre değiştirme denemesi. Biraz sonra tekrar dene.' });
 const accountDeleteLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyFn: byIp, message: 'Çok fazla hesap silme denemesi. Biraz sonra tekrar dene.' });
+// Davet kodu tahmini, kullanıcı adı taraması ve numara ile profil taraması (kullanıcı dizini çıkarma) için hız sınırları.
+const joinLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 20, keyFn: byIp, message: 'Çok fazla davet kodu denemesi. Biraz sonra tekrar dene.' });
+const lookupLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 60, keyFn: byIp, message: 'Çok fazla arama yapıldı. Biraz sonra tekrar dene.' });
+const profileViewLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, keyFn: byIp, message: 'Çok fazla profil isteği. Biraz sonra tekrar dene.' });
 const passwordResetLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyFn: byIp, message: 'Çok fazla istek. Biraz sonra tekrar dene.' });
 const friendRequestLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla arkadaşlık isteği gönderildi. Biraz sonra tekrar dene.' });
 const hubCreateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, keyFn: byIp, message: 'Çok fazla Hub oluşturuldu. Biraz sonra tekrar dene.' });
@@ -1755,7 +1749,7 @@ app.post('/api/hubs/:id/invite-friend', (req, res) => {
   }
 });
 
-app.post('/api/hubs/join', (req, res) => {
+app.post('/api/hubs/join', joinLimiter, (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
 
@@ -3024,7 +3018,7 @@ app.get('/api/friends/requests', (req, res) => {
   }
 });
 
-app.get('/api/users/lookup', (req, res) => {
+app.get('/api/users/lookup', lookupLimiter, (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
 
@@ -3109,8 +3103,10 @@ app.delete('/api/friends/:userId', (req, res) => {
 // KULLANICI PROFİLİ (BAŞKASI)
 // =====================================================
 
-app.get('/api/users/:id/profile', (req, res) => {
-  const viewer = getUserFromRequest(req);
+app.get('/api/users/:id/profile', profileViewLimiter, (req, res) => {
+  // Giriş ŞART: oturumsuz istemci numara tarayarak kullanıcı dizini çıkaramasın.
+  const viewer = requireAuth(req, res);
+  if (!viewer) return;
 
   try {
     const profile = getUserPublicProfile(viewer?.id, Number(req.params.id));
@@ -3591,6 +3587,12 @@ const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
   console.log(`Sauran sunucusu çalışıyor → http://localhost:${PORT}`);
+
+  // Yapılandırma özeti: yalnızca "ayarlı/eksik" (sır DEĞERLERİ hiçbir zaman yazılmaz). Ayrıntı: node server/preflight.js
+  try {
+    const problems = require('./preflight').checkConfig(process.env).filter(r => r.level !== 'ok');
+    problems.forEach(r => console.warn(`[yapılandırma ${r.level}] ${r.key}: ${r.message}`));
+  } catch (_) { /* özet başarısız olsa da sunucu çalışır */ }
 
   // Önceki çalışmadan kalan (gönderilememiş / yarıda kalmış) rol e-postalarını yeniden dene.
   try { recoverStaleRoleNoticeEmails(); } catch (error) { console.error('Outbox toparlama hatası:', error); }
