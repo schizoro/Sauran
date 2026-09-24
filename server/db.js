@@ -3337,6 +3337,15 @@ function deleteAccount(userId) {
 
     // DM'ler: kendi mesajların silinir (mezar taşı bırakılır), karşı tarafın mesajları korunur (bkz. handleDmsOnAccountDeletion).
     const dmPartners = handleDmsOnAccountDeletion(userId);
+    // Başkalarının lobilerinde bu hesabın oluşturduğu/verdiği kayıtlar: oluşturan/banlayan bağlantısı, lobinin sahibine devredilir (oda/ban geçerli kalır; hesaba bağlı
+    // kişisel bağlantı kalmaz). ÖNEMLİ: hub_voice_rooms.created_by yabancı anahtarı (silme kuralsız) olduğundan bu adım olmadan hesap silme başarısız olurdu.
+    db.prepare(`UPDATE hub_voice_rooms SET created_by = (SELECT hubs.created_by FROM hubs WHERE hubs.id = hub_voice_rooms.hub_id) WHERE created_by = ?`).run(userId);
+    db.prepare(`UPDATE hub_bans SET banned_by = (SELECT hubs.created_by FROM hubs WHERE hubs.id = hub_bans.hub_id) WHERE banned_by = ?`).run(userId);
+    // Yönetim/moderasyon kayıtlarındaki personel bağlantıları (kayıtların kendisi kendi saklama süreleriyle kalır).
+    db.prepare(`UPDATE moderation_actions SET moderator_id = NULL WHERE moderator_id = ?`).run(userId);
+    db.prepare(`UPDATE reports SET reviewed_by = NULL WHERE reviewed_by = ?`).run(userId);
+    db.prepare(`UPDATE users SET suspended_by = NULL WHERE suspended_by = ?`).run(userId);
+
     // Bu hesabın sabitlediği (başkalarına ait) lobi mesajlarında sabitleyen bağlantısı kalmasın; sabitleme mesajda kalır.
     db.prepare(`UPDATE messages SET pinned_by = NULL WHERE pinned_by = ?`).run(userId);
     // Geriye kalan (lobi vb.) mesajları silinir; DM satırları yukarıda işlendi.
