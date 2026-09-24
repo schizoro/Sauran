@@ -60,7 +60,7 @@
     function renderNav() {
         const active = activeHubId();
         list.textContent = '';
-        lastHubs.forEach((hub) => {
+        const item = (hub) => {
             const b = document.createElement('button');
             b.type = 'button';
             b.className = 'lobby' + (hub.id === active ? ' active' : '');
@@ -78,8 +78,18 @@
                 closeDrawer();
                 if (typeof openHub === 'function') openHub(hub.id);
             });
-            list.appendChild(b);
-        });
+            return b;
+        };
+        const owned = lastHubs.filter((h) => h.is_owner);
+        const joined = lastHubs.filter((h) => !h.is_owner);
+        owned.forEach((h) => list.appendChild(item(h)));
+        if (joined.length) {
+            const sub = document.createElement('div');
+            sub.className = 'lobby-nav-sub';
+            sub.textContent = tr('lobbies-joined', 'Katıldığım lobiler');
+            list.appendChild(sub);
+            joined.forEach((h) => list.appendChild(item(h)));
+        }
     }
 
     async function fetchHubs() {
