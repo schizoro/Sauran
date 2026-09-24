@@ -20,3 +20,14 @@ mobile/android/app/release/
 
 # Firebase istemci yapılandırması (proje/API kimlikleri) — depoya konmaz
 mobile/android/app/google-services.json
+
+# Veri tabanı kopyaları, yedekler ve yerel geçici araçlar (kişisel veri içerebilir) — depoya konmaz
+*.db
+*.db-wal
+*.db-shm
+data/backups/
+sauran-backup-*
+sauran-export-*
+sauran-dump-*
+server/mig_check.js
+server/_stg/

@@ -14,10 +14,11 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RETENTION_DAYS = 7; // Render disk anlık görüntüsü en az 7 gün (Render dokümantasyonu); migration öncesi doğrulama için yeterli, daha uzun tutmak için gerekçe yok
 
 // Asgari yedekte BOŞALTILAN tablolar: geri yüklemede yeniden oluşan/işe yaramayan ve doğrudan kimlik doğrulama/cihaz gizli bilgisi içerenler.
-const MINIMAL_EXCLUDED_TABLES = ['sessions', 'pending_verifications', 'password_resets', 'push_subscriptions', 'fcm_tokens'];
+// Ayrıca geçici/yeniden üretilebilir bildirim kayıtları (notifications, e-posta kuyruğu) da boşaltılır: geri yüklemede işe yaramaz ve başkalarının adlarını içerebilir.
+const MINIMAL_EXCLUDED_TABLES = ['sessions', 'pending_verifications', 'password_resets', 'push_subscriptions', 'fcm_tokens', 'notifications', 'role_notice_email_outbox'];
 
 // Geçici olduğu açıkça belli, elle alınmış eski yedek adları (DATA_DIR kökünde); yedek dizini dışındaki bu kalıplar da süresi dolunca silinir.
-const STRAY_BACKUP_PATTERNS = [/^sauran\.db\.(bak|backup|pre|old|orig)[-_.\w]*$/i, /^sauran[-_.]?(pre)?migration[-_.\w]*$/i, /^sauran-backup-[-\w.]*\.db$/i];
+const STRAY_BACKUP_PATTERNS = [/^sauran\.db\.(bak|backup|pre|old|orig)[-_.\w]*$/i, /^sauran[-_.]?(pre)?migration[-_.\w]*$/i, /^sauran-backup-[-\w.]*\.db$/i, /^sauran-(export|dump)[-_.\w]*$/i];
 
 function dataDir() { return process.env.DATA_DIR || path.join(__dirname, '..', 'data'); }
 function backupDir() { return path.join(dataDir(), 'backups'); }
@@ -85,11 +86,30 @@ function purgeOldBackups({ now = new Date(), maxAgeDays = retentionDays(), dir =
   return result;
 }
 
-module.exports = { createBackup, purgeOldBackups, backupDir, retentionDays, MINIMAL_EXCLUDED_TABLES, DEFAULT_RETENTION_DAYS };
+// Yedek/DB dizini istemcinin herkese açık (static) dizininin İÇİNDE olamaz: aksi halde dosyalar HTTP ile indirilebilirdi.
+function isInsidePublicDir(dir, publicDir = path.join(__dirname, '..', 'client')) {
+  const d = path.resolve(dir), p = path.resolve(publicDir);
+  return d === p || d.startsWith(p + path.sep);
+}
+
+module.exports = { isInsidePublicDir, createBackup, purgeOldBackups, backupDir, retentionDays, MINIMAL_EXCLUDED_TABLES, DEFAULT_RETENTION_DAYS };
 
 if (require.main === module) {
   try {
+    if (process.argv.includes('--list')) {
+      const dir = backupDir();
+      const list = fs.existsSync(dir) ? fs.readdirSync(dir).filter(n => /^sauran-backup-/.test(n)) : [];
+      list.forEach((n) => {
+        const st = fs.statSync(path.join(dir, n));
+        const left = Math.max(0, Math.ceil((st.mtimeMs + retentionDays() * DAY_MS - Date.now()) / DAY_MS));
+        console.log(`${n}  ${(st.size / 1024).toFixed(0)} KB  otomatik silinmesine ~${left} gün`);
+      });
+      if (!list.length) console.log('Yedek yok.');
+      process.exit(0);
+    }
+    if (process.argv.includes('--purge')) { const r = purgeOldBackups(); console.log(`Süresi dolan ${r.deleted} dosya silindi.`); process.exit(0); }
     const full = process.argv.includes('--full');
+    if (isInsidePublicDir(backupDir())) throw new Error('Yedek dizini herkese açık istemci dizininin içinde olamaz.');
     const r = createBackup({ minimal: !full });
     console.log(`Yedek alındı: ${r.path}`);
     console.log(full ? 'TAM yedek: oturum/kod/anahtar tabloları DAHİL. Gerekmedikten sonra silin.' : `Asgari yedek: şu tablolar boşaltıldı: ${r.excluded.join(', ') || '-'}`);

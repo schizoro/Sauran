@@ -326,6 +326,21 @@ function priorityForReason(reason) {
 const MIN_SIGNUP_AGE = 13;
 const MINOR_AGE_THRESHOLD = 18;
 
+// Boş (yeni) bir veritabanında bu tablo, aşağıdaki sütun geçişlerinden ÖNCE var olmalıdır (aksi halde ilk kurulum "no such table" ile başlamazdı).
+// Sonraki CREATE TABLE IF NOT EXISTS aynı tabloyu değiştirmez; eksik sütunlar geçişlerle eklenir.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS pending_verifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    email TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    password_salt TEXT NOT NULL,
+    code TEXT NOT NULL,
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
 const pendingVerificationColumns = db
   .prepare(`PRAGMA table_info(pending_verifications)`)
   .all()

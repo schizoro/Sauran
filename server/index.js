@@ -298,6 +298,12 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(CLIENT_DIR, hasSession || isNativeWebView || opensChat ? 'index.html' : 'landing.html'));
 });
 
+// Veritabanı/yedek dizini (DATA_DIR) herkese açık istemci dizininin içinde olamaz: aksi halde .db/.db-wal dosyaları HTTP ile indirilebilirdi.
+if (require('./backup').isInsidePublicDir(process.env.DATA_DIR || path.join(__dirname, '..', 'data'))) {
+  console.error('KRİTİK: DATA_DIR istemcinin herkese açık dizininin içinde olamaz. Sunucu başlatılmıyor.');
+  process.exit(1);
+}
+
 // Kişisel veri taşıyan API yanıtları (dışa aktarım dahil) tarayıcı/proxy önbelleğine alınmaz.
 app.use('/api', (req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 
