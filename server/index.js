@@ -89,6 +89,7 @@ const {
   purgeExpiredAuthRecords,
   purgeExpiredAuditLog,
   purgeAdultBirthDates,
+  purgeExpiredMessages,
   purgeExpiredNotificationData,
   listDeletedDmThreads,
   getDeletedDmMessages,
@@ -3558,6 +3559,16 @@ server.listen(PORT, () => {
     } catch (error) { console.error('Doğum tarihi temizleme hatası:', error); }
   };
   runBirthDatePurge();
+
+  // Aktif mesajların teknik saklama modeli (bkz. docs/mesaj-saklama-politikasi.md): açılışta ve saatte bir; hata uygulamayı etkilemez.
+  const runMessagePurge = () => {
+    try {
+      const purged = purgeExpiredMessages();
+      if (purged.media || purged.deleted || purged.copies) console.log(`Mesaj saklama temizliği: medya=${purged.media}, silinen=${purged.deleted}, kopya=${purged.copies}.`);
+    } catch (error) { console.error('Mesaj saklama temizleme hatası:', error); }
+  };
+  runMessagePurge();
+  setInterval(runMessagePurge, 60 * 60 * 1000).unref();
   setInterval(runBirthDatePurge, 24 * 60 * 60 * 1000).unref();
   setInterval(runAuditPurge, 24 * 60 * 60 * 1000).unref();
 

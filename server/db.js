@@ -2688,6 +2688,128 @@ function tombstoneForwardCopiesForDeletedUser(userId) {
   return copies;
 }
 
+// ---- Aktif mesajların TEKNİK saklama modeli (Aşama 15B) --------------------------------------------------------------------------
+// TÜM SÜRELER TEKNİK ÜRÜN VARSAYILANIDIR; KVKK Kurumu ya da başka bir makamca belirlenmiş süreler DEĞİLDİR ve hukuki doğrulamaya tabidir
+// (bkz. docs/mesaj-saklama-politikasi.md). Model, mesajın parçalarını ayrı yaşam döngüleriyle ele alır:
+//  1) MEDYA (ses/görsel/video/dosya, payload içindeki base64): media_days sonra silinir; mesaj metni/adı/türü kalır, payload {expired:true,...} olur
+//     (arayüz "medya süresi doldu" gösterir). En ağır ve en hassas kısım olduğu için en kısa süreli.
+//  2) METİN + yardımcı veri: bir sohbetteki (lobi = hub_N odası, DM = dm_a_b odası) EN YENİ active_keep mesaj yaşından bağımsız KORUNUR
+//     (aktif sohbet geçmişi; bu sayı arayüzün "son 50" limitinden BAĞIMSIZDIR, kasıtlı olarak daha büyüktür). Bunların dışında kalan ve text_days'ten
+//     eski mesajlar (kullanıcıya zaten gösterilmeyenler) silinir. Sabitlenmiş mesajlar bu kurala takılmaz (sabit = açık bir tutma niyeti).
+//  3) Hareketsiz sohbet: dormant_days boyunca hiç mesaj gelmeyen sohbetin tüm mesajları silinir (aksi halde "son N mesaj" koruması sonsuz olurdu).
+// Silinen mesajın: tepkileri/anket oyları silinir, ona verilen yanıtların bağlantısı kaldırılır, FORWARD kopyaları kaynağın yaşam döngüsünü ATLAYAMAZ
+// (kaynağın içeriği/medyası gidince kopyalar da içeriksiz kalır). Rapor kanıtları (report_evidence*) ayrı tablolardır ve HİÇ etkilenmez.
+// "Silinmiş hesap" DM odaları (dmdel_) kendi 90 günlük süresine tabidir ve buraya girmez.
+const MESSAGE_RETENTION = { media_days: 90, text_days: 365, active_keep: 200, dormant_days: 730 };
+const MESSAGE_PURGE_BATCH = 500;
+
+function messageCutoff(now, days) { return new Date(now.getTime() - days * 86400000).toISOString().slice(0, 19).replace('T', ' '); }
+
+// Transaction İÇİNDE: verilen mesajları (kalıcı olarak) siler ve ilişkilerini yetim bırakmaz.
+function deleteMessagesWithRelations(ids) {
+  if (!ids.length) return { deleted: 0, copies: 0 };
+  const idSet = new Set(ids);
+  const json = JSON.stringify(ids);
+
+  // Kopya zinciri: silinenlerden biri KOPYA ise ondan iletilenler üst kaynağa bağlanır; KÖK ise tüm kopyalar içeriksiz mezar taşı olur.
+  const info = db.prepare(`SELECT id, forwarded_from_message_id AS parent FROM messages WHERE id IN (SELECT value FROM json_each(?)) ORDER BY id DESC`).all(json);
+  const roots = [];
+  info.forEach((m) => {
+    if (m.parent == null) roots.push(m.id);
+    else db.prepare(`UPDATE messages SET forwarded_from_message_id = ? WHERE forwarded_from_message_id = ?`).run(m.parent, m.id);
+  });
+  const copies = forwardCopiesOf(roots).filter(c => !idSet.has(c.id));
+  tombstoneMessageRows(copies.map(c => c.id));
+
+  db.prepare(`UPDATE messages SET reply_to_message_id = NULL WHERE reply_to_message_id IN (SELECT value FROM json_each(?))`).run(json);
+  db.prepare(`DELETE FROM message_reactions WHERE message_id IN (SELECT value FROM json_each(?))`).run(json);
+  db.prepare(`DELETE FROM hub_poll_votes WHERE message_id IN (SELECT value FROM json_each(?))`).run(json);
+  const deleted = db.prepare(`DELETE FROM messages WHERE id IN (SELECT value FROM json_each(?))`).run(json).changes;
+  return { deleted, copies: copies.length };
+}
+
+// Medya alanlarını (base64) çıkarır; adı/türü/boyutu/süresi kalır. Hiçbir şey çıkarılamadıysa false.
+function stripMediaPayload(rawPayload) {
+  let payload; try { payload = JSON.parse(rawPayload); } catch (_) { return null; }
+  if (!payload || typeof payload !== 'object') return null;
+  let stripped = false;
+  for (const field of MEDIA_FIELDS) {
+    if (typeof payload[field] === 'string' && payload[field].startsWith('data:')) { delete payload[field]; stripped = true; }
+  }
+  if (!stripped) return null;
+  payload.expired = true;
+  return JSON.stringify(payload);
+}
+
+// Açılışta ve düzenli aralıkla çalışır; her tur sınırlı iş yapar, tekrar çalıştırmak zararsızdır.
+function purgeExpiredMessages(now = new Date()) {
+  const cfg = MESSAGE_RETENTION;
+  const result = { media: 0, deleted: 0, copies: 0 };
+  const notDeletedDm = `COALESCE(room, '') NOT LIKE 'dmdel\\_%' ESCAPE '\\'`;
+
+  db.pragma('secure_delete = ON');
+  try {
+    // 1) medya (imleçle sayfalanır: eşleşip de çıkarılamayan satır döngüyü kilitleyemez)
+    const mediaCut = messageCutoff(now, cfg.media_days);
+    let lastId = 0;
+    for (let round = 0; round < 500; round++) {
+      const rows = db.prepare(`
+        SELECT id, payload FROM messages
+        WHERE id > ? AND created_at < ? AND payload IS NOT NULL AND (payload LIKE '%"data":"data:%' OR payload LIKE '%"audio":"data:%')
+        ORDER BY id LIMIT 50
+      `).all(lastId, mediaCut);
+      if (!rows.length) break;
+      lastId = rows[rows.length - 1].id;
+
+      db.transaction(() => {
+        rows.forEach((row) => {
+          const targets = [row.id, ...forwardCopiesOf([row.id]).map(c => c.id)]; // kopyalar kaynağın medya süresini AŞAMAZ
+          targets.forEach((id) => {
+            const raw = id === row.id ? row.payload : (db.prepare(`SELECT payload FROM messages WHERE id = ?`).get(id) || {}).payload;
+            const stripped = raw ? stripMediaPayload(raw) : null;
+            if (stripped) { db.prepare(`UPDATE messages SET payload = ? WHERE id = ?`).run(stripped, id); result.media += 1; }
+          });
+        });
+      })();
+    }
+
+    // 2) metin: aktif geçmişin dışında kalan ve text_days'ten eski mesajlar
+    const textCut = messageCutoff(now, cfg.text_days);
+    for (let round = 0; round < 100; round++) {
+      const ids = db.prepare(`
+        WITH ranked AS (
+          SELECT id, created_at, pinned_at, ROW_NUMBER() OVER (PARTITION BY room ORDER BY id DESC) AS rn
+          FROM messages WHERE ${notDeletedDm}
+        )
+        SELECT id FROM ranked WHERE rn > ? AND created_at < ? AND pinned_at IS NULL LIMIT ?
+      `).all(cfg.active_keep, textCut, MESSAGE_PURGE_BATCH).map(r => r.id);
+      if (!ids.length) break;
+      const r = db.transaction(() => deleteMessagesWithRelations(ids))();
+      result.deleted += r.deleted; result.copies += r.copies;
+    }
+
+    // 3) hareketsiz sohbetler
+    const dormantCut = messageCutoff(now, cfg.dormant_days);
+    for (let round = 0; round < 100; round++) {
+      const ids = db.prepare(`
+        SELECT id FROM messages
+        WHERE ${notDeletedDm} AND room IN (SELECT room FROM messages WHERE ${notDeletedDm} GROUP BY room HAVING MAX(created_at) < ?)
+        LIMIT ?
+      `).all(dormantCut, MESSAGE_PURGE_BATCH).map(r => r.id);
+      if (!ids.length) break;
+      const r = db.transaction(() => deleteMessagesWithRelations(ids))();
+      result.deleted += r.deleted; result.copies += r.copies;
+    }
+  } finally {
+    db.pragma('secure_delete = OFF');
+  }
+
+  if (result.media || result.deleted || result.copies) {
+    try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (_) { /* yoksay */ }
+  }
+  return result;
+}
+
 // Açılışta bir kez (idempotent): ESKİ sürümde silinen mesajlarda kalmış kalıntıları temizler — user_id/username/ilişkiler, tepkiler, anket oyları, sabitleme —
 // ve silinmiş kök mesajların forward kopyalarını içeriksiz bırakır. Hesap silme mezar taşlarına (user_id zaten NULL) dokunmaz.
 function purgeDeletedMessageResidue() {
@@ -5162,6 +5284,8 @@ module.exports = {
   computeMinorUntil,
   purgeAdultBirthDates,
   purgeDeletedMessageResidue,
+  purgeExpiredMessages,
+  MESSAGE_RETENTION,
   MIN_SIGNUP_AGE,
   getAccountExport,
   isBlocked,

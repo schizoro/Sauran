@@ -3390,6 +3390,7 @@ const I18N = {
     'remove-photo': { tr: 'Kaldır', en: 'Remove' },
     'confirm-delete-message': { tr: 'Bu mesajı silmek istediğine emin misin?', en: 'Are you sure you want to delete this message?' },
     'message-deleted': { tr: 'Bu mesaj silindi', en: 'This message was deleted' },
+    'media-expired': { tr: 'medya süresi doldu (silindi)', en: 'media expired (deleted)' },
     'deleted-account-label': { tr: 'Silinmiş hesap', en: 'Deleted account' },
     'deleted-account-message': { tr: 'Silinmiş hesabın mesajı', en: 'Message from a deleted account' },
     'deleted-dm-readonly': { tr: 'Bu kişi hesabını sildi. Bu sohbet salt okunurdur.', en: 'This person deleted their account. This conversation is read-only.' },
@@ -6945,6 +6946,11 @@ function buildFileCardHtml(payload) {
     const name = payload?.name || 'dosya';
     const size = formatFileSize(payload?.size);
 
+    // Medya saklama süresi dolduysa (sunucu base64 veriyi sildi) yalnızca ad ve bir bilgi gösterilir.
+    if (!payload || payload.expired || !payload.data) {
+        return `<div class="file-msg-card"><span class="hub-msg-deleted">📎 ${escapeHtml(name)} — ${t('media-expired')}</span></div>`;
+    }
+
     if (mime.startsWith('image/')) {
         return `
             <div class="file-msg-card image-msg-card">
@@ -6986,6 +6992,10 @@ function formatDuration(seconds) {
 
 
 function buildVoiceCardHtml(audioSrc, duration) {
+
+    if (!audioSrc) {
+        return `<div class="voice-msg-card"><span class="hub-msg-deleted">🎙️ ${t('media-expired')}</span></div>`;
+    }
 
     return `
         <div class="voice-msg-card">
