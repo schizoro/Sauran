@@ -1,0 +1,211 @@
+/* Sauran — Liquid Glass tasarım katmanı (onaylanan prototipten).
+   style.css'ten SONRA yüklenir; yalnızca görünümü değiştirir, DOM/JS'e dokunmaz.
+   Cam yüzeyler kasıtlı olarak az sayıda öğede kullanılır (performans). */
+
+/* ── Tasarım belirteçleri ─────────────────────────────────────────────── */
+:root {
+  /* zemin */
+  --bg-app: #0a0d11;
+  --bg-surface: #0e1319;
+  --bg-surface-2: #131a22;
+  --bg-surface-3: #18212b;
+  /* metin */
+  --text-primary: #e8edf2;
+  --text-secondary: #a4afbb;
+  --text-tertiary: #6b7784;
+  /* vurgu */
+  --accent: #5cc8ff;
+  --accent-soft: rgba(92, 200, 255, 0.14);
+  --accent-line: rgba(92, 200, 255, 0.35);
+  --success: #5fd6a4;
+  --warning: #f0c36b;
+  --danger: #ff7a86;
+  /* cam */
+  --glass-1: rgba(255, 255, 255, 0.035);
+  --glass-2: rgba(24, 31, 40, 0.62);
+  --glass-bg: var(--glass-1);
+  --blur-1: 18px;
+  --blur-2: 28px;
+  --border-soft: rgba(255, 255, 255, 0.075);
+  --border-soft-strong: rgba(255, 255, 255, 0.12);
+  --hi: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --shadow-surface: none;
+  --shadow-focus: 0 24px 60px -16px rgba(0, 0, 0, 0.6);
+  /* şekil */
+  --radius-sm: 11px;
+  --radius: 14px;
+  --radius-lg: 22px;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  /* boşluk ölçeği */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+}
+
+/* ── Tipografi ────────────────────────────────────────────────────────── */
+* { font-family: "Inter", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif; }
+body { -webkit-font-smoothing: antialiased; line-height: 1.55; }
+
+/* ── Atmosfer: tek, çok hafif ışık (sabit, animasyonsuz) ─────────────── */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(900px 520px at 78% -8%, rgba(60, 150, 210, 0.16), transparent 65%),
+    radial-gradient(700px 460px at -5% 105%, rgba(40, 110, 160, 0.10), transparent 65%);
+}
+#chat-screen, #login-screen { position: relative; z-index: 1; }
+.login-particles { display: none; }
+
+/* ── Odak halkası ─────────────────────────────────────────────────────── */
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible,
+[tabindex]:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
+
+/* ── Giriş / kayıt (odak camı) ───────────────────────────────────────── */
+#login-screen { background: transparent; }
+.login-box {
+  background: var(--glass-2); border: 0; border-radius: var(--radius-lg);
+  -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.35); backdrop-filter: blur(var(--blur-2)) saturate(1.35);
+  box-shadow: var(--hi), 0 0 0 1px rgba(255, 255, 255, 0.09), var(--shadow-focus);
+  padding: 38px 34px; width: 400px;
+}
+.login-box h2 { text-transform: none; letter-spacing: -0.01em; font-size: 24px; font-weight: 650; color: var(--text-primary); }
+.login-box input {
+  height: 46px; padding: 0 14px; border-radius: 12px; background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-soft); color: var(--text-primary);
+}
+.login-box input:focus { border-color: var(--accent-line); background: rgba(255, 255, 255, 0.055); box-shadow: none; }
+.login-box button:not(.auth-switch button) {
+  height: 46px; border-radius: 12px; background: var(--accent); color: #04202e; border: 0; font-weight: 550;
+  transition: 0.18s var(--ease);
+}
+.login-box button:not(.auth-switch button):hover { background: #7ad4ff; box-shadow: none; transform: translateY(-1px); }
+
+.auth-switch button {
+  background: none; border: 0; box-shadow: none; color: var(--accent); font-weight: 550; text-transform: none; letter-spacing: 0;
+  width: auto; padding: 4px 6px; height: auto; border-radius: 8px;
+}
+.auth-switch button:hover { background: var(--accent-soft); }
+
+/* ── Üst bar ─────────────────────────────────────────────────────────── */
+.topbar { background: transparent; border-bottom: 1px solid var(--border-soft); box-shadow: none; }
+.topbar-logo { color: var(--text-primary); letter-spacing: 0.22em; font-weight: 650; }
+.topbar-context-title { color: var(--text-secondary); }
+.topbar-profile-btn, .topbar-menu-btn {
+  background: transparent; border: 0; border-radius: var(--radius-sm); color: var(--text-secondary); transition: 0.18s var(--ease);
+}
+.topbar-profile-btn:hover, .topbar-menu-btn:hover { background: var(--glass-1); color: var(--text-primary); border-color: transparent; }
+.topbar-badge { background: var(--accent); color: #04202e; }
+.topbar-menu-badge { background: var(--accent); box-shadow: none; }
+
+/* ── Cam yüzeyler (yalnızca menü / açılır / popup) ───────────────────── */
+.liquid-glass {
+  background: var(--glass-2); border: 0;
+  -webkit-backdrop-filter: blur(var(--blur-1)) saturate(1.2); backdrop-filter: blur(var(--blur-1)) saturate(1.2);
+  box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong), 0 16px 40px -14px rgba(0, 0, 0, 0.55);
+}
+.liquid-glass:hover { background: var(--glass-2); border-color: transparent; }
+.topbar-menu-item { color: var(--text-secondary); border-radius: var(--radius-sm); }
+.topbar-menu-item:hover { background: var(--accent-soft); color: var(--text-primary); }
+
+/* ── Modallar (odak camı) ────────────────────────────────────────────── */
+.modal-overlay { background: rgba(4, 7, 10, 0.55); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.modal-box, .profile-modal-box, .dm-modal-box {
+  background: var(--glass-2); border: 0; border-radius: var(--radius-lg);
+  -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.35); backdrop-filter: blur(var(--blur-2)) saturate(1.35);
+  box-shadow: var(--hi), 0 0 0 1px rgba(255, 255, 255, 0.09), var(--shadow-focus);
+}
+.modal-header { color: var(--text-primary); border-bottom: 1px solid var(--border-soft); text-transform: none; letter-spacing: 0; font-size: 15px; font-weight: 600; }
+.modal-header button:not([class]):hover { color: var(--accent); border-color: var(--accent-line); }
+.settings-tabs { border-color: var(--border-soft); }
+
+/* ── Lobi listesi ────────────────────────────────────────────────────── */
+.hub-card { border-radius: var(--radius-sm); transition: 0.16s var(--ease); }
+.hub-card:hover { background: var(--glass-1); }
+.hub-card:hover .hub-card-icon { background: var(--accent-soft); }
+.hub-card-name { color: var(--text-primary); font-weight: 600; letter-spacing: 0; }
+.hub-card-meta, .hub-list-subtitle, .hub-detail-count { color: var(--text-tertiary); letter-spacing: 0.04em; }
+.hub-list-subtitle { text-transform: uppercase; font-weight: 600; letter-spacing: 0.08em; }
+
+/* ── Lobi başlığı, yan paneller ──────────────────────────────────────── */
+.hub-detail-header { background: transparent; border-bottom: 0; padding: 20px 32px 12px; }
+.hub-detail-header h2 { color: var(--text-primary); font-size: 19px; font-weight: 650; letter-spacing: -0.01em; }
+.hub-detail-side, .hub-voice-rooms-side, .friends-sidebar {
+  background: var(--glass-1); border-color: var(--border-soft);
+  box-shadow: var(--hi);
+}
+.friends-sidebar-title { color: var(--text-tertiary); }
+.friends-sidebar-name, .hub-voice-member-name { color: var(--text-secondary); }
+.hub-voice-room-name { color: var(--text-primary); }
+
+/* ── Sohbet: kutusuz mesajlar ────────────────────────────────────────── */
+.chat-area { background: transparent; }
+.message, .hub-msg, .dm-msg {
+  background: transparent; border: 0; border-left: 0; border-radius: var(--radius-sm); transition: background 0.15s;
+}
+.message:hover, .hub-msg:hover { background: rgba(255, 255, 255, 0.028); }
+.message .username { color: var(--text-primary); letter-spacing: 0; font-weight: 600; }
+.message .time, .dm-msg-time { color: var(--text-tertiary); opacity: 1; }
+.message .content, .hub-msg-text { color: #d3dbe3; line-height: 1.55; }
+.hub-msg-text { background: transparent; }
+.dm-msg-mine { background: var(--accent-soft); }
+.dm-msg-theirs { background: var(--glass-1); }
+
+/* ── Mesaj yazma alanı (hafif cam) ───────────────────────────────────── */
+.composer-input-box, .hub-composer .composer-input-box {
+  background: var(--glass-1); border: 0; border-radius: 18px; box-shadow: var(--hi), 0 0 0 1px var(--border-soft);
+  -webkit-backdrop-filter: blur(var(--blur-1)) saturate(1.2); backdrop-filter: blur(var(--blur-1)) saturate(1.2);
+  transition: 0.18s var(--ease);
+}
+.composer-input-box:focus-within { box-shadow: var(--hi), 0 0 0 1px var(--accent-line); }
+.composer-send-btn { background: var(--accent); color: #04202e; border: 0; border-radius: 14px; }
+.composer-send-btn:hover { background: #7ad4ff; }
+.composer-icon-btn, .composer-attach-btn { color: var(--text-secondary); }
+.composer-icon-btn:hover, .composer-attach-btn:hover { background: var(--glass-1); color: var(--text-primary); }
+.composer-attach-menu { background: var(--glass-2); box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong); border-radius: var(--radius); }
+
+/* ── Sesli oda ───────────────────────────────────────────────────────── */
+.hub-voice-room-row { background: transparent; border-radius: var(--radius-sm); }
+.hub-voice-room-row:hover { background: var(--glass-1); }
+.hub-in-room-pill { background: rgba(95, 214, 164, 0.1); color: var(--success); border: 0; }
+.hub-in-room-dot { background: var(--success); box-shadow: none; }
+
+/* ── Bildirim toast ──────────────────────────────────────────────────── */
+.toast { background: var(--glass-2); border: 0; border-radius: var(--radius); color: var(--text-primary);
+  box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong), 0 16px 40px -14px rgba(0, 0, 0, 0.55); }
+
+/* ── Kaydırma çubuğu ─────────────────────────────────────────────────── */
+* { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.12) transparent; }
+
+/* ── Mobil: dokunma hedefleri, alttan açılan pencereler ──────────────── */
+@media (max-width: 720px) {
+  body { font-size: 16px; }
+  .topbar { padding-top: calc(12px + env(safe-area-inset-top)); }
+  .hub-detail-header { padding: 14px 18px 8px; }
+  .topbar-profile-btn, .topbar-menu-btn, .hub-icon-btn, .composer-icon-btn, .composer-send-btn { min-width: 44px; min-height: 44px; }
+  .modal-overlay { align-items: flex-end; }
+  .modal-box, .profile-modal-box, .dm-modal-box {
+    width: 100%; max-width: none; border-bottom-left-radius: 0; border-bottom-right-radius: 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* ── Düşük güç / hareket azaltma: camı düz yüzeye indir ──────────────── */
+@media (prefers-reduced-transparency: reduce), (prefers-reduced-motion: reduce) {
+  .login-box, .liquid-glass, .modal-box, .profile-modal-box, .dm-modal-box, .composer-input-box, .modal-overlay {
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  .login-box, .liquid-glass, .modal-box, .profile-modal-box, .dm-modal-box { background: #131a22; }
+}
+
+/* ── Düğme hiyerarşisi: birincil / ikincil / sade ────────────────────── */
+.hub-create-submit, .poll-submit-btn, .about-btn-primary, .cropper-btn-primary, .profile-action-primary {
+  background: var(--accent); color: #04202e; border: 0; border-radius: 12px; font-weight: 550; letter-spacing: 0; text-transform: none;
+  transition: 0.18s var(--ease);
+}
+.hub-create-submit:hover, .poll-submit-btn:hover, .about-btn-primary:hover, .cropper-btn-primary:hover, .profile-action-primary:hover { background: #7ad4ff; box-shadow: none; }
+.profile-action-btn:not(.profile-action-primary):not(.profile-action-danger), .hub-settings-action-btn, .hub-create-image-btn {
+  background: var(--glass-1); border: 0; box-shadow: var(--hi), 0 0 0 1px var(--border-soft); border-radius: 12px; color: var(--text-primary);
+}
+.profile-action-danger { color: var(--danger); }
+.modal-box input:not([type=checkbox]):not([type=file]):not([type=radio]), .modal-box textarea, .modal-box select {
+  background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-soft); border-radius: 12px; color: var(--text-primary);
+}
+.modal-box input:focus, .modal-box textarea:focus, .modal-box select:focus { border-color: var(--accent-line); outline: 0; box-shadow: none; }
