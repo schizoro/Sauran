@@ -2412,13 +2412,14 @@ function getHubDetail(hubId, userId) {
   `).all(hubId);
 
   const members = db.prepare(`
-    SELECT hub_members.user_id, hub_members.role_id, hub_members.permission_tier, users.username, users.status, users.avatar_data, users.avatar_visibility
+    SELECT hub_members.user_id, hub_members.role_id, hub_members.permission_tier, users.username, users.status, users.avatar_data, users.avatar_visibility, users.minor_until
     FROM hub_members
     INNER JOIN users ON users.id = hub_members.user_id
     WHERE hub_members.hub_id = ?
   `).all(hubId).map((m) => {
-    const { avatar_visibility, ...rest } = m;
-    return maskAvatarFor(userId, m.user_id, rest, avatar_visibility);
+    const { avatar_visibility, minor_until, ...rest } = m;
+    const masked = maskAvatarFor(userId, m.user_id, rest, avatar_visibility);
+    return presenceVisibleTo(userId, m.user_id, minor_until) ? masked : { ...masked, status: 'invisible' };
   });
 
   const membership = userId
@@ -3475,6 +3476,14 @@ function avatarVisibleTo(viewerId, ownerId, visibility) {
   return false;
 }
 
+// 18 yaş altı hesapların çevrimiçi durumu/manuel durumu, arkadaşı olmayanlara (ve kendisi dışındaki herkese) 'invisible' (görünmez) gibi gösterilir:
+// çocuğun etkinlik saatleri tanımadığı kişilere açılmasın. Arkadaşlar ve kendisi gerçek durumu görür. Yetişkinler etkilenmez.
+function presenceVisibleTo(viewerId, ownerId, minorUntil) {
+  if (viewerId != null && viewerId === ownerId) return true;
+  if (!isMinorUntil(minorUntil)) return true;
+  return viewerId != null && areFriends(viewerId, ownerId);
+}
+
 function maskAvatarFor(viewerId, ownerId, obj, visibility, fields = ['avatar_data']) {
   if (!obj || ownerId == null) return obj;
   const vis = visibility !== undefined ? visibility : (db.prepare(`SELECT avatar_visibility FROM users WHERE id = ?`).get(ownerId) || {}).avatar_visibility;
@@ -3745,7 +3754,7 @@ function getUserPublicProfile(viewerId, targetId) {
   return {
     id: user.id,
     username: user.username,
-    status: user.status,
+    status: presenceVisibleTo(viewerId, targetId, user.minor_until) ? user.status : 'invisible',
     about_me: aboutVisible ? user.about_me : null,
     avatar_data: visible ? user.avatar_data : null,
     banner_data: visible ? user.banner_data : null,

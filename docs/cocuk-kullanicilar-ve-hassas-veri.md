@@ -1,45 +1,54 @@
-# Çocuk kullanıcılar ve hassas veri (Aşama 19)
+# Çocuk kullanıcılar: mevcut model, riskler, teknik korumalar ve hukuki karar noktaları
 
-> **Uyarı:** Bu belge teknik durumu anlatır. Çocukların kişisel verisi, ebeveyn izni/bilgilendirmesi, çocuk güvenliği bildirim yükümlülükleri ve özel nitelikli kişisel veri
-> konularındaki hukuki yükümlülükler **koddan çıkarılamaz**; **hukuki politika/doğrulama gereklidir** ve bu belgede icat edilmemiştir.
-> Kod, "çocuk güvenliği = daha uzun saklama" ya da "hassas içerik = süresiz saklama" gibi varsayımlar YAPMAZ (bkz. `child19_suite`).
+> **Uyarı:** Bu belge teknik durumu ve **riskleri** anlatır; hukuki sonuç ya da "yasaktır/serbesttir" hükmü vermez. Çocukların kişisel verisi, ebeveyn izni/bilgilendirmesi, çocuk güvenliği bildirim yükümlülükleri
+> **koddan çıkarılamaz**; **hukuki politika gereklidir**. Kod, "çocuk güvenliği = daha uzun saklama" gibi süre varsayımları YAPMAZ (`child19_suite`, `child4_suite`).
 
-## Mevcut durum (koddan doğrulandı)
+## 1. Yaş modeli
+* **Beyan esaslıdır:** kayıtta doğum tarihi girilir; 13 yaş altı reddedilir; kimlik/ebeveyn doğrulaması **yoktur**. Beyan gerçeğe aykırı olabilir; bu, aşağıdaki tüm korumaların doğruluğunu sınırlar.
+* Tam doğum tarihi saklanmaz; 18 yaş altında yalnızca `minor_until` (18. yaş günü). "18 yaş altı" = `13–17` yaş.
+* İleride gerçek yaş doğrulaması gerekip gerekmediği **teknik + ürün + hukuk kararıdır**; bu çalışmada kimlik doğrulama mekanizması eklenmemiştir.
 
-| Konu | Durum |
-|---|---|
-| 13 yaş altı kayıt | Reddedilir (giriş anında hesaplanır, saklanmaz). Beyan tabanlıdır; kimlik doğrulama yoktur. |
-| 13–17 yaş varsayılanı | Kayıtta `avatar_visibility = 'friends'`, `is_minor = true`. |
-| 18 yaş | `minor_until` günü gelince otomatik reşit (Aşama 13). |
-| DM | Yalnızca kabul edilmiş arkadaşlar arasında; yabancı bir kullanıcı çocuğa DM gönderemez. |
-| Arkadaşlık isteği | Kullanıcı adını bilen herkes istek gönderebilir (yaş ayrımı yok) — **ürün/hukuk kararı gerekir** (aşağıya bkz.). |
-| Raporlama | `child_safety` kategorisi otomatik `critical`; rapor ve kanıta yalnızca yetkili moderasyon erişir (normal kullanıcı/lobi sahibi 403). |
-| Bildirim yükü | FCM/Web Push yalnızca genel metin + tür taşır (Aşama 9–10); içerik/ad/kimlik yok. |
-| Saklama | Çocuğa özel (daha uzun ya da daha kısa) süre **yok**; mesaj/medya/rapor kanıtı süreleri yaştan bağımsızdır. |
+## 2. Özellik bazında mevcut davranış (kod incelemesi)
 
-## Bu aşamada bulunan ve düzeltilen gerçek açık
+| Özellik | 13–17 yaş için mevcut davranış | Değerlendirme |
+|---|---|---|
+| Kayıt | 13 yaş altı reddedilir; kayıtta `avatar_visibility='friends'` atanır | Uygulanıyor |
+| Profil fotoğrafı / kapak | `avatar_visibility` **sunucuda uygulanır**: yabancıya gitmez (Aşama 19) | Düzeltildi |
+| Biyografi | Arkadaş olmayana **gösterilmez** | Uygulanıyor |
+| Çevrimiçi / manuel durum | **Bu çalışmada:** arkadaş olmayana "görünmez/çevrimdışı" gösterilir (profil + lobi üye listesi); arkadaşa ve kendisine gerçek durum | Yeni |
+| Kullanıcı adı | Aynı lobideki tüm üyelere ve tam adı bilene görünür (işlev gereği) | Bilinçli |
+| Arama / keşif | Genel kullanıcı/lobi **arama dizini yoktur**; kullanıcı numarası/adı bilinmeden bulunamaz; lobiye yalnızca davet koduyla girilir | Düşük görünürlük |
+| Arkadaşlık (yetişkin → çocuk) | **Engel yoktur**: kullanıcı numarasını (lobi üye listesinden görülebilir) bilen herkes istek gönderebilir; **kabul çocuktadır** | **Risk / karar noktası** (bkz. §3) |
+| Arkadaşlık (çocuk → yetişkin) | Serbest; karşı tarafın kabulü gerekir | Aynı |
+| DM | Yalnızca kabul edilmiş arkadaşlar arasında; yabancı DM gönderemez | Uygulanıyor |
+| Lobi/lobi üyelikleri | Davet koduyla; lobi yöneticileri üyelerin adlarını görür | Bilinçli |
+| Sesli odalar / arama / ekran paylaşımı | Lobi üyeleri arasında; yaşa göre ayrım yok. Daily'ye kullanıcı adı gitmez (Aşama 1) | **Risk / karar noktası** |
+| Davet sistemi | Kod tabanlı (kim oluşturduğu kayıtlı); yaş kısıtı yok | Bilinçli |
+| Raporlama | Kategori "Çocuk güvenliği" → otomatik `critical`; rapor ve kanıta **yalnızca yetkili moderasyon** erişir (403 testli) | Uygulanıyor |
+| Rapor kanıtı | Mesaj + minimum metadata; **yaş/doğum/kullanıcı adı/e-posta tutulmaz**; hesap silinince gönderen bağlantısı kopar | Uygulanıyor |
+| Bildirimler (in-app) | Kısa ömürlü (7–90 gün); başkasının adı içerebilir; export'a girmez | Uygulanıyor |
+| FCM / Web Push | Yalnızca genel metin + tür; içerik/ad/kimlik yok | Uygulanıyor |
+| Export | Kullanıcı kendi verisini alır: `age_group`/`is_minor` var, tam doğum tarihi yok | Uygulanıyor |
+| Hesap silme | Şifreyle doğrulanır; tek transaction; DB+WAL'da iz kalmaz (test) | Uygulanıyor |
+| Günlük/denetim | Kullanıcı adı/e-posta/IP günlüğe yazılmaz; denetim kaydı yalnızca numara + kısa etiket | Uygulanıyor |
 
-`users.avatar_visibility` ('public'/'friends'/'private') kayıtta 13–17 yaş için `friends` atanıyordu ve ayarlarda değiştirilebiliyordu, ancak **sunucuda hiçbir yerde uygulanmıyordu**:
-profil, lobi mesajları, lobi üye listesi ve arkadaş listesi başkasının `avatar_data`/`banner_data` alanını ayara bakmadan döndürüyordu (Çocuk Güvenliği sayfasındaki "yalnızca arkadaşlara açık" ifadesi
-görseller için fiilen doğru değildi). Düzeltme:
+## 3. Yetişkin ↔ çocuk sosyal etkileşimi: risk değerlendirmesi
+**Soru:** "Yetişkin ile çocuk arasındaki sosyal etkileşimi tamamen serbest bırakmak ürün ve çocuk güvenliği açısından kabul edilebilir mi?"
 
-* `avatarVisibleTo` / `maskAvatarFor` (`server/db.js`): **kendisi** her zaman; `public` herkes; `friends` yalnızca kabul edilmiş arkadaşlar; `private` ve bilinmeyen yalnızca kendisi.
-  Uygulanan yerler: profil (avatar + kapak), lobi mesajları (REST), DM mesajları, silinmiş-hesap sohbeti, lobi üyeleri, banlılar, arkadaşlar, engellenenler.
-* **Canlı yayın** (odaya giden mesaj) alıcıya özel üretilemediğinden görüntüleyensiz maskelenir: yalnızca `public` avatarlar yayınlanır. İstemci, REST ile aldığı (kendi yetkisine göre süzülmüş) görseli
-  önbellekten (`knownAvatars`) ve kendi görselini `currentUser`'dan kullanır; böylece arkadaşlar ve kişinin kendisi için görünüm bozulmaz.
-* **18 yaş altı biyografi:** serbest metin biyografi arkadaş olmayanlara (ve oturumsuz görüntüleyene) gösterilmez.
-* Ham `avatar_visibility` alanı API yanıtlarında sızmaz.
+* **Gerçek risk (teknik/ürün):** Yetişkin bir kullanıcı, çocuğun numarasını ortak lobiden öğrenip arkadaşlık isteği gönderebilir; çocuk kabul ederse **özel mesaj, sesli arama ve medya paylaşımı** açılır. Yaş beyanı doğrulanmadığı için bilinen "yaş dışı" kullanıcılar da (yetişkin görünen çocuk, çocuk görünen yetişkin) mümkündür.
+  Kabul mekanizması (çocuğun onayı) tek koruma katmanıdır; yaş farkı, ilk mesaj kısıtı, uyarı metni veya ebeveyn görünürlüğü **yoktur**.
+* **Güvenli teknik seçenekler (uygulanmadı; ürün kararı gerekir):**
+  1. Yetişkin → 18 yaş altı arkadaşlık isteğini engellemek veya yalnızca ortak lobi/onaylı davetle izin vermek.
+  2. 18 yaş altına gelen isteklerde belirgin uyarı/raporlama kısayolu göstermek.
+  3. 18 yaş altı hesaplar için DM'yi yalnızca aynı yaş grubuyla sınırlamak.
+  4. 18 yaş altı hesaplar için lobi üye listesinde tam adı yalnızca arkadaşlara göstermek.
+  Bu seçeneklerin her biri sosyal özelliği **kısıtlar** ve ürün deneyimini değiştirir; bu yüzden kod bunları **kendi başına** uygulamaz.
+* **Hukuki inceleme gerektiren nokta:** Çocuğun rızası/ebeveyn izni, çocuklara yönelik hizmetlerde alınması gereken tedbirler, ihbar/bildirim yükümlülükleri ve platformun sorumluluğu — resmî KVKK rehberleri ve ilgili mevzuata göre bir hukukçu tarafından değerlendirilmelidir.
+* **Bu çalışmada yapılan doğrudan teknik iyileştirmeler:** çocuğun görünürlüğünün azaltılması (görsel, biyografi, çevrimiçi durum), rapor/kanıt erişiminin doğrulanması, silme izinin doğrulanması, bildirim/log/denetim minimizasyonunun doğrulanması.
 
-## Değiştirilmeyenler / bilinçli kararlar
-
-* Çocuk özel özellikleri yeniden tasarlanmadı; DM, lobi, ses ve raporlama akışları aynen çalışır.
-* Rapor kanıtı, mesaj saklama, bildirim ve denetim kayıtlarına çocuk/hassas içeriğe özel süre eklenmedi.
-* İçerik sınıflandırması (özel nitelikli veri tespiti) yapılmaz; kullanıcı mesajlarında özel nitelikli veri bulunabilir ve bu, genel süre kuralına tabidir.
-
-## Hukuki politika gerektiren / açık kalan noktalar
-
-1. Reşit olmayan kullanıcıların açık rızası, ebeveyn bilgilendirmesi ve veri işleme dayanağı (KVKK kapsamı) — **hukuki politika gerekli**.
-2. Çocuk güvenliği raporlarının (ör. istismar bildirimleri) saklama süresi ve yetkili makamlara bildirim yükümlülüğü — **hukuki politika gerekli**; kod özel süre icat etmez.
-3. Yetişkin → 18 yaş altı **arkadaşlık isteği** kısıtı (ör. yaş farkı, davetle ekleme) ürün ve hukuk kararı gerektirir; teknik olarak `friendship` oluşturmadan önce yaş grubu kontrolü eklenebilir.
-4. Yaş beyanının doğrulanması (kimlik/ebeveyn doğrulaması) yoktur.
-5. Ses/video/görsel içerikte özel nitelikli veri ve çocuk içeriği için ek koruma/bildirim süreçleri.
+## 4. Hukuki politika gerektiren / açık kalan noktalar
+1. Reşit olmayan kullanıcılarda veri işleme dayanağı, açık rıza/ebeveyn bilgilendirmesi (KVKK'nın güncel rehberleri ve mevzuat) — **hukuki politika gerekli**.
+2. Çocuk güvenliği raporları için **özel saklama süresi, resmî makamlara bildirim/aktarım yükümlülüğü** — **hukuki politika gerekli**; kod süre icat etmez (tüm nedenler aynı süreleri kullanır).
+3. Yetişkin→çocuk etkileşim kısıtı (yukarıdaki seçenekler) — **ürün + hukuk kararı**.
+4. Yaş doğrulaması (kimlik/ebeveyn) gerekliliği — **ürün + hukuk kararı**.
+5. Ses/görüntü/görsel içerikte çocuk verisi ve özel nitelikli veri için ek koruma/bildirim süreçleri.
