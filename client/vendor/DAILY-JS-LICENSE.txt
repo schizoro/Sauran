@@ -1,0 +1,4 @@
+@daily-co/daily-js 0.92.2  (dist/daily.js, byte-identical to the npm registry tarball; SHA-384 qkOcWks7O6ZM0W8bDQRvE2Zigs/pWm7ioqYeangGqWoaqMEFUNeAKYLp8J+qWiUS)
+License: BSD-2-Clause (as declared in the package.json of @daily-co/daily-js@0.92.2)
+Copyright: Daily. See https://github.com/daily-co/daily-js/ and https://www.npmjs.com/package/@daily-co/daily-js
+Served from our own origin so that visitors' IP address / browser data are not sent to a public CDN when the app loads.

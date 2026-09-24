@@ -161,7 +161,7 @@ async function sendRoleDecisionTeamEmail({ username, userId, decision, role, ver
   await transporter.sendMail({
     to: REPORT_EMAIL_TO,
     from: MAIL_FROM,
-    subject: `[SAURAN] Yönetim Görevi ${accepted ? 'Kabul Edildi' : 'Reddedildi'} — ${username} (${roleLabel})`,
+    subject: `[SAURAN] Yönetim Görevi ${accepted ? 'Kabul Edildi' : 'Reddedildi'} — ${roleLabel}`, // konu satırında kullanıcı adı yok (posta günlükleri/bildirimlerine sızmasın); kimlik gövdede
     html: `
       <div style="font-family: 'Segoe UI', sans-serif; background: #0b0c10; color: #c5c6c7; padding: 32px; max-width: 520px; margin: auto; border-radius: 4px;">
         <h2 style="color: ${accepted ? '#57f287' : '#ff6b7d'}; letter-spacing: 1px;">Yönetim Görevi ${accepted ? 'Kabul Edildi' : 'Reddedildi'}</h2>

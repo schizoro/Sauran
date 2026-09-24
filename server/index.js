@@ -454,7 +454,7 @@ app.post('/api/register', registerLimiter, async (req, res) => {
 
     // E-posta gönderimi yanıtı BEKLEMEZ ve adres kayıtlı olsa da olmasa da yanıt/süre aynıdır (e-posta numaralandırma yok). Gönderim hatası günlüğe yazılır.
     const mailJob = result.code ? sendVerificationEmail(email, result.code) : sendAccountExistsEmail(String(email || '').trim().toLowerCase());
-    mailJob.catch((error) => console.error('Kayıt e-postası gönderilemedi:', error.message));
+    mailJob.catch((error) => console.error('Kayıt e-postası gönderilemedi:', error && error.code ? error.code : 'hata')); // hata metni alıcı adresi içerebilir: günlüğe yalnızca kod yazılır
 
     return res.json({ success: true, email });
 
@@ -2135,7 +2135,8 @@ app.post('/api/dm/:userId/call/join', async (req, res) => {
     const room = await daily.getOrCreateRoom(roomName, { screenshare: false });
     const roomUrl = room.url;
 
-    const token = await daily.createMeetingToken(roomName, user.username);
+    // Birebir DM aramasında arayüz katılımcı adlarını Daily'den okumaz; bu yüzden Daily'ye kullanıcı adı GÖNDERİLMEZ (veri minimizasyonu).
+    const token = await daily.createMeetingToken(roomName, 'Sauran');
 
     return res.json({ success: true, room_url: roomUrl, token, room_name: roomName });
 
@@ -2957,7 +2958,7 @@ app.post('/api/password-reset/request', passwordResetLimiter, async (req, res) =
     if (result.success) {
       const user = db.prepare(`SELECT email FROM users WHERE id = ?`).get(result.userId);
       // Yanıt e-posta gönderimini BEKLEMEZ (hesap var/yok zamanlama farkı olmasın); hata günlüğe yazılır.
-      sendPasswordResetEmail(user.email, result.code).catch((error) => console.error('Şifre sıfırlama e-postası gönderilemedi:', error.message));
+      sendPasswordResetEmail(user.email, result.code).catch((error) => console.error('Şifre sıfırlama e-postası gönderilemedi:', error && error.code ? error.code : 'hata'));
     }
 
     return res.json({ success: true, error: null });
@@ -3187,7 +3188,7 @@ io.on('connection', (socket) => {
   const username = socket.username;
 
   try {
-    console.log(`Socket bağlandı: ${username} [${socket.id}]`);
+    console.log(`Socket bağlandı [${socket.id}]`); // günlüğe kullanıcı adı yazılmaz
 
     if (!activeUsers.has(userId)) {
       activeUsers.set(userId, new Set());
@@ -3537,7 +3538,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', (reason) => {
-    console.log(`Socket ayrıldı: ${username} [${socket.id}] - ${reason}`);
+    console.log(`Socket ayrıldı [${socket.id}] - ${reason}`);
 
     if (!socket.userId) return;
 
