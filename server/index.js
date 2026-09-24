@@ -2800,7 +2800,7 @@ app.get('/api/hubs/:id/bans', (req, res) => {
     return res.status(403).json({ success: false, error: 'Bu işlem için yetkin yok.' });
   }
 
-  return res.json({ success: true, bans: listHubBans(hubId) });
+  return res.json({ success: true, bans: listHubBans(hubId, user.id) });
 });
 
 // =====================================================

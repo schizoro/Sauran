@@ -2397,11 +2397,14 @@ function getHubDetail(hubId, userId) {
   `).all(hubId);
 
   const members = db.prepare(`
-    SELECT hub_members.user_id, hub_members.role_id, hub_members.permission_tier, users.username, users.status, users.avatar_data
+    SELECT hub_members.user_id, hub_members.role_id, hub_members.permission_tier, users.username, users.status, users.avatar_data, users.avatar_visibility
     FROM hub_members
     INNER JOIN users ON users.id = hub_members.user_id
     WHERE hub_members.hub_id = ?
-  `).all(hubId);
+  `).all(hubId).map((m) => {
+    const { avatar_visibility, ...rest } = m;
+    return maskAvatarFor(userId, m.user_id, rest, avatar_visibility);
+  });
 
   const membership = userId
     ? db.prepare(`SELECT role_id, permission_tier, muted FROM hub_members WHERE hub_id = ? AND user_id = ?`).get(hubId, userId)
@@ -2566,14 +2569,14 @@ function isHubBanned(hubId, userId) {
   return Boolean(db.prepare(`SELECT 1 FROM hub_bans WHERE hub_id = ? AND user_id = ?`).get(hubId, userId));
 }
 
-function listHubBans(hubId) {
+function listHubBans(hubId, viewerId = null) {
   return db.prepare(`
-    SELECT users.id, users.username, users.avatar_data, hub_bans.created_at
+    SELECT users.id, users.username, users.avatar_data, users.avatar_visibility, hub_bans.created_at
     FROM hub_bans
     INNER JOIN users ON users.id = hub_bans.user_id
     WHERE hub_bans.hub_id = ?
     ORDER BY hub_bans.created_at DESC
-  `).all(hubId);
+  `).all(hubId).map((b) => { const { avatar_visibility, ...rest } = b; return maskAvatarFor(viewerId, b.id, rest, avatar_visibility); });
 }
 
 function getHubMessages(hubId, limit = 50, viewerId = null) {
@@ -2643,6 +2646,9 @@ function hydrateMessage(row, viewerId = null) {
   }
 
   result = { ...result, reactions: getMessageReactions(result.id, viewerId) };
+
+  // Gönderenin profil görseli, görüntüleyen için gizlilik ayarına göre süzülür (viewerId yoksa yalnızca 'public').
+  if (result.avatar_data && result.user_id) result = maskAvatarFor(viewerId, result.user_id, result);
 
   return result;
 }
@@ -3432,6 +3438,28 @@ function removeFriend(userId, otherUserId) {
   return { success: true };
 }
 
+// ---- Profil görseli görünürlüğü (Aşama 19) ------------------------------------------------------------------------------------
+// users.avatar_visibility ('public' | 'friends' | 'private') ARTIK SUNUCU TARAFINDA UYGULANIR (önceden yalnızca saklanıyordu). Görüntüleyen kişi için başkasının
+// avatar_data / banner_data alanı: kendisi -> her zaman; 'public' -> herkes; 'friends' -> yalnızca kabul edilmiş arkadaşlar; 'private' ve bilinmeyen -> yalnızca kendisi.
+// viewerId YOKSA (ör. sohbet odasına yayınlanan canlı mesaj: alıcı başına farklı içerik üretilemez) yalnızca 'public' olanlar görünür; alıcılar arkadaşsa
+// istemci, REST ile aldığı (kendi yetkisine göre süzülmüş) görseli önbellekten kullanır. 13-17 yaş hesaplarda varsayılan 'friends'tir (kayıtta atanır).
+function avatarVisibleTo(viewerId, ownerId, visibility) {
+  if (viewerId != null && viewerId === ownerId) return true;
+  const v = visibility == null ? 'public' : visibility;
+  if (v === 'public') return true;
+  if (v === 'friends') return viewerId != null && areFriends(viewerId, ownerId);
+  return false;
+}
+
+function maskAvatarFor(viewerId, ownerId, obj, visibility, fields = ['avatar_data']) {
+  if (!obj || ownerId == null) return obj;
+  const vis = visibility !== undefined ? visibility : (db.prepare(`SELECT avatar_visibility FROM users WHERE id = ?`).get(ownerId) || {}).avatar_visibility;
+  if (avatarVisibleTo(viewerId, ownerId, vis)) return obj;
+  const copy = { ...obj };
+  fields.forEach((f) => { if (f in copy) copy[f] = null; });
+  return copy;
+}
+
 function areFriends(a, b) {
   const [low, high] = pairKey(a, b);
   const row = db.prepare(`SELECT status FROM friendships WHERE user_low = ? AND user_high = ?`).get(low, high);
@@ -3450,12 +3478,12 @@ function getFriendshipStatus(a, b) {
 
 function listFriends(userId) {
   return db.prepare(`
-    SELECT users.id, users.username, users.status, users.avatar_data
+    SELECT users.id, users.username, users.status, users.avatar_data, users.avatar_visibility
     FROM friendships
     INNER JOIN users ON users.id = CASE WHEN friendships.user_low = ? THEN friendships.user_high ELSE friendships.user_low END
     WHERE friendships.status = 'accepted' AND (friendships.user_low = ? OR friendships.user_high = ?)
     ORDER BY users.username COLLATE NOCASE
-  `).all(userId, userId, userId);
+  `).all(userId, userId, userId).map((f) => { const { avatar_visibility, ...rest } = f; return maskAvatarFor(userId, f.id, rest, avatar_visibility); });
 }
 
 function listIncomingRequests(userId) {
@@ -3677,13 +3705,16 @@ function confirmPasswordReset(email, code, newPassword) {
 
 function getUserPublicProfile(viewerId, targetId) {
   const user = db.prepare(`
-    SELECT id, username, status, about_me, avatar_data, banner_data
+    SELECT id, username, status, about_me, avatar_data, banner_data, avatar_visibility, minor_until
     FROM users WHERE id = ?
   `).get(targetId);
 
   if (!user) return null;
 
   const isSelf = viewerId === targetId;
+  const visible = avatarVisibleTo(viewerId, targetId, user.avatar_visibility);
+  // 18 yaş altı hesapların serbest metin biyografisi, arkadaşı olmayanlara (ve oturumsuz görüntüleyene) gösterilmez.
+  const aboutVisible = isSelf || !isMinorUntil(user.minor_until) || (viewerId != null && areFriends(viewerId, targetId));
   const friendship = viewerId ? getFriendshipStatus(viewerId, targetId) : 'none';
   const blockedByMe = viewerId ? isBlocked(viewerId, targetId) : false;
 
@@ -3691,9 +3722,9 @@ function getUserPublicProfile(viewerId, targetId) {
     id: user.id,
     username: user.username,
     status: user.status,
-    about_me: user.about_me,
-    avatar_data: user.avatar_data,
-    banner_data: user.banner_data,
+    about_me: aboutVisible ? user.about_me : null,
+    avatar_data: visible ? user.avatar_data : null,
+    banner_data: visible ? user.banner_data : null,
     friendship_status: isSelf ? 'self' : friendship,
     blocked_by_me: blockedByMe
   };
@@ -3727,12 +3758,12 @@ function isBlocked(userId, targetId) {
 
 function listBlockedUsers(userId) {
   return db.prepare(`
-    SELECT users.id, users.username, users.avatar_data
+    SELECT users.id, users.username, users.avatar_data, users.avatar_visibility
     FROM blocked_users
     INNER JOIN users ON users.id = blocked_users.blocked_user_id
     WHERE blocked_users.user_id = ?
     ORDER BY users.username COLLATE NOCASE
-  `).all(userId);
+  `).all(userId).map((b) => { const { avatar_visibility, ...rest } = b; return maskAvatarFor(userId, b.id, rest, avatar_visibility); });
 }
 
 // =====================================================
@@ -5390,6 +5421,7 @@ module.exports = {
   isMinorUntil,
   computeMinorUntil,
   purgeAdultBirthDates,
+  avatarVisibleTo,
   verifyAccountPassword,
   MIN_PASSWORD_LENGTH,
   purgeDeletedMessageResidue,

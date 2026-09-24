@@ -6247,7 +6247,19 @@ function removeDmMessage(messageId) {
 // MESAJ AVATARI (Hub + DM ortak)
 // =====================================================
 
+// Profil görseli gizlilik ayarına göre sunucu tarafından süzülür. Canlı (yayın) mesajlarda alıcıya özel içerik üretilemediğinden başkasının görseli gelmeyebilir;
+// bu durumda REST ile (kendi yetkimize göre) daha önce alınmış görsel önbellekten kullanılır. Kendi görselimiz her zaman currentUser'dan gelir.
+const knownAvatars = new Map();
+
+function resolveAvatar(userId, avatarData) {
+    if (avatarData) { knownAvatars.set(userId, avatarData); return avatarData; }
+    if (currentUser && userId === currentUser.id) return currentUser.avatar_data || null;
+    return knownAvatars.get(userId) || null;
+}
+
 function avatarButtonHtml(userId, avatarData, username) {
+
+    avatarData = resolveAvatar(userId, avatarData);
 
     const color = getUserColor(username || '');
     const initial = (username || '?').charAt(0).toUpperCase();
