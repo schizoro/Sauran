@@ -185,6 +185,31 @@
         hv.appendChild(p);
     }
 
+    // Lobi oluştur: "Vazgeç" mevcut kapatma düğmesine devreder
+    const cancel = $('hub-create-cancel-btn'), closeC = $('hub-create-close-btn');
+    if (cancel && closeC) cancel.addEventListener('click', () => closeC.click());
+
+    // Sesli oda: ikon düğmelerine dile göre erişilebilir ad; başlık altında "Bağlı · N"
+    function voiceLabels() {
+        const m = { 'call-screenshare-btn': ['voice-screenshare', 'Ekran paylaş'], 'call-minimize-btn': ['voice-minimize', 'Küçült'], 'call-leave-btn': ['call-leave', 'Ayrıl'] };
+        Object.keys(m).forEach((id) => { const el = $(id); if (el) { const l = tr(m[id][0], m[id][1]); el.setAttribute('aria-label', l); el.title = l; } });
+    }
+    const dur = $('call-header-duration');
+    if (dur && !$('call-header-sub')) {
+        const sub = document.createElement('span');
+        sub.id = 'call-header-sub'; sub.className = 'call-header-sub';
+        dur.parentNode.insertBefore(sub, dur);
+        const cnt = $('hub-in-room-count');
+        const upd = () => {
+            const n = cnt ? (cnt.textContent || '').replace(/\D/g, '') : '';
+            sub.textContent = n ? tr('voice-connected', 'Bağlı') + ' · ' + n + ' ' + tr('member-count', 'kişi') : '';
+        };
+        if (cnt) new MutationObserver(upd).observe(cnt, { childList: true, characterData: true, subtree: true });
+        upd();
+    }
+    voiceLabels();
+    setInterval(voiceLabels, 15000);
+
     labelButtons();
     mirror();
     syncMainState();

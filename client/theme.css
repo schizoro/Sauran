@@ -12,7 +12,7 @@
   /* metin */
   --text-primary: #e8edf2;
   --text-secondary: #a4afbb;
-  --text-tertiary: #6b7784;
+  --text-tertiary: #7a8693;
   /* vurgu */
   --accent: #5cc8ff;
   --accent-soft: rgba(92, 200, 255, 0.14);
@@ -371,7 +371,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 #call-hub-name { top: 40px; }
 .call-overlay > .call-header { position: relative; }
 .call-header span#call-hub-name { color: var(--text-primary); font-size: 22px; font-weight: 650; letter-spacing: -0.01em; }
-.call-header span#call-header-duration { color: var(--text-tertiary); font-size: 12.5px; font-weight: 500; top: 74px; }
+.call-header span#call-header-duration { color: var(--text-tertiary); font-size: 12.5px; font-weight: 500; top: 96px; }
 .call-header button, .call-header #call-mute-btn, .call-header #call-screenshare-btn, .call-header #call-leave-btn, .call-header #call-minimize-btn {
   height: 44px; padding: 0 18px; border-radius: 999px; border: 0; background: var(--glass-1); color: var(--text-primary);
   box-shadow: var(--hi), 0 0 0 1px var(--border-soft); font-size: 13.5px; font-weight: 550; transition: 0.18s var(--ease); cursor: pointer;
@@ -408,3 +408,114 @@ body:has(.adm-header), body:has(.mod-header) { background: var(--bg-app); color:
 .login-box input[type="date"] { color-scheme: dark; font-weight: 400; color: var(--text-secondary); }
 .login-box label, .login-box .field-label { color: var(--text-tertiary); }
 @media (max-width: 900px) { .hub-back-btn { display: none; } .hub-detail-header { padding-left: 18px; } }
+
+/* ══ Aşama 5: hata düzeltmeleri + prototipe son yaklaştırma ═════════════ */
+
+/* 1) Sesli odalar paneli ve üye paneli: kapalıyken gerçekten görünmez ve etkileşimsiz */
+.hub-voice-rooms-side, .hub-detail-side { visibility: hidden; opacity: 0; pointer-events: none;
+  transition: transform 0.25s var(--ease), opacity 0.2s var(--ease), visibility 0s linear 0.25s; }
+.hub-voice-rooms-side.open, .hub-detail-side.open { visibility: visible; opacity: 1; pointer-events: auto;
+  transition: transform 0.25s var(--ease), opacity 0.2s var(--ease), visibility 0s; }
+@media (min-width: 901px) {
+  .hub-voice-rooms-side { transform: translateX(-24px); }
+  .hub-voice-rooms-side.open { transform: none; }
+  .hub-detail-side { transform: translateX(calc(100% + 40px)); }
+  .hub-detail-side.open { transform: none; }
+}
+
+/* 5) Dokunma alanları: görsel küçük kalır, etkileşim alanı ~44 px */
+@media (max-width: 900px) {
+  .msg-avatar-btn, .hub-attach-btn, .hub-start-btn, .composer-icon-btn, .hub-icon-btn, .hub-voice-rooms-toggle-btn { position: relative; }
+  .msg-avatar-btn::after, .hub-attach-btn::after, .composer-icon-btn::after { content: ""; position: absolute; inset: -6px; }
+  .hub-start-btn::after { content: ""; position: absolute; inset: -4px -2px; }
+  .hub-voice-rooms-toggle-btn { position: fixed; width: 20px; height: 96px; opacity: 0.8; }
+  .hub-voice-rooms-toggle-btn::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; right: -24px; }
+  .hub-voice-rooms-toggle-btn span { font-size: 9px; }
+}
+
+/* 6/7) Sesli oda kontrolleri: ikon tabanlı cam hap */
+.call-header button svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; display: block; margin: 0 auto; }
+.call-header button, .call-header #call-mute-btn, .call-header #call-screenshare-btn, .call-header #call-leave-btn, .call-header #call-minimize-btn { width: 48px; height: 48px; padding: 0; border-radius: 50%; }
+.call-header #call-mute-btn.muted { color: var(--text-tertiary); }
+.call-header-sub { position: fixed; left: 0; right: 0; top: 72px; text-align: center; pointer-events: none; color: var(--text-tertiary) !important; font-size: 12.5px !important; font-weight: 500 !important; letter-spacing: 0 !important; }
+.call-hub-room-person .voice-status { opacity: 0.55; transform: scale(0.85); margin-top: 0; }
+.call-hub-room-person .voice-self-tag { color: var(--text-tertiary); font-size: 12px; opacity: 1; }
+
+/* 4) Sesli oda: katılımcı alanı kontrol hapının arkasına girmez */
+.call-hub-room-view { min-height: 0; overflow-y: auto; justify-content: flex-start; }
+.call-hub-room-grid { margin: auto 0; }
+@media (max-width: 720px) {
+  .call-hub-room-view { padding: 104px 16px 24px; }
+  .call-hub-room-person { width: 84px; gap: 8px; }
+  .call-hub-room-avatar { width: 64px; height: 64px; font-size: 22px; }
+  .call-hub-room-grid { gap: 18px 14px; }
+}
+
+/* 9) Mesaj görünümü */
+.hub-msg-text, .hub-msg .content { font-size: 15px; }
+.hub-msg .username { font-size: 14.5px !important; }
+.hub-msg .header { justify-content: flex-start; gap: 9px; }
+.hub-msg .time, .hub-msg .header .time { margin-left: 0; order: 0; font-size: 12px; }
+.hub-msg .msg-avatar-btn { background: linear-gradient(140deg, #25445a, #182a38); border: 0; border-radius: 50%; }
+.hub-msg .msg-avatar-btn, .hub-msg .msg-avatar-btn .profile-avatar { color: #cfe9f7 !important; font-weight: 600; }
+
+/* 10) Sohbet başlığı: sade */
+.hub-detail-icon { display: none; }
+
+/* 11) Lobi oluştur: prototipteki düzen */
+#hub-create-modal .modal-box { width: 400px; max-width: 92vw; max-height: none; padding: 26px 26px 22px; }
+#hub-create-modal .modal-header { border: 0; padding: 0 0 4px; font-size: 19px; font-weight: 650; }
+#hub-create-close-btn { display: none; }
+#hub-create-modal .hub-create-body { padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.hub-create-desc { color: var(--text-secondary); font-size: 14px; margin: 0; }
+#hub-create-modal .hub-create-image-wrap { order: 3; display: flex; flex-direction: row; align-items: center; gap: 12px; justify-content: flex-start; }
+#hub-create-modal .hub-create-image-preview { width: 40px; height: 40px; font-size: 18px; border-radius: 12px; }
+.hub-create-image-btn { background: none; border: 0; box-shadow: none; color: var(--text-secondary); }
+.hub-create-actions { order: 5; display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.hub-create-actions .hub-create-submit { width: auto; padding: 0 20px; height: 40px; }
+.hub-create-cancel { height: 40px; padding: 0 16px; border: 0; background: none; color: var(--text-secondary); border-radius: 12px; cursor: pointer; }
+.hub-create-cancel:hover { background: var(--glass-1); color: var(--text-primary); }
+#hub-create-error { order: 4; }
+
+/* 12) Kayıt / giriş: marka + sade düğme */
+.auth-brand { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 18px; }
+.auth-brand i { width: 26px; height: 26px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #bfeaff, var(--accent) 45%, #1f6f9a); box-shadow: 0 0 22px rgba(92, 200, 255, 0.35); }
+.auth-brand b { font-size: 20px; font-weight: 650; letter-spacing: 0.02em; color: var(--text-primary); }
+.login-box h2 { font-size: 18px; font-weight: 600; color: var(--text-secondary); margin-bottom: 22px; }
+.login-box button:not(.auth-switch button) { text-transform: none; letter-spacing: 0; font-size: 15px; }
+
+/* 8) Ayarlar: tam sayfa, gruplu satırlar */
+@media (min-width: 769px) {
+  #settings-modal { align-items: stretch; justify-content: stretch; padding: 0; background: var(--bg-app); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  #settings-modal .settings-modal-box { position: static; width: 100%; max-width: none; height: 100%; max-height: none; border-radius: 0; background: transparent;
+    box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; animation: sauran-pop 0.22s var(--ease); display: flex; flex-direction: column; align-items: center; }
+  #settings-modal .modal-header { width: 100%; max-width: 900px; padding: 34px 0 6px; border: 0; font-size: 26px; font-weight: 650; }
+  #settings-modal .settings-layout { width: 100%; max-width: 900px; gap: 32px; padding-top: 12px; }
+  #settings-modal .settings-tabs { width: 190px; border: 0; padding: 4px 0; }
+  #settings-modal .settings-modal-body { padding: 4px 0 40px; }
+}
+#settings-modal .settings-panel { gap: 0; }
+#settings-modal .profile-field-label { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 18px; }
+#settings-modal .privacy-options { gap: 0; margin-top: 6px; }
+#settings-modal .privacy-option { background: none; box-shadow: none; border-radius: 0; border-bottom: 1px solid var(--border-soft); padding: 14px 4px; flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+#settings-modal .privacy-option:hover { background: var(--glass-1); }
+#settings-modal .privacy-option.selected { background: none; box-shadow: none; }
+#settings-modal .privacy-option.selected .privacy-option-title { color: var(--accent); }
+#settings-modal .privacy-option-desc { flex-basis: 100%; }
+.notif-toggle { background: rgba(255, 255, 255, 0.1); box-shadow: none; border: 0; }
+.notif-toggle input:checked ~ .notif-toggle-track { background: var(--accent); }
+.notif-toggle-thumb { background: #dfe7ee; }
+.notif-toggle input:checked ~ .notif-toggle-track .notif-toggle-thumb { background: #04202e; box-shadow: none; }
+
+/* 3) Mobil profil: ekrana sığar, kaydırılır, güvenli alan */
+@media (max-width: 720px) {
+  #profile-modal .profile-modal-box, .profile-modal-box { width: 100%; max-width: none; max-height: calc(100dvh - 16px - env(safe-area-inset-top)); overflow-y: auto;
+    padding-bottom: env(safe-area-inset-bottom); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+  #profile-modal { align-items: flex-end; padding: 0; }
+  #hub-create-modal .modal-box { width: 100%; max-width: none; }
+  /* 15) Mobil ana ekran sadeleşmesi */
+  .topbar-logo { display: none; }
+  .topbar-profile-btn { min-width: 44px; min-height: 44px; }
+}
+
+@media (max-width: 900px) { .hub-attach-btn { min-width: 44px; min-height: 44px; } }

@@ -3241,6 +3241,11 @@ const I18N = {
     'ios-voice-hint-ok': { tr: 'Anladım', en: 'Got it' },
     'notif-role-notice': { tr: 'Sauran Yönetim: yeni görev bildirimi', en: 'Sauran Management: new duty notice' },
     'notif-role-revoked': { tr: 'Sauran Yönetim: görev bilgilendirmesi', en: 'Sauran Management: duty information' },
+    'voice-screenshare': { tr: 'Ekran paylaş', en: 'Share screen' },
+    'voice-minimize': { tr: 'Küçült', en: 'Minimize' },
+    'voice-connected': { tr: 'Bağlı', en: 'Connected' },
+    'hub-create-desc': { tr: 'Yeni bir sosyal alan aç. Sonra arkadaşlarını davet edebilirsin.', en: 'Open a new social space. You can invite friends afterwards.' },
+    'cancel': { tr: 'Vazgeç', en: 'Cancel' },
     'lobbies-title': { tr: 'Lobilerim', en: 'My lobbies' },
     'select-lobby': { tr: 'Bir lobi seç', en: 'Select a lobby' },
     'lobby-nav-open': { tr: 'Lobileri aç', en: 'Open lobbies' },
@@ -7439,8 +7444,17 @@ function updateVoiceSessionSummary() {
     }
 }
 
+const VOICE_CTRL_ICONS = {
+    mic: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
+    micOff: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 3l18 18M9 9v2a3 3 0 0 0 5 2.2M15 9V6a3 3 0 0 0-5.7-1.3M5 11a7 7 0 0 0 11 5.7M19 11a7 7 0 0 1-.6 2.8M12 18v3"/></svg>'
+};
+
 function updateMuteButton() {
-    callMuteBtn.textContent = voiceLocalMuted ? `🔇 ${t('voice-mic-off')}` : `🎤 ${t('voice-mic-on')}`;
+    callMuteBtn.innerHTML = voiceLocalMuted ? VOICE_CTRL_ICONS.micOff : VOICE_CTRL_ICONS.mic;
+    const micLabel = voiceLocalMuted ? t('voice-mic-off') : t('voice-mic-on');
+    callMuteBtn.setAttribute('aria-label', micLabel);
+    callMuteBtn.title = micLabel;
+    callMuteBtn.setAttribute('aria-pressed', voiceLocalMuted ? 'true' : 'false');
     callMuteBtn.classList.toggle('muted', voiceLocalMuted);
 }
 
@@ -8937,7 +8951,7 @@ function renderHubDetail() {
     }
 
     hubDetailName.textContent = currentHub.name;
-    hubDetailCount.textContent = `👥 ${currentHub.members.length} ${t('member-count')}`;
+    hubDetailCount.textContent = `${currentHub.members.length} ${t('member-count')}`;
 
     hubDeleteBtn.style.display = currentHub.is_owner ? 'block' : 'none';
     if (hubSettingsOpenBtn) {

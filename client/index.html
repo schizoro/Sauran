@@ -32,6 +32,7 @@
 
         <div class="login-box">
 
+            <div class="auth-brand" aria-hidden="true"><i></i><b>Sauran</b></div>
             <h2 id="auth-title">Sauran'a Hoş Geldin</h2>
 
             <!-- GİRİŞ FORMU -->
@@ -552,6 +553,7 @@
             </div>
 
             <div class="hub-create-body">
+                <p class="hub-create-desc" data-i18n="hub-create-desc">Yeni bir sosyal alan aç. Sonra arkadaşlarını davet edebilirsin.</p>
 
                 <div class="hub-create-image-wrap">
                     <span id="hub-create-image-preview" class="hub-create-image-preview">🧩</span>
@@ -563,7 +565,10 @@
 
                 <div id="hub-create-error" class="hub-create-error"></div>
 
-                <button id="hub-create-submit-btn" class="hub-create-submit" type="button">Hub'ı Oluştur</button>
+                <div class="hub-create-actions">
+                    <button id="hub-create-cancel-btn" class="hub-create-cancel" type="button" data-i18n="cancel">Vazgeç</button>
+                    <button id="hub-create-submit-btn" class="hub-create-submit" type="button">Lobiyi Oluştur</button>
+                </div>
 
             </div>
 
@@ -1288,10 +1293,10 @@
         <div class="call-header">
             <span id="call-hub-name">🎙️ Sesli Sohbet</span>
             <span id="call-header-duration" class="call-duration-text" style="display:none;"></span>
-            <button id="call-mute-btn" type="button" style="display:none;">🎤 Mikrofon</button>
-            <button id="call-screenshare-btn" type="button" style="display:none;">🖥️ Ekran Paylaş</button>
-            <button id="call-minimize-btn" type="button" title="Ekranı alta al">▁</button>
-            <button id="call-leave-btn" type="button" data-i18n="call-leave">Ayrıl</button>
+            <button id="call-mute-btn" type="button" style="display:none;" aria-label="Mikrofon" title="Mikrofon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+            <button id="call-screenshare-btn" type="button" style="display:none;" aria-label="Ekran paylaş" title="Ekran paylaş"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></button>
+            <button id="call-minimize-btn" type="button" aria-label="Küçült" title="Ekranı alta al"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg></button>
+            <button id="call-leave-btn" type="button" aria-label="Ayrıl" title="Ayrıl"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 15c5-4 11-4 16 0l-2 3-3-1.500v-2.500a9 9 0 0 0-6 0v2.500L6 18z"/></svg></button>
         </div>
 
         <div id="call-frame-container" class="call-frame-container"></div>
