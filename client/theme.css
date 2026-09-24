@@ -532,3 +532,33 @@ body:has(.adm-header), body:has(.mod-header) { background: var(--bg-app); color:
 .notif-pref-row input[type="checkbox"]:checked::after { transform: translateX(18px); background: #04202e; }
 .notif-pref-row input[type="checkbox"]:disabled { opacity: 0.45; cursor: not-allowed; }
 .notif-pref-row input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ══ Mobil hata düzeltmeleri (5 madde) ══════════════════════════════════ */
+
+/* 1) Sesli oda kartı: sağ sütun kartın içinde, tek satırda, taşmadan */
+.hub-voice-room-row { overflow: hidden; align-items: center; }
+.hub-voice-room-info { min-width: 0; }
+.hub-voice-room-side { align-self: center; flex-direction: row; align-items: center; justify-content: flex-end; gap: 8px; margin: 0; min-width: 0; }
+.hub-voice-room-count { margin: 0; white-space: nowrap; }
+.hub-voice-room-delete { order: 2; }
+.hub-voice-room-toggle { max-width: 100%; white-space: nowrap; }
+
+/* 3) Üyeler paneli: başlıktaki üye düğmesi panelin başlığına binmez */
+@media (max-width: 900px) {
+  .hub-detail-side { padding-top: 76px; }
+  .hub-side-title { line-height: 1.4; }
+}
+
+/* 4) Açılır menüler opak ve üstte: arkadaki metin görünmez */
+.composer-attach-menu, .msg-actions-menu, .topbar-menu-dropdown, .composer-attach-wrap .liquid-glass {
+  background: rgba(16, 22, 29, 0.98); z-index: 70;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+.composer-attach-wrap { position: relative; z-index: 40; }
+
+/* 5) Klavye: mobilde composer'da bulanıklık (backdrop-filter) yok; yeniden boyamada sıçrama azalır */
+@media (max-width: 900px) {
+  .composer-input-box, .hub-composer .composer-input-box { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(20, 27, 35, 0.92); }
+  .hub-detail-main, .chat-area, #hub-detail-view { min-height: 0; }
+  #hub-feed { overscroll-behavior: contain; }
+}

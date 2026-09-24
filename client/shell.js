@@ -210,6 +210,21 @@
     voiceLabels();
     setInterval(voiceLabels, 15000);
 
+    // Klavye: girdi odaklanınca composer görünür kalsın (WebView yeniden boyutlanınca)
+    const composerInputs = document.querySelectorAll('.hub-composer input[type="text"], .hub-composer textarea, .dm-modal-box .composer-input-box input');
+    composerInputs.forEach((el) => el.addEventListener('focus', () => {
+        setTimeout(() => { try { el.scrollIntoView({ block: 'nearest' }); } catch (_) {} }, 320);
+    }));
+    if (window.visualViewport) {
+        let lastH = window.visualViewport.height;
+        window.visualViewport.addEventListener('resize', () => {
+            const h = window.visualViewport.height;
+            const feed = $('hub-feed');
+            if (feed && h < lastH && document.activeElement && document.activeElement.closest('.hub-composer')) feed.scrollTop = feed.scrollHeight;
+            lastH = h;
+        });
+    }
+
     labelButtons();
     mirror();
     syncMainState();
