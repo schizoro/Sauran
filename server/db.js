@@ -14,6 +14,9 @@ const dbPath = path.join(dataDir, 'sauran.db');
 const db = new Database(dbPath);
 
 db.pragma('journal_mode = WAL');
+// Silinen içerik (mesaj, medya, hesap verisi vb.) veritabanı dosyasında sayfa artığı olarak KALMASIN diye silinen alanlar sıfırlanır. Bu, bağlantı düzeyinde
+// açıktır; bakım fonksiyonlarındaki geçici aç/kapa çağrıları artık "ON"a döner (kapatılmaz).
+db.pragma('secure_delete = ON');
 db.pragma('foreign_keys = ON');
 
 // =====================================================
@@ -440,7 +443,7 @@ function purgeAdultBirthDates(now = new Date()) {
       return { users: legacy + expired, legacy, expired, pending };
     })();
   } finally {
-    db.pragma('secure_delete = OFF');
+    db.pragma('secure_delete = ON');
   }
 
   if (result.legacy || result.pending) scrubFreedPages();
@@ -927,7 +930,7 @@ function purgeExpiredRetention(now = new Date()) {
       result.log = db.prepare(`DELETE FROM evidence_lifecycle_log WHERE created_at < ?`).run(lifecycleLogCutoff(now)).changes;
     })();
   } finally {
-    db.pragma('secure_delete = OFF');
+    db.pragma('secure_delete = ON');
   }
 
   if (result.media || result.evidence || result.reports) {
@@ -964,7 +967,7 @@ function purgeExpiredAuthRecords(now = new Date()) {
       }
     })();
   } finally {
-    db.pragma('secure_delete = OFF');
+    db.pragma('secure_delete = ON');
   }
 
   if (result.pending || result.resets || result.sessions) {
@@ -1052,7 +1055,7 @@ function purgeExpiredNotificationData(now = new Date()) {
       `).run(cut(o.unfinished)).changes;
     })();
   } finally {
-    db.pragma('secure_delete = OFF');
+    db.pragma('secure_delete = ON');
   }
 
   if (result.notifications || result.orphan_sources || result.outbox_deleted || result.outbox_scrubbed) {
@@ -1220,7 +1223,7 @@ function purgeExpiredDeletedDmThreads(now = new Date()) {
       sweepMessageOrphans(); // süresi dolan sohbetin mesajlarından iletilmiş kopyalar kaynağı aşmasın
     })();
   } finally {
-    db.pragma('secure_delete = OFF');
+    db.pragma('secure_delete = ON');
   }
 
   try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (_) { /* yoksay */ }
@@ -1904,7 +1907,7 @@ function hashLegacyPlaintextAuthCodes() {
       });
     })();
   } finally {
-    db.pragma('secure_delete = OFF');
+    db.pragma('secure_delete = ON');
   }
 
   try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (_) { /* yoksay */ }
@@ -2829,7 +2832,7 @@ function purgeExpiredMessages(now = new Date()) {
     const swept = db.transaction(() => sweepMessageOrphans())();
     result.copies += swept.orphan_copies.length;
   } finally {
-    db.pragma('secure_delete = OFF');
+    db.pragma('secure_delete = ON');
   }
 
   if (result.media || result.deleted || result.copies) {
@@ -2877,7 +2880,7 @@ function sweepMessageOrphans() {
 function sweepMessageOrphansSecure() {
   db.pragma('secure_delete = ON');
   try { return db.transaction(() => sweepMessageOrphans())(); }
-  finally { db.pragma('secure_delete = OFF'); }
+  finally { db.pragma('secure_delete = ON'); }
 }
 
 // Açılışta bir kez (idempotent): ESKİ sürümde silinen mesajlarda kalmış kalıntıları temizler — user_id/username/ilişkiler, tepkiler, anket oyları, sabitleme —
@@ -2907,7 +2910,7 @@ function purgeDeletedMessageResidue() {
       return result;
     })();
   } finally {
-    db.pragma('secure_delete = OFF');
+    db.pragma('secure_delete = ON');
   }
 }
 
@@ -4868,7 +4871,7 @@ function purgeExpiredAuditLog(now = new Date()) {
       rows: db.prepare(`DELETE FROM admin_audit_log WHERE created_at < ?`).run(rowCutoff).changes
     }));
   } finally {
-    db.pragma('secure_delete = OFF');
+    db.pragma('secure_delete = ON');
   }
 }
 
@@ -5263,7 +5266,13 @@ cleanupStalePlatformNotices();
 purgeDeletedMessageResidue();
 sweepMessageOrphansSecure();
 
+// WAL dosyası, silinmiş verinin eski sayfa görüntülerini kontrol noktasına kadar taşıyabilir; düzenli ve kapanışta kesilir.
+function checkpointWal() {
+  try { db.pragma('wal_checkpoint(TRUNCATE)'); return true; } catch (_) { return false; }
+}
+
 module.exports = {
+  checkpointWal,
   isAccountSuspended,
   suspendAccount,
   unsuspendAccount,

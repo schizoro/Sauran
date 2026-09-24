@@ -1,4 +1,5 @@
 require('dotenv').config();
+const { purgeOldBackups } = require('./backup');
 const { sendAccountExistsEmail, sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail } = require('./mailer');
 const push = require('./push');
 const fcm = require('./fcm');
@@ -89,6 +90,7 @@ const {
   purgeExpiredAuthRecords,
   purgeExpiredAuditLog,
   purgeAdultBirthDates,
+  checkpointWal,
   verifyAccountPassword,
   purgeExpiredMessages,
   purgeExpiredNotificationData,
@@ -293,6 +295,9 @@ app.get('/', (req, res) => {
   res.setHeader('Vary', 'Cookie, User-Agent');
   res.sendFile(path.join(CLIENT_DIR, hasSession || isNativeWebView || opensChat ? 'index.html' : 'landing.html'));
 });
+
+// Kişisel veri taşıyan API yanıtları (dışa aktarım dahil) tarayıcı/proxy önbelleğine alınmaz.
+app.use('/api', (req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 
 app.use(express.static(path.join(__dirname, '..', 'client'), {
   etag: false,
@@ -741,6 +746,7 @@ app.get('/api/account/export', (req, res) => {
     }
 
     res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Content-Disposition', `attachment; filename="sauran-verilerim-${user.username}.json"`);
     return res.send(JSON.stringify(data, null, 2));
 
@@ -3611,6 +3617,20 @@ server.listen(PORT, () => {
   };
   runMessagePurge();
   setInterval(runMessagePurge, 60 * 60 * 1000).unref();
+
+  // Elle alınmış yedeklerin (DATA_DIR/backups + açıkça geçici adlı eski dosyalar) süresi (varsayılan 14 gün, teknik varsayılan) dolunca silinmesi:
+  // açılışta ve günde bir. Uygulama kendiliğinden yedek ALMAZ (bkz. docs/yedekleme-ve-dis-kopyalar.md).
+  const runBackupCleanup = () => {
+    try {
+      const r = purgeOldBackups();
+      if (r.deleted) console.log(`Süresi dolan yedek/geçici dosyalar silindi: ${r.deleted}.`);
+    } catch (error) { console.error('Yedek temizleme hatası:', error); }
+  };
+  runBackupCleanup();
+  setInterval(runBackupCleanup, 24 * 60 * 60 * 1000).unref();
+
+  // WAL dosyası saatte bir kesilir (silinen verinin eski sayfa görüntüleri diskte gereksiz kalmasın).
+  setInterval(() => { checkpointWal(); }, 60 * 60 * 1000).unref();
   setInterval(runBirthDatePurge, 24 * 60 * 60 * 1000).unref();
   setInterval(runAuditPurge, 24 * 60 * 60 * 1000).unref();
 
@@ -3658,3 +3678,16 @@ server.listen(PORT, () => {
     scheduleRoleNoticeEmails();
   }, 5 * 60 * 1000).unref();
 });
+
+// Zarif kapanış (Render dağıtımda SIGTERM gönderir): WAL kesilir, bağlantılar kapanır.
+let shuttingDown = false;
+function gracefulShutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`${signal} alındı, kapanıyor...`);
+  const done = () => { checkpointWal(); process.exit(0); };
+  try { io.close(() => server.close(done)); } catch (_) { done(); }
+  setTimeout(done, 5000).unref();
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
