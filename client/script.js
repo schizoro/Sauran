@@ -7451,7 +7451,7 @@ const VOICE_CTRL_ICONS = {
 
 function updateMuteButton() {
     callMuteBtn.innerHTML = voiceLocalMuted ? VOICE_CTRL_ICONS.micOff : VOICE_CTRL_ICONS.mic;
-    const micLabel = voiceLocalMuted ? t('voice-mic-off') : t('voice-mic-on');
+    const micLabel = voiceLocalMuted ? `${t('voice-mic-on')} · ${t('voice-mic-off')}` : t('voice-mic-on');
     callMuteBtn.setAttribute('aria-label', micLabel);
     callMuteBtn.title = micLabel;
     callMuteBtn.setAttribute('aria-pressed', voiceLocalMuted ? 'true' : 'false');

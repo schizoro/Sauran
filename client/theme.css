@@ -56,7 +56,7 @@ body::before {
 
 /* ── Odak halkası ─────────────────────────────────────────────────────── */
 button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible,
-[tabindex]:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
+[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ── Giriş / kayıt (odak camı) ───────────────────────────────────────── */
 #login-screen { background: transparent; }
@@ -519,3 +519,16 @@ body:has(.adm-header), body:has(.mod-header) { background: var(--bg-app); color:
 }
 
 @media (max-width: 900px) { .hub-attach-btn { min-width: 44px; min-height: 44px; } }
+
+/* Ayarlar: bildirim onay kutuları anahtar (switch) görünümünde — davranış aynı, yalnızca görsel */
+.notif-pref-row { display: flex; align-items: center; gap: 14px; padding: 12px 4px; border-bottom: 1px solid var(--border-soft); background: none; border-radius: 0; cursor: pointer; }
+.notif-pref-row > span { flex: 1; color: var(--text-primary); }
+.notif-pref-row input[type="checkbox"] {
+  -webkit-appearance: none; appearance: none; order: 2; flex: none; margin: 0; width: 42px; height: 24px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1); position: relative; cursor: pointer; transition: background 0.2s var(--ease); border: 0;
+}
+.notif-pref-row input[type="checkbox"]::after { content: ""; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: #dfe7ee; transition: transform 0.2s var(--ease), background 0.2s var(--ease); }
+.notif-pref-row input[type="checkbox"]:checked { background: var(--accent); }
+.notif-pref-row input[type="checkbox"]:checked::after { transform: translateX(18px); background: #04202e; }
+.notif-pref-row input[type="checkbox"]:disabled { opacity: 0.45; cursor: not-allowed; }
+.notif-pref-row input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
