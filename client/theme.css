@@ -328,3 +328,83 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .hub-voice-rooms-toggle-btn { left: 320px; }
   .hub-voice-rooms-toggle-btn.open { left: 580px; }
 }
+
+/* ══ Aşama 3: kalan farklar ═════════════════════════════════════════════ */
+
+/* ── Üye paneli düğmesi (başlıkta ikon) ve panel ─────────────────────── */
+.members-in-header { position: static !important; transform: none !important; width: 38px; height: 38px; border-radius: var(--radius-sm); }
+.members-in-header svg { width: 19px; height: 19px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.members-in-header.open { color: var(--accent); background: var(--accent-soft); }
+.hub-detail-side { background: var(--glass-2); border: 0; -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.35); backdrop-filter: blur(var(--blur-2)) saturate(1.35);
+  box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong), var(--shadow-focus); }
+@media (min-width: 901px) { .hub-detail-side { top: 12px; bottom: 12px; right: 12px; border-radius: var(--radius-lg); } }
+
+/* ── ☰ menü: küçük, sade ─────────────────────────────────────────────── */
+.topbar-menu-btn { width: 36px; height: 36px; padding: 0; font-size: 16px; color: var(--text-tertiary); display: grid; place-items: center; }
+.topbar-menu-dropdown { border-radius: var(--radius); }
+
+/* ── Profil penceresi: küçük, kompakt kart ───────────────────────────── */
+.profile-modal-box, .profile-modal-box-minimal { width: 320px; max-width: 92vw; max-height: 88vh; overflow-y: auto; }
+.profile-banner { padding: 26px 20px 16px; border-bottom: 1px solid var(--border-soft); background-image: linear-gradient(180deg, rgba(60, 150, 210, 0.16), transparent 80%); }
+.profile-banner.has-image { background-image: linear-gradient(180deg, rgba(10, 13, 17, 0.1), rgba(10, 13, 17, 0.7)), var(--banner-img); background-size: cover; }
+.profile-modal-box .banner-change-btn { font-size: 11px; padding: 4px 10px; opacity: 0.85; }
+.profile-modal-username { font-size: 18px; letter-spacing: 0; font-weight: 650; }
+.profile-modal-box hr, .profile-modal-box .profile-divider { border-color: var(--border-soft); }
+
+/* ── Açılış animasyonu (hafif) ───────────────────────────────────────── */
+@keyframes sauran-pop { from { opacity: 0; transform: translateY(8px) scale(0.985); } to { opacity: 1; transform: none; } }
+.modal-box, .profile-modal-box { animation: sauran-pop 0.22s var(--ease); }
+
+/* ── Sesli oda ekranı: geniş sahne + alttaki cam kontrol hapı ────────── */
+.call-overlay { background: var(--bg-app); }
+.call-overlay::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(900px 520px at 78% -8%, rgba(60, 150, 210, 0.14), transparent 65%); }
+.call-overlay > .call-hub-room-view { position: relative; }
+.call-header {
+  order: 99; align-self: center; justify-content: center; gap: 10px; margin: 0 0 max(24px, env(safe-area-inset-bottom));
+  padding: 8px; border: 0; border-radius: 999px; background: none; position: static; isolation: isolate;
+}
+.call-header::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 999px; background: var(--glass-2);
+  -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.35); backdrop-filter: blur(var(--blur-2)) saturate(1.35);
+  box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong), var(--shadow-focus); }
+#call-hub-name, #call-header-duration { position: fixed; left: 0; right: 0; text-align: center; pointer-events: none; }
+#call-hub-name { top: 40px; }
+.call-overlay > .call-header { position: relative; }
+.call-header span#call-hub-name { color: var(--text-primary); font-size: 22px; font-weight: 650; letter-spacing: -0.01em; }
+.call-header span#call-header-duration { color: var(--text-tertiary); font-size: 12.5px; font-weight: 500; top: 74px; }
+.call-header button, .call-header #call-mute-btn, .call-header #call-screenshare-btn, .call-header #call-leave-btn, .call-header #call-minimize-btn {
+  height: 44px; padding: 0 18px; border-radius: 999px; border: 0; background: var(--glass-1); color: var(--text-primary);
+  box-shadow: var(--hi), 0 0 0 1px var(--border-soft); font-size: 13.5px; font-weight: 550; transition: 0.18s var(--ease); cursor: pointer;
+}
+.call-header button:hover { background: rgba(255, 255, 255, 0.08); }
+#call-header-spacer{display:none}
+.call-header #call-mute-btn { color: var(--accent); }
+#call-screenshare-btn.active, .call-header #call-screenshare-btn.active { background: var(--accent-soft); color: var(--accent); }
+.call-header #call-minimize-btn { width: 44px; padding: 0; color: var(--text-secondary); }
+body .call-header #call-leave-btn { background: rgba(255, 122, 134, 0.14); color: var(--danger); box-shadow: none; }
+body .call-header #call-leave-btn:hover { background: rgba(255, 122, 134, 0.24); color: var(--danger); }
+.call-hub-room-view { align-items: center; justify-content: center; padding: 96px 24px 8px; }
+.call-hub-room-grid { gap: 34px; align-content: center; align-items: flex-start; max-width: 760px; flex: 0 1 auto; }
+.call-hub-room-person { width: 120px; gap: 12px; color: var(--text-secondary); }
+.call-hub-room-avatar { width: 92px; height: 92px; font-size: 30px; border: 0; background: linear-gradient(140deg, #25445a, #182a38);
+  -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; transition: 0.25s var(--ease); }
+.call-hub-room-person:has(.voice-icon-btn.speaking) .call-hub-room-avatar { box-shadow: 0 0 0 3px var(--bg-app), 0 0 0 5px var(--accent-line), 0 0 30px rgba(92, 200, 255, 0.25); }
+.call-hub-room-person:has(.voice-icon-btn.off) .call-hub-room-avatar { opacity: 0.6; }
+.call-hub-room-person.is-self .call-hub-room-avatar { border: 0; }
+.call-hub-room-name { background: none; border: 0; padding: 0; font-size: 14px; font-weight: 500; color: inherit; }
+.call-hub-room-screenshare-banner { border-radius: var(--radius); background: var(--accent-soft); border: 0; }
+#call-hub-room-watch-btn { border: 0; background: var(--accent); color: #04202e; border-radius: 999px; }
+.call-mini-bar { background: var(--glass-2); border: 0; box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong); }
+@media (max-width: 720px) {
+  .call-header { gap: 6px; padding: 6px; }
+  .call-header button { padding: 0 14px; font-size: 13px; }
+  .call-hub-room-grid { gap: 22px; }
+  .call-hub-room-avatar { width: 76px; height: 76px; }
+  .call-hub-room-person { width: 96px; }
+}
+
+/* ── Admin / moderasyon ortak yüzey dili ─────────────────────────────── */
+body:has(.adm-header), body:has(.mod-header) { background: var(--bg-app); color: var(--text-secondary); }
+.login-box input[type="date"] { color-scheme: dark; font-weight: 400; color: var(--text-secondary); }
+.login-box label, .login-box .field-label { color: var(--text-tertiary); }
+@media (max-width: 900px) { .hub-back-btn { display: none; } .hub-detail-header { padding-left: 18px; } }
