@@ -275,7 +275,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   }
   body.lobby-drawer-open .lobby-nav { transform: none; }
   .lobby-nav .friends-sidebar { max-height: 45%; }
-  #hub-list-content, #hub-list-header { display: none !important; }
+  
   .lobby-nav .rail-btn-sm { width: 44px; height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) { .lobby-nav { transition: none; } }
@@ -407,7 +407,7 @@ body .call-header #call-leave-btn:hover { background: rgba(255, 122, 134, 0.24);
 body:has(.adm-header), body:has(.mod-header) { background: var(--bg-app); color: var(--text-secondary); }
 .login-box input[type="date"] { color-scheme: dark; font-weight: 400; color: var(--text-secondary); }
 .login-box label, .login-box .field-label { color: var(--text-tertiary); }
-@media (max-width: 900px) { .hub-back-btn { display: none; } .hub-detail-header { padding-left: 18px; } }
+@media (max-width: 900px) { .hub-back-btn { display: flex; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; } .hub-detail-header { padding-left: 12px; } .home-empty { display: none !important; } }
 
 /* ══ Aşama 5: hata düzeltmeleri + prototipe son yaklaştırma ═════════════ */
 
@@ -577,3 +577,15 @@ body:has(.adm-header), body:has(.mod-header) { background: var(--bg-app); color:
   .modal-overlay .modal-box, .modal-overlay .profile-modal-box { max-height: calc(var(--vvh, 100dvh) - 16px); overflow-y: auto; }
   .hub-start-menu { left: 12px; right: auto; z-index: 70; max-width: calc(100vw - 24px); }
 }
+
+/* Ayarlar: şifre alanları ve hesap silme — daha ferah ve büyük */
+#settings-modal .settings-panel input[type="password"] {
+  display: block; width: 100%; height: 50px; padding: 0 16px; margin: 0 0 14px; font-size: 16px; border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-soft); color: var(--text-primary); outline: 0;
+}
+#settings-modal .settings-panel input[type="password"]:focus { border-color: var(--accent-line); background: rgba(255, 255, 255, 0.065); }
+#settings-modal .settings-panel input[type="password"]:first-of-type { margin-top: 10px; }
+#settings-password-btn, #settings-delete-account-btn { width: 100%; height: 50px; margin-top: 6px; font-size: 15px; border-radius: 14px; }
+#settings-password-error { margin: -4px 0 8px; }
+#settings-delete-password { margin-top: 14px; }
+#settings-delete-account-btn { margin-top: 2px; justify-content: center; }

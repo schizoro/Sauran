@@ -210,6 +210,26 @@
     voiceLabels();
     setInterval(voiceLabels, 15000);
 
+    // Lobiden ana menüye dönüş: soldan sağa kaydırma (mobil) — geri düğmesiyle aynı işlev
+    (function swipeBack() {
+        let sx = 0, sy = 0, t0 = 0, track = false;
+        document.addEventListener('touchstart', (e) => {
+            const t = e.touches[0];
+            track = e.touches.length === 1 && t.clientX < 28 && window.innerWidth <= 900 && activeHubId() != null
+                && !document.body.classList.contains('lobby-drawer-open') && !document.querySelector('.modal-overlay[style*="flex"]');
+            sx = t.clientX; sy = t.clientY; t0 = Date.now();
+        }, { passive: true });
+        document.addEventListener('touchend', (e) => {
+            if (!track) return;
+            track = false;
+            const t = e.changedTouches[0];
+            if (t.clientX - sx > 70 && Math.abs(t.clientY - sy) < 60 && Date.now() - t0 < 700) {
+                const back = $('hub-back-btn');
+                if (back) back.click();
+            }
+        }, { passive: true });
+    })();
+
     // iOS Safari: klavye açılınca yerleşim görünüm alanına (visualViewport) sabitlenir; sayfa kayması sıfırlanır
     (function keepInVisualViewport() {
         const vv = window.visualViewport;
