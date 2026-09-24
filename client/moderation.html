@@ -65,7 +65,7 @@
         </div>
 
         <div id="mod-loading" class="mod-state">Yükleniyor…</div>
-        <div id="mod-denied" class="mod-state" style="display:none;">Bu sayfaya erişim yetkin yok.</div>
+        <div id="mod-denied" class="mod-state" style="display:none;">Bu sayfaya erişmek için gerekli platform yetkin yok.</div>
 
         <div id="mod-content" style="display:none;">
 
@@ -124,7 +124,15 @@
 
                 if (metaRes.status === 401 || metaRes.status === 403) {
                     document.getElementById('mod-loading').style.display = 'none';
-                    document.getElementById('mod-denied').style.display = 'block';
+                    const denied = document.getElementById('mod-denied');
+                    if (metaRes.status === 401) {
+                        // Oturum bulunamadı (ör. e-posta uygulamasının kendi tarayıcısı ya da farklı alan adı): yetki değil, giriş eksik.
+                        denied.textContent = 'Oturum bulunamadı. Bu sayfayı Sauran hesabına giriş yaptığın tarayıcıda aç ya da önce giriş yap. ';
+                        const a = document.createElement('a');
+                        a.href = '/index.html'; a.textContent = 'Giriş yap';
+                        denied.appendChild(a);
+                    }
+                    denied.style.display = 'block';
                     return;
                 }
 
