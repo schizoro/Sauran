@@ -1344,10 +1344,10 @@ async function register() {
     }
 
 
-    if (password.length < 6) {
+    if (password.length < 8) {
 
         showAuthError(
-            'Şifre en az 6 karakter olmalı.'
+            'Şifre en az 8 karakter olmalı.'
         );
 
         return;
@@ -3043,7 +3043,21 @@ document.getElementById('settings-delete-account-btn').addEventListener('click',
         return;
     }
 
-    const response = await fetch('/api/account', { method: 'DELETE', credentials: 'include' });
+    // Kalıcı silme için parola ile yeniden doğrulama (çalınmış/açık kalmış oturumla silmeyi önler).
+    const passwordInput = document.getElementById('settings-delete-password');
+    const password = passwordInput ? passwordInput.value : '';
+    if (!password) {
+        showToast(t('delete-account-password-required'));
+        if (passwordInput) passwordInput.focus();
+        return;
+    }
+
+    const response = await fetch('/api/account', {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+    });
     const data = await response.json();
 
     if (!data.success) {
@@ -3327,6 +3341,8 @@ const I18N = {
     'confirm-logout-all': { tr: 'Bu cihaz dışındaki tüm oturumlar kapatılacak. Emin misin?', en: 'All sessions except this device will be signed out. Are you sure?' },
     'logout-all-done': { tr: 'Diğer tüm cihazlardan çıkış yapıldı.', en: 'Signed out of all other devices.' },
     'delete-account-prompt': { tr: 'Hesabını kalıcı olarak silmek üzeresin. Onaylamak için kullanıcı adını yaz: {username}', en: 'You are about to permanently delete your account. Type your username to confirm: {username}' },
+    'delete-account-password-required': { tr: 'Hesabı silmek için mevcut şifreni yaz.', en: 'Enter your current password to delete your account.' },
+    'delete-account-password-placeholder': { tr: 'Mevcut şifren (hesabı silmek için)', en: 'Current password (to delete the account)' },
     'delete-account-mismatch': { tr: 'Kullanıcı adı eşleşmedi, hesap silinmedi.', en: "Username didn't match, account not deleted." },
     'attach-camera': { tr: 'Kamerayla Çek', en: 'Take Photo/Video' },
     'attach-gallery': { tr: 'Galeriden Seç', en: 'Choose from Gallery' },

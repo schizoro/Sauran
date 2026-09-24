@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail } = require('./mailer');
+const { sendAccountExistsEmail, sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail } = require('./mailer');
 const push = require('./push');
 const fcm = require('./fcm');
 const daily = require('./daily');
@@ -89,6 +89,7 @@ const {
   purgeExpiredAuthRecords,
   purgeExpiredAuditLog,
   purgeAdultBirthDates,
+  verifyAccountPassword,
   purgeExpiredMessages,
   purgeExpiredNotificationData,
   listDeletedDmThreads,
@@ -247,6 +248,8 @@ const verifyLimiters = makeCodeLimiters();
 const resetConfirmLimiters = makeCodeLimiters();
 
 const registerLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyFn: byIp, message: 'Çok fazla kayıt denemesi. Biraz sonra tekrar dene.' });
+const passwordChangeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, keyFn: byIp, message: 'Çok fazla şifre değiştirme denemesi. Biraz sonra tekrar dene.' });
+const accountDeleteLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyFn: byIp, message: 'Çok fazla hesap silme denemesi. Biraz sonra tekrar dene.' });
 const passwordResetLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyFn: byIp, message: 'Çok fazla istek. Biraz sonra tekrar dene.' });
 const friendRequestLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla arkadaşlık isteği gönderildi. Biraz sonra tekrar dene.' });
 const hubCreateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, keyFn: byIp, message: 'Çok fazla Hub oluşturuldu. Biraz sonra tekrar dene.' });
@@ -449,7 +452,9 @@ app.post('/api/register', registerLimiter, async (req, res) => {
       return res.status(400).json(result);
     }
 
-    await sendVerificationEmail(email, result.code);
+    // E-posta gönderimi yanıtı BEKLEMEZ ve adres kayıtlı olsa da olmasa da yanıt/süre aynıdır (e-posta numaralandırma yok). Gönderim hatası günlüğe yazılır.
+    const mailJob = result.code ? sendVerificationEmail(email, result.code) : sendAccountExistsEmail(String(email || '').trim().toLowerCase());
+    mailJob.catch((error) => console.error('Kayıt e-postası gönderilemedi:', error.message));
 
     return res.json({ success: true, email });
 
@@ -508,6 +513,10 @@ app.post('/api/login', loginLimiter, (req, res) => {
         success: false,
         error: 'Kullanıcı adı/e-posta ve şifre gerekli.'
       });
+    }
+
+    if (loginValue.length > 254 || String(password).length > 1024) {
+      return res.status(401).json({ success: false, error: 'Kullanıcı adı/e-posta veya şifre hatalı.' });
     }
 
     let actualUsername = loginValue;
@@ -621,6 +630,7 @@ app.delete('/api/sessions/:id', (req, res) => {
   const info = db.prepare(`DELETE FROM sessions WHERE id = ? AND user_id = ?`).run(Number(req.params.id), user.id);
 
   if (!info.changes) return res.status(404).json({ success: false, error: 'Oturum bulunamadı.' });
+  disconnectRevokedSockets(user.id);
   return res.json({ success: true });
 });
 
@@ -637,6 +647,7 @@ app.post('/api/sessions/logout-all', (req, res) => {
     db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(user.id);
   }
 
+  disconnectRevokedSockets(user.id);
   return res.json({ success: true });
 });
 
@@ -739,11 +750,16 @@ app.get('/api/account/export', (req, res) => {
   }
 });
 
-app.delete('/api/account', (req, res) => {
+app.delete('/api/account', accountDeleteLimiter, (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
 
   try {
+
+    // Çalınmış/açık kalmış bir oturumla hesabın kalıcı silinmesini önlemek için parola ile yeniden doğrulama gerekir.
+    if (!verifyAccountPassword(user.id, req.body && req.body.password)) {
+      return res.status(403).json({ success: false, error: 'Hesabı silmek için mevcut şifreni doğru girmelisin.' });
+    }
 
     // Tüm DB silme/güncelleme adımları tek transaction'da (bkz. deleteAccount): hata olursa hiçbir şey silinmez, başarı dönülmez.
     // Rapor/kanıt kayıtları fiziksel olarak silinmez (süreli saklama); yalnızca bu hesapla bağlantıları koparılır.
@@ -915,7 +931,7 @@ app.patch('/api/profile/username', (req, res) => {
   }
 });
 
-app.patch('/api/profile/password', (req, res) => {
+app.patch('/api/profile/password', passwordChangeLimiter, (req, res) => {
   try {
     const user = getUserFromRequest(req);
 
@@ -935,6 +951,8 @@ app.patch('/api/profile/password', (req, res) => {
     if (currentHash) {
       db.prepare(`DELETE FROM sessions WHERE user_id = ? AND token_hash != ?`).run(user.id, currentHash);
     }
+
+    disconnectRevokedSockets(user.id); // diğer cihazlardaki açık soketler de kapanır
 
     return res.json(result);
 
@@ -1527,6 +1545,7 @@ app.post('/api/logout', (req, res) => {
     if (token) {
       const tokenHash = hashSessionToken(token);
       db.prepare(`DELETE FROM sessions WHERE token_hash = ?`).run(tokenHash);
+      disconnectRevokedSockets();
     }
 
     clearSessionCookie(req, res);
@@ -2305,6 +2324,23 @@ app.post('/api/messages/:id/forward', (req, res) => {
 // =====================================================
 
 const activeUsers = new Map();
+
+// Oturumu artık geçerli olmayan (çıkış, oturum iptali, tümünden çıkış, şifre değişimi/sıfırlama, süre dolması) soketleri kapatır.
+// userId verilirse yalnızca o hesabın, verilmezse tüm açık soketler denetlenir. Bir soket ancak KENDİ oturumu duruyorsa açık kalır.
+function disconnectRevokedSockets(userId = null) {
+  const ids = userId != null ? [userId] : Array.from(activeUsers.keys());
+  const now = Date.now();
+  for (const uid of ids) {
+    for (const sid of Array.from(activeUsers.get(uid) || [])) {
+      const s = io.sockets.sockets.get(sid);
+      if (!s) continue;
+      const h = s.data && s.data.tokenHash;
+      const row = h ? db.prepare(`SELECT expires_at FROM sessions WHERE token_hash = ?`).get(h) : null;
+      if (!row || new Date(row.expires_at).getTime() <= now) s.disconnect(true);
+    }
+  }
+}
+setInterval(() => { try { disconnectRevokedSockets(); } catch (e) { console.error('Soket oturum denetimi hatası:', e); } }, 5 * 60 * 1000).unref();
 const activeUserNames = new Map(); // userId -> username (son bilinen)
 
 function isUserOnline(userId) {
@@ -2920,7 +2956,8 @@ app.post('/api/password-reset/request', passwordResetLimiter, async (req, res) =
     // döndürülür — e-posta yalnızca hesap gerçekten varsa gönderilir.
     if (result.success) {
       const user = db.prepare(`SELECT email FROM users WHERE id = ?`).get(result.userId);
-      await sendPasswordResetEmail(user.email, result.code);
+      // Yanıt e-posta gönderimini BEKLEMEZ (hesap var/yok zamanlama farkı olmasın); hata günlüğe yazılır.
+      sendPasswordResetEmail(user.email, result.code).catch((error) => console.error('Şifre sıfırlama e-postası gönderilemedi:', error.message));
     }
 
     return res.json({ success: true, error: null });
@@ -2938,6 +2975,9 @@ app.post('/api/password-reset/confirm', ...resetConfirmLimiters, (req, res) => {
     if (!result.success) {
       return res.status(400).json(result);
     }
+
+    // Tüm oturumlar silindi; bu hesabın açık soketleri de kapatılır.
+    disconnectRevokedSockets();
 
     return res.json(result);
 
@@ -3126,6 +3166,7 @@ io.use((socket, next) => {
     if (!user) return next(new Error('Geçersiz veya süresi dolmuş oturum.'));
 
     socket.userId = user.id;
+    socket.data.tokenHash = hashSessionToken(token); // soket, doğrulandığı oturuma bağlıdır (oturum iptal edilirse kapanır)
     socket.username = user.username;
     socket.email = user.email;
 

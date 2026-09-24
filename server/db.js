@@ -1923,6 +1923,20 @@ function hashPassword(password) {
   return { hash, salt };
 }
 
+// Kullanıcı numaralandırmaya karşı: hesap/kayıt/sıfırlama kaydı YOKSA da gerçek doğrulamayla aynı maliyette (scrypt) sahte bir işlem yapılır.
+const DUMMY_PASSWORD_RECORD = (() => { const salt = crypto.randomBytes(16).toString('hex'); return { salt, hash: crypto.scryptSync('sauran-dummy-password', salt, 64).toString('hex') }; })();
+function spendVerificationTime() { verifyPassword('yanlis-sifre', DUMMY_PASSWORD_RECORD.hash, DUMMY_PASSWORD_RECORD.salt); }
+
+// Yeni parola politikası (mevcut hesaplar ETKİLENMEZ; giriş herhangi bir uzunlukta mevcut parolayı kabul eder): en az 8, en çok 128 karakter.
+const MIN_PASSWORD_LENGTH = 8;
+const MAX_PASSWORD_LENGTH = 128;
+function validateNewPassword(password) {
+  const p = String(password || '');
+  if (p.length < MIN_PASSWORD_LENGTH) return `Şifre en az ${MIN_PASSWORD_LENGTH} karakter olmalıdır.`;
+  if (p.length > MAX_PASSWORD_LENGTH) return `Şifre en fazla ${MAX_PASSWORD_LENGTH} karakter olabilir.`;
+  return null;
+}
+
 function verifyPassword(password, storedHash, storedSalt) {
   try {
     const hash = crypto.scryptSync(password, storedSalt, 64).toString('hex');
@@ -1972,8 +1986,9 @@ function createVerification(username, email, password, birthDate, termsAccepted)
       return { success: false, error: 'Geçerli bir e-posta adresi girin.' };
     }
 
-    if (password.length < 6) {
-      return { success: false, error: 'Şifre en az 6 karakter olmalıdır.' };
+    const passwordError = validateNewPassword(password);
+    if (passwordError) {
+      return { success: false, error: passwordError };
     }
 
     const existingUsername = db
@@ -1989,7 +2004,10 @@ function createVerification(username, email, password, birthDate, termsAccepted)
       .get(email);
 
     if (existingEmail) {
-      return { success: false, error: 'Bu e-posta adresi zaten kullanılıyor.' };
+      // E-posta numaralandırmayı önlemek için istemciye AYNI başarı yanıtı döner (kod gönderilmiş gibi); adrese bunun yerine "hesabın zaten var" bilgi e-postası gider.
+      hashPassword(password); // aynı maliyet
+      authcodes.hashCode(authcodes.generateNumericCode(), verifyCodeContext(email));
+      return { success: true, code: null, exists: true };
     }
 
     // Eski doğrulama kaydını temizle
@@ -2027,6 +2045,7 @@ function verifyAndCreateUser(email, code) {
     `).get(email);
 
     if (!pending) {
+      authcodes.verifyCode(code, authcodes.hashCode('000000', verifyCodeContext(email)), verifyCodeContext(email)); // kayıt var/yok zamanlama farkı olmasın
       return { success: false, error: 'Geçersiz kod.' };
     }
 
@@ -2101,10 +2120,12 @@ function loginUser(username, password) {
     `).get(username);
 
     if (!user) {
+      spendVerificationTime();
       return { success: false, error: 'Kullanıcı adı veya şifre hatalı.' };
     }
 
     if (!user.password_hash || !user.password_salt) {
+      spendVerificationTime();
       return { success: false, error: 'Bu hesap yeni sisteme geçirilmemiş.' };
     }
 
@@ -3282,6 +3303,14 @@ function enqueueDmCallRoomsForDeletedUser(userId) {
   return names;
 }
 
+// Hesap silme öncesi parola ile yeniden doğrulama. Parolası olmayan (eski/geçişsiz) hesaplar için doğrulama atlanır.
+function verifyAccountPassword(userId, password) {
+  const u = db.prepare(`SELECT password_hash, password_salt FROM users WHERE id = ?`).get(userId);
+  if (!u) return false;
+  if (!u.password_hash || !u.password_salt) return true;
+  return verifyPassword(String(password || '').slice(0, 1024), u.password_hash, u.password_salt);
+}
+
 function deleteAccount(userId) {
   const run = db.transaction(() => {
     unlinkReportDataForDeletedUser(userId);
@@ -3577,7 +3606,10 @@ function requestPasswordReset(email) {
   email = String(email || '').trim().toLowerCase();
 
   const user = db.prepare(`SELECT id FROM users WHERE LOWER(email) = LOWER(?)`).get(email);
-  if (!user) return { success: false, error: 'Bu e-posta ile kayıtlı bir hesap yok.' };
+  if (!user) {
+    authcodes.hashCode(authcodes.generateNumericCode(), resetCodeContext(0)); // hesap var/yok zamanlama farkı olmasın (yanıt istemciye zaten aynı)
+    return { success: false, error: 'İstek işlenemedi.' };
+  }
 
   // Kod yalnızca e-postayla kullanıcıya gönderilmek üzere bellekte döner; veritabanına yalnızca hash'i yazılır.
   const code = authcodes.generateNumericCode();
@@ -3593,36 +3625,40 @@ function confirmPasswordReset(email, code, newPassword) {
   email = String(email || '').trim().toLowerCase();
   code = String(code || '').trim();
 
+  // Hesap yok / bu hesap için istek yok durumları AYNI genel hatayı ve benzer maliyeti verir (kullanıcı numaralandırma yok).
+  const GENERIC_RESET_ERROR = 'Geçersiz veya süresi dolmuş kod.';
   const user = db.prepare(`SELECT id FROM users WHERE LOWER(email) = LOWER(?)`).get(email);
-  if (!user) return { success: false, error: 'Geçersiz istek.' };
-
-  const reset = db.prepare(`SELECT * FROM password_resets WHERE user_id = ? ORDER BY id DESC LIMIT 1`).get(user.id);
-  if (!reset) return { success: false, error: 'Geçersiz kod.' };
+  const reset = user ? db.prepare(`SELECT * FROM password_resets WHERE user_id = ? ORDER BY id DESC LIMIT 1`).get(user.id) : null;
+  if (!user || !reset) {
+    authcodes.verifyCode(code, authcodes.hashCode('000000', resetCodeContext(user ? user.id : 0)), resetCodeContext(user ? user.id : 0));
+    return { success: false, error: GENERIC_RESET_ERROR };
+  }
 
   // Her deneme ÖNCE sayılır; sınır aşılırsa kod yakılır (yeni kod istenmeli).
   const attempts = reset.attempts + 1;
   if (attempts > authcodes.CODE_MAX_ATTEMPTS) {
     db.prepare(`DELETE FROM password_resets WHERE id = ?`).run(reset.id);
-    return { success: false, error: 'Çok fazla hatalı deneme. Yeni bir kod iste.' };
+    return { success: false, error: GENERIC_RESET_ERROR };
   }
   db.prepare(`UPDATE password_resets SET attempts = ? WHERE id = ?`).run(attempts, reset.id);
 
   if (!authcodes.verifyCode(code, reset.code, resetCodeContext(user.id))) {
     if (attempts >= authcodes.CODE_MAX_ATTEMPTS) {
       db.prepare(`DELETE FROM password_resets WHERE id = ?`).run(reset.id);
-      return { success: false, error: 'Çok fazla hatalı deneme. Yeni bir kod iste.' };
+      return { success: false, error: GENERIC_RESET_ERROR };
     }
-    return { success: false, error: 'Geçersiz kod.' };
+    return { success: false, error: GENERIC_RESET_ERROR };
   }
 
   if (new Date(reset.expires_at).getTime() <= Date.now()) {
     db.prepare(`DELETE FROM password_resets WHERE id = ?`).run(reset.id);
-    return { success: false, error: 'Kodun süresi dolmuş.' };
+    return { success: false, error: GENERIC_RESET_ERROR };
   }
 
   const newPasswordStr = String(newPassword || '');
-  if (newPasswordStr.length < 6) {
-    return { success: false, error: 'Yeni şifre en az 6 karakter olmalıdır.' };
+  const newPasswordError = validateNewPassword(newPasswordStr);
+  if (newPasswordError) {
+    return { success: false, error: newPasswordError };
   }
 
   const { hash, salt } = hashPassword(newPasswordStr);
@@ -4040,8 +4076,9 @@ function updatePassword(userId, currentPassword, newPassword) {
   }
 
   const newPasswordStr = String(newPassword || '');
-  if (newPasswordStr.length < 6) {
-    return { success: false, error: 'Yeni şifre en az 6 karakter olmalıdır.' };
+  const newPasswordError = validateNewPassword(newPasswordStr);
+  if (newPasswordError) {
+    return { success: false, error: newPasswordError };
   }
 
   const { hash, salt } = hashPassword(newPasswordStr);
@@ -5344,6 +5381,8 @@ module.exports = {
   isMinorUntil,
   computeMinorUntil,
   purgeAdultBirthDates,
+  verifyAccountPassword,
+  MIN_PASSWORD_LENGTH,
   purgeDeletedMessageResidue,
   sweepMessageOrphans,
   sweepMessageOrphansSecure,

@@ -179,4 +179,20 @@ async function sendRoleDecisionTeamEmail({ username, userId, decision, role, ver
   });
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail };
+// E-posta numaralandırmayı önlemek için kayıt ekranı adres kayıtlı olsa da aynı yanıtı verir; kayıtlı adrese bilgi e-postası gider (kod içermez).
+async function sendAccountExistsEmail(toEmail) {
+  await transporter.sendMail({
+    to: toEmail,
+    from: MAIL_FROM,
+    subject: 'Sauran — Bu e-posta ile bir hesabın zaten var',
+    html: `
+      <div style="font-family: 'Segoe UI', sans-serif; background: #0b0c10; color: #c5c6c7; padding: 40px; max-width: 480px; margin: auto; border-radius: 12px;">
+        <h2 style="color: #66fcf1; letter-spacing: 2px; text-transform: uppercase;">Sauran</h2>
+        <p style="margin-top: 20px;">Bu e-posta adresiyle Sauran'a kayıt olunmaya çalışıldı, ancak bu adres için zaten bir hesap var.</p>
+        <p>Hesabına giriş yapabilir ya da şifreni unuttuysan giriş ekranındaki "Şifremi unuttum" bağlantısını kullanabilirsin. Bu isteği sen yapmadıysan bu e-postayı görmezden gelebilirsin.</p>
+      </div>
+    `
+  });
+}
+
+module.exports = { sendAccountExistsEmail, sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail };
