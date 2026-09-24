@@ -113,14 +113,74 @@
     wrap('loadHubList', fetchHubs);
     wrap('switchToView', function () { renderNav(); syncMainState(); });
 
+    // Lobi bilgi penceresi (üst çubuktaki lobi fotoğrafına tıklayınca)
+    function openHubInfo() {
+        let hub = null;
+        try { hub = typeof currentHub !== 'undefined' ? currentHub : null; } catch (_) { hub = null; }
+        if (!hub) return;
+        let ov = $('hub-info-modal');
+        if (!ov) {
+            ov = document.createElement('div');
+            ov.id = 'hub-info-modal'; ov.className = 'modal-overlay'; ov.style.display = 'none';
+            ov.addEventListener('click', (e) => { if (e.target === ov) closeHubInfo(); });
+            document.body.appendChild(ov);
+        }
+        const members = Array.isArray(hub.members) ? hub.members : [];
+        const owner = members.find((m) => m.user_id === hub.created_by);
+        const online = members.filter((m) => m.online).length;
+        let created = '';
+        if (hub.created_at) {
+            const d = new Date(String(hub.created_at).replace(' ', 'T') + 'Z');
+            if (!isNaN(d)) created = d.toLocaleDateString(document.documentElement.lang || undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+        }
+        const box = document.createElement('div');
+        box.className = 'modal-box hub-info-box';
+        box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
+        const head = document.createElement('div');
+        head.className = 'hub-info-head';
+        head.appendChild(lobbyAvatar(hub.image_data, hub.name, 'lobby-avatar hub-info-avatar'));
+        const h = document.createElement('h3'); h.textContent = hub.name || '';
+        head.appendChild(h);
+        box.appendChild(head);
+        if (hub.description && String(hub.description).trim()) {
+            const p = document.createElement('p'); p.className = 'hub-info-desc'; p.textContent = String(hub.description);
+            box.appendChild(p);
+        }
+        const rows = [
+            [tr('hub-info-owner', 'Sahibi'), owner ? owner.username : (hub.is_owner ? tr('voice-room-you', 'Sen') : '—')],
+            [tr('hub-info-members', 'Üye'), String(members.length)],
+            [tr('hub-info-online', 'Çevrimiçi'), String(online)],
+            [tr('hub-info-created', 'Oluşturulma'), created || '—']
+        ];
+        const dl = document.createElement('dl'); dl.className = 'hub-info-rows';
+        rows.forEach(([k, v]) => {
+            const dt = document.createElement('dt'); dt.textContent = k;
+            const dd = document.createElement('dd'); dd.textContent = v;
+            dl.append(dt, dd);
+        });
+        box.appendChild(dl);
+        const close = document.createElement('button');
+        close.type = 'button'; close.className = 'hub-info-close'; close.textContent = tr('close', 'Kapat');
+        close.addEventListener('click', closeHubInfo);
+        box.appendChild(close);
+        ov.textContent = '';
+        ov.appendChild(box);
+        ov.style.display = 'flex';
+        close.focus();
+    }
+    function closeHubInfo() { const ov = $('hub-info-modal'); if (ov) ov.style.display = 'none'; }
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeHubInfo(); });
+
     // Üst çubuğun ortasında açık lobinin yuvarlak (cam) fotoğrafı
     function updateTopbarBadge() {
         const bar = document.querySelector('.topbar');
         if (!bar) return;
         let badge = $('topbar-lobby-badge');
         if (!badge) {
-            badge = document.createElement('span');
+            badge = document.createElement('button');
+            badge.type = 'button';
             badge.id = 'topbar-lobby-badge'; badge.className = 'topbar-lobby-badge';
+            badge.addEventListener('click', openHubInfo);
             bar.appendChild(badge);
         }
         let hub = null;
@@ -128,8 +188,8 @@
         badge.textContent = '';
         if (!hub) { badge.style.display = 'none'; badge.removeAttribute('aria-label'); return; }
         badge.style.display = 'grid';
-        badge.setAttribute('role', 'img');
-        badge.setAttribute('aria-label', hub.name || '');
+        badge.setAttribute('aria-label', tr('hub-info-title', 'Lobi bilgisi') + ': ' + (hub.name || ''));
+        badge.title = tr('hub-info-title', 'Lobi bilgisi');
         badge.appendChild(lobbyAvatar(hub.image_data, hub.name, 'lobby-avatar lobby-avatar-lg'));
     }
 
