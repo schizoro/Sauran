@@ -113,6 +113,38 @@
     wrap('loadHubList', fetchHubs);
     wrap('switchToView', function () { renderNav(); syncMainState(); });
 
+    // Ana menü: "Lobilerim" / "Katıldığım lobiler" başlıkları açılır düğme; tıklayınca liste aşağı açılır
+    (function hubListAccordions() {
+        const groups = [['hub-list-grid-owned', 'owned'], ['hub-list-grid-joined', 'joined']];
+        groups.forEach(([gridId, key]) => {
+            const grid = $(gridId);
+            if (!grid || !grid.parentElement) return;
+            const title = grid.parentElement.querySelector('.hub-list-subtitle');
+            if (!title) return;
+            let open = false;
+            try { open = localStorage.getItem('sauran.menu.' + key) === '1'; } catch (_) {}
+            title.setAttribute('role', 'button');
+            title.setAttribute('tabindex', '0');
+            title.classList.add('hub-list-toggle');
+            const apply = () => {
+                title.setAttribute('aria-expanded', open ? 'true' : 'false');
+                grid.style.display = open ? '' : 'none';
+                title.classList.toggle('open', open);
+            };
+            const count = () => { title.setAttribute('data-count', String(grid.children.length)); };
+            const toggle = () => {
+                open = !open;
+                try { localStorage.setItem('sauran.menu.' + key, open ? '1' : '0'); } catch (_) {}
+                apply();
+            };
+            title.addEventListener('click', toggle);
+            title.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+            new MutationObserver(count).observe(grid, { childList: true });
+            count();
+            apply();
+        });
+    })();
+
     // Lobi bilgi penceresi (üst çubuktaki lobi fotoğrafına tıklayınca)
     function openHubInfo() {
         let hub = null;

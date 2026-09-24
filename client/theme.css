@@ -632,3 +632,16 @@ body:has(.adm-header), body:has(.mod-header) { background: var(--bg-app); color:
   background: var(--glass-1); box-shadow: var(--hi), 0 0 0 1px var(--border-soft); }
 .hub-info-close:hover { background: rgba(255, 255, 255, 0.07); }
 @media (max-width: 720px) { .hub-info-box { width: 100%; max-width: none; } }
+
+/* Ana menü: açılır liste düğmeleri */
+.hub-list-toggle {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 0 16px; margin-bottom: 8px; cursor: pointer; user-select: none;
+  border-radius: 14px; background: var(--glass-1); box-shadow: var(--hi), 0 0 0 1px var(--border-soft);
+  color: var(--text-primary) !important; font-size: 15px !important; font-weight: 600 !important; letter-spacing: 0 !important; text-transform: none;
+  transition: background 0.18s var(--ease);
+}
+.hub-list-toggle:hover { background: rgba(255, 255, 255, 0.06); }
+.hub-list-toggle::after { content: attr(data-count); margin-left: auto; font-size: 13px; font-weight: 500; color: var(--text-tertiary); }
+.hub-list-toggle::before { content: ""; order: 3; width: 8px; height: 8px; margin-left: 6px; border-right: 2px solid var(--text-secondary); border-bottom: 2px solid var(--text-secondary); transform: rotate(-45deg); transition: transform 0.2s var(--ease); }
+.hub-list-toggle.open::before { transform: rotate(45deg); }
+.hub-list-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
