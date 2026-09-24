@@ -1191,7 +1191,11 @@ function getDeletedDmMessages(userId, token, limit = 50) {
 function deleteDeletedDmThread(userId, token) {
   const room = findDeletedDmRoom(userId, token);
   if (!room) return { success: false, error: 'Sohbet bulunamadı.' };
-  const info = db.prepare(`DELETE FROM messages WHERE room = ? AND hub_id IS NULL`).run(room);
+  const info = db.transaction(() => {
+    const r = db.prepare(`DELETE FROM messages WHERE room = ? AND hub_id IS NULL`).run(room);
+    sweepMessageOrphans();
+    return r;
+  })();
   return info.changes ? { success: true, deleted: info.changes } : { success: false, error: 'Sohbet bulunamadı.' };
 }
 
@@ -1213,6 +1217,7 @@ function purgeExpiredDeletedDmThreads(now = new Date()) {
         result.messages += db.prepare(`DELETE FROM messages WHERE room = ? AND hub_id IS NULL`).run(room).changes;
         result.threads += 1;
       });
+      sweepMessageOrphans(); // süresi dolan sohbetin mesajlarından iletilmiş kopyalar kaynağı aşmasın
     })();
   } finally {
     db.pragma('secure_delete = OFF');
@@ -2800,6 +2805,8 @@ function purgeExpiredMessages(now = new Date()) {
       const r = db.transaction(() => deleteMessagesWithRelations(ids))();
       result.deleted += r.deleted; result.copies += r.copies;
     }
+    const swept = db.transaction(() => sweepMessageOrphans())();
+    result.copies += swept.orphan_copies.length;
   } finally {
     db.pragma('secure_delete = OFF');
   }
@@ -2808,6 +2815,48 @@ function purgeExpiredMessages(now = new Date()) {
     try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (_) { /* yoksay */ }
   }
   return result;
+}
+
+// ---- Kalan mesaj metadata açıkları (Aşama 15C) ------------------------------------------------------------------------------------
+// Değişmez kural: bir mesajın kaynağı (forward) FİZİKSEL olarak yoksa (lobi silindi/sohbet temizlendi, hesap silindi, saklama süresi doldu, silinmiş hesap sohbeti
+// silindi vb.) kopya içeriksiz mezar taşı olur; kopuk reply bağlantısı ve var olmayan hesabı gösteren pinned_by temizlenir. Idempotent; transaction İÇİNDE ya da
+// dışında çağrılabilir (secure_delete'i çağıran açar). Eski sürümden kalan kopuk ilişkileri de aynı süpürme temizler.
+function sweepMessageOrphans() {
+  const result = { orphan_copies: [], replies: 0, pins: 0, legacy_general: 0 };
+
+  result.orphan_copies = db.prepare(`
+    SELECT id, user_id, to_user_id FROM messages
+    WHERE forwarded_from_message_id IS NOT NULL AND kind != 'deleted'
+      AND forwarded_from_message_id NOT IN (SELECT id FROM messages)
+  `).all();
+  // Kaynağı olmayan kopyadan iletilenler de (zincir) aynı kaynağın içeriğini taşır: hepsi içeriksiz kalır.
+  const chained = forwardCopiesOf(result.orphan_copies.map(c => c.id));
+  const seen = new Set(result.orphan_copies.map(c => c.id));
+  chained.forEach(c => { if (!seen.has(c.id)) { result.orphan_copies.push(c); seen.add(c.id); } });
+  tombstoneMessageRows(result.orphan_copies.map(c => c.id));
+
+  result.replies = db.prepare(`
+    UPDATE messages SET reply_to_message_id = NULL
+    WHERE reply_to_message_id IS NOT NULL AND reply_to_message_id NOT IN (SELECT id FROM messages)
+  `).run().changes;
+
+  // Sabitleme mesajda kalır (lobi ürün davranışı); yalnızca var olmayan hesabı gösteren bağlantı kaldırılır.
+  result.pins = db.prepare(`
+    UPDATE messages SET pinned_by = NULL WHERE pinned_by IS NOT NULL AND pinned_by NOT IN (SELECT id FROM users)
+  `).run().changes;
+
+  // Eski tek-oda ('general') sohbetinden kalan, gönderen bağlantısız ve arayüzde hiçbir yerde gösterilmeyen satırlar (yalnızca kullanıcı adı metni taşır).
+  result.legacy_general = db.prepare(`
+    DELETE FROM messages WHERE room = 'general' AND hub_id IS NULL AND to_user_id IS NULL AND user_id IS NULL AND kind IS NOT 'deleted'
+  `).run().changes;
+
+  return result;
+}
+
+function sweepMessageOrphansSecure() {
+  db.pragma('secure_delete = ON');
+  try { return db.transaction(() => sweepMessageOrphans())(); }
+  finally { db.pragma('secure_delete = OFF'); }
 }
 
 // Açılışta bir kez (idempotent): ESKİ sürümde silinen mesajlarda kalmış kalıntıları temizler — user_id/username/ilişkiler, tepkiler, anket oyları, sabitleme —
@@ -3133,7 +3182,11 @@ function clearHubMessages(hubId, userId) {
     return { success: false, error: 'Bu işlem için yetkin yok.' };
   }
 
-  const info = db.prepare(`DELETE FROM messages WHERE hub_id = ?`).run(hubId);
+  const info = db.transaction(() => {
+    const r = db.prepare(`DELETE FROM messages WHERE hub_id = ?`).run(hubId);
+    sweepMessageOrphans(); // bu lobi mesajlarının başka sohbetlere iletilmiş kopyaları içeriksiz kalır
+    return r;
+  })();
   return { success: true, deleted: info.changes };
 }
 
@@ -3186,6 +3239,7 @@ function purgeHubData(hubId) {
   db.prepare(`DELETE FROM hub_poll_votes WHERE message_id IN (SELECT id FROM messages WHERE hub_id = ?)`).run(hubId);
   db.prepare(`DELETE FROM message_reactions WHERE message_id IN (SELECT id FROM messages WHERE hub_id = ?)`).run(hubId);
   db.prepare(`DELETE FROM messages WHERE hub_id = ?`).run(hubId);
+  sweepMessageOrphans(); // lobi mesajlarının iletilmiş kopyaları kaynağı aşmasın (bu fonksiyon çağıranın transaction'ı içindedir)
   db.prepare(`DELETE FROM hub_invites WHERE hub_id = ?`).run(hubId);
   db.prepare(`DELETE FROM hub_bans WHERE hub_id = ?`).run(hubId);
   db.prepare(`DELETE FROM hub_voice_rooms WHERE hub_id = ?`).run(hubId);
@@ -3245,6 +3299,8 @@ function deleteAccount(userId) {
 
     // DM'ler: kendi mesajların silinir (mezar taşı bırakılır), karşı tarafın mesajları korunur (bkz. handleDmsOnAccountDeletion).
     const dmPartners = handleDmsOnAccountDeletion(userId);
+    // Bu hesabın sabitlediği (başkalarına ait) lobi mesajlarında sabitleyen bağlantısı kalmasın; sabitleme mesajda kalır.
+    db.prepare(`UPDATE messages SET pinned_by = NULL WHERE pinned_by = ?`).run(userId);
     // Geriye kalan (lobi vb.) mesajları silinir; DM satırları yukarıda işlendi.
     db.prepare(`DELETE FROM messages WHERE user_id = ?`).run(userId);
     db.prepare(`DELETE FROM friendships WHERE user_low = ? OR user_high = ?`).run(userId, userId);
@@ -3967,7 +4023,11 @@ function updateUsername(userId, newUsername) {
   const existing = db.prepare(`SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?`).get(newUsername, userId);
   if (existing) return { success: false, error: 'Bu kullanıcı adı zaten alınmış.' };
 
-  db.prepare(`UPDATE users SET username = ? WHERE id = ?`).run(newUsername, userId);
+  // Mesajlardaki gönderen adı anlık bir kopyadır; eski ad sohbet geçmişinde yaşamasın diye aynı işlemde güncellenir (tek yerde güncel ad).
+  db.transaction(() => {
+    db.prepare(`UPDATE users SET username = ? WHERE id = ?`).run(newUsername, userId);
+    db.prepare(`UPDATE messages SET username = ? WHERE user_id = ?`).run(newUsername, userId);
+  })();
   return { success: true, username: newUsername };
 }
 
@@ -5164,6 +5224,7 @@ cleanupStalePlatformNotices();
 
 // Eski sürümden kalan silinmiş-mesaj kalıntıları (tüm tablolar/sütunlar yukarıda hazır olduktan sonra) açılışta bir kez temizlenir.
 purgeDeletedMessageResidue();
+sweepMessageOrphansSecure();
 
 module.exports = {
   isAccountSuspended,
@@ -5284,6 +5345,8 @@ module.exports = {
   computeMinorUntil,
   purgeAdultBirthDates,
   purgeDeletedMessageResidue,
+  sweepMessageOrphans,
+  sweepMessageOrphansSecure,
   purgeExpiredMessages,
   MESSAGE_RETENTION,
   MIN_SIGNUP_AGE,

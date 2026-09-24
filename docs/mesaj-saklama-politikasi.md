@@ -41,3 +41,19 @@ Bir mesaj saklama süresi nedeniyle silindiğinde:
 * Pencere (200) ve süreler değiştirilirse gizlilik politikası, `docs/veri-envanteri-yasam-dongusu.md` ve testler (`msgret_suite`) birlikte güncellenmelidir.
 * Saklama süresi nedeniyle silinen mesaja bağlı rapor kanıtı **etkilenmez**; moderasyon panelinde mesaj durumu "mesaj artık yok" olarak görünür.
 * Yedeklerde silinen mesajlar bir süre daha bulunabilir (bkz. yedekler belgesi, Aşama 18); sağlayıcı süreleri doğrulanmamıştır.
+
+## Kalan metadata düzeltmeleri (Aşama 15C)
+
+* **`messages.username`:** Aktif mesajlardaki gönderen adı anlık bir kopyadır (arayüz bunu gösterir). Kullanıcı adı değişince aynı işlemde bu kopya da
+  güncellenir; böylece **eski ad, mesaj saklama süresi boyunca sohbet geçmişinde yaşamaz**. Silinmiş mesajlarda ad zaten yoktur (Aşama 15A).
+* **`pinned_by`:** Bir hesap silinince, o hesabın sabitlediği başkalarına ait lobi mesajlarında sabitleyen bağlantısı NULL yapılır; **sabitleme mesajda kalır**
+  (lobi ürün davranışı). DM sabitlemeleri mevcut hesap silme mantığıyla temizlenir.
+* **Kaynağı kalmamış forward kopyaları:** Değişmez kural — bir kopyanın kaynağı fiziksel olarak yoksa (lobi silindi, lobi sohbeti temizlendi, hesap silindi,
+  saklama süresi doldu, "silinmiş hesap" sohbeti silindi) kopya (ve ondan iletilenler) içeriksiz mezar taşı olur. `sweepMessageOrphans` bu kuralı
+  lobi silme/sohbet temizleme/hesap silme/saklama temizliği/silinmiş hesap sohbeti silme anında ve açılışta uygular (eski sürüm kalıntıları dahil).
+  Sonuç: sahibi olunan lobinin ve hesap silinen kişinin mesajlarının DM kopyaları artık yaşamaya devam etmez (önceki boşluk kapatıldı).
+* **Kopuk `reply_to_message_id`** ve **var olmayan hesabı gösteren `pinned_by`** açılışta/saklama turunda temizlenir. Eski tek-oda (`general`) sohbetinden kalan,
+  gönderen bağlantısı olmayan ve arayüzde gösterilmeyen satırlar silinir.
+* Canlı arayüz: kopyaların içeriksiz kalması sonraki yüklemede görünür (lobi/sohbet silmede ayrıca canlı olay gönderilmez).
+* **Bilinen sınır:** Kaynağı fiziksel olarak silinmiş bir ara kopya, zincirdeki çocuklarını kaynağa yeniden bağlayamaz; bu nadir durumda çocuklar da içeriksiz olur
+  (aşırı silme yönünde güvenli seçim).
