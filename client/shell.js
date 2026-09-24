@@ -1,0 +1,185 @@
+// Sauran — uygulama kabuğu (sol ray + lobi listesi).
+// Yalnızca görünüm/gezinme bağlar: veriyi mevcut /api/hubs uç noktasından okur,
+// eylemleri mevcut düğmelere ve openHub()/switchToView() işlevlerine devreder.
+// Backend, oturum ve mesaj mantığına dokunmaz. script.js'ten SONRA yüklenir.
+(function () {
+    'use strict';
+
+    const $ = (id) => document.getElementById(id);
+    const nav = $('lobby-nav');
+    const list = $('lobby-nav-list');
+    if (!nav || !list) return;
+
+    const tr = (key, fallback) => {
+        try { const v = t(key); return v && v !== key ? v : fallback; } catch (_) { return fallback; }
+    };
+    const escapeText = (s) => String(s == null ? '' : s);
+    let lastHubs = [];
+
+    // ── Erişilebilir adlar (yalnızca ikon içeren düğmeler) ──────────────
+    function labelButtons() {
+        const map = {
+            'rail-home': ['hubs-title', 'Ana Menü'],
+            'rail-notifications': ['menu-notifications', 'Bildirimler'],
+            'rail-friend': ['menu-add-friend', 'Arkadaş Ekle'],
+            'rail-settings': ['menu-settings', 'Ayarlar'],
+            'rail-profile': ['menu-settings', 'Profilim'],
+            'lobby-nav-create': ['lobby-create', 'Lobi oluştur'],
+            'lobby-nav-toggle': ['lobby-nav-open', 'Lobileri aç']
+        };
+        Object.keys(map).forEach((id) => {
+            const el = $(id);
+            if (!el) return;
+            const label = tr(map[id][0], map[id][1]);
+            el.setAttribute('aria-label', label);
+            el.setAttribute('title', label);
+        });
+        const rp = $('rail-profile');
+        if (rp) { rp.setAttribute('aria-label', tr('profile', 'Profilim')); }
+    }
+
+    // ── Lobi listesi ────────────────────────────────────────────────────
+    function activeHubId() {
+        try { return typeof currentHub !== 'undefined' && currentHub ? currentHub.id : null; } catch (_) { return null; }
+    }
+
+    function renderNav() {
+        const active = activeHubId();
+        list.textContent = '';
+        lastHubs.forEach((hub) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'lobby' + (hub.id === active ? ' active' : '');
+            b.dataset.hubId = hub.id;
+            if (hub.id === active) b.setAttribute('aria-current', 'true');
+            const mark = document.createElement('i');
+            mark.className = 'mark';
+            const name = document.createElement('span');
+            name.className = 'lobby-name';
+            name.textContent = escapeText(hub.name);
+            const n = document.createElement('span');
+            n.className = 'lobby-count';
+            n.textContent = String(hub.member_count == null ? '' : hub.member_count);
+            b.append(mark, name, n);
+            b.addEventListener('click', () => {
+                closeDrawer();
+                if (typeof openHub === 'function') openHub(hub.id);
+            });
+            list.appendChild(b);
+        });
+    }
+
+    async function fetchHubs() {
+        try {
+            const r = await fetch('/api/hubs', { credentials: 'include' });
+            const d = await r.json();
+            if (d && d.success) { lastHubs = d.hubs || []; renderNav(); }
+        } catch (_) { /* sessiz: ana liste zaten hatayı gösterir */ }
+    }
+
+    // ── Mevcut işlevlere bağlanma (sarmalama; davranış aynen korunur) ───
+    function wrap(name, after) {
+        const orig = window[name];
+        if (typeof orig !== 'function') return;
+        window[name] = function () {
+            const out = orig.apply(this, arguments);
+            try { after.apply(this, arguments); } catch (_) {}
+            return out;
+        };
+    }
+    wrap('loadHubList', fetchHubs);
+    wrap('switchToView', function () { renderNav(); syncMainState(); });
+
+    // Ana içerik: lobi seçili değilken sakin bir boş durum
+    function syncMainState() {
+        const chat = document.querySelector('#chat-screen');
+        if (!chat) return;
+        const inHub = activeHubId() != null;
+        chat.classList.toggle('in-hub', inHub);
+        const home = $('rail-home');
+        if (home) home.classList.toggle('on', !inHub);
+    }
+
+    // ── Ray düğmeleri: mevcut düğmelere devret ─────────────────────────
+    const delegate = {
+        notifications: 'notifications-btn',
+        friend: 'friend-add-open-btn',
+        settings: 'settings-btn',
+        profile: 'profile-btn'
+    };
+    document.querySelectorAll('[data-rail]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const k = btn.dataset.rail;
+            if (k === 'home') {
+                if (typeof switchToView === 'function') { switchToView('hubs'); }
+                if (typeof loadHubList === 'function') loadHubList();
+                return;
+            }
+            const target = $(delegate[k]);
+            if (target) target.click();
+        });
+    });
+    const createBtn = $('lobby-nav-create');
+    if (createBtn) createBtn.addEventListener('click', () => {
+        closeDrawer();
+        if (typeof openHubCreateModal === 'function') openHubCreateModal();
+    });
+
+    // ── Küçük ekran: lobi listesi çekmece ──────────────────────────────
+    const toggle = $('lobby-nav-toggle');
+    function closeDrawer() { document.body.classList.remove('lobby-drawer-open'); if (toggle) toggle.setAttribute('aria-expanded', 'false'); }
+    if (toggle) {
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.addEventListener('click', () => {
+            const open = document.body.classList.toggle('lobby-drawer-open');
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+    }
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
+    document.addEventListener('click', (e) => {
+        if (document.body.classList.contains('lobby-drawer-open') && !e.target.closest('#lobby-nav, #lobby-nav-toggle')) closeDrawer();
+    });
+
+    // ── Arkadaşlar paneli: lobi listesinin altına taşı (sağ panel yok) ──
+    const friends = $('friends-sidebar');
+    if (friends) nav.appendChild(friends);
+
+    // ── Bildirim noktası / avatar: mevcut öğelerden yansıt ─────────────
+    function mirror() {
+        const badge = $('notifications-badge') || $('topbar-menu-badge');
+        const dot = $('rail-notif-dot');
+        if (dot && badge) {
+            const shown = badge.style.display !== 'none' && (badge.textContent || '').trim() !== '0';
+            dot.style.display = shown ? 'block' : 'none';
+        }
+        const av = $('profile-avatar'), img = $('profile-avatar-img'), ri = $('rail-avatar-initial'), rp = $('rail-profile');
+        if (ri && av) {
+            ri.textContent = (av.textContent || '').trim();
+            if (rp && img && img.style.display !== 'none' && img.src) {
+                rp.style.backgroundImage = 'url("' + img.src.replace(/"/g, '%22') + '")';
+                ri.style.display = 'none';
+            } else if (rp) { rp.style.backgroundImage = ''; ri.style.display = ''; }
+        }
+    }
+    const mo = new MutationObserver(mirror);
+    ['notifications-badge', 'topbar-menu-badge', 'profile-avatar', 'profile-avatar-img'].forEach((id) => {
+        const el = $(id);
+        if (el) mo.observe(el, { attributes: true, childList: true, characterData: true, subtree: true });
+    });
+
+    // Lobi seçili değilken ana içerikte sakin bir yönlendirme
+    const hv = $('hub-list-view');
+    if (hv && !$('home-empty')) {
+        const p = document.createElement('p');
+        p.id = 'home-empty'; p.className = 'home-empty'; p.setAttribute('data-i18n', 'select-lobby');
+        p.textContent = tr('select-lobby', 'Bir lobi seç');
+        hv.appendChild(p);
+    }
+
+    labelButtons();
+    mirror();
+    syncMainState();
+    // Oturum açık sayfa yenilemede ana liste zaten loadHubList() çağırır; yine de ilk veriyi al.
+    setTimeout(fetchHubs, 800);
+    setInterval(labelButtons, 15000);
+})();

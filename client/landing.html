@@ -35,7 +35,7 @@
     </script>
 
     <style>
-        :root { --bg:#0d0f14; --text:#eef0f3; --muted:#9aa0ac; --accent:#66fcf1; --accent2:#b366f5; --line:rgba(255,255,255,.12); }
+        :root { --bg:#0d0f14; --text:#eef0f3; --muted:#9aa0ac; --accent:#5cc8ff; --accent2:#b366f5; --line:rgba(255,255,255,.12); }
         * { margin:0; padding:0; box-sizing:border-box; }
         html { scroll-behavior:smooth; }
         body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,-apple-system,Roboto,sans-serif; line-height:1.55; min-height:100vh; overflow-x:hidden; }
@@ -60,12 +60,12 @@
         .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:12px 22px; border-radius:14px; font-weight:600; font-size:1rem;
                border:1px solid var(--line); background:rgba(255,255,255,.07); color:var(--text); cursor:pointer; transition:transform .15s, background .15s; }
         .btn:hover { transform:translateY(-2px); background:rgba(255,255,255,.12); }
-        .btn.primary { background:linear-gradient(135deg,#66fcf1,#3fd0c6); color:#06201e; border-color:transparent; box-shadow:0 6px 24px rgba(102,252,241,.3); }
+        .btn.primary { background:linear-gradient(135deg,#5cc8ff,#3fd0c6); color:#06201e; border-color:transparent; box-shadow:0 6px 24px rgba(92,200,255,.3); }
         .btn.primary:hover { background:linear-gradient(135deg,#8afff6,#55ddd3); }
         .btn.sm { padding:8px 16px; font-size:.92rem; border-radius:12px; }
 
         .hero { text-align:center; padding:70px 0 60px; }
-        .pill { display:inline-block; padding:6px 14px; border-radius:999px; font-size:.85rem; color:var(--accent); background:rgba(102,252,241,.1); border:1px solid rgba(102,252,241,.25); margin-bottom:22px; }
+        .pill { display:inline-block; padding:6px 14px; border-radius:999px; font-size:.85rem; color:var(--accent); background:rgba(92,200,255,.1); border:1px solid rgba(92,200,255,.25); margin-bottom:22px; }
         h1 { font-size:clamp(2.4rem,7vw,4.4rem); line-height:1.08; font-weight:800; letter-spacing:-1px; }
         h1 span { background:linear-gradient(120deg,var(--accent),var(--accent2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
         .lead { max-width:600px; margin:22px auto 0; color:var(--muted); font-size:1.15rem; }
@@ -87,10 +87,10 @@
         .trust-lead { text-align:center; color:var(--muted); max-width:640px; margin:10px auto 24px; }
         .chips { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-bottom:24px; }
         .chip { padding:10px 16px; border-radius:999px; font-size:.92rem; border:1px solid var(--line); background:rgba(255,255,255,.07); transition:background .15s, border-color .15s; }
-        .chip:hover { background:rgba(102,252,241,.14); border-color:rgba(102,252,241,.4); }
+        .chip:hover { background:rgba(92,200,255,.14); border-color:rgba(92,200,255,.4); }
         .panels { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr)); gap:14px; align-items:start; }
         .panel { padding:0; overflow:hidden; scroll-margin-top:16px; }
-        .panel:target { border-color:rgba(102,252,241,.5); }
+        .panel:target { border-color:rgba(92,200,255,.5); }
         .panel summary { cursor:pointer; padding:18px 22px; font-weight:600; font-size:1.05rem; list-style:none; display:flex; justify-content:space-between; gap:10px; }
         .panel summary::-webkit-details-marker { display:none; }
         .panel summary::after { content:'+'; color:var(--accent); font-size:1.4rem; line-height:1; }
@@ -110,6 +110,28 @@
 
         @media (max-width:520px) { .nav-links .btn:not(.primary) { display:none; } .hero { padding-top:44px; } }
         @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } .btn { transition:none; } }
+    
+        /* ── Sauran Liquid Glass (onaylı tasarım sistemi) ── */
+        :root { --bg:#0a0d11; --text:#e8edf2; --muted:#a4afbb; --accent:#5cc8ff; --accent2:#5cc8ff; --line:rgba(255,255,255,.075); }
+        body { font-family:"Inter","Segoe UI Variable","Segoe UI",system-ui,-apple-system,sans-serif; -webkit-font-smoothing:antialiased; }
+        body::before { content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+            background:radial-gradient(900px 520px at 78% -8%,rgba(60,150,210,.18),transparent 65%),radial-gradient(700px 460px at -5% 105%,rgba(40,110,160,.11),transparent 65%); }
+        .orb { display:none; }
+        .glass { background:rgba(255,255,255,.035); border:0; border-radius:22px; -webkit-backdrop-filter:blur(18px) saturate(1.2); backdrop-filter:blur(18px) saturate(1.2);
+                 box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 0 0 1px rgba(255,255,255,.075); }
+        .btn { border:0; border-radius:12px; background:rgba(255,255,255,.035); box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 0 0 1px rgba(255,255,255,.075); font-weight:550; }
+        .btn:hover { background:rgba(255,255,255,.07); transform:translateY(-1px); }
+        .btn.primary { background:#5cc8ff; color:#04202e; box-shadow:none; }
+        .btn.primary:hover { background:#7ad4ff; }
+        h1 { letter-spacing:-.02em; font-weight:700; }
+        h1 span { background:none; color:var(--accent); -webkit-background-clip:border-box; background-clip:border-box; }
+        .pill { background:rgba(92,200,255,.1); border-color:rgba(92,200,255,.25); }
+        .chip { border:0; box-shadow:0 0 0 1px rgba(255,255,255,.075); }
+        .chip:hover { background:rgba(92,200,255,.14); }
+        .panel:target { box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 0 0 1px rgba(92,200,255,.45); }
+        .hero { padding:96px 0 80px; }
+        .features { gap:20px; padding-bottom:80px; }
+        a:focus-visible, button:focus-visible, summary:focus-visible { outline:2px solid rgba(92,200,255,.45); outline-offset:2px; }
     </style>
 </head>
 <body>

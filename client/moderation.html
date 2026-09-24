@@ -5,11 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Moderasyon Paneli — Sauran</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="theme.css">
     <style>
-        body { margin: 0; padding: 24px; background: #0b0c10; color: #c5c6c7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        body { margin: 0; padding: 24px; background: #0a0d11; color: #c5c6c7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
         .mod-wrap { max-width: 960px; margin: 0 auto; }
         .mod-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
-        .mod-header h1 { font-size: 18px; color: #66fcf1; margin: 0; letter-spacing: 1px; }
+        .mod-header h1 { font-size: 18px; color: #5cc8ff; margin: 0; letter-spacing: 1px; }
         .mod-state { text-align: center; padding: 60px 20px; color: #6b7280; font-size: 14px; }
         .mod-filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
         .mod-filters select {
@@ -21,7 +22,7 @@
             display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; cursor: pointer;
             background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); transition: 0.15s;
         }
-        .mod-card:hover { border-color: rgba(102,252,241,0.35); }
+        .mod-card:hover { border-color: rgba(92,200,255,0.35); }
         .mod-priority { flex-shrink: 0; font-size: 10px; font-weight: bold; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; }
         .mod-priority.critical { background: rgba(255,46,70,0.15); color: #ff6b7d; }
         .mod-priority.high { background: rgba(255,159,67,0.15); color: #ffb066; }
@@ -29,7 +30,7 @@
         .mod-card-main { flex: 1; min-width: 0; }
         .mod-card-title { font-size: 13px; color: #e2f8f6; margin-bottom: 2px; }
         .mod-card-meta { font-size: 11px; color: #6b7280; }
-        .mod-status-badge { flex-shrink: 0; font-size: 10.5px; color: #66fcf1; border: 1px solid rgba(102,252,241,0.3); border-radius: 999px; padding: 3px 9px; }
+        .mod-status-badge { flex-shrink: 0; font-size: 10.5px; color: #5cc8ff; border: 1px solid rgba(92,200,255,0.3); border-radius: 999px; padding: 3px 9px; }
         .mod-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; padding: 20px; }
         .mod-modal-overlay.open { display: flex; }
         .mod-modal {
@@ -37,7 +38,7 @@
             background: rgba(20,22,28,0.7); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
             border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 20px 60px rgba(0,0,0,0.6);
         }
-        .mod-modal h2 { margin: 0 0 14px; font-size: 15px; color: #66fcf1; }
+        .mod-modal h2 { margin: 0 0 14px; font-size: 15px; color: #5cc8ff; }
         .mod-field { margin-bottom: 12px; }
         .mod-field-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; display: block; margin-bottom: 3px; }
         .mod-field-value { font-size: 13px; color: #c5c6c7; white-space: pre-wrap; word-break: break-word; }
@@ -49,7 +50,7 @@
             border-radius: 8px; padding: 8px 10px; font-size: 12.5px; flex: 1; min-width: 120px;
         }
         .mod-actions button, #mod-view-account-btn {
-            background: rgba(102,252,241,0.1); border: 1px solid rgba(102,252,241,0.4); color: #66fcf1;
+            background: rgba(92,200,255,0.1); border: 1px solid rgba(92,200,255,0.4); color: #5cc8ff;
             border-radius: 8px; padding: 8px 16px; font-size: 12.5px; cursor: pointer; font-weight: bold;
         }
         .mod-close-btn { position: absolute; top: 16px; right: 16px; width: 26px; height: 26px; border-radius: 50%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #8e9297; cursor: pointer; }
@@ -246,7 +247,7 @@
                 return `<video controls src="${esc(payload.data)}" style="max-width:100%; max-height:320px; border-radius:8px; margin-top:4px; display:block;"></video>`;
             }
             if (kind === 'file' && payload.data) {
-                return `<a href="${esc(payload.data)}" download="${esc(payload.name || 'dosya')}" style="color:#66fcf1;">📎 ${esc(payload.name || 'dosya')}</a> <span style="color:#6b7280;">(${Math.round((payload.size || 0) / 1024)} KB)</span>`;
+                return `<a href="${esc(payload.data)}" download="${esc(payload.name || 'dosya')}" style="color:#5cc8ff;">📎 ${esc(payload.name || 'dosya')}</a> <span style="color:#6b7280;">(${Math.round((payload.size || 0) / 1024)} KB)</span>`;
             }
             if (kind === 'poll') {
                 const options = Array.isArray(payload.options) ? payload.options : [];
@@ -254,7 +255,7 @@
                 return `<div><strong>${esc(ctx.content || payload.question || '')}</strong></div>${optionsHtml}`;
             }
             if (kind === 'share') {
-                return `${esc(ctx.content || '')}${payload.url ? `<br><a href="${esc(payload.url)}" target="_blank" rel="noopener noreferrer" style="color:#66fcf1;">${esc(payload.url)}</a>` : ''}`;
+                return `${esc(ctx.content || '')}${payload.url ? `<br><a href="${esc(payload.url)}" target="_blank" rel="noopener noreferrer" style="color:#5cc8ff;">${esc(payload.url)}</a>` : ''}`;
             }
             if (kind === 'deleted') return '(bu mesaj kullanıcı tarafından silinmiş)';
             return esc(ctx.content || '(boş)');
@@ -312,7 +313,7 @@
                 const u = data.user;
                 const avatarHtml = u.avatar_data
                     ? `<img src="${esc(u.avatar_data)}" alt="" style="width:48px; height:48px; border-radius:50%; object-fit:cover;">`
-                    : `<div style="width:48px; height:48px; border-radius:50%; background:rgba(102,252,241,0.12); display:flex; align-items:center; justify-content:center; font-weight:bold; color:#66fcf1;">${esc((u.username || '?')[0].toUpperCase())}</div>`;
+                    : `<div style="width:48px; height:48px; border-radius:50%; background:rgba(92,200,255,0.12); display:flex; align-items:center; justify-content:center; font-weight:bold; color:#5cc8ff;">${esc((u.username || '?')[0].toUpperCase())}</div>`;
 
                 box.innerHTML = `
                     <div style="display:flex; align-items:center; gap:12px; margin:10px 0;">

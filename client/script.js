@@ -641,7 +641,7 @@ let currentUsername = '';
 // =====================================================
 
 const USER_COLORS = [
-    '#66fcf1',
+    '#5cc8ff',
     '#ff6b6b',
     '#ffd93d',
     '#6bcb77',
@@ -1039,7 +1039,7 @@ showLoginBtn.addEventListener(
     let rafId = null;
 
     function accentColor() {
-        return getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#66fcf1';
+        return getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#5cc8ff';
     }
 
     function resize() {
@@ -3241,6 +3241,10 @@ const I18N = {
     'ios-voice-hint-ok': { tr: 'Anladım', en: 'Got it' },
     'notif-role-notice': { tr: 'Sauran Yönetim: yeni görev bildirimi', en: 'Sauran Management: new duty notice' },
     'notif-role-revoked': { tr: 'Sauran Yönetim: görev bilgilendirmesi', en: 'Sauran Management: duty information' },
+    'lobbies-title': { tr: 'Lobilerim', en: 'My lobbies' },
+    'select-lobby': { tr: 'Bir lobi seç', en: 'Select a lobby' },
+    'lobby-nav-open': { tr: 'Lobileri aç', en: 'Open lobbies' },
+    'lobby-create': { tr: 'Lobi oluştur', en: 'Create lobby' },
     'hubs-title': { tr: 'Ana Menü', en: 'Home' },
     'hubs-owned': { tr: 'OLUŞTURDUĞUM LOBİLER', en: 'LOBBIES I CREATED' },
     'hubs-joined': { tr: 'KATILDIĞIM LOBİLER', en: 'LOBBIES I JOINED' },

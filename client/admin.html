@@ -5,17 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Yönetim Paneli — Sauran</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="theme.css">
     <style>
-        body { display: block; height: auto; min-height: 100vh; margin: 0; padding: 20px; background: #0b0c10; color: #c5c6c7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        body { display: block; height: auto; min-height: 100vh; margin: 0; padding: 20px; background: #0a0d11; color: #c5c6c7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
         .adm-wrap { max-width: 1100px; margin: 0 auto; }
         .adm-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
-        .adm-header h1 { font-size: 18px; color: #66fcf1; margin: 0; letter-spacing: 1px; }
+        .adm-header h1 { font-size: 18px; color: #5cc8ff; margin: 0; letter-spacing: 1px; }
         .adm-nav { display: flex; gap: 8px; flex-wrap: wrap; }
         .adm-nav a, .adm-nav button {
             padding: 8px 16px; border-radius: 999px; font-size: 12.5px; font-weight: bold; cursor: pointer; text-decoration: none;
             color: #c5c6c7; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); transition: 0.15s;
         }
-        .adm-nav a:hover, .adm-nav button:hover, .adm-nav button.active { color: #66fcf1; border-color: rgba(102,252,241,0.4); }
+        .adm-nav a:hover, .adm-nav button:hover, .adm-nav button.active { color: #5cc8ff; border-color: rgba(92,200,255,0.4); }
         .adm-state { text-align: center; padding: 60px 20px; color: #6b7280; font-size: 14px; }
         .adm-glass {
             border-radius: 18px; padding: 18px; background: rgba(20,22,28,0.55);
@@ -32,18 +33,18 @@
             border-radius: 10px; padding: 9px 12px; font-size: 13px; outline: none;
         }
         .adm-toolbar input { flex: 1; min-width: 180px; }
-        .adm-toolbar input:focus { border-color: rgba(102,252,241,0.45); }
+        .adm-toolbar input:focus { border-color: rgba(92,200,255,0.45); }
         table.adm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
         .adm-table th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; padding: 8px 10px; }
         .adm-table td { padding: 10px; border-top: 1px solid rgba(255,255,255,0.06); overflow-wrap: anywhere; }
         .adm-table tbody tr { cursor: pointer; transition: 0.12s; }
-        .adm-table tbody tr:hover { background: rgba(102,252,241,0.06); }
+        .adm-table tbody tr:hover { background: rgba(92,200,255,0.06); }
         .adm-role { font-size: 10.5px; font-weight: bold; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; background: rgba(255,255,255,0.06); color: #9ca3af; }
-        .adm-role.moderator { background: rgba(102,252,241,0.12); color: #66fcf1; }
+        .adm-role.moderator { background: rgba(92,200,255,0.12); color: #5cc8ff; }
         .adm-role.admin { background: rgba(255,159,67,0.15); color: #ffb066; }
         .adm-role.founder { background: rgba(255,46,70,0.15); color: #ff6b7d; }
         .adm-pager { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; font-size: 12.5px; color: #6b7280; gap: 10px; flex-wrap: wrap; }
-        .adm-pager button { padding: 7px 16px; border-radius: 999px; cursor: pointer; color: #66fcf1; background: rgba(102,252,241,0.08); border: 1px solid rgba(102,252,241,0.35); font-weight: bold; }
+        .adm-pager button { padding: 7px 16px; border-radius: 999px; cursor: pointer; color: #5cc8ff; background: rgba(92,200,255,0.08); border: 1px solid rgba(92,200,255,0.35); font-weight: bold; }
         .adm-pager button:disabled { opacity: 0.35; cursor: not-allowed; }
         .adm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; justify-content: flex-end; z-index: 200; }
         .adm-overlay.open { display: flex; }
@@ -54,17 +55,17 @@
         }
         .adm-close { position: absolute; top: 16px; right: 16px; width: 28px; height: 28px; border-radius: 50%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #8e9297; cursor: pointer; }
         .adm-user-head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; padding-right: 30px; }
-        .adm-avatar { width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 22px; font-weight: bold; color: #66fcf1; background: rgba(255,255,255,0.06); }
+        .adm-avatar { width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 22px; font-weight: bold; color: #5cc8ff; background: rgba(255,255,255,0.06); }
         .adm-avatar img { width: 100%; height: 100%; object-fit: cover; }
-        .adm-section-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; color: #66fcf1; margin: 18px 0 8px; }
+        .adm-section-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; color: #5cc8ff; margin: 18px 0 8px; }
         .adm-row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 13px; }
         .adm-row span:first-child { color: #6b7280; }
         .adm-row span:last-child { color: #e2f8f6; text-align: right; word-break: break-word; }
         .adm-muted { color: #6b7280 !important; font-style: italic; }
         .adm-about { font-size: 13px; color: #c5c6c7; white-space: pre-wrap; word-break: break-word; }
-        .adm-apply-btn { padding: 9px 16px; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 12.5px; color: #66fcf1; background: rgba(102,252,241,0.1); border: 1px solid rgba(102,252,241,0.4); }
+        .adm-apply-btn { padding: 9px 16px; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 12.5px; color: #5cc8ff; background: rgba(92,200,255,0.1); border: 1px solid rgba(92,200,255,0.4); }
         .adm-apply-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .adm-mod-link { display: inline-block; margin-top: 14px; font-size: 12.5px; color: #66fcf1; }
+        .adm-mod-link { display: inline-block; margin-top: 14px; font-size: 12.5px; color: #5cc8ff; }
         @media (max-width: 720px) {
             body { padding: 14px; }
             table.adm-table thead { display: none; }
