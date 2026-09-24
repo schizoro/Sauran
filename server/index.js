@@ -90,6 +90,8 @@ const {
   purgeExpiredAuthRecords,
   purgeExpiredAuditLog,
   purgeAdultBirthDates,
+  logDataLifecycle,
+  purgeExpiredDataLifecycleLog,
   checkpointWal,
   verifyAccountPassword,
   purgeExpiredMessages,
@@ -780,6 +782,7 @@ app.delete('/api/account', accountDeleteLimiter, (req, res) => {
     activeUserNames.delete(user.id);
 
     finalizeHubPurge(result);
+    logDataLifecycle('account_deleted', { accounts: 1, hubs_purged: (result.purged_hubs || result.purgedHubs || []).length });
 
     // DM karşı tarafları: sohbet penceresi açıksa sayfa yenilemeden "Silinmiş hesap / salt okunur" durumuna geçsin (mevcut user:<id> odaları).
     // Yalnızca DB işlemi başarıyla tamamlandıktan sonra gönderilir.
@@ -3596,6 +3599,8 @@ server.listen(PORT, () => {
     try {
       const purged = purgeExpiredAuditLog();
       if (purged.reasons || purged.rows) console.log(`Audit log temizliği: gerekçe=${purged.reasons}, kayıt=${purged.rows}.`);
+      logDataLifecycle('audit_log_purged', purged);
+      const lc = purgeExpiredDataLifecycleLog(); if (lc) console.log(`Süresi dolan veri silme kayıtları silindi: ${lc}.`);
     } catch (error) { console.error('Audit log temizleme hatası:', error); }
   };
   runAuditPurge();
@@ -3604,6 +3609,7 @@ server.listen(PORT, () => {
   const runBirthDatePurge = () => {
     try {
       const purged = purgeAdultBirthDates();
+      logDataLifecycle('birth_dates_minimized', { legacy: purged.legacy, expired: purged.expired, pending: purged.pending });
       if (purged.users || purged.pending) console.log(`Doğum tarihi minimizasyonu: eski kayıt=${purged.legacy}, reşit olan=${purged.expired}, bekleyen kayıt=${purged.pending}.`);
     } catch (error) { console.error('Doğum tarihi temizleme hatası:', error); }
   };
@@ -3613,17 +3619,19 @@ server.listen(PORT, () => {
   const runMessagePurge = () => {
     try {
       const purged = purgeExpiredMessages();
+      logDataLifecycle('messages_purged', purged);
       if (purged.media || purged.deleted || purged.copies) console.log(`Mesaj saklama temizliği: medya=${purged.media}, silinen=${purged.deleted}, kopya=${purged.copies}.`);
     } catch (error) { console.error('Mesaj saklama temizleme hatası:', error); }
   };
   runMessagePurge();
   setInterval(runMessagePurge, 60 * 60 * 1000).unref();
 
-  // Elle alınmış yedeklerin (DATA_DIR/backups + açıkça geçici adlı eski dosyalar) süresi (varsayılan 14 gün, teknik varsayılan) dolunca silinmesi:
+  // Elle alınmış yedeklerin (DATA_DIR/backups + açıkça geçici adlı eski dosyalar) süresi (varsayılan 7 gün, teknik varsayılan) dolunca silinmesi:
   // açılışta ve günde bir. Uygulama kendiliğinden yedek ALMAZ (bkz. docs/yedekleme-ve-dis-kopyalar.md).
   const runBackupCleanup = () => {
     try {
       const r = purgeOldBackups();
+      logDataLifecycle('backups_purged', { files: r.deleted });
       if (r.deleted) console.log(`Süresi dolan yedek/geçici dosyalar silindi: ${r.deleted}.`);
     } catch (error) { console.error('Yedek temizleme hatası:', error); }
   };
@@ -3640,6 +3648,7 @@ server.listen(PORT, () => {
   const runAuthCleanup = () => {
     try {
       const purged = purgeExpiredAuthRecords();
+      logDataLifecycle('auth_records_purged', purged);
       if (purged.pending || purged.resets || purged.sessions) {
         console.log(`Süresi dolan geçici kayıtlar silindi: doğrulama=${purged.pending}, şifre sıfırlama=${purged.resets}, oturum=${purged.sessions}.`);
       }
@@ -3652,6 +3661,7 @@ server.listen(PORT, () => {
   const runNotificationCleanup = () => {
     try {
       const r = purgeExpiredNotificationData();
+      logDataLifecycle('notifications_purged', r);
       if (r.notifications || r.orphan_sources || r.outbox_deleted || r.outbox_scrubbed) {
         console.log(`Bildirim/e-posta kuyruğu temizliği: bildirim=${r.notifications}, kaynağı silinmiş bildirim=${r.orphan_sources}, kuyruk silinen=${r.outbox_deleted}, kuyruk içeriği temizlenen=${r.outbox_scrubbed}.`);
       }
@@ -3664,6 +3674,7 @@ server.listen(PORT, () => {
   const runDeletedDmCleanup = () => {
     try {
       const r = purgeExpiredDeletedDmThreads();
+      logDataLifecycle('deleted_dm_threads_purged', r);
       if (r.threads) console.log(`Süresi dolan silinmiş-hesap DM sohbetleri silindi: sohbet=${r.threads}, mesaj=${r.messages}.`);
     } catch (error) { console.error('Silinmiş-hesap DM temizleme hatası:', error); }
   };

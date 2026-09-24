@@ -57,6 +57,7 @@ Kısaltmalar: **HS** = hesap silinince, **EX** = kullanıcı dışa aktarımına
 | **report_evidence** | Raporlandığı andaki mesaj metni + metadata (mesajlardan bağımsız kopya) | Sonradan silinen içerikle incelemenin boşa çıkmaması | Açık 180 g / reddedilen 30 g / işlem yapılan 365 g | Gönderen/alıcı bağlantısı kopar (bayrak) | Hayır | Yalnızca yetkili moderasyon | Hayır | `DELETE` (`retention_until`) | **Evet** |
 | **report_evidence_media** | Medya (ses/görsel/video/dosya) kopyası | Kanıt | Açık 90 g / reddedilen 7 g / işlem yapılan 180 g (metinden uzun olamaz) | Aynı | Hayır | Yalnızca yetkili moderasyon | Hayır | `DELETE` | **Evet** |
 | **evidence_lifecycle_log** | İmha/anonimleştirme olayı, rapor no, sayılar (**kişisel veri/içerik yok**) | Silme kaydı (hesap verebilirlik) | En az 3 **takvim yılı**; kanıt/rapor temizliğinden bağımsız | Etkilenmez | Hayır | Sunucu/yetkili | Hayır | Süre dolunca silinir; append-only | **Evet** (süre) |
+| **data_lifecycle_log** | Diğer tüm süre/silme temizliklerinin (mesaj, bildirim, oturum/kod, silinmiş hesap DM, denetim, yedek, hesap silme) olay adı + gün + **yalnızca sayaçlar** (kişisel veri/içerik/kimlik YOK) | Silme/imha kaydı (hesap verebilirlik) | En az 3 takvim yılı (evidence_lifecycle_log ile aynı kural); günlük toplanır | Etkilenmez | Hayır | Sunucu/yetkili | Hayır | Süre dolunca silinir | **Evet** (süre) |
 | **moderation_actions** | Rapor işlemi (moderatör, eylem, gerekçe — serbest metin) | Moderasyon kaydı | Rapor silinince (cascade) | Moderatör bağlantısı NULL yapılır | Hayır | Yetkili moderasyon | Hayır | Rapor ile | Evet |
 | **admin_audit_log** | Yetki işlemi (aktör/hedef no, eylem, kısa gerekçe, rol/durum etiketi) | Yetki kötüye kullanımı denetimi | Gerekçe 90 g; kayıt 365 g | Hesaba bağlantı kaldırılır; iki tarafı silinen kayıt silinir | Hayır | Yalnızca kurucu | Hayır | `UPDATE`/`DELETE` (tetikleyici geçici kaldırılır) | **Evet** |
 
@@ -69,7 +70,7 @@ Kısaltmalar: **HS** = hesap silinince, **EX** = kullanıcı dışa aktarımına
 | **Sunucu/güvenlik günlükleri** | Yalnızca konsol; kullanıcı adı/e-posta/IP yazılmaz | İşletme | Render günlük saklaması: **doğrulanmalı** | — | Hayır | Operatör | Render | Render | **Evet** |
 | **E-posta** (Zoho) | Doğrulama/sıfırlama kodu, görev bildirimi, rapor bildirimi, "hesabın zaten var" bilgisi | İletişim | Uygulamada içerik saklanmaz; gönderici posta kutusunda ve alıcı sağlayıcısında kalır | — | Hayır | Posta kutusu sahipleri | **Zoho** | Uygulama dışı | **Evet** |
 | **Üçüncü taraf yükleri** | FCM/Web Push (genel metin), Daily (oda adı, ad/`user_id`, ses), Zoho (e-posta) | Hizmet | Bkz. üçüncü taraf belgesi | — | — | — | Evet | Sağlayıcı | **Evet** |
-| **Yedek/anlık görüntü** | DB kopyaları | Felaket kurtarma | Uygulama yedek almaz; elle asgari yedek 14 g; Render yedeği: **doğrulanmalı** | Yedeklerde kalabilir | — | Operatör | Render | Süre/elle silme | **Evet** |
+| **Yedek/anlık görüntü** | DB kopyaları | Felaket kurtarma | Uygulama yedek almaz; elle asgari yedek 7 g; Render yedeği: **doğrulanmalı** | Yedeklerde kalabilir | — | Operatör | Render | Süre/elle silme | **Evet** |
 | **Dışa aktarım dosyaları** | Sunucuda dosya yazılmaz; bellekte üretilip indirilir (`no-store`) | Erişim hakkı | Sunucuda saklanmaz | — | (kendisi) | Kullanıcı | Hayır | — | Hayır |
 
 ## 2. Hesap silinince (özet)
@@ -98,7 +99,7 @@ Hesap silme **parola ile yeniden doğrulanır** (Aşama 16).
 | E-posta outbox | 7 gün | `OUTBOX_RETENTION_DAYS` |
 | Denetim kaydı gerekçesi / kaydı | 90 / 365 gün | `AUDIT_REASON_RETENTION_DAYS`, `AUDIT_RETENTION_DAYS` |
 | 18 yaş altı `minor_until` | 18. yaş gününe kadar | `purgeAdultBirthDates` |
-| Elle alınan yedek | 14 gün | `BACKUP_RETENTION_DAYS` |
+| Elle alınan yedek | 7 gün | `BACKUP_RETENTION_DAYS` |
 | Web Push teslim penceresi | 1 saat (TTL) | `push.js` |
 | Daily giriş belirteci | 4 saat | `daily.js` |
 | Daily silme kuyruğu yeniden deneme | en çok 6 saat aralık, başarıya kadar | `failDailyRoomCleanup` |

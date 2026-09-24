@@ -5302,6 +5302,41 @@ function unsuspendAccount({ actorId, targetId, internalReason }) {
 // Açılışta eski/geçersiz görev bildirimlerini temizle (idempotent).
 cleanupStalePlatformNotices();
 
+// ---- Genel veri silme/imha KAYDI (data_lifecycle_log) --------------------------------------------------------------------------
+// Silme/yok etme işlemlerinin kaydı tutulur (Kişisel Verilerin Silinmesi, Yok Edilmesi veya Anonim Hale Getirilmesi Hakkında Yönetmelik: bu işlemlere ilişkin
+// kayıtların en az 3 yıl saklanması — resmî metinden teyit edilmelidir). Kayıt YALNIZCA olay adı, tarih ve sayaçlardır; kişisel veri/içerik/kimlik YOKTUR.
+// Aynı olay aynı gün içinde tek satırda toplanır (gürültü olmasın). Rapor kanıtı silmeleri ayrıca evidence_lifecycle_log'a yazılır (o sisteme dokunulmaz).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS data_lifecycle_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event TEXT NOT NULL,
+    detail TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_data_lifecycle_created ON data_lifecycle_log(created_at);
+`);
+
+function logDataLifecycle(event, counts = {}) {
+  const clean = {};
+  for (const [k, v] of Object.entries(counts || {})) if (Number.isFinite(Number(v)) && Number(v) !== 0) clean[String(k).slice(0, 40)] = Math.trunc(Number(v));
+  if (!Object.keys(clean).length) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const row = db.prepare(`SELECT id, detail FROM data_lifecycle_log WHERE event = ? AND date(created_at) = ? ORDER BY id DESC LIMIT 1`).get(event, today);
+  if (row) {
+    let prev = {}; try { prev = JSON.parse(row.detail || '{}'); } catch (_) { prev = {}; }
+    for (const [k, v] of Object.entries(clean)) prev[k] = (Number(prev[k]) || 0) + v;
+    db.prepare(`UPDATE data_lifecycle_log SET detail = ? WHERE id = ?`).run(JSON.stringify(prev), row.id);
+  } else {
+    db.prepare(`INSERT INTO data_lifecycle_log (event, detail) VALUES (?, ?)`).run(String(event).slice(0, 60), JSON.stringify(clean));
+  }
+}
+
+// Kayıtların kendisi de sınırsız birikmez: en az 3 takvim yıl (evidence_lifecycle_log ile aynı kural) sonra silinir.
+function purgeExpiredDataLifecycleLog(now = new Date()) {
+  return db.prepare(`DELETE FROM data_lifecycle_log WHERE created_at < ?`).run(lifecycleLogCutoff(now)).changes;
+}
+
 // Eski sürümden kalan silinmiş-mesaj kalıntıları (tüm tablolar/sütunlar yukarıda hazır olduktan sonra) açılışta bir kez temizlenir.
 purgeDeletedMessageResidue();
 sweepMessageOrphansSecure();
@@ -5312,6 +5347,8 @@ function checkpointWal() {
 }
 
 module.exports = {
+  logDataLifecycle,
+  purgeExpiredDataLifecycleLog,
   checkpointWal,
   isAccountSuspended,
   suspendAccount,

@@ -9,7 +9,7 @@
 |---|---|---|
 | Canlı veritabanı `sauran.db` (+ `-wal`, `-shm`) | Evet (DATA_DIR / Render diski) | Uygulama cleanup'ları. **Silinen içerik dosyada sıfırlanır** (`secure_delete = ON`, bağlantı düzeyinde); WAL saatte bir ve kapanışta (`SIGTERM`/`SIGINT`) kontrol noktasıyla kesilir. |
 | Uygulamanın kendiliğinden aldığı yedek | **Hayır.** Kodda otomatik yedek/arşiv yoktur (otomatik yedek, kişisel veri kopyası sayısını artırırdı). | — |
-| Elle alınan yedek (`node backup.js`) | Yalnızca operatör çalıştırırsa | `DATA_DIR/backups/`, izin 0600/0700; **asgari** yedekte oturum, bekleyen kayıt, sıfırlama kodu, push/FCM tabloları BOŞ; **14 gün** (teknik varsayılan, `BACKUP_RETENTION_DAYS`) sonra sunucu tarafından otomatik silinir. `BACKUP_CLEANUP=off` ile kapatılabilir. |
+| Elle alınan yedek (`node backup.js`) | Yalnızca operatör çalıştırırsa | `DATA_DIR/backups/`, izin 0600/0700; **asgari** yedekte oturum, bekleyen kayıt, sıfırlama kodu, push/FCM tabloları BOŞ; **7 gün** (teknik varsayılan, `BACKUP_RETENTION_DAYS`) sonra sunucu tarafından otomatik silinir. `BACKUP_CLEANUP=off` ile kapatılabilir. |
 | Dışa aktarım dosyaları | Sunucuda dosya **yazılmaz**: veri bellekte üretilir, `Cache-Control: no-store` ile kullanıcıya indirilir. | Kullanıcının kendi cihazındaki kopya kullanıcının sorumluluğundadır. |
 | Sunucu günlükleri | Uygulama yalnızca konsola yazar (dosya/arşiv yok). Günlüklere kullanıcı adı/e-posta/IP yazılmaz (Aşama 17). | Render günlük saklaması: **doğrulanmalı**. |
 | Render disk yedeği / anlık görüntüsü | Sağlayıcıya bağlı | **Doğrulanmalı** (süre, konum, erişim). |
@@ -19,7 +19,7 @@
 ## Önemli beyanlar
 
 * **Canlı veritabanından silinen veri, daha önce alınmış yedeklerde ve sağlayıcı anlık görüntülerinde bir süre daha kalabilir.** Yedeklerin yaşam döngüsü canlı veritabanından ayrıdır; hesap silme/mesaj silme yedekleri geriye dönük değiştirmez.
-* **Migration öncesi yedek kalıcı bir saklama kaynağına dönüşmemelidir.** Şema/veri geçişinden önce alınan yedek, doğrulama bittiğinde silinmelidir; unutulursa `DATA_DIR/backups/` içindeki dosya 14 gün sonra kendiliğinden silinir
+* **Migration öncesi yedek kalıcı bir saklama kaynağına dönüşmemelidir.** Şema/veri geçişinden önce alınan yedek, doğrulama bittiğinde silinmelidir; unutulursa `DATA_DIR/backups/` içindeki dosya 7 gün sonra kendiliğinden silinir
   (DATA_DIR kökünde `sauran.db.bak*`, `sauran.db.pre-*`, `sauran-premigration*` gibi açıkça geçici adlı eski dosyalar da). Bu kalıpların dışındaki adlarla bırakılan dosyalar silinmez; operatör sorumluluğundadır.
 * **Geri yükleme sonrası:** Bir yedek geri yüklenirse, yedek alındıktan sonra silinen hesap/mesajların yeniden görünmemesi için silme işlemlerinin yeniden uygulanması gerekir
   (silme kaydı tutulmaz; bu nedenle yedek geri yükleme kararı hukuki/operasyonel değerlendirme gerektirir).

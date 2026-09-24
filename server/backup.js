@@ -3,7 +3,7 @@
 // Uygulama HİÇBİR yedeği kendiliğinden ALMAZ (otomatik yedek, kişisel veri kopyası sayısını artırırdı). Bu araç yalnızca elle çalıştırılır:
 //     node backup.js            -> "asgari" yedek (varsayılan): oturumlar, bekleyen kayıtlar, sıfırlama kodları, push/FCM anahtarları BOŞ
 //     node backup.js --full     -> tam yedek (yalnızca gerçekten gerekliyse)
-// Yedekler DATA_DIR/backups/ altına, yalnızca sahibin okuyabileceği izinle (0600, dizin 0700) yazılır ve BACKUP_RETENTION_DAYS (varsayılan 14 gün, TEKNİK
+// Yedekler DATA_DIR/backups/ altına, yalnızca sahibin okuyabileceği izinle (0600, dizin 0700) yazılır ve BACKUP_RETENTION_DAYS (varsayılan 7 gün, TEKNİK
 // VARSAYILAN; hukuki bir süre değildir) sonra sunucu tarafından otomatik silinir. Bu araç, canlı veritabanından silinen verinin ESKİ bir yedekte kalabileceğini
 // ortadan kaldırmaz; yedeklerin kendi yaşam döngüsü ayrıdır (bkz. docs/yedekleme-ve-dis-kopyalar.md).
 
@@ -11,7 +11,7 @@ const fs = require('fs');
 const path = require('path');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_RETENTION_DAYS = 14;
+const DEFAULT_RETENTION_DAYS = 7; // Render disk anlık görüntüsü en az 7 gün (Render dokümantasyonu); migration öncesi doğrulama için yeterli, daha uzun tutmak için gerekçe yok
 
 // Asgari yedekte BOŞALTILAN tablolar: geri yüklemede yeniden oluşan/işe yaramayan ve doğrudan kimlik doğrulama/cihaz gizli bilgisi içerenler.
 const MINIMAL_EXCLUDED_TABLES = ['sessions', 'pending_verifications', 'password_resets', 'push_subscriptions', 'fcm_tokens'];
