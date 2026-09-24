@@ -43,6 +43,20 @@
         try { return typeof currentHub !== 'undefined' && currentHub ? currentHub.id : null; } catch (_) { return null; }
     }
 
+    // Lobi fotoğrafı (yuvarlak) ya da ad baş harfi
+    function lobbyAvatar(imageData, name, cls) {
+        const el = document.createElement('span');
+        el.className = cls;
+        if (imageData) {
+            const img = document.createElement('img');
+            img.src = imageData; img.alt = ''; img.decoding = 'async';
+            el.appendChild(img);
+        } else {
+            el.textContent = String(name || '?').trim().charAt(0).toUpperCase() || '?';
+        }
+        return el;
+    }
+
     function renderNav() {
         const active = activeHubId();
         list.textContent = '';
@@ -52,8 +66,7 @@
             b.className = 'lobby' + (hub.id === active ? ' active' : '');
             b.dataset.hubId = hub.id;
             if (hub.id === active) b.setAttribute('aria-current', 'true');
-            const mark = document.createElement('i');
-            mark.className = 'mark';
+            const mark = lobbyAvatar(hub.image_data, hub.name, 'mark lobby-avatar');
             const name = document.createElement('span');
             name.className = 'lobby-name';
             name.textContent = escapeText(hub.name);
@@ -90,12 +103,33 @@
     wrap('loadHubList', fetchHubs);
     wrap('switchToView', function () { renderNav(); syncMainState(); });
 
+    // Üst çubuğun ortasında açık lobinin yuvarlak (cam) fotoğrafı
+    function updateTopbarBadge() {
+        const bar = document.querySelector('.topbar');
+        if (!bar) return;
+        let badge = $('topbar-lobby-badge');
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.id = 'topbar-lobby-badge'; badge.className = 'topbar-lobby-badge';
+            bar.appendChild(badge);
+        }
+        let hub = null;
+        try { hub = typeof currentHub !== 'undefined' ? currentHub : null; } catch (_) { hub = null; }
+        badge.textContent = '';
+        if (!hub) { badge.style.display = 'none'; badge.removeAttribute('aria-label'); return; }
+        badge.style.display = 'grid';
+        badge.setAttribute('role', 'img');
+        badge.setAttribute('aria-label', hub.name || '');
+        badge.appendChild(lobbyAvatar(hub.image_data, hub.name, 'lobby-avatar lobby-avatar-lg'));
+    }
+
     // Ana içerik: lobi seçili değilken sakin bir boş durum
     function syncMainState() {
         const chat = document.querySelector('#chat-screen');
         if (!chat) return;
         const inHub = activeHubId() != null;
         chat.classList.toggle('in-hub', inHub);
+        updateTopbarBadge();
         const home = $('rail-home');
         if (home) home.classList.toggle('on', !inHub);
     }
