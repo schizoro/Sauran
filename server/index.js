@@ -2009,7 +2009,8 @@ app.post('/api/hubs/:id/call/join', async (req, res) => {
     const room = await daily.getOrCreateRoom(roomName);
     const roomUrl = room.url;
 
-    const token = await daily.createMeetingToken(roomName, user.username);
+    // Daily'ye kullanıcı ADI gönderilmez (sabit ad + yalnızca sayısal kimlik); arayüz adları kendi katılımcı listesinden (Socket.io) çözer.
+    const token = await daily.createMeetingToken(roomName, 'Sauran', user.id);
 
     return res.json({ success: true, room_url: roomUrl, token });
 
@@ -2109,7 +2110,7 @@ app.post('/api/hubs/:id/voice-rooms/:roomId/join', async (req, res) => {
     const room = await daily.getOrCreateRoom(roomName);
     const roomUrl = room.url;
 
-    const token = await daily.createMeetingToken(roomName, user.username, user.id);
+    const token = await daily.createMeetingToken(roomName, 'Sauran', user.id); // kullanıcı adı Daily'ye gitmez
 
     return res.json({ success: true, room_url: roomUrl, token, room_id: roomId, room_name: room.name });
 

@@ -166,7 +166,7 @@ async function sendRoleDecisionTeamEmail({ username, userId, decision, role, ver
       <div style="font-family: 'Segoe UI', sans-serif; background: #0b0c10; color: #c5c6c7; padding: 32px; max-width: 520px; margin: auto; border-radius: 4px;">
         <h2 style="color: ${accepted ? '#57f287' : '#ff6b7d'}; letter-spacing: 1px;">Yönetim Görevi ${accepted ? 'Kabul Edildi' : 'Reddedildi'}</h2>
         <table style="font-size: 13px; border-collapse: collapse; margin-top: 12px;">
-          <tr><td style="padding:3px 14px 3px 0; color:#45a29e;">Kullanıcı</td><td>${escapeHtml(username)} (#${escapeHtml(userId)})</td></tr>
+          <tr><td style="padding:3px 14px 3px 0; color:#45a29e;">Kullanıcı</td><td>Hesap #${escapeHtml(userId)}</td></tr>
           <tr><td style="padding:3px 14px 3px 0; color:#45a29e;">Görev</td><td>${escapeHtml(roleLabel)}</td></tr>
           <tr><td style="padding:3px 14px 3px 0; color:#45a29e;">Bildirim sürümü</td><td>${escapeHtml(version)}</td></tr>
           <tr><td style="padding:3px 14px 3px 0; color:#45a29e;">Karar</td><td>${accepted ? 'Kabul etti' : 'Reddetti'}</td></tr>

@@ -2914,7 +2914,7 @@ function maybeNotifyIncomingDm(msg) {
     showSystemNotification(msg.username, dmPreviewText(msg), {
         tag: `dm-${msg.user_id}`,
         renotify: true,
-        data: { url: `/?open_dm=${msg.user_id}&name=${encodeURIComponent(msg.username)}` }
+        data: { url: `/?open_dm=${msg.user_id}` } // kullanıcı adı URL'ye (sunucu/proxy erişim günlüklerine) yazılmaz; açılışta API'den alınır
     }).catch((error) => console.error('DM bildirimi gösterilemedi:', error));
 
 }
@@ -6120,6 +6120,15 @@ async function openDeletedDm(token) {
 
 async function openDm(userId, username) {
 
+    // Bildirim bağlantısında ad taşınmaz: yoksa oturumlu API'den alınır.
+    if (!username) {
+        try {
+            const r = await fetch(`/api/users/${userId}/profile`, { credentials: 'include' });
+            const j = await r.json();
+            username = (j && j.profile && j.profile.username) || '';
+        } catch (_) { /* ad boş kalır */ }
+    }
+
     setDmReadOnlyMode(false);
     activeDmUserId = userId;
     activeDmUsername = username;
@@ -7961,7 +7970,8 @@ function wireHubRoomScreenshareEvents() {
 
         if (sharing && screensharingSessionId !== p.session_id) {
             screensharingSessionId = p.session_id;
-            screensharingUsername = p.user_name || '';
+            // Ad Daily'den değil (orada yalnızca sayısal kimlik var), Socket.io katılımcı listemizden çözülür.
+            screensharingUsername = currentVoiceParticipants.find(x => x.user_id === Number(p.user_id))?.username || '';
             showScreenshareBanner(screensharingUsername);
         } else if (!sharing && screensharingSessionId === p.session_id) {
             screensharingSessionId = null;

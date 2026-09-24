@@ -1,47 +1,98 @@
-# Üçüncü taraf servisler ve veri aktarımı (Aşama 17)
+# Üçüncü taraf servisler, veri akışları ve yurt dışı aktarım (güncel)
 
-> **Uyarı:** Bu belge **koddan çıkarılabilen** gerçek veri akışlarını anlatır. Sağlayıcıların veri merkezi konumu, saklama süresi, alt işleyenleri ve KVKK kapsamındaki
-> yurt dışı aktarım dayanağı **koddan bilinemez**; aşağıda "**doğrulanmalı**" olarak işaretlidir. Bu belge hukuki uygunluk garantisi vermez.
+> **Bu belge hukuki görüş ya da uygunluk beyanı DEĞİLDİR.** Koddan ve sağlayıcıların herkese açık belgelerinden **doğrulanabilenleri**, **doğrulanamayanları** ve **hukuki karar gerektirenleri** ayırır.
+> Sağlayıcı bilgileri belge tarihinde (Eylül 2026) ilgili resmî sayfalardan okunmuştur; sağlayıcı koşulları değişebilir ve **yayın öncesinde yeniden teyit edilmelidir**.
+> Hiçbir sözleşme imzalanmamış, Kurum'a hiçbir bildirim yapılmamıştır.
 
-Kodda (istemci HTML/JS, sunucu, mobil kabuk) gerçekten kullanılan dış bağlantılar taranmıştır: **analitik, reklam, harici yazı tipi, izleme pikseli veya sosyal eklenti YOKTUR**.
-Aşağıdaki servisler dışında üçüncü tarafa istek yapan kod bulunmaz.
+## 0. Kodda taranan dış bağımlılıklar
 
-## Özet tablo
+* **Sunucu bağımlılıkları** (`server/package.json`): `better-sqlite3` (yerel), `express`, `socket.io`, `cors`, `dotenv` (yerel), **`firebase-admin`** (FCM), **`nodemailer`** (SMTP), **`web-push`** (tarayıcı push).
+* **İstemci:** harici script/yazı tipi/CDN/analitik **yoktur** (`daily-js@0.92.2` kendi sunucumuzdan sunulur, `client/vendor/`). Ödeme, reklam, analitik, sosyal eklenti kodu **bulunmadı**.
+* **Mobil kabuk** (`mobile/`, Capacitor): `@capacitor/push-notifications` (FCM istemcisi). Uygulama `https://sauran.onrender.com` adresini WebView'da açar; `google-services.json` depoda yoktur (`.gitignore`).
+* **Sunucunun dış çağrıları:** `api.daily.co`, FCM (firebase-admin), tarayıcı push uç noktaları (web-push), `smtp.zoho.com:465`. Başka dış çağrı yoktur.
 
-| Servis | Ne zaman | Giden veri | Kullanıcıya ait mi | Yük minimizasyonu | Uygulama tarafı saklama | Sağlayıcı tarafı saklama / konum |
-|---|---|---|---|---|---|---|
-| **Firebase Cloud Messaging (Google)** | Kullanıcı çevrimdışı/görünmezken DM, lobi mesajı, arama, arkadaşlık isteği/kabulü, lobi daveti, yönetim görevi bildirimi | Cihaz kayıt anahtarı (FCM token), sabit başlık `Sauran`, türe göre sabit genel metin, `data.type`, Android `tag = type` | Token cihaza/kullanıcıya bağlıdır; içerik kullanıcıya özgü değildir | **Uygulandı (Aşama 9):** mesaj içeriği, gönderen adı, lobi adı, kullanıcı/sohbet/lobi numarası, URL YOK. Çağıran title/body/url/tag verse bile taşıma katmanı yok sayar | `fcm_tokens` (token, UA, tarih): hesap silinince cascade ile silinir; geçersiz token (404/geçersiz) anında silinir | **Doğrulanmalı** (Google; konum ve saklama koddan bilinmez) |
-| **Web Push (tarayıcı üreticisinin push hizmeti)** | Aynı olaylar, tarayıcı/PWA aboneliği varsa | Abonelik uç noktası (push hizmetine gider), Web Push standardıyla **şifrelenmiş** yük: başlık `Sauran`, sabit genel metin, `type`, `tag = type`; TTL 1 saat, öncelik yüksek | Uç nokta cihaza/kullanıcıya bağlıdır; yük değildir | **Uygulandı (Aşama 10):** FCM ile aynı genel yük; `sw.js` de yükten bağımsız sabit metin kullanır | `push_subscriptions` (uç nokta, anahtarlar, UA): hesap silinince cascade; 404/410'da silinir | **Doğrulanmalı** (Google/Mozilla/Apple/Microsoft; teslim edilmemiş mesaj push hizmetinde en fazla TTL kadar bekleyebilir) |
-| **Daily.co (sesli/görüntülü)** | Sesli sohbete, sesli odaya veya DM aramasına katılınca | Oda adı (`sauran-hub-<id>`, `sauran-vr-<id>`, `sauran-dm-<küçük id>-<büyük id>`), katılım belirteci: `user_name`, lobi sesli odasında `user_id`, süre 4 saat; canlı ses/ekran paylaşımı (WebRTC) | Evet (kullanıcı adı, hesap numarası, oda adındaki numaralar, canlı ses) | **Uygulandı (bu aşama):** birebir DM aramasında kullanıcı adı **gönderilmez** (sabit `Sauran`). Lobi odalarında `user_name` arayüz işlevi için (konuşan/ekran paylaşan gösterimi) gereklidir, korunmuştur | Odalar uygulamanın **silme kuyruğuyla** (`daily_room_cleanup`) silinir: lobi silinince, sesli oda silinince, hesap silinince (DM çağrı odaları). Aktif DM çifti hesap silinmedikçe DM çağrı odası Daily'de kalabilir | **Doğrulanmalı** (Daily; konum, medya/kayıt saklama, alt işleyenler). Uygulama ses **kaydetmez** |
-| **Zoho Mail (SMTP)** | Kayıt doğrulama kodu, şifre sıfırlama kodu, yönetim görevi bildirimleri (kullanıcıya), yeni rapor bildirimi ve görev kabul/ret bildirimi (moderasyon ekibine), kayıtlı e-postayla kayıt denemesinde bilgi e-postası | Alıcı e-posta adresi, e-posta metni. Rapor bildirimi yalnızca rapor no/kategori/öncelik/panel bağlantısı; görev kabul/ret ekibe kullanıcı adı ve hesap no (**konu satırında kullanıcı adı yok**, bu aşamada kaldırıldı). Doğrulama/sıfırlama e-postaları 6 haneli kod içerir | Evet (e-posta adresi, kod) | Rapor e-postası minimum alanlı (Aşama 6). Kod uygulamada yalnızca hash olarak tutulur; e-postada düz gider (zorunlu). Bilgi e-postası kod içermez | Uygulama outbox'ında içerik saklanmaz (Aşama 8); kod/kayıt süreli (10 dk) | E-posta gövdeleri gönderici (`destek@sauran.online`) posta kutusunda ve alıcı sağlayıcısında kalır: **uygulama dışı, saklama doğrulanmalı** (Zoho konumu/saklama koddan bilinmez) |
-| **Render (barındırma)** | Sürekli: tüm istekler, veritabanı dosyası, günlükler | Bütün uygulama verileri (sunucu diski), HTTP istekleri (IP, UA, yol), sunucu günlükleri | Evet | Sunucu günlüklerine **kullanıcı adı/e-posta/IP yazılmaz** (soket günlüklerinden kullanıcı adı bu aşamada kaldırıldı; e-posta hata günlüğü yalnızca hata kodu yazar) | Canlı DB: uygulama cleanup'ları. Disk yedeği/anlık görüntü: bkz. Aşama 18 belgesi | **Doğrulanmalı** (bölge, disk snapshot/yedek süresi, istek günlüğü saklama; koddan bilinmez) |
-| **unpkg.com (CDN)** | — (**artık kullanılmıyor**) | — | — | **Kaldırıldı (bu aşama):** `daily-js@0.92.2` (BSD-2-Clause) `client/vendor/` altından kendi origin'imizden sunulur, SRI korunur. Sayfa açılırken üçüncü taraf CDN'e IP/UA gitmez | — | — |
-| **Google Play Hizmetleri / Android WebView** (mobil kabuk) | Android uygulamasında bildirim kaydı | FCM token üretimi Google altyapısıyla yapılır; uygulama `https://sauran.onrender.com` adresini WebView'da açar | Evet (token) | — | Token için yukarıya bkz. | **Doğrulanmalı** (Google) |
+## 1. Sağlayıcı bazında gerçek veri akışı
 
-## Ayrıntılar ve güvenlik
+Kısaltmalar: **Doğrulandı** = kod veya sağlayıcının resmî sayfası; **Teyit edilmeli** = elde doğrulanabilir kaynak yok.
 
-* **İletişim güvenliği:** Tüm dış çağrılar HTTPS/TLS (`api.daily.co`, FCM/Web Push, Zoho `smtp.zoho.com:465` SSL). Çerez `Secure` (Aşama 14).
-* **Gizli anahtarlar:** `DAILY_API_KEY`, `FIREBASE_SERVICE_ACCOUNT_*`, `VAPID_*`, `ZOHO_EMAIL_PASSWORD` yalnızca ortam değişkenidir; depoya konmaz, istemciye gönderilmez.
-* **Daily belirteci:** 4 saat geçerli, oda kapsamlı; oda `private`, kamera kapalı başlar, sohbet kapalı (`enable_chat:false`), DM odasında ekran paylaşımı kapalı.
-* **Daily oda adları** sayısal kimlikler taşır (lobi/sesli oda/kullanıcı çifti). Bunlar uygulama içindeki kimliklerdir; ad değildir, ama kullanıcıya bağlanabilir.
-* **Web Push vs FCM:** Aynı olay ikisine de gidebilir; her ikisinin yükü aynı genel içeriktir (`server/push.js` ve `server/fcm.js` aynı `buildGenericContent`).
-* **E-posta numaralandırma:** Kayıtlı e-postayla kayıt denemesinde kod içermeyen bilgi e-postası gider (Aşama 16).
+### 1.1 Firebase Cloud Messaging (Google)
+| Konu | Durum |
+|---|---|
+| Ne gidiyor | Cihaz kayıt anahtarı (FCM token), başlık `Sauran`, türe göre **sabit genel metin**, `data.type`, Android `tag = type`. Mesaj içeriği, gönderen adı, lobi adı, kullanıcı/sohbet numarası, URL **yok** (kod + `fcm_suite`). **Doğrulandı** |
+| Ne zaman | Olay bazlı: kullanıcı çevrimdışı/görünmezken DM, lobi mesajı, arama, arkadaşlık isteği/kabulü, lobi daveti, yönetim görevi bildirimi (`dispatchWebPush`). **Doğrulandı** |
+| Neden / API | Uygulama kapalıyken bildirim; `firebase-admin` `sendEachForMulticast`, `android.ttl = 1 saat`. **Doğrulandı** |
+| Sağlayıcıda tutulma | Firebase, "installation ID"leri ilgili API çağrısıyla silinene kadar tutar; silme sonrası canlı ve yedek sistemlerden **180 gün içinde** kaldırır (Firebase gizlilik sayfası). Teslim edilemeyen ileti bekletmesi: kodda TTL 1 saat verilir; sağlayıcı tarafı davranışı **teyit edilmeli**. |
+| Ülke/bölge | Firebase hizmetlerinin çoğu **küresel Google altyapısında** çalışır; belirli bir ülke koddan/sayfadan belirlenemez. **Teyit edilmeli** (tek bir ülke varsaymıyoruz). |
+| Alt işleyen / DPA | Firebase Data Processing and Security Terms (bazı hizmetlerde Google Cloud DPA). Google veri işleyen, Sauran veri sorumlusu rolündedir. Sözleşmenin Sauran hesabı için **kabul edildiği/edilmediği doğrulanmalı**. |
+| Aktarım mekanizması (sağlayıcı beyanı) | AB-ABD / İsviçre-ABD Veri Gizliliği Çerçevesi (Türkiye için geçerli bir mekanizma DEĞİLDİR; bkz. §3). |
+| Teknik minimizasyon | Yük zaten minimum. Token kullanıcı silinince/çıkışta/geçersizleşince silinir. **Ek azaltma gerekmedi.** |
 
-## Yurt dışı aktarım
+### 1.2 Web Push (tarayıcı üreticisinin push hizmeti)
+| Konu | Durum |
+|---|---|
+| Ne gidiyor | Abonelik uç noktası (tarayıcının kendi push hizmetinin adresi), **Web Push standardıyla şifrelenmiş** genel yük (başlık `Sauran`, sabit metin, `type`, `tag = type`), TTL 1 saat. **Doğrulandı** (kod + `fcm_suite`) |
+| Sağlayıcılar | Chrome/Edge: Google/Microsoft push hizmeti; Firefox: Mozilla; Safari/iOS PWA: Apple. Hangi hizmetin kullanıldığı **kullanıcının tarayıcısına bağlıdır**; Sauran seçemez. |
+| Ülke/saklama/DPA | Sağlayıcılar Sauran ile **sözleşmeli işleyen değildir**; tarayıcı üreticisinin hizmet koşulları geçerlidir. Konum ve saklama **teyit edilmeli**. |
+| Teknik minimizasyon | Yük zaten minimum; şifreli; kullanıcı/mesaj bilgisi yok. |
 
-Google (FCM/Web Push), Daily.co, Zoho ve Render altyapılarının **yurt dışında** olma ihtimali vardır. Verilerin fiilen hangi ülkelerde işlendiği, sağlayıcı sözleşmeleri, alt işleyenler ve
-KVKK'daki aktarım dayanağı/güvenceleri **koddan doğrulanamaz**; **hukuki doğrulama gereklidir**. Bu belge servisleri "hukuki doğrulama eksik" diye kaldırmaz; teknik olarak
-mümkün olan en az veriyi göndermeyi hedefler.
+### 1.3 Daily.co (sesli/görüntülü altyapı)
+| Konu | Durum |
+|---|---|
+| Ne gidiyor | Oda adı (`sauran-hub-<no>`, `sauran-vr-<no>`, `sauran-dm-<no>-<no>`), giriş belirteci (4 saat): **`user_name` sabit `Sauran`**, lobi odalarında yalnızca sayısal `user_id`; **canlı ses/ekran akışı** (WebRTC). Kullanıcı adı **artık gitmez** (bu çalışmada lobi odaları için de kaldırıldı). **Doğrulandı** (kod + `thirdparty_suite`; gerçek Daily ile canlı test yapılamadı) |
+| Neden / API | Sesli odalar; `POST /rooms`, `/meeting-tokens`, `DELETE /rooms` (temizlik kuyruğu). Olay bazlı (odaya katılım). |
+| Sağlayıcıda tutulma | Daily DPA'ya göre kişisel veri, hizmeti sunmak için gerekli olduğu sürece tutulur; çağrı telemetrisi yapılandırılan sürede silinir; sonlanınca müşteri seçimine göre iade/silme. Sauran'ın Daily hesabındaki **retention ayarı** ve ses/kayıt saklama davranışı **teyit edilmeli** (uygulama ses kaydı almaz). |
+| Ülke/bölge | Daily DPA: **birincil işleme Amerika Birleşik Devletleri**, AWS ve Oracle Cloud üzerinde. Alt işleyen listesi `daily.co/legal/sub-processors` (10 gün önceden bildirim). Sauran hesabının bölgesi **teyit edilmeli**. |
+| DPA / mekanizma | Daily DPA mevcut (1 Mayıs 2025 sürümü): Daily veri işleyen; AB SCC (Modül 1-3), UK eki, Veri Gizliliği Çerçevesi. **Türkiye'ye özgü** bir mekanizma DPA'da yoktur (bkz. §3). |
 
-## Bu aşamada yapılan teknik minimizasyonlar
+### 1.4 Zoho Mail (SMTP)
+| Konu | Durum |
+|---|---|
+| Ne gidiyor | Alıcı e-posta adresi ve gövde: doğrulama kodu, şifre sıfırlama kodu, yönetim görevi bildirimi (kullanıcıya, adıyla), ekip bildirimleri (yeni rapor: yalnızca rapor no/kategori/öncelik/panel bağlantısı; görev kabul/ret: **yalnızca hesap numarası**, kullanıcı adı **bu çalışmada kaldırıldı**), "hesabın zaten var" bilgisi (kod yok). **Doğrulandı** (kod) |
+| Ne zaman / API | Olay bazlı, `nodemailer` → `smtp.zoho.com:465` (SSL). |
+| Sağlayıcıda tutulma | E-postalar gönderici posta kutusunda (`destek@sauran.online`) ve alıcı sağlayıcısında kalır; uygulama içinde içerik saklanmaz. Zoho saklama süresi **teyit edilmeli**. |
+| Ülke/bölge | Zoho veri merkezi **hesaba göre** değişir (Zoho: sunucu bilgisi hesap ayarlarında verilir); `smtp.zoho.com` ana bilgisayar adı tek başına veri merkezini kanıtlamaz. **Sauran'ın Zoho hesabının veri merkezi teyit edilmeli.** |
+| DPA | Zoho, DPA talebi için hesap yöneticisinin `legal@zohocorp.com` adresine, **hangi veri merkezine kayıtlı olduğunu belirterek** başvurmasını ister; DPA model sözleşme maddelerine dayanır. Sauran için **imzalanıp imzalanmadığı doğrulanmalı**. |
+| Teknik minimizasyon | Rapor e-postası minimum; görev kabul/ret e-postasından kullanıcı adı çıkarıldı; konu satırında ad yok; hata günlüklerine alıcı adresi yazılmaz. |
 
-1. `unpkg.com` bağımlılığı kaldırıldı (kütüphane self-host, `client/vendor/`, lisans notu `DAILY-JS-LICENSE.txt`).
-2. DM aramasında Daily'ye kullanıcı adı gönderilmez.
-3. Sunucu günlüklerinden kullanıcı adı çıkarıldı (soket bağlan/ayrıl); kayıt/sıfırlama e-posta hata günlüğü yalnızca hata kodu içerir.
-4. Yönetim görevi kabul/ret e-postasının konu satırından kullanıcı adı çıkarıldı.
-5. Gizlilik politikası (TR/EN) bu gerçeklerle güncellendi.
+### 1.5 Render (barındırma)
+| Konu | Durum |
+|---|---|
+| Ne gidiyor | Tüm uygulama: HTTP istekleri (IP, UA, yol/sorgu), veritabanı dosyası, sunucu diski, konsol günlükleri. **Sürekli.** |
+| Ülke/bölge | Render bölgeleri: Oregon, Ohio, Virginia (ABD), Frankfurt (Almanya), Singapur; bölge servis oluşturulurken seçilir ve **sonradan değiştirilemez**. Sauran'ın bölgesi **Render panelinden teyit edilmeli** (koddan bilinemez). |
+| Disk yedeği | Render otomatik günlük disk anlık görüntüsü alır, **en az 7 gün** erişilebilir tutar, diskler ve anlık görüntüler **bekleme durumunda şifrelidir** (Render dokümantasyonu). Servis/disk silinince anlık görüntülerin akıbeti dokümanda belirtilmemiştir → **Render'dan teyit edilmeli**. |
+| DPA / mekanizma | Render DPA ve alt işleyen listesi (`render.com/dpa`, `render.com/trust`) yayınlanmış; Render AB-ABD Veri Gizliliği Çerçevesi sertifikalıdır (sağlayıcı beyanı). Sauran için DPA'nın kabulü **doğrulanmalı**. |
+| Günlükler | Render günlük saklama süresi **teyit edilmeli**. Sauran uygulaması günlüğe kullanıcı adı/e-posta/IP **yazmaz**; **bu çalışmada** bildirim tıklama URL'sinden kullanıcı adı (`?name=`) da kaldırıldı (erişim günlüğüne girebilirdi). |
 
-## Bilinçli olarak değiştirilmeyenler
+### 1.6 Diğer
+* **Google Play Hizmetleri / Android WebView / Apple-Google-Mozilla push:** kullanıcının cihazı ve tarayıcısı üzerinden çalışır; Sauran'ın sözleşmeli işleyeni değildir.
+* **GitHub (kaynak depo):** yalnızca kod; kullanıcı verisi yok.
+* **npm:** yalnızca geliştirme/dağıtım sırasında paket indirme; çalışma anında kullanıcı verisi göndermez.
 
-* Lobi sesli odalarında `user_name`/`user_id`: istemci konuşan/ekran paylaşan kullanıcıyı Daily'nin katılımcı bilgisinden eşleştirir; kaldırmak çalışan ses sistemini bozar.
-* FCM/Web Push, Daily ve SMTP entegrasyonları hukuki doğrulama eksik diye kapatılmadı.
+## 2. Roller (veri sorumlusu / veri işleyen)
+Sauran'ı işleten taraf **veri sorumlusu**dur. Firebase, Daily, Zoho ve Render, Sauran adına veriyi işlediği ölçüde **veri işleyen** konumundadır (sağlayıcıların DPA'ları bu rolü tanımlar). Tarayıcı push hizmetleri ve cihaz üreticisi hizmetleri kullanıcı ile sağlayıcı arasındaki ilişkidir; rol tespiti **hukuki değerlendirme** gerektirir.
+
+## 3. Güncel KVKK yurt dışı aktarım rejimi ve Sauran'a etkisi
+**Resmî kaynaklar:** 6698 sayılı Kanun m. 9 (7499 sayılı Kanunla değişik; 1 Haziran 2024'te yürürlüğe girdi), Kişisel Verilerin Yurt Dışına Aktarılmasına İlişkin Usul ve Esaslar Hakkında Yönetmelik (Resmî Gazete, 10 Temmuz 2024 — ikincil kaynaklardan; metin teyit edilmeli),
+KVKK Kurulu'nun 04.06.2024 tarih ve 2024/959 sayılı kararı (standart sözleşme ve BCR metinleri), KVKK "Yurt Dışına Aktarım" sayfası ve "Kişisel Verilerin Yurt Dışına Aktarılması Rehberi" (Yayınları No: 48).
+
+Kademeli yapı (Kurum sayfasına göre): **(1) yeterlilik kararı**; **(2) uygun güvenceler**; **(3) yalnızca arızi (istisnai) haller**.
+
+1. **Yeterlilik kararı:** Kurum sayfasında (belge tarihinde) *"henüz bir belirleme yapılmamış"* denmektedir. Dolayısıyla **hiçbir ülke/sağlayıcı için "yeterli ülke" dayanağı kullanılamaz** (AB-ABD DPF veya AB SCC'leri Türkiye rejimi için tek başına mekanizma değildir).
+2. **Uygun güvenceler** (yeterlilik yoksa): kamu kurumları arası sözleşme (Kurul izni), **bağlayıcı şirket kuralları**, **Kurul'un ilan ettiği standart sözleşme** (bildirim — izin değil), yazılı taahhüt (Kurul izni). Teorik olarak ilgili olanlar:
+   * **Standart sözleşme** — Kurum dört tip yayımlamıştır: veri sorumlusu→veri sorumlusu, veri sorumlusu→veri işleyen, veri işleyen→veri işleyen, veri işleyen→veri sorumlusu. Sauran (veri sorumlusu) → Daily/Google/Zoho/Render (veri işleyen) ilişkisi için **veri sorumlusu→veri işleyen** tipi teorik olarak ilgilidir; taraflar Sauran'ı işleten tüzel/gerçek kişi ile ilgili sağlayıcı olur. İkincil kaynaklara göre sözleşme imzalandıktan sonra **5 iş günü içinde Kurum'a bildirim** gerekir (bildirimi yükümlü taraf ve yöntem **Yönetmelik ve Kurum duyurusundan teyit edilmeli**).
+   * **BCR:** yalnızca aynı ekonomik faaliyet grubu içi aktarım için; Sauran için uygulanabilir değildir.
+   * **Taahhüt:** Kurul izni gerektirir; standart sözleşme mümkün olduğu için genellikle ikincil.
+3. **Arızi haller** (açık rıza, sözleşmenin ifası vb.): Kurum, bunların **arızi, sürekli olmayan** aktarımlar için olduğunu belirtir. Sauran'ın Daily/Zoho/Render/FCM kullanımı **sürekli/olağan** akışlardır; bu istisnalara dayanmak hukuken riskli olabilir → **hukuki karar noktası**.
+
+**Sonuç (teknik + hukuki):** Sağlayıcıların işleme yeri koddan doğrulanamadığından **yurt dışı aktarım varsayılmalıdır** (Daily için sağlayıcı beyanı ABD; Render/Firebase/Zoho için bölge teyit edilmeli). Bu durumda hangi güvencenin kullanılacağı (büyük olasılıkla sağlayıcılarla **standart sözleşme** ve bildirim), aydınlatma metninin buna göre yazılması ve VERBİS gerekliliği **hukuki karar** gerektirir. **Bu çalışmada sözleşme imzalanmadı, Kurum'a bildirim yapılmadı.** Gizlilik politikasında aktarım "kabul edilmelidir; hukuki dayanak henüz doğrulanmış bir değerlendirmeye bağlanmamıştır" şeklinde belirtilmiştir.
+
+## 4. Uygulanan teknik minimizasyonlar (özet)
+1. `unpkg.com` kaldırıldı (kütüphane self-host, SRI).
+2. Daily'ye **hiçbir odada kullanıcı adı gitmez** (DM ve lobi); yalnızca sayısal `user_id` (lobi) — arayüz adları kendi Socket.io katılımcı listesinden çözer.
+3. Yerel bildirim tıklama URL'sinden kullanıcı adı çıkarıldı (Render erişim günlüğüne girmesin).
+4. Görev kabul/ret ekip e-postasından kullanıcı adı çıkarıldı; hata günlüklerinde alıcı adresi yok; sunucu günlüklerinde kullanıcı adı yok.
+5. FCM/Web Push yükleri yalnızca genel metin + tür (Aşama 9-10); FCM TTL 1 saat, Web Push TTL 1 saat.
+
+## 5. Doğrulanması gerekenler (özet liste)
+Render bölgesi ve servis/disk silindikten sonra anlık görüntü akıbeti; Render günlük saklaması; Zoho hesabının veri merkezi ve DPA'nın imzalanıp imzalanmadığı; Daily hesabındaki retention/bölge ayarı ve DPA kabulü; Firebase veri işleme şartlarının kabulü ve
+FCM ileti bekletmesi; tarayıcı push hizmetlerinin saklaması; standart sözleşme tipi/tarafları/bildirim usulü (Yönetmelik metninden); VERBİS gerekliliği ve saklama-imha politikası yükümlülüğü.
