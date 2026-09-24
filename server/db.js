@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const authcodes = require('./authcodes');
+const { stripImageMetadata } = require('./imagemeta'); // görsel üstverisi (EXIF/GPS vb.) temizliği
 
 // DATA_DIR verilirse (örn. Render'da bağlı kalıcı disk) oraya, verilmezse
 // projenin kendi 'data' klasörüne yazar. Böylece kalıcı disk eklendiğinde
@@ -2241,6 +2242,7 @@ function updateAvatar(userId, dataUrl) {
       }
     }
 
+    dataUrl = stripImageMetadata(dataUrl); // konum/cihaz üstverisi saklanmaz
     db.prepare(`UPDATE users SET avatar_data = ? WHERE id = ?`).run(dataUrl, userId);
 
     return { success: true, avatar_data: dataUrl };
@@ -2263,6 +2265,7 @@ function updateBanner(userId, dataUrl) {
       }
     }
 
+    dataUrl = stripImageMetadata(dataUrl);
     db.prepare(`UPDATE users SET banner_data = ? WHERE id = ?`).run(dataUrl, userId);
 
     return { success: true, banner_data: dataUrl };
@@ -2314,7 +2317,7 @@ function createHub(userId, { name, image_data }) {
       VALUES (?, 'custom', '🧩', ?, ?)
     `);
 
-    const hubResult = insertHub.run(name, image_data || null, userId);
+    const hubResult = insertHub.run(name, stripImageMetadata(image_data) || null, userId);
     const hubId = hubResult.lastInsertRowid;
 
     db.prepare(`INSERT INTO hub_members (hub_id, user_id, permission_tier) VALUES (?, ?, 'owner')`).run(hubId, userId);
@@ -2344,7 +2347,7 @@ function updateHub(hubId, userId, { name, image_data }) {
     if (image_data && !/^data:image\/(png|jpe?g|webp|gif);base64,/.test(image_data)) {
       return { success: false, error: 'Geçersiz görsel formatı.' };
     }
-    db.prepare(`UPDATE hubs SET image_data = ? WHERE id = ?`).run(image_data || null, hubId);
+    db.prepare(`UPDATE hubs SET image_data = ? WHERE id = ?`).run(stripImageMetadata(image_data) || null, hubId);
   }
 
   return { success: true };
@@ -3081,7 +3084,7 @@ function createHubFileMessage(hubId, userId, username, file) {
     : 'file';
 
   const payload = JSON.stringify({
-    data,
+    data: stripImageMetadata(data), // görselse EXIF/GPS vb. üstveri çıkarılır (piksellere dokunulmaz)
     name: String(name || 'dosya').slice(0, 200),
     mime: String(mime || 'application/octet-stream').slice(0, 100),
     size: Number(size) || 0
@@ -4240,7 +4243,7 @@ function createDmFileMessage(fromId, fromUsername, toId, file) {
     : 'dm_file';
 
   const payload = JSON.stringify({
-    data,
+    data: stripImageMetadata(data), // görselse EXIF/GPS vb. üstveri çıkarılır (piksellere dokunulmaz)
     name: String(name || 'dosya').slice(0, 200),
     mime: String(mime || 'application/octet-stream').slice(0, 100),
     size: Number(size) || 0
@@ -5365,12 +5368,29 @@ function purgeExpiredDataLifecycleLog(now = new Date()) {
 purgeDeletedMessageResidue();
 sweepMessageOrphansSecure();
 
+// Eskiden yüklenmiş profil/kapak/lobi görsellerinden üstveri (EXIF/GPS vb.) bir kez temizlenir (idempotent; yalnızca değişen satırlar yazılır).
+function scrubStoredImageMetadata() {
+  let changed = 0;
+  db.pragma('secure_delete = ON');
+  db.transaction(() => {
+    for (const [table, col] of [['users', 'avatar_data'], ['users', 'banner_data'], ['hubs', 'image_data']]) {
+      for (const row of db.prepare(`SELECT id, ${col} AS v FROM ${table} WHERE ${col} LIKE 'data:image/%'`).all()) {
+        const cleaned = stripImageMetadata(row.v);
+        if (cleaned !== row.v) { db.prepare(`UPDATE ${table} SET ${col} = ? WHERE id = ?`).run(cleaned, row.id); changed++; }
+      }
+    }
+  })();
+  return changed;
+}
+scrubStoredImageMetadata();
+
 // WAL dosyası, silinmiş verinin eski sayfa görüntülerini kontrol noktasına kadar taşıyabilir; düzenli ve kapanışta kesilir.
 function checkpointWal() {
   try { db.pragma('wal_checkpoint(TRUNCATE)'); return true; } catch (_) { return false; }
 }
 
 module.exports = {
+  scrubStoredImageMetadata,
   logDataLifecycle,
   purgeExpiredDataLifecycleLog,
   checkpointWal,
