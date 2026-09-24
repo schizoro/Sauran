@@ -401,17 +401,33 @@ function getUserFromRequest(req) {
   return getUserFromSessionToken(token);
 }
 
-function setSessionCookie(res, token) {
-  const secureFlag = isProduction ? '; Secure' : '';
-  res.setHeader(
-    'Set-Cookie',
-    `sauran_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_DURATION / 1000}${secureFlag}`
-  );
+// Oturum çerezi TEK yerden üretilir. Bayraklar: HttpOnly; SameSite=Lax; Path=/; Max-Age=7 gün (SESSION_DURATION); ve aşağıdaki kurala göre Secure.
+// Secure kuralı (yanlış yapılandırmaya dayanıklı): yalnızca AÇIKÇA yerel geliştirme (üretim değil + HTTP + localhost/127.0.0.1/::1) ise Secure eklenmez;
+// aksi her durumda Secure eklenir. NODE_ENV unutulsa bile Render (RENDER=true) ya da HTTPS isteği (trust proxy ile X-Forwarded-Proto) ya da yerel olmayan
+// bir host adı Secure çerez üretir; böylece çerez yanlışlıkla HTTP üzerinden gönderilemez.
+const cookieProductionLike = isProduction || process.env.RENDER === 'true';
+if (cookieProductionLike && !isProduction) {
+  console.warn('UYARI: RENDER ortamı algılandı ama NODE_ENV=production değil; oturum çerezi yine de Secure üretilir. NODE_ENV=production ayarlayın.');
+}
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+
+function shouldMarkSessionCookieSecure(req) {
+  if (cookieProductionLike) return true;
+  if (req.secure) return true; // HTTPS (doğrudan ya da güvenilen tek proxy'nin X-Forwarded-Proto'su)
+  const host = String((req.headers && req.headers.host) || '').toLowerCase().replace(/:\d+$/, '').replace(/^\[|\]$/g, '');
+  return !LOCAL_HOSTS.has(host);
 }
 
-function clearSessionCookie(res) {
-  const secureFlag = isProduction ? '; Secure' : '';
-  res.setHeader('Set-Cookie', `sauran_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secureFlag}`);
+function buildSessionCookie(req, value, maxAgeSeconds) {
+  return `sauran_session=${value}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAgeSeconds}${shouldMarkSessionCookieSecure(req) ? '; Secure' : ''}`;
+}
+
+function setSessionCookie(req, res, token) {
+  res.setHeader('Set-Cookie', buildSessionCookie(req, encodeURIComponent(token), SESSION_DURATION / 1000));
+}
+
+function clearSessionCookie(req, res) {
+  res.setHeader('Set-Cookie', buildSessionCookie(req, '', 0));
 }
 
 // =====================================================
@@ -453,7 +469,7 @@ app.post('/api/verify', ...verifyLimiters, (req, res) => {
     }
 
     const sessionToken = createSession(result.id, req.headers['user-agent']);
-    setSessionCookie(res, sessionToken);
+    setSessionCookie(req, res, sessionToken);
 
     return res.json({
       success: true,
@@ -524,7 +540,7 @@ app.post('/api/login', loginLimiter, (req, res) => {
     }
 
     const sessionToken = createSession(result.id, req.headers['user-agent']);
-    setSessionCookie(res, sessionToken);
+    setSessionCookie(req, res, sessionToken);
 
     return res.json({
       success: true,
@@ -746,7 +762,7 @@ app.delete('/api/account', (req, res) => {
     // Yalnızca DB işlemi başarıyla tamamlandıktan sonra gönderilir.
     (result.dm_partners || []).forEach((p) => io.to(`user:${p.partner_id}`).emit('dm_partner_deleted', { user_id: user.id, token: p.token }));
 
-    clearSessionCookie(res);
+    clearSessionCookie(req, res);
     return res.json({ success: true });
 
   } catch (error) {
@@ -1508,7 +1524,7 @@ app.post('/api/logout', (req, res) => {
       db.prepare(`DELETE FROM sessions WHERE token_hash = ?`).run(tokenHash);
     }
 
-    clearSessionCookie(res);
+    clearSessionCookie(req, res);
     return res.json({ success: true });
 
   } catch (error) {
