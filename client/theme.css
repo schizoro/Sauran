@@ -562,3 +562,18 @@ body:has(.adm-header), body:has(.mod-header) { background: var(--bg-app); color:
   .hub-detail-main, .chat-area, #hub-detail-view { min-height: 0; }
   #hub-feed { overscroll-behavior: contain; }
 }
+
+/* ══ iOS/mobil gerçek cihaz hataları ════════════════════════════════════ */
+/* Başlıktaki üye düğmesi yalnızca kendi paneli açıkken diğer panellerin üstünde kalır (ses paneline binmesin) */
+.members-in-header { z-index: auto; }
+.members-in-header.open { z-index: 61; }
+.hub-voice-rooms-side.open { z-index: 65; }
+
+@media (max-width: 900px) {
+  /* Klavye açıkken görünüm alanı (visualViewport) kadar yükseklik: composer ve alt sayfalar klavyenin üstünde kalır */
+  html { overscroll-behavior: none; }
+  body { height: var(--vvh, 100dvh); max-height: var(--vvh, 100dvh); overflow: hidden; }
+  .modal-overlay { top: var(--vvtop, 0px); bottom: auto; height: var(--vvh, 100dvh); }
+  .modal-overlay .modal-box, .modal-overlay .profile-modal-box { max-height: calc(var(--vvh, 100dvh) - 16px); overflow-y: auto; }
+  .hub-start-menu { left: 12px; right: auto; z-index: 70; max-width: calc(100vw - 24px); }
+}

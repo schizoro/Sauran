@@ -210,6 +210,23 @@
     voiceLabels();
     setInterval(voiceLabels, 15000);
 
+    // iOS Safari: klavye açılınca yerleşim görünüm alanına (visualViewport) sabitlenir; sayfa kayması sıfırlanır
+    (function keepInVisualViewport() {
+        const vv = window.visualViewport;
+        if (!vv) return;
+        const root = document.documentElement;
+        const sync = () => {
+            root.style.setProperty('--vvh', Math.round(vv.height) + 'px');
+            root.style.setProperty('--vvtop', Math.round(vv.offsetTop) + 'px');
+            const kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+            root.classList.toggle('kb-open', kb > 80);
+            if (kb > 80 && (window.scrollY || vv.pageTop)) window.scrollTo(0, 0);
+        };
+        vv.addEventListener('resize', sync);
+        vv.addEventListener('scroll', sync);
+        sync();
+    })();
+
     // Klavye: girdi odaklanınca composer görünür kalsın (WebView yeniden boyutlanınca)
     const composerInputs = document.querySelectorAll('.hub-composer input[type="text"], .hub-composer textarea, .dm-modal-box .composer-input-box input');
     composerInputs.forEach((el) => el.addEventListener('focus', () => {
