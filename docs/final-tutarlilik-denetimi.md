@@ -24,3 +24,11 @@
 | 18 | Hukuki onay gereken süreler | Mesaj 90/365/730 gün, kanıt 30/180/365, bildirim/denetim 90–730, hareketsiz hesap 730+30, davet 7, log ≥ 3 yıl. |
 | 19 | Yedek sağlayıcı süreleri | Render disk/snapshot süresi, şifreleme ve erişim; Zoho posta kutusu saklaması; Daily kayıt/log saklaması; Firebase. Hepsi sağlayıcıdan doğrulanmalı. |
 | 20 | Gerçek üretim engeli | Kod engeli yok. Operasyonel: `DATA_DIR` kalıcı disk, SMTP anahtarı, ilk açılış geri alınamaz temizlik için yedek + `--impact`, gerçek cihaz testleri, tek örnek varsayımı. |
+
+## Sınıflandırma ve sınır notları (final düzeltme)
+- **Lifecycle/audit logları:** `data_lifecycle_log`, `evidence_lifecycle_log` ve `admin_audit_log` mesaj içeriği, kullanıcı adı, e-posta, IP, profil, medya tutmaz. Ancak `report_id`, `actor_user_id`, `target_user_id` gibi iç referanslar mevcut kayıtlarla eşleştirilebildiği için **takma adlı (pseudonymous) kişisel veri** sayılabilir; "anonim" denmez. 3 yıllık süre değişmedi (hukuki doğrulama gerekli).
+- **Yedek süresi tek kaynak:** uygulama yedeği **7 gün** (`backup.js` DEFAULT_RETENTION_DAYS; temizlik, preflight, politika aynı). "14 gün" yalnızca eski sürüm geçmişi notudur. **Render snapshot süresi ayrıdır ve Render'dan doğrulanmalıdır** (tahmin edilmedi).
+- **"Süresiz" ifadesi:** aktif hizmet amacı süren veriler (ör. aktif hesap) amaç sürdükçe tutulur; amacı sona ermiş veri için sınırsız saklama bırakılmamıştır.
+- **Sağlayıcılar (kod değişmedi):** Render, Zoho, Daily, Firebase/Google, Web Push servisleri — bölge doğrulanmadı, sağlayıcı saklama süreleri doğrulanmadı, DPA/sözleşme imzalanmadı; güncel KVKK aktarım mekanizması ayrıca değerlendirilmeli.
+- **VERBİS:** gerekip gerekmediği koddan çıkarılmaz; veri sorumlusu çalışan sayısı, mali bilanço, ana faaliyet ve özel nitelikli veri işleme üzerinden hukuki değerlendirme yapmalıdır.
+- **5651:** teknik log/trafik kayıtları belgelenmiştir; 5651 yükümlülüğünün Sauran'a uygulanıp uygulanmadığı hukukçu incelemesi olmadan belirtilmez.

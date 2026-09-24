@@ -11,7 +11,7 @@ const fs = require('fs');
 const path = require('path');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_RETENTION_DAYS = 7; // Render disk anlık görüntüsü en az 7 gün (Render dokümantasyonu); migration öncesi doğrulama için yeterli, daha uzun tutmak için gerekçe yok
+const DEFAULT_RETENTION_DAYS = 7; // Render anlık görüntü süresi ayrıdır ve Render'dan doğrulanmalıdır; migration öncesi doğrulama için yeterli, daha uzun tutmak için gerekçe yok
 
 // Asgari yedekte BOŞALTILAN tablolar: geri yüklemede yeniden oluşan/işe yaramayan ve doğrudan kimlik doğrulama/cihaz gizli bilgisi içerenler.
 // Ayrıca geçici/yeniden üretilebilir bildirim kayıtları (notifications, e-posta kuyruğu) da boşaltılır: geri yüklemede işe yaramaz ve başkalarının adlarını içerebilir.

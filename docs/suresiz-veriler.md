@@ -1,6 +1,6 @@
 # Süresiz kalan verilerin kademeli sınırlanması (Aşama 6)
 
-> Süreler **teknik varsayılandır**; hukuken belirlenmiş süreler değildir ve **hukuki doğrulama gerektirir** (bkz. `veri-saklama-hukuki-eslestirme.md`). Amaç: kullanıcıyı şaşırtmadan, uyarıyla ve geri dönüşü olan adımlarla süresizliği kaldırmak.
+> Süreler **teknik varsayılandır**; hukuken belirlenmiş süreler değildir ve **hukuki doğrulama gerektirir** (bkz. `veri-saklama-hukuki-eslestirme.md`). Amaç: kullanıcıyı şaşırtmadan, uyarıyla ve geri dönüşü olan adımlarla amacı sona ermiş veriler için sınırsız saklamayı kaldırmak (aktif hesap gibi amacı devam eden veriler hesap süresince tutulur).
 > Aktif kullanıcı hesabı ve aktif lobi **otomatik silinmez**. Sayaçlar dağıtım anında başlar: mevcut hiçbir hesap/davet ilk açılışta süresi dolmuş sayılmaz.
 
 | Veri | Neden saklanıyor / kullanıcıya gösteriliyor mu | Sahibi hesabını silince | Erişim / export | Kişisel veri | Yeni sınır | Açık kalan |

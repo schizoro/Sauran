@@ -25,7 +25,7 @@ Bir hesap silindiğinde (bkz. `deleteAccount`, tek transaction):
 ## Süre (retention)
 
 - **Başlangıç:** hesap silme anı. Bu an, sohbetin oda anahtarına epoch saniye olarak yazılır: `dmdel_<karşı taraf no>_<rastgele jeton>_<silme anı>`.
-  Şema değişikliği yoktur; anahtar yalnızca bir sayı taşır, kişisel veri içermez.
+  Şema değişikliği yoktur; anahtar yalnızca bir sayı taşır, doğrudan kimlik bilgisi içermez.
 - **Süre:** **90 gün** (teknik varsayılan).
 - **Dolunca:** o sohbetin tüm satırları silinir: karşı tarafın korunan mesajları, ilgili medya (mesajın `payload`'ı), mezar taşları ve tepkiler.
   Yalnızca `dmdel_` odalarına dokunulur; karşı tarafın hesabındaki diğer mesajlar, diğer DM'ler, lobi mesajları ve rapor kanıtları etkilenmez.
