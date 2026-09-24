@@ -16,7 +16,7 @@ Kısaltmalar: **HS** = hesap silinince, **EX** = kullanıcı dışa aktarımına
 
 | Veri | Kimle ilgili / içerik | Neden | Teknik saklama | HS | EX | Erişim | 3T | İmha | HD |
 |---|---|---|---|---|---|---|---|---|---|
-| **users** | Kullanıcı adı, e-posta, parola özeti+tuz (scrypt), biyografi, durum, profil/kapak görseli, `avatar_visibility`, `minor_until`, şartlar onay zamanı, rol, askı bilgisi; `birth_date` sütunu ESKİ şemadan kalır ve her zaman NULL | Hesap/hizmet | Hesap silinene kadar. **Hareketsiz hesap için süre tanımlı DEĞİL** | Satır silinir; bağlantılar temizlenir (aşağıdaki HS listesi) | Evet (parola özeti/tuz hariç; `age_group`/`is_minor`) | Kullanıcı kendisi; moderatör/yönetici sınırlı görünüm (tam doğum tarihi yok, yaş grubu var); görseller `avatar_visibility`'ye göre | E-posta gönderimleri Zoho'ya (bkz. e-posta) | `DELETE` + `secure_delete` | **Evet**: hareketsiz hesap süresi, hukuki dayanak |
+| **users** | Kullanıcı adı, e-posta, parola özeti+tuz (scrypt), biyografi, durum, profil/kapak görseli, `avatar_visibility`, `minor_until`, şartlar onay zamanı, rol, askı bilgisi; `birth_date` sütunu ESKİ şemadan kalır ve her zaman NULL | Hesap/hizmet | Hesap silinene kadar; **730 gün hiç etkinlik yoksa** 30 gün önceden e-posta uyarısı → silme (teknik varsayılan; yönetim rolleri/askıdakiler/etkin üyeli lobi sahipleri hariç; bkz. `suresiz-veriler.md`) | Satır silinir; bağlantılar temizlenir (aşağıdaki HS listesi) | Evet (parola özeti/tuz hariç; `age_group`/`is_minor`) | Kullanıcı kendisi; moderatör/yönetici sınırlı görünüm (tam doğum tarihi yok, yaş grubu var); görseller `avatar_visibility`'ye göre | E-posta gönderimleri Zoho'ya (bkz. e-posta) | `DELETE` + `secure_delete` | **Evet**: hareketsiz hesap süresi, hukuki dayanak |
 | **sessions** | Oturum belirteci özeti (düz belirteç yok), tarayıcı UA, zaman | Oturum | 7 gün; süresi dolan 10 dk'da bir silinir; çıkış/şifre değişimi/silmede silinir | Silinir | Evet (liste; belirteç yok) | Kullanıcı (kendi listesi); sunucu | Hayır | `DELETE` | Hayır |
 | **pending_verifications** | Kullanıcı adı, e-posta, parola özeti, kod özeti, `minor_until` (yalnızca 18 altı), onay | E-posta doğrulama | 10 dakika, 5 deneme; 10 dk'da bir temizlenir | (hesap oluşmadan) süresi dolunca silinir | Hayır | Sunucu | Kod e-postası Zoho'ya | `DELETE` | Hayır |
 | **password_resets** | Kod özeti, deneme sayısı | Şifre sıfırlama | 10 dakika, 5 deneme; temizlenir | Silinir | Hayır | Sunucu | Kod e-postası Zoho'ya | `DELETE` | Hayır |
@@ -103,7 +103,11 @@ Hesap silme **parola ile yeniden doğrulanır** (Aşama 16).
 | Web Push teslim penceresi | 1 saat (TTL) | `push.js` |
 | Daily giriş belirteci | 4 saat | `daily.js` |
 | Daily silme kuyruğu yeniden deneme | en çok 6 saat aralık, başarıya kadar | `failDailyRoomCleanup` |
-| Hareketsiz **hesap**, **lobi**, **öneri**, **davet kodu** | **Tanımsız (süresiz)** | Aşağıya bkz. |
+| Hareketsiz **hesap** | 730 gün (+30 gün uyarı) | `INDEFINITE_RETENTION.inactive_account_days` |
+| Kullanılmayan **davet kodu** | 180 gün | `invite_idle_days` |
+| Yanıtlanmayan **arkadaşlık isteği** | 90 gün | `pending_friend_days` |
+| **Öneri** girdisi | 730 gün | `feedback_days` |
+| Hareketsiz **lobi** | Süre doldu diye silinmez; sahibinin hesabına bağlı | Aşama 6 kararı |
 
 ## 4. Tutarlılık kontrolünde bulunan ve düzeltilen gerçek boşluk
 
@@ -112,7 +116,7 @@ Hesap silme **parola ile yeniden doğrulanır** (Aşama 16).
 
 ## 5. Açık kalan / hukuki karar gerektirenler
 
-1. Hareketsiz hesap, hareketsiz lobi, öneri (feedback) ve davet kodları için otomatik süre yok — ürün ve hukuk kararı.
+1. Hareketsiz lobi için ayrı süre yok (sahibinin hesabına bağlı); hareketsiz hesap/öneri/davet/istek sınırları teknik varsayılandır — süreler için hukuki karar.
 2. Özel nitelikli veri içerebilecek serbest metin/medya için içerik türüne özel süre/koruma kararı (kod içerik sınıflandırmaz).
 3. Çocuk kullanıcılar ve çocuk güvenliği raporları için özel yükümlülükler ([çocuk belgesi](cocuk-kullanicilar-ve-hassas-veri.md)).
 4. Sağlayıcı konumu/saklaması/alt işleyenler ve yurt dışı aktarım dayanağı ([üçüncü taraf belgesi](ucuncu-taraf-veri-aktarimi.md)).

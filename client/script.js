@@ -3254,6 +3254,7 @@ const I18N = {
     'modal-notifications': { tr: '🔔 Bildirimler', en: '🔔 Notifications' },
     'modal-join-code': { tr: '🔑 Davet Koduyla Katıl', en: '🔑 Join with Invite Code' },
     'modal-invite-code': { tr: '🔑 Davet Kodu', en: '🔑 Invite Code' },
+    'invite-expiry-note': { tr: 'Bu kod {days} gün boyunca hiç kullanılmazsa otomatik silinir.', en: 'This code is deleted automatically if it is not used for {days} days.' },
     'modal-poll': { tr: '📊 Oylama Başlat', en: '📊 Start a Poll' },
     'modal-share': { tr: '📌 Paylaşım Yap', en: '📌 Share Something' },
     'modal-add-friend': { tr: '👤＋ Arkadaş Ekle', en: '👤＋ Add Friend' },
@@ -8740,6 +8741,8 @@ hubInviteBtn.addEventListener(
             if (!data.success) return;
 
             hubInviteCodeDisplay.textContent = data.code;
+            const expiryNote = document.getElementById('hub-invite-expiry-note');
+            if (expiryNote && data.expires_after_idle_days) expiryNote.textContent = t('invite-expiry-note').replace('{days}', data.expires_after_idle_days);
             hubInviteModal.style.display = 'flex';
 
         } catch (error) {

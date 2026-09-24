@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { purgeOldBackups } = require('./backup');
-const { sendAccountExistsEmail, sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail } = require('./mailer');
+const { sendInactivityWarningEmail, sendAccountExistsEmail, sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail } = require('./mailer');
 const push = require('./push');
 const fcm = require('./fcm');
 const daily = require('./daily');
@@ -90,6 +90,9 @@ const {
   purgeExpiredAuthRecords,
   purgeExpiredAuditLog,
   purgeAdultBirthDates,
+  touchUserActivity,
+  runInactiveAccountPass,
+  purgeExpiredIndefiniteData,
   logDataLifecycle,
   purgeExpiredDataLifecycleLog,
   checkpointWal,
@@ -397,6 +400,8 @@ function getUserFromSessionToken(token) {
     db.prepare(`DELETE FROM sessions WHERE token_hash = ?`).run(tokenHash);
     return null;
   }
+
+  try { touchUserActivity(user.id); } catch (_) { /* etkinlik kaydı hatası oturumu engellemez */ }
 
   return {
     id: user.id,
@@ -764,6 +769,25 @@ app.get('/api/account/export', (req, res) => {
   }
 });
 
+// Hesap silme transaction'ından SONRAKİ adımlar (kullanıcının kendi silmesi ve hareketsiz hesap temizliği için ortak).
+function finishAccountDeletion(userId, result) {
+  // Açık soketler kapatılır (oturumlar zaten silindi; yeniden bağlanma da reddedilir).
+  for (const sid of Array.from(activeUsers.get(userId) || [])) {
+    io.sockets.sockets.get(sid)?.disconnect(true);
+  }
+  activeUsers.delete(userId);
+  activeUserNames.delete(userId);
+
+  finalizeHubPurge(result);
+  logDataLifecycle('account_deleted', { accounts: 1, hubs_purged: (result.purged_hubs || result.purgedHubs || []).length });
+
+  // DM karşı tarafları: sohbet penceresi açıksa sayfa yenilemeden "Silinmiş hesap / salt okunur" durumuna geçsin (mevcut user:<id> odaları).
+  (result.forward_tombstoned || []).forEach((c) => {
+    if (c.to_user_id) io.to(`user:${c.user_id}`).to(`user:${c.to_user_id}`).emit('dm_message_deleted', { id: c.id });
+  });
+  (result.dm_partners || []).forEach((p) => io.to(`user:${p.partner_id}`).emit('dm_partner_deleted', { user_id: userId, token: p.token }));
+}
+
 app.delete('/api/account', accountDeleteLimiter, (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
@@ -780,23 +804,7 @@ app.delete('/api/account', accountDeleteLimiter, (req, res) => {
     const result = deleteAccount(user.id);
 
     // --- Transaction SONRASI (DB artık kalıcı olarak silindi) ---
-    // Açık soketler kapatılır (oturumlar zaten silindi; yeniden bağlanma da reddedilir).
-    for (const sid of Array.from(activeUsers.get(user.id) || [])) {
-      io.sockets.sockets.get(sid)?.disconnect(true);
-    }
-    activeUsers.delete(user.id);
-    activeUserNames.delete(user.id);
-
-    finalizeHubPurge(result);
-    logDataLifecycle('account_deleted', { accounts: 1, hubs_purged: (result.purged_hubs || result.purgedHubs || []).length });
-
-    // DM karşı tarafları: sohbet penceresi açıksa sayfa yenilemeden "Silinmiş hesap / salt okunur" durumuna geçsin (mevcut user:<id> odaları).
-    // Yalnızca DB işlemi başarıyla tamamlandıktan sonra gönderilir.
-    (result.forward_tombstoned || []).forEach((c) => {
-      if (c.to_user_id) io.to(`user:${c.user_id}`).to(`user:${c.to_user_id}`).emit('dm_message_deleted', { id: c.id });
-    });
-
-    (result.dm_partners || []).forEach((p) => io.to(`user:${p.partner_id}`).emit('dm_partner_deleted', { user_id: user.id, token: p.token }));
+    finishAccountDeletion(user.id, result);
 
     clearSessionCookie(req, res);
     return res.json({ success: true });
@@ -3686,6 +3694,31 @@ server.listen(PORT, () => {
   };
   runDeletedDmCleanup();
   setInterval(runDeletedDmCleanup, 60 * 60 * 1000).unref();
+
+  // Süresiz kalan verilere kademeli sınırlı saklama (bkz. docs/suresiz-veriler.md): davet kodu, bekleyen arkadaşlık isteği, öneri; açılışta ve günde bir.
+  const runIndefiniteCleanup = () => {
+    try {
+      const r = purgeExpiredIndefiniteData();
+      logDataLifecycle('indefinite_data_purged', r);
+      if (r.invites || r.pending_friend_requests || r.feedback) console.log(`Süresi dolan davet/istek/öneri silindi: davet=${r.invites}, istek=${r.pending_friend_requests}, öneri=${r.feedback}.`);
+    } catch (error) { console.error('Süresiz veri temizleme hatası:', error); }
+  };
+  runIndefiniteCleanup();
+  setInterval(runIndefiniteCleanup, 24 * 60 * 60 * 1000).unref();
+
+  // Hareketsiz hesaplar: ÖNCE e-posta uyarısı, en az 30 gün sonra silme (giriş sayaç sıfırlar). Yönetim rolleri/askıdakiler/aktif lobi sahipleri hariç.
+  const runInactiveAccounts = async () => {
+    try {
+      const r = await runInactiveAccountPass({
+        sendWarning: (email, deleteOn) => sendInactivityWarningEmail(email, deleteOn),
+        onDeleted: (userId, result) => finishAccountDeletion(userId, result)
+      });
+      logDataLifecycle('inactive_accounts', { warned: r.warned, deleted: r.deleted });
+      if (r.warned || r.deleted || r.warn_failed) console.log(`Hareketsiz hesap turu: uyarılan=${r.warned}, uyarı gönderilemedi=${r.warn_failed}, silinen=${r.deleted}.`);
+    } catch (error) { console.error('Hareketsiz hesap turu hatası:', error); }
+  };
+  runInactiveAccounts();
+  setInterval(runInactiveAccounts, 24 * 60 * 60 * 1000).unref();
 
   // Daily oda silme kuyruğu: açılışta ve 5 dakikada bir (başarısız silmeler geri çekilmeyle yeniden denenir).
   processDailyRoomCleanup().catch(() => {});

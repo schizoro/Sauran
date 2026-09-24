@@ -2380,13 +2380,16 @@ function createHubInvite(hubId, userId) {
     VALUES (?, ?, ?)
   `).run(hubId, code, userId);
 
-  return { success: true, code };
+  return { success: true, code, expires_after_idle_days: INDEFINITE_RETENTION.invite_idle_days };
 }
 
 function joinHubByCode(code, userId) {
   const invite = db.prepare(`SELECT * FROM hub_invites WHERE code = ?`).get(String(code || '').trim());
 
   if (!invite) return { success: false, error: 'Geçersiz davet kodu.' };
+  if ((invite.last_used_at || invite.created_at) < sqlTimeAgo(new Date(), INDEFINITE_RETENTION.invite_idle_days)) {
+    return { success: false, error: 'Bu davet kodunun süresi dolmuş.' };
+  }
   if (invite.max_uses && invite.uses >= invite.max_uses) {
     return { success: false, error: 'Bu davet kodu kullanım limitine ulaşmış.' };
   }
@@ -2400,7 +2403,7 @@ function joinHubByCode(code, userId) {
   }
 
   db.prepare(`INSERT INTO hub_members (hub_id, user_id) VALUES (?, ?)`).run(invite.hub_id, userId);
-  db.prepare(`UPDATE hub_invites SET uses = uses + 1 WHERE id = ?`).run(invite.id);
+  db.prepare(`UPDATE hub_invites SET uses = uses + 1, last_used_at = CURRENT_TIMESTAMP WHERE id = ?`).run(invite.id);
 
   return { success: true, hub_id: invite.hub_id };
 }
@@ -5364,6 +5367,103 @@ function purgeExpiredDataLifecycleLog(now = new Date()) {
   return db.prepare(`DELETE FROM data_lifecycle_log WHERE created_at < ?`).run(lifecycleLogCutoff(now)).changes;
 }
 
+// ---- Süresiz kalan verilere KADEMELİ, sınırlı saklama (Aşama 6) ---------------------------------------------------------------
+// TÜM SÜRELER TEKNİK VARSAYILANDIR; hukuken belirlenmiş süreler değildir (bkz. docs/veri-saklama-hukuki-eslestirme.md, docs/suresiz-veriler.md).
+// Amaç: kullanıcıyı şaşırtmadan, uyarıyla ve geri dönüşü olan adımlarla süresizliği kaldırmak. Aktif hesap/lobi otomatik silinmez.
+const INDEFINITE_RETENTION = {
+  inactive_account_days: 730,   // hiç giriş/oturum etkinliği olmayan hesap: uyarı + silme
+  inactive_warning_days: 30,    // silmeden en az bu kadar gün önce e-posta uyarısı; kullanıcı girerse sayaç sıfırlanır
+  invite_idle_days: 180,        // hiç kullanılmayan/kullanılmayı bırakılmış davet kodu
+  pending_friend_days: 90,      // yanıtlanmayan arkadaşlık isteği (bildirimle aynı süre)
+  feedback_days: 730            // öneri panosu girdisi
+};
+
+for (const [table, col, sql] of [
+  ['users', 'last_active_at', `ALTER TABLE users ADD COLUMN last_active_at DATETIME`],
+  ['users', 'inactive_warned_at', `ALTER TABLE users ADD COLUMN inactive_warned_at DATETIME`],
+  ['hub_invites', 'last_used_at', `ALTER TABLE hub_invites ADD COLUMN last_used_at DATETIME`]
+]) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name);
+  if (!cols.includes(col)) {
+    db.exec(sql);
+    // Mevcut kayıtlar için sayaç DAĞITIM ANINDA başlar: hiçbir mevcut hesap/davet ilk açılışta süresi dolmuş sayılmaz.
+    if (col === 'last_active_at') db.exec(`UPDATE users SET last_active_at = CURRENT_TIMESTAMP`);
+    if (col === 'last_used_at') db.exec(`UPDATE hub_invites SET last_used_at = CURRENT_TIMESTAMP`);
+  }
+}
+
+const sqlTimeAgo = (now, days) => new Date(now.getTime() - days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+
+// Oturum etkinliği: günde en fazla bir yazma; etkinlik uyarı işaretini de sıfırlar.
+function touchUserActivity(userId) {
+  db.prepare(`
+    UPDATE users SET last_active_at = CURRENT_TIMESTAMP, inactive_warned_at = NULL
+    WHERE id = ? AND (last_active_at IS NULL OR last_active_at < datetime('now', '-1 day') OR inactive_warned_at IS NOT NULL)
+  `).run(userId);
+}
+
+// Hareketsiz hesap adayları. Hariç: yönetim rolleri, askıdaki hesaplar, ve etkinliği süren başka üyeleri olan lobilerin sahipleri
+// (lobi sahibinin silinmesi lobiyi de siler; aktif topluluğu şaşırtacak bir silme yapılmaz).
+function listInactiveAccountCandidates(now = new Date()) {
+  const cfg = INDEFINITE_RETENTION;
+  const warnCut = sqlTimeAgo(now, cfg.inactive_account_days - cfg.inactive_warning_days);
+  const deleteCut = sqlTimeAgo(now, cfg.inactive_account_days);
+  const activeCut = sqlTimeAgo(now, cfg.inactive_account_days);
+  const base = `
+    SELECT u.id, u.email, COALESCE(u.last_active_at, u.created_at) AS last_seen, u.inactive_warned_at
+    FROM users u
+    WHERE COALESCE(u.platform_role, 'user') NOT IN ('moderator', 'admin', 'founder')
+      AND COALESCE(u.account_status, 'active') != 'suspended'
+      AND NOT EXISTS (
+        SELECT 1 FROM hubs h JOIN hub_members hm ON hm.hub_id = h.id JOIN users mu ON mu.id = hm.user_id
+        WHERE h.created_by = u.id AND hm.user_id != u.id AND COALESCE(mu.last_active_at, mu.created_at) >= ?
+      )`;
+  const toWarn = db.prepare(`${base} AND COALESCE(u.last_active_at, u.created_at) < ? AND u.inactive_warned_at IS NULL LIMIT 50`).all(activeCut, warnCut);
+  const toDelete = db.prepare(`${base} AND COALESCE(u.last_active_at, u.created_at) < ? AND u.inactive_warned_at IS NOT NULL AND u.inactive_warned_at <= ? LIMIT 50`)
+    .all(activeCut, deleteCut, sqlTimeAgo(now, cfg.inactive_warning_days));
+  return { toWarn, toDelete };
+}
+
+function markInactiveWarned(userId) {
+  db.prepare(`UPDATE users SET inactive_warned_at = CURRENT_TIMESTAMP WHERE id = ?`).run(userId);
+}
+
+// Tek geçiş: önce uyarı (başarısız e-posta = uyarılmamış sayılır → SİLİNMEZ), sonra uyarılmış ve süresi dolmuşları sil (deleteAccount ile, kullanıcının kendi silmesiyle aynı yol).
+// sendWarning(email, deleteOnDate) ve onDeleted(userId, result) çağıran tarafından verilir (e-posta ve canlı arayüz güncellemeleri).
+async function runInactiveAccountPass({ now = new Date(), sendWarning, onDeleted } = {}) {
+  const out = { warned: 0, warn_failed: 0, deleted: 0 };
+  if (String(process.env.INACTIVE_ACCOUNT_DELETION || '').toLowerCase() === 'off') return out;
+  const { toWarn, toDelete } = listInactiveAccountCandidates(now);
+
+  for (const c of toWarn) {
+    try {
+      const deleteOn = new Date(now.getTime() + INDEFINITE_RETENTION.inactive_warning_days * 86400000).toISOString().slice(0, 10);
+      await sendWarning(c.email, deleteOn);
+      markInactiveWarned(c.id); out.warned++;
+    } catch (_) { out.warn_failed++; }
+  }
+  for (const c of toDelete) {
+    try {
+      const result = deleteAccount(c.id);
+      if (onDeleted) onDeleted(c.id, result);
+      out.deleted++;
+    } catch (_) { /* bir sonraki turda yeniden denenir */ }
+  }
+  return out;
+}
+
+// Davet kodu / bekleyen arkadaşlık isteği / öneri: süresi dolanları siler (günde bir). Yalnızca ilgili satırlara dokunur.
+function purgeExpiredIndefiniteData(now = new Date()) {
+  const cfg = INDEFINITE_RETENTION;
+  db.pragma('secure_delete = ON');
+  return db.transaction(() => ({
+    invites: db.prepare(`DELETE FROM hub_invites WHERE COALESCE(last_used_at, created_at) < ? OR (max_uses IS NOT NULL AND uses >= max_uses AND COALESCE(last_used_at, created_at) < ?)`)
+      .run(sqlTimeAgo(now, cfg.invite_idle_days), sqlTimeAgo(now, 7)).changes,
+    pending_friend_requests: db.prepare(`DELETE FROM friendships WHERE status = 'pending' AND created_at < ?`).run(sqlTimeAgo(now, cfg.pending_friend_days)).changes,
+    feedback: db.prepare(`DELETE FROM feedback WHERE created_at < ?`).run(sqlTimeAgo(now, cfg.feedback_days)).changes
+  }))();
+}
+
 // Eski sürümden kalan silinmiş-mesaj kalıntıları (tüm tablolar/sütunlar yukarıda hazır olduktan sonra) açılışta bir kez temizlenir.
 purgeDeletedMessageResidue();
 sweepMessageOrphansSecure();
@@ -5390,6 +5490,11 @@ function checkpointWal() {
 }
 
 module.exports = {
+  INDEFINITE_RETENTION,
+  touchUserActivity,
+  listInactiveAccountCandidates,
+  runInactiveAccountPass,
+  purgeExpiredIndefiniteData,
   scrubStoredImageMetadata,
   logDataLifecycle,
   purgeExpiredDataLifecycleLog,

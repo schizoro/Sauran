@@ -195,4 +195,21 @@ async function sendAccountExistsEmail(toEmail) {
   });
 }
 
-module.exports = { sendAccountExistsEmail, sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail };
+// Hareketsiz hesap uyarısı: hesap 30 gün içinde silinecek; giriş yapılırsa sayaç sıfırlanır.
+async function sendInactivityWarningEmail(toEmail, deleteOnDate) {
+  await transporter.sendMail({
+    to: toEmail,
+    from: MAIL_FROM,
+    subject: 'Sauran — Hesabın uzun süredir kullanılmıyor',
+    html: `
+      <div style="font-family: 'Segoe UI', sans-serif; background: #0b0c10; color: #c5c6c7; padding: 40px; max-width: 480px; margin: auto; border-radius: 12px;">
+        <h2 style="color: #66fcf1; letter-spacing: 2px; text-transform: uppercase;">Sauran</h2>
+        <p style="margin-top: 20px;">Sauran hesabın uzun süredir (yaklaşık 2 yıl) kullanılmıyor.</p>
+        <p>Kişisel verilerini gereğinden uzun tutmamak için, hesabın <strong>${escapeHtml(deleteOnDate)}</strong> tarihinde otomatik olarak silinecek. Hesabını tutmak istiyorsan bu tarihten önce giriş yapman yeterlidir.</p>
+        <p style="color: #45a29e; font-size: 13px;">Bu e-postayı beklemiyorsan görmezden gelebilirsin.</p>
+      </div>
+    `
+  });
+}
+
+module.exports = { sendInactivityWarningEmail, sendAccountExistsEmail, sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail };

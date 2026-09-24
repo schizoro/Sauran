@@ -43,7 +43,12 @@ Tüm satırlarda erişim ayrıca **sunucu/operatör (Render erişimi)** ve DB do
 | **Daily giriş belirteci** | 4 saat | Oda girişi | Daily | Oturum uzunluğu | Sözleşmenin ifası | Evet (ör. 2 saat) | Yok | Düşük |
 | **Daily silme kuyruğu** | Başarıya kadar (aralık ≤ 6 saat) | Oda adları (sayısal kimlik) | Sunucu | Sağlayıcıdaki oda silinsin | KVKK m.7 (silme) | — | — | Düşük |
 
-Satırlarda görünmeyen ve **hâlâ süresiz olanlar** (hareketsiz hesap, lobi, öneri, davet, bekleyen arkadaşlık isteği) Aşama 6 kapsamında ele alınmıştır (bkz. "Süresiz kalan veriler" belgesi ve bu tablonun güncel hâli).
+| **Hareketsiz hesap** (yeni) | 730 gün + 30 gün önceden e-posta uyarısı | Hesap verisi; hesap sahibi; hesap sürekliliği | Kullanıcı; moderatör sınırlı | Uzun süre kullanılmayan hesabın amacı kalmaz (KVKK m. 4/2-ç, m. 7) | Sözleşmenin ifası sona ermesi / m. 7 silme | Evet (ör. 365) | 730 için somut gerekçe yok | **Evet** |
+| **Davet kodu** (yeni) | 180 gün kullanılmazsa | Kod + oluşturan no | Lobi yöneticileri | Kullanılmayan kodun amacı kalmaz | Meşru menfaat | Evet | Yok | Düşük |
+| **Bekleyen arkadaşlık isteği** (yeni) | 90 gün | İki hesap ilişkisi | İlgili iki kullanıcı | Bildirimle aynı süre | Sözleşmenin ifası | Evet | Yok | Düşük |
+| **Öneri panosu girdisi** (yeni) | 730 gün | Serbest metin + yazar | Giriş yapan kullanıcılar | Ürün geri bildirimi | Meşru menfaat | Evet | Yok | Orta |
+
+Hareketsiz **lobi**: süre doldu diye silinmez; yaşam döngüsü sahibinin hesabına ve mesaj saklamasına bağlıdır (bkz. `suresiz-veriler.md`). Ölü cihaz anahtarlarının süresi (sağlayıcı geçersizleştirmesine bağlı) açık kalan noktadır.
 
 ## 3. Özel incelenen süreler
 * **7 gün** (sessions/outbox/silinmiş bildirim/yedek): kısa, ölçülü. Yedek 14→7 azaltıldı: Render otomatik anlık görüntüsü zaten ≥7 gün tutulur; elle yedeğin daha uzun tutulması için gerekçe yok.
