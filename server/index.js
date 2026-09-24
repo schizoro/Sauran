@@ -760,6 +760,10 @@ app.delete('/api/account', (req, res) => {
 
     // DM karşı tarafları: sohbet penceresi açıksa sayfa yenilemeden "Silinmiş hesap / salt okunur" durumuna geçsin (mevcut user:<id> odaları).
     // Yalnızca DB işlemi başarıyla tamamlandıktan sonra gönderilir.
+    (result.forward_tombstoned || []).forEach((c) => {
+      if (c.to_user_id) io.to(`user:${c.user_id}`).to(`user:${c.to_user_id}`).emit('dm_message_deleted', { id: c.id });
+    });
+
     (result.dm_partners || []).forEach((p) => io.to(`user:${p.partner_id}`).emit('dm_partner_deleted', { user_id: user.id, token: p.token }));
 
     clearSessionCookie(req, res);
@@ -2142,7 +2146,13 @@ app.delete('/api/messages/:id', (req, res) => {
       io.to(`user:${user.id}`).to(`user:${result.to_user_id}`).emit('dm_message_deleted', { id: result.id });
     }
 
-    return res.json(result);
+    // Silinen mesajın forward kopyaları da içeriksiz kaldı: açık sohbet pencereleri sayfa yenilemeden güncellensin.
+    (result.forward_copies || []).forEach((c) => {
+      if (c.to_user_id) io.to(`user:${c.user_id}`).to(`user:${c.to_user_id}`).emit('dm_message_deleted', { id: c.id });
+    });
+
+    const { forward_copies, ...publicResult } = result;
+    return res.json(publicResult);
 
   } catch (error) {
     console.error('Mesaj silme hatası:', error);

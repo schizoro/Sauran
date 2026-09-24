@@ -1077,6 +1077,9 @@ function handleDmsOnAccountDeletion(userId) {
   // X'in kendi "silinmiş hesap" sohbetleri (X karşı taraftı): X ayrılıyor, kimse kalmıyor -> tamamen sil (tepkiler CASCADE ile gider)
   db.prepare(`DELETE FROM messages WHERE room LIKE ? ESCAPE '\\'`).run(`dmdel\\_${userId}\\_%`);
 
+  // Bu hesabın DM odalarındaki silinmiş (içeriksiz) mezar taşları hiçbir şey taşımaz ve silinen hesaba (oda anahtarı/to_user_id) bağlıdır: tamamen silinir.
+  db.prepare(`DELETE FROM messages WHERE hub_id IS NULL AND kind = 'deleted' AND user_id IS NULL AND (room LIKE ? ESCAPE '\\' OR room LIKE ? ESCAPE '\\')`).run(`dm\\_${userId}\\_%`, `dm\\_%\\_${userId}`);
+
   const partners = db.prepare(`
     SELECT DISTINCT CASE WHEN user_id = ? THEN to_user_id ELSE user_id END AS other
     FROM messages
@@ -2575,7 +2578,7 @@ function getReplyPreview(messageId) {
   if (!parent) return null;
 
   if (parent.kind === 'deleted') {
-    return { id: parent.id, username: parent.username, preview: null, kind: 'deleted' };
+    return { id: parent.id, username: null, preview: null, kind: 'deleted' };
   }
 
   const preview = parent.content
@@ -2615,15 +2618,105 @@ function hydrateMessage(row, viewerId = null) {
   return result;
 }
 
+// ---- Silinmiş mesaj (mezar taşı) yaşam döngüsü ---------------------------------------------------------------------------------
+// Kullanıcı mesajını silince satır ("mezar taşı") kalır, ama kişisel/ilişkisel HİÇBİR şey kalmaz: user_id NULL, username '', içerik/medya yok, düzenlendi bayrağı 0,
+// reply/forward bağlantısı yok, sabitleme yok; tepkiler ve anket oyları silinir. Yalnızca sohbet sırasını/bağlamı korumak için id, oda, hub_id, to_user_id
+// (DM'de sohbetin diğer tarafı; gönderen bundan çıkarılır), created_at ve kind='deleted' kalır.
+// FORWARD: iletme, içeriği bağımsız bir satıra kopyalar (forwarded_from_message_id ile). Kaynağı (kök) silinince ya da kök mesajın sahibi hesabını silince
+// bu kopyaların içeriği de yaşamamalı: kopyalar (zincir halinde iletilenler dahil) içeriksiz mezar taşına çevrilir; kopyanın kendisi başka bir kullanıcıya ait
+// olsa da içeriği o kaynağa aittir. Bir KOPYA silinirse yalnızca o silinir; ondan iletilenler kaynağa yeniden bağlanır (zincir korunur).
+const TOMBSTONE_SET = `kind = 'deleted', content = '', payload = NULL, user_id = NULL, username = '', edited = 0,
+  reply_to_message_id = NULL, forwarded_from_message_id = NULL, pinned_at = NULL, pinned_by = NULL`;
+
+// Transaction İÇİNDE çağrılır.
+function tombstoneMessageRows(ids) {
+  const ids2 = Array.from(new Set(ids));
+  ids2.forEach((id) => {
+    db.prepare(`UPDATE messages SET ${TOMBSTONE_SET} WHERE id = ?`).run(id);
+    db.prepare(`DELETE FROM message_reactions WHERE message_id = ?`).run(id);
+    db.prepare(`DELETE FROM hub_poll_votes WHERE message_id = ?`).run(id);
+  });
+}
+
+// Verilen kök mesajların (zincir halinde) TÜM canlı forward kopyaları: { id, user_id, to_user_id }
+function forwardCopiesOf(rootIds) {
+  if (!rootIds.length) return [];
+  return db.prepare(`
+    WITH RECURSIVE d(id) AS (
+      SELECT id FROM messages WHERE forwarded_from_message_id IN (SELECT value FROM json_each(?))
+      UNION
+      SELECT m.id FROM messages m JOIN d ON m.forwarded_from_message_id = d.id
+    )
+    SELECT id, user_id, to_user_id FROM messages WHERE id IN (SELECT id FROM d) AND kind != 'deleted'
+  `).all(JSON.stringify(rootIds));
+}
+
 function deleteMessage(messageId, userId) {
-  const msg = db.prepare(`SELECT user_id, hub_id, to_user_id, kind FROM messages WHERE id = ?`).get(messageId);
-  if (!msg) return { success: false, error: 'Mesaj bulunamadı.' };
-  if (msg.user_id !== userId) return { success: false, error: 'Yalnızca kendi mesajını silebilirsin.' };
-  if (msg.kind === 'deleted') return { success: false, error: 'Mesaj zaten silinmiş.' };
+  const run = db.transaction(() => {
+    const msg = db.prepare(`SELECT user_id, hub_id, to_user_id, kind, forwarded_from_message_id FROM messages WHERE id = ?`).get(messageId);
+    if (!msg) return { success: false, error: 'Mesaj bulunamadı.' };
+    if (msg.kind === 'deleted') return { success: false, error: 'Mesaj zaten silinmiş.' };
+    if (msg.user_id !== userId) return { success: false, error: 'Yalnızca kendi mesajını silebilirsin.' };
 
-  db.prepare(`UPDATE messages SET kind = 'deleted', content = '', payload = NULL WHERE id = ?`).run(messageId);
+    let copies = [];
+    if (msg.forwarded_from_message_id == null) {
+      copies = forwardCopiesOf([messageId]); // kök: iletilen tüm kopyalar da içeriksiz kalır
+    } else {
+      // kopya: yalnızca kendisi silinir; ondan iletilenler zinciri koparmamak için üst kaynağa bağlanır
+      db.prepare(`UPDATE messages SET forwarded_from_message_id = ? WHERE forwarded_from_message_id = ?`).run(msg.forwarded_from_message_id, messageId);
+    }
 
-  return { success: true, id: messageId, hub_id: msg.hub_id, to_user_id: msg.to_user_id };
+    tombstoneMessageRows([messageId, ...copies.map(c => c.id)]);
+
+    return { success: true, id: messageId, hub_id: msg.hub_id, to_user_id: msg.to_user_id, forward_copies: copies };
+  });
+
+  return run();
+}
+
+// Hesap silme (deleteAccount transaction'ı İÇİNDE): silinen hesabın içeriğinin forward kopyaları başkalarının satırlarında yaşamaya devam etmesin.
+// - Hesabın KENDİ kopyaları (başkasından iletilmiş): onlardan iletilenler kaynağa yeniden bağlanır (zincir korunur; içerik o hesaba ait değildir).
+// - Hesabın KÖK mesajları (kendi yazdığı, iletilmemiş): tüm forward kopyaları (başkalarına ait satırlar dahil) içeriksiz mezar taşı olur.
+// Hesabın kendi satırlarına dokunulmaz (mevcut hesap silme adımları işler). Dönen liste, canlı arayüz güncellemesi için kullanılır.
+function tombstoneForwardCopiesForDeletedUser(userId) {
+  db.prepare(`SELECT id, forwarded_from_message_id AS parent FROM messages WHERE user_id = ? AND forwarded_from_message_id IS NOT NULL ORDER BY id DESC`).all(userId)
+    .forEach(c => db.prepare(`UPDATE messages SET forwarded_from_message_id = ? WHERE forwarded_from_message_id = ?`).run(c.parent, c.id));
+
+  const roots = db.prepare(`SELECT id FROM messages WHERE user_id = ? AND forwarded_from_message_id IS NULL AND kind != 'deleted'`).all(userId).map(r => r.id);
+  const copies = forwardCopiesOf(roots).filter(c => c.user_id !== userId);
+  tombstoneMessageRows(copies.map(c => c.id));
+  return copies;
+}
+
+// Açılışta bir kez (idempotent): ESKİ sürümde silinen mesajlarda kalmış kalıntıları temizler — user_id/username/ilişkiler, tepkiler, anket oyları, sabitleme —
+// ve silinmiş kök mesajların forward kopyalarını içeriksiz bırakır. Hesap silme mezar taşlarına (user_id zaten NULL) dokunmaz.
+function purgeDeletedMessageResidue() {
+  db.pragma('secure_delete = ON');
+  try {
+    return db.transaction(() => {
+      const result = { tombstones: 0, copies: 0, reactions: 0 };
+      const legacy = db.prepare(`SELECT id, forwarded_from_message_id AS parent FROM messages WHERE kind = 'deleted' AND user_id IS NOT NULL ORDER BY id DESC`).all();
+
+      legacy.forEach((row) => {
+        if (row.parent != null) {
+          db.prepare(`UPDATE messages SET forwarded_from_message_id = ? WHERE forwarded_from_message_id = ?`).run(row.parent, row.id);
+        } else {
+          const copies = forwardCopiesOf([row.id]);
+          tombstoneMessageRows(copies.map(c => c.id));
+          result.copies += copies.length;
+        }
+        tombstoneMessageRows([row.id]);
+        result.tombstones += 1;
+      });
+
+      result.reactions = db.prepare(`DELETE FROM message_reactions WHERE message_id IN (SELECT id FROM messages WHERE kind = 'deleted')`).run().changes
+        + db.prepare(`DELETE FROM hub_poll_votes WHERE message_id IN (SELECT id FROM messages WHERE kind = 'deleted')`).run().changes;
+      db.prepare(`UPDATE messages SET pinned_at = NULL, pinned_by = NULL WHERE kind = 'deleted' AND (pinned_at IS NOT NULL OR pinned_by IS NOT NULL)`).run();
+      return result;
+    })();
+  } finally {
+    db.pragma('secure_delete = OFF');
+  }
 }
 
 function editMessage(messageId, userId, newContent) {
@@ -3025,6 +3118,9 @@ function deleteAccount(userId) {
     // hesabın numarası geçen odalar artık öksüzdür. Odanın var olup olmadığı bilinmez: Daily'de yoksa (404) silme başarılı sayılır.
     const dmCallRooms = enqueueDmCallRoomsForDeletedUser(userId);
 
+    // Bu hesabın içeriğinin forward kopyaları (başkalarının satırlarında) içeriksiz mezar taşı olur; hesabın kendi kopyalarından iletilenler kaynağa bağlanır.
+    const forwardTombstoned = tombstoneForwardCopiesForDeletedUser(userId);
+
     // DM'ler: kendi mesajların silinir (mezar taşı bırakılır), karşı tarafın mesajları korunur (bkz. handleDmsOnAccountDeletion).
     const dmPartners = handleDmsOnAccountDeletion(userId);
     // Geriye kalan (lobi vb.) mesajları silinir; DM satırları yukarıda işlendi.
@@ -3040,16 +3136,17 @@ function deleteAccount(userId) {
     const info = db.prepare(`DELETE FROM users WHERE id = ?`).run(userId);
     if (info.changes !== 1) throw new Error('Hesap silinemedi (kullanıcı satırı silinmedi).');
 
-    return { purgedHubs, dmPartners, dmCallRooms };
+    return { purgedHubs, dmPartners, dmCallRooms, forwardTombstoned };
   });
 
-  const { purgedHubs, dmPartners, dmCallRooms } = run();
+  const { purgedHubs, dmPartners, dmCallRooms, forwardTombstoned } = run();
 
   return {
     success: true,
     hub_ids: purgedHubs.map(h => h.hubId),
     voice_room_ids: purgedHubs.flatMap(h => h.voiceRoomIds),
     daily_room_names: [...purgedHubs.flatMap(h => h.dailyRoomNames), ...dmCallRooms],
+    forward_tombstoned: forwardTombstoned,
     dm_partners: dmPartners
   };
 }
@@ -3543,7 +3640,7 @@ function describeReportTarget(targetType, targetId) {
     }
     if (targetType === 'message') {
       const m = db.prepare(`SELECT username, content, kind, payload FROM messages WHERE id = ?`).get(targetId);
-      if (!m) return 'Mesaj (silinmiş)';
+      if (!m || m.kind === 'deleted') return 'Mesaj (silinmiş)';
       const kindLabel = describeMessageKindLabel(m.kind, m.content, m.payload);
       return `Mesaj (${m.username}): ${kindLabel}`;
     }
@@ -3881,7 +3978,13 @@ function getDmMessages(userId, otherUserId, limit = 50) {
     ORDER BY messages.id DESC LIMIT ?
   `).all(dmRoom(userId, otherUserId), limit);
 
-  return rows.reverse().map((row) => hydrateMessage(row, userId));
+  // Silinmiş (mezar taşı) satırlarda user_id yoktur; to_user_id sohbetin alıcı tarafını verir, gönderen ise diğer taraftır (yalnızca arayüzde hizalama için).
+  return rows.reverse().map((row) => {
+    if (row.kind === 'deleted' && row.user_id === null && row.to_user_id !== null) {
+      row = { ...row, user_id: row.to_user_id === userId ? otherUserId : userId };
+    }
+    return hydrateMessage(row, userId);
+  });
 }
 
 // =====================================================
@@ -4937,6 +5040,9 @@ function unsuspendAccount({ actorId, targetId, internalReason }) {
 // Açılışta eski/geçersiz görev bildirimlerini temizle (idempotent).
 cleanupStalePlatformNotices();
 
+// Eski sürümden kalan silinmiş-mesaj kalıntıları (tüm tablolar/sütunlar yukarıda hazır olduktan sonra) açılışta bir kez temizlenir.
+purgeDeletedMessageResidue();
+
 module.exports = {
   isAccountSuspended,
   suspendAccount,
@@ -5055,6 +5161,7 @@ module.exports = {
   isMinorUntil,
   computeMinorUntil,
   purgeAdultBirthDates,
+  purgeDeletedMessageResidue,
   MIN_SIGNUP_AGE,
   getAccountExport,
   isBlocked,
