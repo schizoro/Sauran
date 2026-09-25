@@ -8,7 +8,7 @@
 | Kopya | Var mı | Yaşam döngüsü / kontrol |
 |---|---|---|
 | Canlı DB `sauran.db` (+ `-wal`, `-shm`) | Evet (`DATA_DIR`, Render kalıcı diski) | Uygulama cleanup'ları. **Silinen içerik dosyada sıfırlanır** (`secure_delete = ON`, bağlantı düzeyinde); WAL saatte bir ve kapanışta kesilir. `DATA_DIR` **herkese açık `client/` dizininin içinde olamaz**: öyleyse sunucu başlamaz (kritik hata). Sunucu yalnızca `client/` dizinini servis eder. |
-| Uygulamanın kendiliğinden aldığı yedek | **Evet (kapalı beta, üretimde varsayılan AÇIK; `AUTO_BACKUP=off` ile kapanır)** | Günde bir **asgari** yedek + bütünlük denetimi + sağlama toplamı (`.sha256`); en fazla `BACKUP_KEEP` (7) adet ve 7 gün. Off-site (şifreli, S3 uyumlu) yükleme YAPILANDIRILMADIKÇA yedekler yalnızca sunucu diskindedir. Bkz. `docs/uretim-operasyon.md`. |
+| Uygulamanın kendiliğinden aldığı yedek | **Hayır** (otomatik yedek kişisel veri kopyası sayısını artırırdı) | — |
 | Elle alınan yedek (`node server/backup.js`) | Yalnızca operatör çalıştırırsa | `DATA_DIR/backups/`, izin 0600/0700, dosya adı yalnızca zaman damgası + tür. **Asgari** yedekte oturum, bekleyen kayıt, sıfırlama kodu, push/FCM anahtarları, **bildirimler ve e-posta kuyruğu BOŞ**. **7 gün** sonra sunucu tarafından otomatik silinir (`BACKUP_RETENTION_DAYS` ile değiştirilebilir, `BACKUP_CLEANUP=off` ile kapatılabilir). `--list` (kalan süre), `--purge` (elle temizlik), `--full` (yalnızca gerekirse). |
 | Migration öncesi yedek | Operatör isteğine bağlı | Yukarıdaki araçla alınır; **kalıcı arşiv değildir**: doğrulama biter bitmez elle silinmeli, unutulursa 7 gün sonra otomatik silinir. `DATA_DIR` kökündeki `sauran.db.bak*`, `sauran.db.pre-*`, `sauran-premigration*`, `sauran-export*`, `sauran-dump*` gibi **açıkça geçici adlı** eski dosyalar da 7 gün sonra silinir. |
 | Dışa aktarım dosyaları | Sunucuda dosya **yazılmaz**; bellekte üretilir, `Cache-Control: no-store` ile indirilir | Kullanıcının kendi cihazındaki kopya kullanıcının sorumluluğundadır. |
@@ -47,11 +47,3 @@
 * `SIGTERM` ile zarif kapanış POSIX'te (Render) çalışır; Windows'ta sinyal işleyici tetiklenmez.
 * Yedek temizliği yalnızca uygulama çalışırken (açılışta + günde bir) işler.
 * Render tarafı yedeklerini kodla silemeyiz/kısaltamayız; süreler Render ayarları ve hesabı üzerinden doğrulanmalıdır.
-
-
-## Güncelleme (kapalı beta): otomatik yedek ve geri yükleme
-
-- Günlük otomatik yedek: `server/backup.js` `runAutoBackup` (açılıştan 2 dk sonra ve 24 saatte bir). Asgari yedek → `PRAGMA integrity_check` → SHA-256 → (yapılandırılmışsa) AES-256-GCM ile şifrelenmiş off-site yükleme → eski yedek temizliği.
-- Doğrulama: `node server/backup.js --verify <dosya>`; geri yükleme: `node server/backup.js --restore <dosya> --to <hedef>` (var olan dosyanın üzerine yazmaz; canlı DB'yi doğrudan değiştirmez).
-- **Kişisel veri kopyası sayısı arttı:** yedekler kişisel veri içerir; saklama 7 gün/7 adet. Gizlilik politikası güncellendi. **Hukuki doğrulama gerekli.**
-- Off-site sağlayıcı seçilmediği için şu an uzak kopya YOKTUR; yapılandırma sözleşmesi `docs/uretim-operasyon.md`'de.

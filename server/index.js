@@ -1,6 +1,5 @@
 require('dotenv').config();
-const { purgeOldBackups, runAutoBackup, latestBackupInfo } = require('./backup');
-const offsite = require('./offsite');
+const { purgeOldBackups } = require('./backup');
 const { sendInactivityWarningEmail, sendAccountExistsEmail, sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail } = require('./mailer');
 const push = require('./push');
 const fcm = require('./fcm');
@@ -10,7 +9,6 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
-const fs = require('fs');
 const crypto = require('crypto');
 
 const {
@@ -167,8 +165,6 @@ const {
   REPORT_PRIORITIES,
   db
 } = require('./db');
-const beta = require('./beta');
-const { db: betaDb, writeAuditLog: betaAudit } = require('./db');
 
 const app = express();
 
@@ -185,7 +181,6 @@ const server = http.createServer(app);
 // (ör. ayrı bir mobil/istemci alan adı), ALLOWED_ORIGINS ortam değişkenine
 // virgülle ayrılmış origin listesi eklenmelidir.
 const isProduction = process.env.NODE_ENV === 'production';
-const autoBackupEnabled = () => isProduction && String(process.env.AUTO_BACKUP || '').toLowerCase() !== 'off';
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean);
 
 // Üretimde VARSAYILAN: yalnızca AYNI ORIGIN (Origin başlığı, isteğin Host'uyla eşleşir) + ALLOWED_ORIGINS listesi. Eskiden ALLOWED_ORIGINS boşken her origin
@@ -249,7 +244,6 @@ const makeCodeLimiters = () => [
 const verifyLimiters = makeCodeLimiters();
 const resetConfirmLimiters = makeCodeLimiters();
 
-const betaFeedbackLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 15, keyFn: byIp, message: 'Çok fazla geri bildirim gönderdin. Biraz sonra tekrar dene.' });
 const registerLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyFn: byIp, message: 'Çok fazla kayıt denemesi. Biraz sonra tekrar dene.' });
 const passwordChangeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, keyFn: byIp, message: 'Çok fazla şifre değiştirme denemesi. Biraz sonra tekrar dene.' });
 const accountDeleteLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyFn: byIp, message: 'Çok fazla hesap silme denemesi. Biraz sonra tekrar dene.' });
@@ -307,59 +301,14 @@ if (require('./backup').isInsidePublicDir(process.env.DATA_DIR || path.join(__di
   process.exit(1);
 }
 
-// =====================================================
-// SAĞLIK (health) — Render sağlık kontrolü ve founder/admin işletme özeti
-// =====================================================
-// /healthz: herkese açık, YALNIZCA durum (kişisel veri, sürüm, yapılandırma değeri yok). Veritabanı yanıt vermezse 503.
-// /api/admin/health: founder/admin; süreç, veritabanı boyutu, gerçek zamanlı bağlantı sayısı, yedek durumu ve yapılandırma özeti
-// (yalnızca "ayarlı/eksik"; hiçbir gizli değer, e-posta ya da kullanıcı verisi içermez).
-const serverStartedAt = Date.now();
-let lastAutoBackup = null;
-
-function dbHealth() {
-  try {
-    db.prepare('SELECT 1').get();
-    return { ok: true };
-  } catch (_) { return { ok: false }; }
-}
-
-app.get('/healthz', (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-  const d = dbHealth();
-  res.status(d.ok ? 200 : 503).json({ status: d.ok ? 'ok' : 'degraded', db: d.ok ? 'ok' : 'error', uptime_s: Math.round(process.uptime()) });
-});
-
-app.get('/api/admin/health', (req, res) => {
-  const user = requirePlatformRole(req, res, 'admin');
-  if (!user) return;
-  const fileMb = (f) => { try { return Math.round(fs.statSync(f).size / 1048576 * 10) / 10; } catch (_) { return null; } };
-  const dataDir = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
-  const cfg = (() => { try { return require('./preflight').checkConfig(process.env).filter((r) => r.level !== 'ok').map((r) => ({ level: r.level, key: r.key })); } catch (_) { return []; } })();
-  res.json({
-    success: true,
-    process: { uptime_s: Math.round(process.uptime()), started_at: new Date(serverStartedAt).toISOString(), node: process.version, memory_mb: Math.round(process.memoryUsage().rss / 1048576) },
-    db: { ...dbHealth(), size_mb: fileMb(path.join(dataDir, 'sauran.db')), wal_mb: fileMb(path.join(dataDir, 'sauran.db-wal')) },
-    realtime: { connections: io.engine ? io.engine.clientsCount : null },
-    services: { daily: daily.isConfigured(), web_push: push.isConfigured(), fcm: fcm.isConfigured(), mail_configured: Boolean(String(process.env.ZOHO_EMAIL_PASSWORD || '').trim()) },
-    backup: { latest: latestBackupInfo(), auto_enabled: autoBackupEnabled(), last_run: lastAutoBackup, offsite: offsite.status() },
-    config_warnings: cfg,
-    beta: { invite_required: beta.isRequired() }
-  });
-});
-
 // Kişisel veri taşıyan API yanıtları (dışa aktarım dahil) tarayıcı/proxy önbelleğine alınmaz.
 app.use('/api', (req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 
 app.use(express.static(path.join(__dirname, '..', 'client'), {
   etag: false,
   lastModified: false,
-  setHeaders: (res, filePath) => {
+  setHeaders: (res) => {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    if (/\.apk$/i.test(filePath)) {
-      res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-      res.setHeader('Content-Disposition', 'attachment');
-      res.setHeader('X-Content-Type-Options', 'nosniff');
-    }
   }
 }));
 
@@ -509,18 +458,7 @@ app.post('/api/register', registerLimiter, async (req, res) => {
   try {
     const { username, email, password, birth_date, terms_accepted } = req.body;
 
-    // Kapalı beta: geçerli davet kodu olmadan kayıt başlamaz (kod burada yalnızca doğrulanır; tüketimi e-posta doğrulamasında olur).
-    let betaInviteId = null;
-    if (beta.isRequired()) {
-      const v = beta.validateCode(req.body && req.body.invite_code);
-      if (!v.ok) return res.status(400).json({ success: false, error: 'Geçerli bir beta davet kodu gerekli.', invite_required: true });
-      betaInviteId = v.id;
-    }
-
     const result = createVerification(username, email, password, birth_date, terms_accepted);
-    if (result.success && result.code && betaInviteId) {
-      betaDb.prepare(`UPDATE pending_verifications SET beta_invite_id = ? WHERE LOWER(email) = LOWER(?)`).run(betaInviteId, String(email || '').trim().toLowerCase());
-    }
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -1673,83 +1611,6 @@ function requirePlatformRole(req, res, minRole) {
 
   return user;
 }
-
-// =====================================================
-// KAPALI BETA: davet kodları (yalnız founder) + geri bildirim
-// =====================================================
-
-app.get('/api/beta/status', (req, res) => {
-  res.json({ success: true, invite_required: beta.isRequired() });
-});
-
-app.post('/api/beta/feedback', betaFeedbackLimiter, (req, res) => {
-  const user = requireAuth(req, res);
-  if (!user) return;
-  const result = beta.createFeedback(user.id, req.body || {});
-  return res.status(result.success ? 200 : 400).json(result);
-});
-
-app.get('/api/admin/beta', adminWriteLimiter, (req, res) => {
-  const user = requirePlatformRole(req, res, 'founder');
-  if (!user) return;
-  res.json({ success: true, invite_required: beta.isRequired(), env_override: String(process.env.BETA_INVITE_REQUIRED || '').toLowerCase() === 'off', invites: beta.listInvites(), categories: beta.FEEDBACK_CATEGORIES });
-});
-
-app.post('/api/admin/beta/mode', adminWriteLimiter, (req, res) => {
-  const user = requirePlatformRole(req, res, 'founder');
-  if (!user) return;
-  const enabled = req.body && req.body.invite_required === true;
-  betaDb.transaction(() => {
-    beta.setRequired(enabled);
-    betaAudit({ actorUserId: user.id, action: 'beta_mode_changed', targetUserId: user.id, reason: 'Beta davet modu', oldValue: null, newValue: enabled ? 'on' : 'off' });
-  })();
-  res.json({ success: true, invite_required: beta.isRequired() });
-});
-
-app.post('/api/admin/beta/invites', adminWriteLimiter, (req, res) => {
-  const user = requirePlatformRole(req, res, 'founder');
-  if (!user) return;
-  try {
-    const b = req.body || {};
-    const invite = betaDb.transaction(() => {
-      const created = beta.createInvite({ createdBy: user.id, label: b.label, maxUses: b.max_uses, expiresInDays: b.expires_in_days });
-      betaAudit({ actorUserId: user.id, action: 'beta_invite_created', targetUserId: user.id, reason: `Davet #${created.id}`, oldValue: null, newValue: null });
-      return created;
-    })();
-    // Kodun kendisi YALNIZCA burada, bir kez gösterilir (veritabanında yalnızca özeti tutulur).
-    res.json({ success: true, invite });
-  } catch (error) {
-    console.error('Beta daveti oluşturulamadı:', error && error.message);
-    res.status(500).json({ success: false, error: 'Davet oluşturulamadı.' });
-  }
-});
-
-app.post('/api/admin/beta/invites/:id/revoke', adminWriteLimiter, (req, res) => {
-  const user = requirePlatformRole(req, res, 'founder');
-  if (!user) return;
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ success: false, error: 'Geçersiz davet.' });
-  const ok = betaDb.transaction(() => {
-    const changed = beta.revokeInvite(id);
-    if (changed) betaAudit({ actorUserId: user.id, action: 'beta_invite_revoked', targetUserId: user.id, reason: `Davet #${id}`, oldValue: null, newValue: null });
-    return changed;
-  })();
-  res.json({ success: ok });
-});
-
-app.get('/api/admin/beta/feedback', (req, res) => {
-  const user = requirePlatformRole(req, res, 'admin');
-  if (!user) return;
-  res.json({ success: true, feedback: beta.listFeedback({ status: req.query.status }), categories: beta.FEEDBACK_CATEGORIES, statuses: beta.FEEDBACK_STATUSES });
-});
-
-app.post('/api/admin/beta/feedback/:id/status', adminWriteLimiter, (req, res) => {
-  const user = requirePlatformRole(req, res, 'admin');
-  if (!user) return;
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ success: false, error: 'Geçersiz kayıt.' });
-  res.json({ success: beta.setFeedbackStatus(id, req.body && req.body.status) });
-});
 
 app.get('/api/hubs', (req, res) => {
   const user = requireAuth(req, res);
@@ -3795,24 +3656,6 @@ server.listen(PORT, () => {
   };
   runBackupCleanup();
   setInterval(runBackupCleanup, 24 * 60 * 60 * 1000).unref();
-
-  // Günlük otomatik yedek (kapalı beta): üretimde varsayılan AÇIK (AUTO_BACKUP=off ile kapanır). Asgari yedek alınır, bütünlüğü doğrulanır,
-  // off-site depolama yapılandırılmışsa ŞİFRELENEREK yüklenir, eski yedekler temizlenir. Sonuç günlükte yalnızca sayılarla yer alır.
-  // İlk çalışma açılıştan 2 dakika sonradır (açılış yükünü artırmasın).
-  const runScheduledBackup = async () => {
-    if (!autoBackupEnabled()) return;
-    try {
-      const r = await runAutoBackup();
-      lastAutoBackup = { at: new Date().toISOString(), ok: true, file: r.file, offsite: r.offsite.uploaded ? 'uploaded' : (r.offsite.reason || 'skipped') };
-      logDataLifecycle('backup_created', { backups: 1, offsite_uploaded: r.offsite.uploaded ? 1 : 0 });
-      console.log(`Otomatik yedek alındı ve doğrulandı; off-site: ${r.offsite.uploaded ? 'yüklendi' : 'yüklenmedi (' + (r.offsite.reason || '-') + ')'}.`);
-    } catch (error) {
-      lastAutoBackup = { at: new Date().toISOString(), ok: false, error: String(error.message).slice(0, 120) };
-      console.error('Otomatik yedek hatası:', error.message);
-    }
-  };
-  setTimeout(runScheduledBackup, 2 * 60 * 1000).unref();
-  setInterval(runScheduledBackup, 24 * 60 * 60 * 1000).unref();
 
   // WAL dosyası saatte bir kesilir (silinen verinin eski sayfa görüntüleri diskte gereksiz kalmasın).
   setInterval(() => { checkpointWal(); }, 60 * 60 * 1000).unref();

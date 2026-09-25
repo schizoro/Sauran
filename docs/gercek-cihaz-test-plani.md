@@ -36,21 +36,3 @@ Tüm yapılandırma `node server/preflight.js` ile HATA'sız; test hesapları: A
 
 ## Sonuç kaydı
 Her madde için: cihaz/OS/sürüm, tarih, sonuç, ekran görüntüsü (kişisel veri içermemeli).
-
-## Kapalı beta ek senaryoları (elle uygulanır — bu ortamda YAPILMADI)
-
-### Android (release APK `1.0.0-beta.1`)
-- [ ] Temiz kurulum (siteden APK; bilinmeyen kaynak izni); eski debug APK varsa önce kaldır
-- [ ] Yeni kayıt (davet kodu ile), e-posta kodu, ilk giriş bildirimi (beta metni)
-- [ ] Mevcut hesapla giriş; uygulamayı kapatıp aç → oturum kalıyor mu; çıkış → giriş
-- [ ] Bildirim izni; mesaj/DM bildirimi; bildirime dokununca doğru ekran; uygulama arka planda/kilitli
-- [ ] DM, lobi, sesli oda: mikrofon izni, mikrofon aç/kapa, kulaklık, Bluetooth, arka plana alma (ön plan servisi), ekran kilidi, Wi-Fi → mobil veri
-- [ ] Klavye: mesaj yazarken alan klavyenin üstünde kalıyor mu, sıçrama var mı
-- [ ] Ayarlar → Beta geri bildirim gönder; hesap silme; veri dışa aktarma
-
-### iPhone (Safari / ana ekran PWA)
-- [ ] Kayıt/giriş; ana ekrana ekle; bildirim izni ve bildirimi; arka plan; klavye; DM; lobi; sesli oda; oturumun kalması
-
-### Web / masaüstü
-- [ ] Kayıt (davet kodlu ve kodsuz reddedilme), giriş, DM, lobi, bildirim, sesli oda, rapor → moderasyon, dışa aktarım/silme
-- [ ] Founder: `admin.html → Beta` (davet oluştur/iptal, mod, geri bildirim)

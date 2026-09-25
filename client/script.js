@@ -1377,19 +1377,12 @@ async function register() {
     }
 
 
-    const inviteWrap = document.getElementById('register-invite-wrap');
-    const inviteCode = inviteWrap && inviteWrap.style.display !== 'none' ? document.getElementById('register-invite-input').value.trim() : '';
-    if (inviteWrap && inviteWrap.style.display !== 'none' && !inviteCode) {
-        showAuthError(t('register-invite-required'));
-        return;
-    }
-
-    openTermsModal({ username, email, password, birthDate, inviteCode });
+    openTermsModal({ username, email, password, birthDate });
 
 }
 
 
-async function submitRegistration({ username, email, password, birthDate, inviteCode }) {
+async function submitRegistration({ username, email, password, birthDate }) {
 
     registerBtn.disabled =
         true;
@@ -1418,8 +1411,7 @@ async function submitRegistration({ username, email, password, birthDate, invite
                         email,
                         password,
                         birth_date: birthDate,
-                        terms_accepted: true,
-                        invite_code: inviteCode || undefined
+                        terms_accepted: true
                     })
                 }
             );
@@ -2437,45 +2429,6 @@ settingsBtn.addEventListener(
 
 
 // =====================================================
-// KAPALI BETA: davet kodu alanı + geri bildirim
-// =====================================================
-
-const BETA_CATEGORIES = ['bug', 'usability', 'performance', 'voice', 'notification', 'android', 'iphone', 'web', 'idea', 'other'];
-
-fetch('/api/beta/status').then((r) => r.json()).then((d) => {
-    const wrap = document.getElementById('register-invite-wrap');
-    if (wrap && d && d.invite_required) wrap.style.display = 'block';
-}).catch(() => {});
-
-(function initBetaFeedback() {
-    const select = document.getElementById('beta-feedback-category');
-    const msg = document.getElementById('beta-feedback-message');
-    const send = document.getElementById('beta-feedback-send');
-    const status = document.getElementById('beta-feedback-status');
-    if (!select || !msg || !send) return;
-    const fill = () => {
-        const keep = select.value;
-        select.textContent = '';
-        BETA_CATEGORIES.forEach((c) => { const o = document.createElement('option'); o.value = c; o.textContent = t('beta-cat-' + c); select.appendChild(o); });
-        if (keep) select.value = keep;
-    };
-    fill();
-    select.addEventListener('focus', fill);
-    send.addEventListener('click', async () => {
-        status.textContent = '';
-        send.disabled = true;
-        try {
-            const context = (window.innerWidth <= 768 ? 'mobil' : 'masaüstü') + ' / ' + (currentHub ? 'lobi' : 'ana menü');
-            const res = await fetch('/api/beta/feedback', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ category: select.value, message: msg.value, context }) });
-            const data = await res.json();
-            if (data.success) { msg.value = ''; status.textContent = t('beta-feedback-sent'); }
-            else status.textContent = data.error || '';
-        } catch (e) { status.textContent = ''; }
-        send.disabled = false;
-    });
-})();
-
-// =====================================================
 // AYARLAR — KATEGORİ SEKMELERİ
 // =====================================================
 
@@ -3300,26 +3253,6 @@ const I18N = {
     'hub-info-online': { tr: 'Çevrimiçi', en: 'Online' },
     'hub-info-created': { tr: 'Oluşturulma', en: 'Created' },
     'close': { tr: 'Kapat', en: 'Close' },
-    'register-invite-placeholder': { tr: 'Beta davet kodu', en: 'Beta invite code' },
-    'register-invite-note': { tr: 'Sauran kapalı beta aşamasındadır; kayıt için davet kodu gerekir.', en: 'Sauran is in closed beta; an invite code is required to register.' },
-    'register-invite-required': { tr: 'Beta davet kodunu gir.', en: 'Enter your beta invite code.' },
-    'beta-note': { tr: 'Sauran şu anda kapalı beta aşamasındadır. Bazı hatalar veya kısa süreli kesintiler yaşanabilir.', en: 'Sauran is currently in closed beta. Some bugs or brief interruptions may occur.' },
-    'settings-tab-beta': { tr: 'Beta', en: 'Beta' },
-    'beta-feedback-title': { tr: 'Beta Geri Bildirim', en: 'Beta Feedback' },
-    'beta-feedback-help': { tr: 'Sauran kapalı beta aşamasındadır. Karşılaştığın hatayı ya da önerini buradan yaz; başka birinin özel bilgisini, şifreni veya kimlik bilgilerini yazma.', en: 'Sauran is in closed beta. Write the bug or idea you ran into here; do not include anyone else\'s private information, your password or ID details.' },
-    'beta-feedback-placeholder': { tr: 'Ne oldu? Nerede oldu? (en az birkaç kelime)', en: 'What happened? Where? (at least a few words)' },
-    'beta-feedback-send': { tr: 'Gönder', en: 'Send' },
-    'beta-feedback-sent': { tr: 'Teşekkürler! Geri bildirimin alındı.', en: 'Thank you! Your feedback was received.' },
-    'beta-cat-bug': { tr: 'Hata', en: 'Bug' },
-    'beta-cat-usability': { tr: 'Kullanım zorluğu', en: 'Usability' },
-    'beta-cat-performance': { tr: 'Performans', en: 'Performance' },
-    'beta-cat-voice': { tr: 'Sesli oda', en: 'Voice room' },
-    'beta-cat-notification': { tr: 'Bildirim', en: 'Notifications' },
-    'beta-cat-android': { tr: 'Android', en: 'Android' },
-    'beta-cat-iphone': { tr: 'iPhone', en: 'iPhone' },
-    'beta-cat-web': { tr: 'Web', en: 'Web' },
-    'beta-cat-idea': { tr: 'Özellik önerisi', en: 'Feature idea' },
-    'beta-cat-other': { tr: 'Diğer', en: 'Other' },
     'lobbies-title': { tr: 'Lobilerim', en: 'My lobbies' },
     'select-lobby': { tr: 'Bir lobi seç', en: 'Select a lobby' },
     'lobby-nav-open': { tr: 'Lobileri aç', en: 'Open lobbies' },
@@ -4220,23 +4153,21 @@ function connectToChat() {
 const DEV_NOTICE_COPY = {
     new: {
         tr: {
-            title: 'Sauran Kapalı Beta Aşamasında',
+            title: 'Sauran Geliştirme Sürecinde',
             paras: [
                 'Sauran şu anda aktif olarak geliştirilmeye devam ediyor. Geliştirme ve yazılım ekibimiz, uygulamanın performansını, kararlılığını ve yeni özelliklerini sürekli olarak iyileştirmek için çalışmalarını sürdürüyor.',
                 'Bu geliştirme sürecinde, sistem üzerinde yapılan bazı güncellemeler veya teknik çalışmalar nedeniyle zaman zaman kısa süreli bağlantı kesintileri yaşanabilir.',
                 'Bu kesintilerin süresi genellikle <strong>yaklaşık 30 saniye</strong> civarında olabilir. Ancak geliştirme çalışmalarının ve teknik güncellemelerin zamanlaması önceden sabit olmadığı için bu kesintilerin belirli veya düzenli bir zamanı bulunmamaktadır.',
-                'Sauran şu anda <strong>kapalı beta</strong> aşamasındadır: bazı özellikler değişebilir ve hatalarla karşılaşabilirsin. Bir sorun ya da önerin olursa <strong>Ayarlar → Beta</strong> bölümünden bize yazman çok değerli.',
                 'Çalışmalar sırasında göstereceğiniz anlayış için teşekkür ederiz. Sauran\'ı daha iyi, daha hızlı ve daha kararlı bir deneyim haline getirmek için çalışmaya devam ediyoruz.'
             ],
             sign: 'Sauran Geliştirme Ekibi'
         },
         en: {
-            title: 'Sauran Is in Closed Beta',
+            title: 'Sauran Is Under Development',
             paras: [
                 'Sauran is being actively developed. Our development and engineering team keeps working to continuously improve the app\'s performance, stability and new features.',
                 'During this process, some updates or technical work on the system may occasionally cause brief connection interruptions.',
                 'These interruptions usually last <strong>about 30 seconds</strong>. Since the timing of development work and technical updates is not fixed in advance, there is no specific or regular schedule for them.',
-                'Sauran is currently in <strong>closed beta</strong>: some features may change and you may run into bugs. If you hit a problem or have an idea, writing to us in <strong>Settings → Beta</strong> is very valuable.',
                 'Thank you for your understanding while we work. We are continuing to make Sauran a better, faster and more stable experience.'
             ],
             sign: 'The Sauran Development Team'

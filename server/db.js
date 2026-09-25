@@ -2091,27 +2091,10 @@ function verifyAndCreateUser(email, code) {
 
     const minor = isMinorUntil(pending.minor_until);
 
-    const betaInvites = require('./beta');
-    let result;
-    try {
-      result = db.transaction(() => {
-        // Kapalı beta: davet kodu bu noktada atomik tüketilir. Kayıt ile doğrulama arasında iptal/süre dolumu/tükenme olduysa kullanıcı oluşmaz.
-        const consumed = pending.beta_invite_id ? betaInvites.redeem(pending.beta_invite_id, null) : false;
-        if (betaInvites.isRequired() && !consumed) throw new Error('BETA_INVITE_INVALID');
-        const r = db.prepare(`
+    const result = db.prepare(`
       INSERT INTO users (username, email, password_hash, password_salt, minor_until, avatar_visibility, terms_accepted_at, dev_notice_new)
       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 1)
     `).run(pending.username, pending.email, pending.password_hash, pending.password_salt, minor ? pending.minor_until : null, minor ? 'friends' : 'public');
-        if (consumed) db.prepare(`UPDATE beta_invite_uses SET user_id = ? WHERE id = (SELECT MAX(id) FROM beta_invite_uses WHERE invite_id = ? AND user_id IS NULL)`).run(r.lastInsertRowid, pending.beta_invite_id);
-        return r;
-      })();
-    } catch (e) {
-      if (e && e.message === 'BETA_INVITE_INVALID') {
-        db.prepare(`DELETE FROM pending_verifications WHERE id = ?`).run(pending.id);
-        return { success: false, error: 'Davet kodu artık geçerli değil. Yeni bir davet kodu iste.' };
-      }
-      throw e;
-    }
 
     db.prepare(`DELETE FROM pending_verifications WHERE id = ?`).run(pending.id);
 
@@ -4121,7 +4104,6 @@ function getAccountExport(userId) {
     poll_votes: pollVotes,
     feedback,
     feedback_votes: feedbackVotes,
-    beta_feedback: require('./beta').listOwnFeedback(userId),
     notification_preferences: notificationPreferences,
     notification_devices: notificationDevices,
     sessions,
@@ -4902,7 +4884,7 @@ function withAuditMaintenance(fn) {
   })();
 }
 
-const AUDIT_ACTIONS = ['platform_role_changed', 'platform_role_accepted', 'platform_role_declined', 'account_suspended', 'account_unsuspended', 'beta_invite_created', 'beta_invite_revoked', 'beta_mode_changed'];
+const AUDIT_ACTIONS = ['platform_role_changed', 'platform_role_accepted', 'platform_role_declined', 'account_suspended', 'account_unsuspended'];
 const AUDIT_REASON_MAX = 200;
 const AUDIT_VALUE_MAX = 40;
 const AUDIT_MAX_LIMIT = 50;
@@ -5478,8 +5460,7 @@ function purgeExpiredIndefiniteData(now = new Date()) {
     invites: db.prepare(`DELETE FROM hub_invites WHERE COALESCE(last_used_at, created_at) < ? OR (max_uses IS NOT NULL AND uses >= max_uses AND COALESCE(last_used_at, created_at) < ?)`)
       .run(sqlTimeAgo(now, cfg.invite_idle_days), sqlTimeAgo(now, 7)).changes,
     pending_friend_requests: db.prepare(`DELETE FROM friendships WHERE status = 'pending' AND created_at < ?`).run(sqlTimeAgo(now, cfg.pending_friend_days)).changes,
-    feedback: db.prepare(`DELETE FROM feedback WHERE created_at < ?`).run(sqlTimeAgo(now, cfg.feedback_days)).changes,
-    beta: require('./beta').purgeExpired()
+    feedback: db.prepare(`DELETE FROM feedback WHERE created_at < ?`).run(sqlTimeAgo(now, cfg.feedback_days)).changes
   }))();
 }
 

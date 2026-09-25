@@ -3,10 +3,10 @@
   "appName": "Sauran",
   "webDir": "www",
   "server": {
-    "url": "https://sauran.online",
+    "url": "https://sauran.onrender.com",
     "androidScheme": "https",
     "cleartext": false,
-    "allowNavigation": ["sauran.online"]
+    "allowNavigation": ["sauran.onrender.com"]
   },
   "android": {
     "allowMixedContent": false,

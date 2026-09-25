@@ -37,8 +37,6 @@
 
             <!-- GİRİŞ FORMU -->
 
-            <p class="beta-note" data-i18n="beta-note">Sauran şu anda kapalı beta aşamasındadır. Bazı hatalar veya kısa süreli kesintiler yaşanabilir.</p>
-
             <div id="login-form">
 
                 <div class="field-float">
@@ -133,20 +131,6 @@
             <!-- KAYIT FORMU -->
 
             <div id="register-form" style="display: none;">
-
-                <div id="register-invite-wrap" style="display: none;">
-                    <input
-                        type="text"
-                        id="register-invite-input"
-                        data-i18n-placeholder="register-invite-placeholder"
-                        placeholder="Beta davet kodu"
-                        autocomplete="off"
-                        autocapitalize="characters"
-                        spellcheck="false"
-                        maxlength="16"
-                    >
-                    <p class="auth-terms-note" data-i18n="register-invite-note">Sauran kapalı beta aşamasındadır; kayıt için davet kodu gerekir.</p>
-                </div>
 
                 <input
                     type="text"
@@ -1150,7 +1134,6 @@
                 <button class="settings-tab-btn" data-settings-tab="privacy" type="button" data-i18n="settings-tab-privacy">Gizlilik</button>
                 <button class="settings-tab-btn" data-settings-tab="legal" type="button" data-i18n="settings-tab-legal">Gizlilik ve Yasal</button>
                 <button class="settings-tab-btn" data-settings-tab="account" type="button" data-i18n="settings-tab-account">Hesap</button>
-                <button class="settings-tab-btn" data-settings-tab="beta" type="button" data-i18n="settings-tab-beta">Beta</button>
             </div>
 
             <div class="poll-create-body settings-modal-body">
@@ -1277,17 +1260,6 @@
                     <a href="cocuk-guvenligi.html" target="_blank" rel="noopener" class="hub-settings-action-btn" style="text-decoration:none; display:block; box-sizing:border-box;">🛡️ <span data-i18n="settings-child-safety">Çocuk Güvenliği</span></a>
                     <a href="destek.html" target="_blank" rel="noopener" class="hub-settings-action-btn" style="text-decoration:none; display:block; box-sizing:border-box;">💬 <span data-i18n="settings-support">Destek &amp; İletişim</span></a>
                     <button id="settings-export-data-btn" class="hub-settings-action-btn" type="button">📦 <span data-i18n="settings-export-data">Verilerimi İndir</span></button>
-
-                </div>
-
-                <div class="settings-panel" data-settings-panel="beta" style="display:none;">
-
-                    <span class="profile-field-label" data-i18n="beta-feedback-title">Beta Geri Bildirim</span>
-                    <p class="beta-feedback-help" data-i18n="beta-feedback-help">Sauran kapalı beta aşamasındadır. Karşılaştığın hatayı ya da önerini buradan yaz; başka birinin özel bilgisini, şifreni veya kimlik bilgilerini yazma.</p>
-                    <select id="beta-feedback-category" class="beta-feedback-select"></select>
-                    <textarea id="beta-feedback-message" class="beta-feedback-text" maxlength="1500" rows="5" data-i18n-placeholder="beta-feedback-placeholder" placeholder="Ne oldu? Nerede oldu? (en az birkaç kelime)"></textarea>
-                    <div id="beta-feedback-status" class="friend-add-error" role="status"></div>
-                    <button id="beta-feedback-send" type="button" class="about-btn about-btn-primary poll-submit-btn" data-i18n="beta-feedback-send">Gönder</button>
 
                 </div>
 

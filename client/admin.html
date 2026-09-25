@@ -84,7 +84,6 @@
             <div class="adm-nav">
                 <button type="button" id="tab-users" class="active">Kullanıcılar</button>
                 <button type="button" id="tab-audit" style="display:none;">Audit Log</button>
-                <button type="button" id="tab-beta" style="display:none;">Beta</button>
                 <a href="/" id="t-back">← Uygulama</a>
                 <a href="moderation.html" id="t-moderation">Moderasyon Paneli</a>
             </div>
@@ -115,30 +114,6 @@
                 </div>
             </div>
 
-          </div>
-
-          <div id="adm-beta-view" style="display:none;">
-            <div class="adm-glass" id="beta-invites-box" style="display:none;">
-                <h2 style="margin:0 0 6px;font-size:15px;">Beta davetleri</h2>
-                <p class="adm-muted" style="font-size:12px;margin:0 0 14px;">Kayıt için davet kodu gerekli olduğunda yeni kullanıcılar bu kodlarla katılır. Kodun kendisi yalnızca oluşturulurken bir kez gösterilir.</p>
-                <div class="adm-toolbar">
-                    <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="beta-mode-toggle"> <span>Kayıt için davet kodu iste</span></label>
-                    <span id="beta-mode-note" class="adm-muted" style="font-size:12px;"></span>
-                </div>
-                <div class="adm-toolbar" style="margin-top:10px;">
-                    <input type="text" id="beta-label" placeholder="Etiket (ör. Ali)" maxlength="60">
-                    <input type="text" id="beta-max" inputmode="numeric" placeholder="Kullanım sayısı" value="1" style="flex:0 1 130px;min-width:100px;">
-                    <input type="text" id="beta-days" inputmode="numeric" placeholder="Gün (boş=süresiz)" value="7" style="flex:0 1 150px;min-width:110px;">
-                    <button type="button" id="beta-create" class="adm-apply-btn">Davet oluştur</button>
-                </div>
-                <div id="beta-new-code" style="display:none;margin:12px 0;padding:12px 14px;border-radius:12px;background:rgba(92,200,255,0.1);"></div>
-                <div id="beta-invite-list"></div>
-            </div>
-            <div class="adm-glass" style="margin-top:14px;">
-                <h2 style="margin:0 0 10px;font-size:15px;">Beta geri bildirimleri</h2>
-                <div class="adm-toolbar"><select id="beta-fb-filter"><option value="">Tümü</option><option value="new">Yeni</option><option value="seen">Görüldü</option><option value="resolved">Çözüldü</option></select></div>
-                <div id="beta-fb-list"></div>
-            </div>
           </div>
 
           <div id="adm-audit-view" style="display:none;">
@@ -205,7 +180,7 @@
                 auAllActions: 'Tüm işlemler', auActorPh: 'Yapan ID', auTargetPh: 'Hedef ID', auFrom: 'Başlangıç', auTo: 'Bitiş',
                 auEmpty: 'Kayıt bulunamadı.', auEntries: 'kayıt', auDeleted: 'silinmiş hesap',
                 auNote: 'Yönetim geçmişi yalnızca ekleme yapılarak tutulur; bu panelden değiştirilemez veya silinemez. Yalnızca yönetimsel değişiklikler kaydedilir, sayfa görüntülemeleri kaydedilmez.',
-                act_beta_invite_created: 'Beta daveti oluşturuldu', act_beta_invite_revoked: 'Beta daveti iptal edildi', act_beta_mode_changed: 'Beta modu değişti', act_platform_role_changed: 'Rol değişikliği', act_platform_role_accepted: 'Görev kabulü', act_platform_role_declined: 'Görev reddi', act_account_suspended: 'Hesap askıya alındı', act_account_unsuspended: 'Askı kaldırıldı'
+                act_platform_role_changed: 'Rol değişikliği', act_platform_role_accepted: 'Görev kabulü', act_platform_role_declined: 'Görev reddi', act_account_suspended: 'Hesap askıya alındı', act_account_unsuspended: 'Askı kaldırıldı'
             },
             en: {
                 title: '🛡️ SAURAN ADMIN PANEL', back: '← App', moderation: 'Moderation Panel',
@@ -237,7 +212,7 @@
                 auAllActions: 'All actions', auActorPh: 'Actor ID', auTargetPh: 'Target ID', auFrom: 'From', auTo: 'To',
                 auEmpty: 'No entries found.', auEntries: 'entries', auDeleted: 'deleted account',
                 auNote: 'The admin history is append-only; it cannot be changed or deleted from this panel. Only administrative changes are recorded, not page views.',
-                act_beta_invite_created: 'Beta invite created', act_beta_invite_revoked: 'Beta invite revoked', act_beta_mode_changed: 'Beta mode changed', act_platform_role_changed: 'Role changed', act_platform_role_accepted: 'Duty accepted', act_platform_role_declined: 'Duty declined', act_account_suspended: 'Account suspended', act_account_unsuspended: 'Suspension lifted'
+                act_platform_role_changed: 'Role changed', act_platform_role_accepted: 'Duty accepted', act_platform_role_declined: 'Duty declined', act_account_suspended: 'Account suspended', act_account_unsuspended: 'Suspension lifted'
             }
         };
 
@@ -498,7 +473,7 @@
             }
         }
 
-        const AUDIT_ACTIONS = ['platform_role_changed', 'platform_role_accepted', 'platform_role_declined', 'account_suspended', 'account_unsuspended', 'beta_invite_created', 'beta_invite_revoked', 'beta_mode_changed'];
+        const AUDIT_ACTIONS = ['platform_role_changed', 'platform_role_accepted', 'platform_role_declined', 'account_suspended', 'account_unsuspended'];
         const audit = { page: 1, limit: 20, total: 0, loaded: false };
 
         function who(id, username) {
@@ -548,9 +523,6 @@
         function showView(name) {
             $('adm-users-view').style.display = name === 'users' ? 'block' : 'none';
             $('adm-audit-view').style.display = name === 'audit' ? 'block' : 'none';
-            $('adm-beta-view').style.display = name === 'beta' ? 'block' : 'none';
-            $('tab-beta').classList.toggle('active', name === 'beta');
-            if (name === 'beta') betaLoad();
             $('tab-users').classList.toggle('active', name === 'users');
             $('tab-audit').classList.toggle('active', name === 'audit');
             if (name === 'audit') loadAudit().then(() => { audit.loaded = true; }).catch(showError);
@@ -563,57 +535,13 @@
                 const res = await fetch('/api/me', { credentials: 'include' });
                 const data = await res.json();
                 if (data.success && data.user.platform_role === 'founder') { isFounder = true; $('tab-audit').style.display = ''; }
-                if (data.success && (data.user.platform_role === 'founder' || data.user.platform_role === 'admin')) { $('tab-beta').style.display = ''; }
             } catch (e) {}
         }
-
-
-        // ── Beta davetleri ve geri bildirimler ─────────────────────────────────
-        const BETA_STATE = { active: 'Aktif', revoked: 'İptal', expired: 'Süresi doldu', used_up: 'Tükendi' };
-        const FB_CAT = { bug: 'Hata', usability: 'Kullanım', performance: 'Performans', voice: 'Sesli oda', notification: 'Bildirim', android: 'Android', iphone: 'iPhone', web: 'Web', idea: 'Öneri', other: 'Diğer' };
-        const FB_ST = { new: 'Yeni', seen: 'Görüldü', resolved: 'Çözüldü' };
-        const betaFmt = (v) => { if (!v) return '—'; const d = new Date(String(v).replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(v)) ? '' : 'Z')); return isNaN(d) ? esc(v) : d.toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' }); };
-        async function betaApi(method, url, body) {
-            const res = await fetch(url, { method, credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
-            return res.json();
-        }
-        async function betaLoad() {
-            if (isFounder) {
-                $('beta-invites-box').style.display = '';
-                const d = await betaApi('GET', '/api/admin/beta');
-                if (d.success) {
-                    $('beta-mode-toggle').checked = d.invite_required;
-                    $('beta-mode-toggle').disabled = d.env_override;
-                    $('beta-mode-note').textContent = d.env_override ? 'BETA_INVITE_REQUIRED=off ortam değişkeni bu ayarı geçersiz kılıyor.' : '';
-                    $('beta-invite-list').innerHTML = d.invites.length ? '<table class="adm-table"><thead><tr><th>#</th><th>Etiket</th><th>Kod sonu</th><th>Kullanım</th><th>Bitiş</th><th>Durum</th><th></th></tr></thead><tbody>' +
-                        d.invites.map((i) => `<tr><td data-label="#">${i.id}</td><td data-label="Etiket">${esc(i.label || '—')}</td><td data-label="Kod sonu">…${esc(i.code_hint)}</td><td data-label="Kullanım">${i.used_count}/${i.max_uses}</td><td data-label="Bitiş">${betaFmt(i.expires_at)}</td><td data-label="Durum">${esc(BETA_STATE[i.state] || i.state)}</td><td>${i.state === 'active' ? `<button type="button" class="adm-apply-btn" data-revoke="${i.id}">İptal et</button>` : ''}</td></tr>`).join('') + '</tbody></table>' : '<p class="adm-muted">Henüz davet yok.</p>';
-                }
-            }
-            const f = await betaApi('GET', '/api/admin/beta/feedback' + ($('beta-fb-filter').value ? '?status=' + encodeURIComponent($('beta-fb-filter').value) : ''));
-            $('beta-fb-list').innerHTML = f.success && f.feedback.length ? '<table class="adm-table"><thead><tr><th>Tarih</th><th>Kullanıcı</th><th>Kategori</th><th>Mesaj</th><th>Durum</th></tr></thead><tbody>' +
-                f.feedback.map((x) => `<tr><td data-label="Tarih">${betaFmt(x.created_at)}</td><td data-label="Kullanıcı">${esc(x.username || '—')}</td><td data-label="Kategori">${esc(FB_CAT[x.category] || x.category)}${x.context ? '<br><span class="adm-muted" style="font-size:11px;">' + esc(x.context) + '</span>' : ''}</td><td data-label="Mesaj" style="white-space:pre-wrap;">${esc(x.message)}</td><td data-label="Durum"><select data-fbid="${x.id}">${Object.keys(FB_ST).map((s) => `<option value="${s}" ${s === x.status ? 'selected' : ''}>${FB_ST[s]}</option>`).join('')}</select></td></tr>`).join('') + '</tbody></table>' : '<p class="adm-muted">Geri bildirim yok.</p>';
-        }
-        document.addEventListener('click', async (e) => {
-            const rv = e.target.closest && e.target.closest('[data-revoke]');
-            if (rv && confirm('Bu davet iptal edilsin mi?')) { await betaApi('POST', '/api/admin/beta/invites/' + rv.dataset.revoke + '/revoke', {}); betaLoad(); }
-            if (e.target.id === 'beta-create') {
-                const r = await betaApi('POST', '/api/admin/beta/invites', { label: $('beta-label').value, max_uses: $('beta-max').value, expires_in_days: $('beta-days').value });
-                const box = $('beta-new-code');
-                if (r.success) { box.style.display = 'block'; box.innerHTML = 'Yeni davet kodu (bir daha gösterilmez): <strong style="font-size:18px;letter-spacing:.12em;user-select:all;">' + esc(r.invite.code) + '</strong>'; $('beta-label').value = ''; betaLoad(); }
-                else { box.style.display = 'block'; box.textContent = r.error || 'Davet oluşturulamadı.'; }
-            }
-        });
-        document.addEventListener('change', async (e) => {
-            if (e.target.id === 'beta-mode-toggle') { await betaApi('POST', '/api/admin/beta/mode', { invite_required: e.target.checked }); betaLoad(); }
-            if (e.target.id === 'beta-fb-filter') betaLoad();
-            if (e.target.dataset && e.target.dataset.fbid) { await betaApi('POST', '/api/admin/beta/feedback/' + e.target.dataset.fbid + '/status', { status: e.target.value }); }
-        });
 
         let searchTimer = null;
         function wire() {
             $('tab-users').addEventListener('click', () => showView('users'));
             $('tab-audit').addEventListener('click', () => showView('audit'));
-            $('tab-beta').addEventListener('click', () => showView('beta'));
             ['au-action', 'au-actor', 'au-target', 'au-from', 'au-to'].forEach((id) => {
                 $(id).addEventListener(id === 'au-actor' || id === 'au-target' ? 'input' : 'change', () => { audit.page = 1; loadAudit().catch(showError); });
             });
