@@ -31,3 +31,8 @@ sauran-export-*
 sauran-dump-*
 server/mig_check.js
 server/_stg/
+
+# Android yayın imzası (asla depoya konmaz)
+mobile/android/keystore.properties
+mobile/android/*.keystore.properties
+mobile/dist/

@@ -147,7 +147,7 @@
         </nav>
 
         <header class="hero">
-            <span class="pill">Resmi Sauran sitesi</span>
+            <span class="pill">Resmi Sauran sitesi · Kapalı beta</span>
             <h1>Sesin, <span>topluluğun</span>,<br>tek yerde.</h1>
             <p class="lead">Sauran; arkadaşlarınla sesli odalarda buluşabildiğin, özel mesajlaşabildiğin ve kendi topluluğunu kurabildiğin modern bir sohbet uygulaması.</p>
             <div class="cta">
@@ -155,7 +155,7 @@
                 <a class="btn" href="/app">Giriş Yap</a>
                 <a class="btn" href="/app#kayit">Kayıt Ol</a>
             </div>
-            <p class="hint">Tarayıcıdan hemen kullan · Android uygulaması da mevcut</p>
+            <p class="hint">Sauran şu anda kapalı beta aşamasındadır. Kayıt için davet kodu gerekir · Tarayıcıdan kullan veya Android beta uygulamasını indir</p>
         </header>
 
         <section class="features" aria-label="Özellikler">
@@ -258,6 +258,36 @@
                 </details>
             </div>
         </section>
+
+        <section class="glass band" id="android-beta" aria-label="Android beta" style="margin-bottom:30px">
+            <h2>Sauran Android Beta</h2>
+            <p>Sauran'ın Android beta sürümünü Android cihazında deneyebilirsin. Bu, resmi Sauran uygulamasıdır; kapalı beta olduğu için bazı hatalar veya kısa süreli kesintiler yaşanabilir.</p>
+            <div class="cta" style="margin-top:0">
+                <a class="btn primary" id="apk-btn" href="/downloads/beta.json" download>Android APK'yı İndir</a>
+            </div>
+            <p class="hint" id="apk-meta">Sürüm bilgisi yükleniyor…</p>
+            <details style="max-width:560px;margin:14px auto 0;text-align:left">
+                <summary style="cursor:pointer;color:var(--muted)">Kurulum ve doğrulama</summary>
+                <p class="hint" style="margin-top:10px">Uygulama Google Play dışından yüklenir; Android, "bilinmeyen kaynaklardan yükleme" izni isteyebilir. Yalnızca <strong>sauran.online</strong> adresinden indirdiğin dosyayı kullan. İndirdikten sonra aşağıdaki SHA-256 değerini karşılaştırarak dosyanın değişmediğini doğrulayabilirsin.</p>
+                <p class="hint" style="word-break:break-all;font-family:monospace" id="apk-sha">—</p>
+            </details>
+        </section>
+        <script>
+            (function () {
+                try {
+                    fetch('/downloads/beta.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (m) {
+                        var btn = document.getElementById('apk-btn');
+                        btn.href = m.downloadUrl;
+                        btn.setAttribute('download', m.fileName);
+                        document.getElementById('apk-meta').textContent = 'Sürüm ' + m.currentVersion + ' · ' + (m.sizeBytes / 1048576).toFixed(1) + ' MB · Son güncelleme: ' + m.updatedAt;
+                        document.getElementById('apk-sha').textContent = 'SHA-256: ' + m.sha256;
+                    }).catch(function () {
+                        document.getElementById('apk-meta').textContent = 'Sürüm bilgisi şu anda alınamadı.';
+                        document.getElementById('apk-btn').style.display = 'none';
+                    });
+                } catch (e) {}
+            })();
+        </script>
 
         <section class="glass band">
             <h2>Hazırsan başlayalım.</h2>
