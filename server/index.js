@@ -2476,12 +2476,14 @@ function emitHubMessage(hubId, message) {
   const info = getHubPushInfo(hubId);
   if (!info) return;
 
+  const body = `${message.username}: ${messagePushPreview(message)}`;
+
   for (const memberId of info.member_ids) {
     if (memberId === message.user_id) continue;
 
     dispatchWebPush(memberId, 'hub_message', {
-      title: message.username,
-      body: messagePushPreview(message),
+      title: info.name,
+      body,
       url: `/?open_hub=${hubId}`,
       tag: `hub-${hubId}`
     }).catch(error => console.error('Web push gönderilemedi:', error));

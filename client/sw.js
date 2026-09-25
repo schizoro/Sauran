@@ -31,14 +31,11 @@ self.addEventListener('push', (event) => {
 
     const type = GENERIC_TYPES.includes(data.type) ? data.type : 'generic';
 
-    const rich = data.rich === true && (type === 'dm_message' || type === 'hub_message' || type === 'incoming_call')
-        && typeof data.title === 'string' && typeof data.body === 'string';
-
     event.waitUntil(
-        self.registration.showNotification(rich ? data.title.slice(0, 60) : 'Sauran', {
-            body: rich ? data.body.slice(0, 140) : GENERIC_BODY[type],
-            ...(rich ? {} : { tag: type }),
-            renotify: !rich,
+        self.registration.showNotification('Sauran', {
+            body: GENERIC_BODY[type],
+            tag: type,
+            renotify: true,
             data: { type }
         })
     );

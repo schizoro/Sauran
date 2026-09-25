@@ -70,23 +70,11 @@ function buildGenericContent({ type } = {}) {
   };
 }
 
-// Kullanıcının isteğiyle: yalnızca mesaj/arama türlerinde gönderen adı (title) ve mesaj önizlemesi (body) bildirimde görünür.
-// Diğer bütün türler (arkadaşlık, davet, yönetim bildirimleri...) sabit genel metinle kalır. Kimlik numarası, URL, etiket ya da lobi adı yine gönderilmez.
-const RICH_TYPES = new Set(['dm_message', 'hub_message', 'incoming_call']);
-const clip = (s, n) => String(s).replace(/\s+/g, ' ').trim().slice(0, n);
-function buildContent({ type, title, body } = {}) {
-  const generic = buildGenericContent({ type });
-  if (RICH_TYPES.has(type) && typeof title === 'string' && title.trim() && typeof body === 'string' && body.trim()) {
-    return { title: clip(title, 60), body: clip(body, 140), data: generic.data, rich: true };
-  }
-  return { ...generic, rich: false };
-}
-
-// Verilen cihaz anahtarlarına bildirim gönderir; artık geçersiz olan anahtarları döndürür.
-async function sendToTokens(tokens, { type, title, body } = {}) {
+// Verilen cihaz anahtarlarına GENEL bir bildirim gönderir; artık geçersiz olan anahtarları döndürür.
+async function sendToTokens(tokens, { type } = {}) {
   if (!configured || !tokens.length) return [];
 
-  const content = buildContent({ type, title, body });
+  const content = buildGenericContent({ type });
 
   const response = await messaging.sendEachForMulticast({
     tokens,
@@ -96,7 +84,7 @@ async function sendToTokens(tokens, { type, title, body } = {}) {
       priority: 'high',
       ttl: 60 * 60 * 1000,
       // Etiket yalnızca bildirim TÜRÜdür (kişiye/sohbete özgü değil): aynı türden bildirimler birikmek yerine tek bildirimde birleşir.
-      notification: { channelId: 'sauran_messages', icon: 'ic_stat_message', ...(content.rich ? {} : { tag: content.data.type }) }
+      notification: { channelId: 'sauran_messages', icon: 'ic_stat_message', tag: content.data.type }
     }
   });
 
@@ -114,6 +102,5 @@ async function sendToTokens(tokens, { type, title, body } = {}) {
 module.exports = {
   isConfigured: () => configured,
   sendToTokens,
-  buildGenericContent,
-  buildContent
+  buildGenericContent
 };
