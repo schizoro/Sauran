@@ -72,6 +72,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   border: 1px solid var(--border-soft); color: var(--text-primary);
 }
 .login-box input:focus { border-color: var(--accent-line); background: rgba(255, 255, 255, 0.055); box-shadow: none; }
+/* Floating label alanı: yukarıdaki genel input yüksekliği/dolgusu etiketle çakışmasın (etiket yukarı çıkınca değer altında kalır) */
+.login-box .field-float input { height: 54px; padding: 22px 14px 6px; line-height: 1.2; }
 .login-box button:not(.auth-switch button) {
   height: 46px; border-radius: 12px; background: var(--accent); color: #04202e; border: 0; font-weight: 550;
   transition: 0.18s var(--ease);
