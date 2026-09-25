@@ -6153,7 +6153,8 @@ async function openDm(userId, username) {
     setDmReadOnlyMode(false);
     activeDmUserId = userId;
     activeDmUsername = username;
-    dmModalTitle.textContent = `💬 ${username}`;
+    dmModalTitle.innerHTML = `${avatarButtonHtml(userId, null, username)}<span class="dm-title-name">${escapeHtml(username)}</span>`;
+    wireMsgAvatars(dmModalTitle);
     dmFeed.innerHTML = '';
 
     unreadDmCounts.delete(userId);
@@ -9849,7 +9850,15 @@ function renderHubMembers() {
         membersPanelTitle.textContent = `${currentHub.name} — ${t('members-title')} - ${currentHub.members.length}`;
     }
 
-    hubMemberList.innerHTML = currentHub.members.map((m) => {
+    // Sıra: kurucu, hemen altında moderatörler, sonra üyeler (grup içinde sunucu sırası korunur); yönetim ile üyeler arasında ince çizgi
+    const tierRank = { owner: 0, moderator: 1 };
+    const orderedMembers = currentHub.members
+        .map((m, i) => ({ m, i }))
+        .sort((x, y) => ((tierRank[x.m.permission_tier] ?? 2) - (tierRank[y.m.permission_tier] ?? 2)) || (x.i - y.i))
+        .map((x) => x.m);
+    const isStaffTier = (m) => m.permission_tier === 'owner' || m.permission_tier === 'moderator';
+
+    hubMemberList.innerHTML = orderedMembers.map((m, idx) => {
 
         const avatar = avatarButtonHtml(m.user_id, m.avatar_data, m.username);
         const isSelf = m.user_id === currentUser.id;
@@ -9857,7 +9866,10 @@ function renderHubMembers() {
 
         const showMenu = canModerate && !isSelf && m.permission_tier !== 'owner';
 
+        const divider = (idx > 0 && !isStaffTier(m) && isStaffTier(orderedMembers[idx - 1])) ? '<div class="hub-member-divider" role="separator"></div>' : '';
+
         return `
+            ${divider}
             <div class="hub-member-row" data-user-id="${m.user_id}" data-tier="${m.permission_tier}">
                 <span class="hub-member-avatar-wrap">
                     ${avatar}
