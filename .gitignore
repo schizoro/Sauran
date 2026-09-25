@@ -31,3 +31,11 @@ sauran-export-*
 sauran-dump-*
 server/mig_check.js
 server/_stg/
+
+# Gizli dosyalar (Android imzası, ortam değişkenleri, servis hesapları) — asla depoya konmaz
+key.properties
+keystore.properties
+.env.*
+!.env.example
+!*.env.example
+*service-account*.json
