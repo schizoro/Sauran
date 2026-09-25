@@ -165,6 +165,8 @@ const {
   REPORT_PRIORITIES,
   db
 } = require('./db');
+const beta = require('./beta');
+const { db: betaDb, writeAuditLog: betaAudit } = require('./db');
 
 const app = express();
 
@@ -244,6 +246,7 @@ const makeCodeLimiters = () => [
 const verifyLimiters = makeCodeLimiters();
 const resetConfirmLimiters = makeCodeLimiters();
 
+const betaFeedbackLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 15, keyFn: byIp, message: 'Çok fazla geri bildirim gönderdin. Biraz sonra tekrar dene.' });
 const registerLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyFn: byIp, message: 'Çok fazla kayıt denemesi. Biraz sonra tekrar dene.' });
 const passwordChangeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, keyFn: byIp, message: 'Çok fazla şifre değiştirme denemesi. Biraz sonra tekrar dene.' });
 const accountDeleteLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyFn: byIp, message: 'Çok fazla hesap silme denemesi. Biraz sonra tekrar dene.' });
@@ -307,8 +310,13 @@ app.use('/api', (req, res, next) => { res.setHeader('Cache-Control', 'no-store')
 app.use(express.static(path.join(__dirname, '..', 'client'), {
   etag: false,
   lastModified: false,
-  setHeaders: (res) => {
+  setHeaders: (res, filePath) => {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    if (/\.apk$/i.test(filePath)) {
+      res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+      res.setHeader('Content-Disposition', 'attachment');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+    }
   }
 }));
 
@@ -458,7 +466,18 @@ app.post('/api/register', registerLimiter, async (req, res) => {
   try {
     const { username, email, password, birth_date, terms_accepted } = req.body;
 
+    // Kapalı beta: geçerli davet kodu olmadan kayıt başlamaz (kod burada yalnızca doğrulanır; tüketimi e-posta doğrulamasında olur).
+    let betaInviteId = null;
+    if (beta.isRequired()) {
+      const v = beta.validateCode(req.body && req.body.invite_code);
+      if (!v.ok) return res.status(400).json({ success: false, error: 'Geçerli bir beta davet kodu gerekli.', invite_required: true });
+      betaInviteId = v.id;
+    }
+
     const result = createVerification(username, email, password, birth_date, terms_accepted);
+    if (result.success && result.code && betaInviteId) {
+      betaDb.prepare(`UPDATE pending_verifications SET beta_invite_id = ? WHERE LOWER(email) = LOWER(?)`).run(betaInviteId, String(email || '').trim().toLowerCase());
+    }
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -1611,6 +1630,83 @@ function requirePlatformRole(req, res, minRole) {
 
   return user;
 }
+
+// =====================================================
+// KAPALI BETA: davet kodları (yalnız founder) + geri bildirim
+// =====================================================
+
+app.get('/api/beta/status', (req, res) => {
+  res.json({ success: true, invite_required: beta.isRequired() });
+});
+
+app.post('/api/beta/feedback', betaFeedbackLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const result = beta.createFeedback(user.id, req.body || {});
+  return res.status(result.success ? 200 : 400).json(result);
+});
+
+app.get('/api/admin/beta', adminWriteLimiter, (req, res) => {
+  const user = requirePlatformRole(req, res, 'founder');
+  if (!user) return;
+  res.json({ success: true, invite_required: beta.isRequired(), env_override: String(process.env.BETA_INVITE_REQUIRED || '').toLowerCase() === 'off', invites: beta.listInvites(), categories: beta.FEEDBACK_CATEGORIES });
+});
+
+app.post('/api/admin/beta/mode', adminWriteLimiter, (req, res) => {
+  const user = requirePlatformRole(req, res, 'founder');
+  if (!user) return;
+  const enabled = req.body && req.body.invite_required === true;
+  betaDb.transaction(() => {
+    beta.setRequired(enabled);
+    betaAudit({ actorUserId: user.id, action: 'beta_mode_changed', targetUserId: user.id, reason: 'Beta davet modu', oldValue: null, newValue: enabled ? 'on' : 'off' });
+  })();
+  res.json({ success: true, invite_required: beta.isRequired() });
+});
+
+app.post('/api/admin/beta/invites', adminWriteLimiter, (req, res) => {
+  const user = requirePlatformRole(req, res, 'founder');
+  if (!user) return;
+  try {
+    const b = req.body || {};
+    const invite = betaDb.transaction(() => {
+      const created = beta.createInvite({ createdBy: user.id, label: b.label, maxUses: b.max_uses, expiresInDays: b.expires_in_days });
+      betaAudit({ actorUserId: user.id, action: 'beta_invite_created', targetUserId: user.id, reason: `Davet #${created.id}`, oldValue: null, newValue: null });
+      return created;
+    })();
+    // Kodun kendisi YALNIZCA burada, bir kez gösterilir (veritabanında yalnızca özeti tutulur).
+    res.json({ success: true, invite });
+  } catch (error) {
+    console.error('Beta daveti oluşturulamadı:', error && error.message);
+    res.status(500).json({ success: false, error: 'Davet oluşturulamadı.' });
+  }
+});
+
+app.post('/api/admin/beta/invites/:id/revoke', adminWriteLimiter, (req, res) => {
+  const user = requirePlatformRole(req, res, 'founder');
+  if (!user) return;
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ success: false, error: 'Geçersiz davet.' });
+  const ok = betaDb.transaction(() => {
+    const changed = beta.revokeInvite(id);
+    if (changed) betaAudit({ actorUserId: user.id, action: 'beta_invite_revoked', targetUserId: user.id, reason: `Davet #${id}`, oldValue: null, newValue: null });
+    return changed;
+  })();
+  res.json({ success: ok });
+});
+
+app.get('/api/admin/beta/feedback', (req, res) => {
+  const user = requirePlatformRole(req, res, 'admin');
+  if (!user) return;
+  res.json({ success: true, feedback: beta.listFeedback({ status: req.query.status }), categories: beta.FEEDBACK_CATEGORIES, statuses: beta.FEEDBACK_STATUSES });
+});
+
+app.post('/api/admin/beta/feedback/:id/status', adminWriteLimiter, (req, res) => {
+  const user = requirePlatformRole(req, res, 'admin');
+  if (!user) return;
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ success: false, error: 'Geçersiz kayıt.' });
+  res.json({ success: beta.setFeedbackStatus(id, req.body && req.body.status) });
+});
 
 app.get('/api/hubs', (req, res) => {
   const user = requireAuth(req, res);

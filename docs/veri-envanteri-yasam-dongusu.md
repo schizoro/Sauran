@@ -39,6 +39,9 @@ Kısaltmalar: **HS** = hesap silinince, **EX** = kullanıcı dışa aktarımına
 | **friendships**, **blocked_users** | İki kullanıcı ilişkisi, engellemeler | Arkadaşlık/DM izni/güvenlik | Kaldırılana/hesap silinene kadar | Silinir (cascade) | Evet | İlgili kullanıcılar | Hayır | `DELETE` | Hayır |
 | **notification_preferences** | Bildirim tercihleri | Tercihler | Hesap silinene kadar | Silinir (cascade) | Evet | Kullanıcı | Hayır | `DELETE` | Hayır |
 | **feedback**, **feedback_votes** | Kullanıcı önerisi (başlık/metin), oylar | Ürün geri bildirimi | Hesap silinene kadar (kullanıcıya ait öneri/oylar silinir) | Silinir (cascade) | Evet | Giriş yapmış kullanıcılar (öneri panosu) | Hayır | `DELETE` | Evet (süresiz öneri saklaması) |
+| **beta_feedback** | Kapalı beta geri bildirimi (kategori, mesaj, isteğe bağlı kısa teknik bağlam, durum, kullanıcı numarası) | Beta hata/geri bildirim toplama | 365 gün (günlük temizlik) veya hesap silinene kadar | Silinir (cascade) | Evet | Founder/admin (kullanıcı adıyla) | Evet (kullanıcının kendi kayıtları) |
+| **beta_invites**, **beta_invite_uses** | Beta davet kodları (yalnızca SHA-256 özeti + son 3 karakter), kullanım sayısı, kim kullandı | Kapalı beta erişim kontrolü | Süresi/iptali 90 günden eski davetler günlük temizlikle silinir | Kullanıcı bağlantısı NULL'a çekilir (kayıt kalır) | Evet | Yalnızca founder | Hayır |
+| **app_settings** | Uygulama ayarları (ör. beta davet modu açık/kapalı); kişisel veri içermez | Yapılandırma | Süresiz (yapılandırma; kişisel veri değil) | Etkilenmez | Hayır | Founder | Hayır |
 
 ### Bildirim ve cihaz
 
