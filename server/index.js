@@ -3375,12 +3375,15 @@ io.on('connection', (socket) => {
     const toUserId = Number(data?.to_user_id);
     if (!toUserId || !socket.userId) return;
     io.to(`user:${toUserId}`).emit('dm_call_declined', { from_user_id: socket.userId });
+    // Aynı hesabın diğer cihazlarında çalan gelen arama kapansın.
+    socket.to(`user:${socket.userId}`).emit('dm_call_handled', { from_user_id: toUserId });
   });
 
   socket.on('dm_call_accept', (data) => {
     const toUserId = Number(data?.to_user_id);
     if (!toUserId || !socket.userId) return;
     io.to(`user:${toUserId}`).emit('dm_call_accepted', { from_user_id: socket.userId });
+    socket.to(`user:${socket.userId}`).emit('dm_call_handled', { from_user_id: toUserId });
   });
 
   socket.on('dm_call_end', (data) => {

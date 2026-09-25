@@ -3978,6 +3978,10 @@ function connectToChat() {
             endDmCallUi();
         }
     });
+    // Bu arama aynı hesabın başka cihazında yanıtlandı/reddedildi: buradaki zil ve pencere kapansın.
+    socket.on('dm_call_handled', (data) => {
+        if (incomingCallFromId && data.from_user_id === incomingCallFromId) hideIncomingCall();
+    });
     socket.on('dm_call_accepted', (data) => {
         if (data.from_user_id === outgoingCallToId) joinDmCall(outgoingCallToId, outgoingCallToUsername);
     });
@@ -9255,6 +9259,8 @@ dmIncomingCallAcceptBtn.addEventListener('click', () => {
 });
 
 async function joinDmCall(userId, username) {
+
+    stopRingtone(); // görüşme başlarken hiçbir zil sesi devam etmesin
 
     outgoingCallToId = userId;
     outgoingCallToUsername = username;
