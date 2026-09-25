@@ -96,3 +96,11 @@ Kademeli yapı (Kurum sayfasına göre): **(1) yeterlilik kararı**; **(2) uygun
 ## 5. Doğrulanması gerekenler (özet liste)
 Render bölgesi ve servis/disk silindikten sonra anlık görüntü akıbeti; Render günlük saklaması; Zoho hesabının veri merkezi ve DPA'nın imzalanıp imzalanmadığı; Daily hesabındaki retention/bölge ayarı ve DPA kabulü; Firebase veri işleme şartlarının kabulü ve
 FCM ileti bekletmesi; tarayıcı push hizmetlerinin saklaması; standart sözleşme tipi/tarafları/bildirim usulü (Yönetmelik metninden); VERBİS gerekliliği ve saklama-imha politikası yükümlülüğü.
+
+## Güncelleme: bildirim içeriği (kullanıcı kararı)
+
+Önceki "yalnızca genel metin" tasarımından **bilinçli olarak** sapıldı: özel mesaj, lobi mesajı ve gelen arama bildirimlerinde başlık = gönderen adı, gövde = mesaj önizlemesi (en çok 140 karakter). Diğer türler (arkadaşlık, davet, yönetim bildirimleri) sabit genel metinde kalır; kimlik numarası, URL, lobi adı ve etiket hâlâ gönderilmez.
+
+- **Web Push:** yük Web Push standardı gereği uçtan uca şifrelidir (tarayıcı üreticisinin push hizmeti içeriği okuyamaz).
+- **FCM (Android):** yük Google altyapısında **şifresiz** (düz metin) geçer; gönderen adı ve önizleme Google tarafından görülebilir. Bu, önceki minimizasyon taahhüdünden bir gerilemedir; **hukuki doğrulama gerekli** (yurt dışı aktarım, aydınlatma metni güncellendi).
+- Kilit ekranında önizleme kullanıcının cihaz ayarıyla kapatılabilir. Özel nitelikli/hassas veri içeren mesaj metinleri de önizlemede görünebilir; kullanıcıya ayrı bir "önizlemeyi kapat" seçeneği henüz yoktur (teknik açık madde).

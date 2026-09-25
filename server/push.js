@@ -2,7 +2,7 @@ require('dotenv').config();
 
 const webpush = require('web-push');
 // FCM ile AYNI genel içerik üreticisi (tek doğruluk kaynağı): bildirim metni türe göre sabittir.
-const { buildGenericContent } = require('./fcm');
+const { buildGenericContent, buildContent } = require('./fcm');
 
 // VAPID anahtarlarını üretmek için (bir kez):  npx web-push generate-vapid-keys
 const PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
@@ -21,9 +21,12 @@ if (configured) {
 // kişiselleştirilmiş yönlendirme (URL, name=) ASLA bulunmaz. Yük yalnızca genel bir başlık, türe göre sabit bir metin ve genel `type` içerir.
 // Çağıranın verdiği title/body/url/tag bilerek YOK SAYILIR (bir çağıran hatası bile bir şey sızdıramaz). Web Push şifrelemesi (web-push kütüphanesi) aynen sürer.
 // Tıklama davranışı servis işçisinde (sw.js) `type` ile tür bazlı genel ekrana yönlendirir; gerçek bilgiler uygulama açılınca oturumlu API/Socket.io'dan gelir.
-function buildPayload({ type } = {}) {
-  const content = buildGenericContent({ type });
-  return { title: content.title, body: content.body, type: content.data.type, tag: content.data.type };
+function buildPayload({ type, title, body } = {}) {
+  const content = buildContent({ type, title, body });
+  // Mesaj/arama türlerinde başlık = gönderen adı, gövde = önizleme (Web Push yükü uçtan uca şifrelenir). Diğer türlerde yalnızca tür.
+  return content.rich
+    ? { title: content.title, body: content.body, type: content.data.type, rich: true }
+    : { title: content.title, body: content.body, type: content.data.type, tag: content.data.type };
 }
 
 function sendNotification(subscription, payload) {
