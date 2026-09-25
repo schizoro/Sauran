@@ -199,7 +199,7 @@
                     <span class="mod-priority ${esc(r.priority)}">${esc(priorityLabel(r.priority))}</span>
                     <div class="mod-card-main">
                         <div class="mod-card-title">#${r.id} — ${esc(reasonLabel(r.reason))} — ${esc(r.target_label)}</div>
-                        <div class="mod-card-meta">Bildiren: ${esc(r.reporter_username || '(hesap silinmiş)')} · ${esc(r.created_at)}</div>
+                        <div class="mod-card-meta">Bildiren: ${esc(r.reporter_username || '(hesap silinmiş)')} · ${esc(fmtTime(r.created_at))}</div>
                     </div>
                     <span class="mod-status-badge">${esc(statusLabel(r.status))}</span>
                 </div>
@@ -240,6 +240,16 @@
 
         // Rapor edilen iletinin türüne göre gerçek içeriği (metin/ses/görsel/video/dosya/anket/paylaşım)
         // moderatöre gösterir — sadece metin mesajlarını değil, tüm ileti türlerini kapsar.
+        // Sunucu zamanları UTC ('YYYY-MM-DD HH:MM:SS' ya da ISO); moderatöre tarayıcının yerel saatinde gösterilir.
+        function fmtTime(v) {
+            if (!v) return v;
+            const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/.exec(String(v));
+            if (!m) return v;
+            const d = new Date(m[1] + 'T' + m[2] + (m[4] || 'Z'));
+            return isNaN(d) ? v : d.toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'medium' });
+        }
+        const STICKER_EMOJI = { wave: '👋', thumbsup: '👍', heart: '❤️', laugh: '😂', cry: '😭', fire: '🔥', clap: '👏', party: '🎉', shock: '😱', 'love-eyes': '😍', thinking: '🤔', sleep: '😴', cool: '😎', wink: '😉', ok: '👌', pray: '🙏' };
+
         function renderMessageContent(ctx) {
             if (!ctx || !ctx.exists) return '';
             const kind = ctx.kind;
@@ -265,6 +275,10 @@
             if (kind === 'share') {
                 return `${esc(ctx.content || '')}${payload.url ? `<br><a href="${esc(payload.url)}" target="_blank" rel="noopener noreferrer" style="color:#5cc8ff;">${esc(payload.url)}</a>` : ''}`;
             }
+            if (kind === 'sticker' || kind === 'dm_sticker') {
+                const id = payload.id || '';
+                return `<span style="font-size:48px; line-height:1.2; display:inline-block;">${STICKER_EMOJI[id] || '❔'}</span> <span style="color:#6b7280;">Çıkartma${id ? ' · ' + esc(id) : ''}</span>`;
+            }
             if (kind === 'deleted') return '(bu mesaj kullanıcı tarafından silinmiş)';
             return esc(ctx.content || '(boş)');
         }
@@ -289,7 +303,7 @@
             else if (ev.message_state === 'hub_removed') notices.push(badge('⚠️ Lobi kaldırıldı', '#b45309'));
             else if (ev.message_state === 'chat_cleared') notices.push(badge('⚠️ Lobi sohbeti temizlendi', '#b45309'));
             else if (ev.message_state === 'removed') notices.push(badge('⚠️ Mesaj artık mevcut değil', '#b45309'));
-            else notices.push(badge('Mesaj mevcut', '#047857'));
+            else notices.push('<div style="margin:4px 0; font-size:12px; color:#5fd6a4;">✓ Mesaj hâlâ mevcut</div>');
             if (ev.flags.sender_account_deleted) notices.push(badge('👤 Gönderen hesabı silindi', '#7c3aed'));
             if (ev.flags.recipient_account_deleted) notices.push(badge('👤 Alıcı hesabı silindi', '#7c3aed'));
             if (ev.flags.reporter_account_deleted) notices.push(badge('👤 Raporlayan hesabı silindi', '#7c3aed'));
@@ -299,8 +313,8 @@
             const ctx = { exists: true, kind: ev.kind, content: ev.content, payload: ev.payload };
             const where = ev.context.type === 'hub' ? `Lobi: ${esc(ev.context.hub_name || 'bilinmiyor')}` : 'Özel Mesaj (DM)';
 
-            return field('İleti İçeriği (raporlandığı an)', `${notices.join('')}<br>${renderMessageContent(ctx)}`) +
-                field('Kanıt Bilgisi', `Mesaj #${ev.message_id} · Gönderen: ${ev.sender_username ? esc(ev.sender_username) : '<em>(hesap silinmiş)</em>'} · ${where}<br>Mesaj tarihi: ${esc(ev.message_created_at || '—')} · Kanıt alındı: ${esc(ev.captured_at)}<br>Kanıt saklama sonu: ${esc(ev.retention_until)}${ev.media_retention_until ? ' · Medya saklama sonu: ' + esc(ev.media_retention_until) : ''} · Rapor kaydı saklama sonu: ${esc(ev.report_retention_until)}`);
+            return field('Raporlanan ileti', `${notices.join('')}<br>${renderMessageContent(ctx)}`) +
+                field('Kanıt Bilgisi', `Mesaj #${ev.message_id} · Gönderen: ${ev.sender_username ? esc(ev.sender_username) : '<em>(hesap silinmiş)</em>'} · ${where}<br>Mesaj tarihi: ${esc(fmtTime(ev.message_created_at) || '—')} · Kanıt alındı: ${esc(fmtTime(ev.captured_at))}<br>Kanıt saklama sonu: ${esc(fmtTime(ev.retention_until))}${ev.media_retention_until ? ' · Medya saklama sonu: ' + esc(fmtTime(ev.media_retention_until)) : ''} · Rapor kaydı saklama sonu: ${esc(fmtTime(ev.report_retention_until))}`);
         }
 
         // Kullanıcı profili raporlarında moderatörün hesabı doğrudan bu panelden
@@ -332,7 +346,7 @@
                         </div>
                     </div>
                     <div class="mod-field"><span class="mod-field-label">E-posta</span><span class="mod-field-value">${esc(u.email || '—')}</span></div>
-                    <div class="mod-field"><span class="mod-field-label">Kayıt Tarihi</span><span class="mod-field-value">${esc(u.created_at)}</span></div>
+                    <div class="mod-field"><span class="mod-field-label">Kayıt Tarihi</span><span class="mod-field-value">${esc(fmtTime(u.created_at))}</span></div>
                     <div class="mod-field"><span class="mod-field-label">Yaş Grubu</span><span class="mod-field-value">${u.age_group === 'minor' ? '18 yaş altı' : '18 yaş ve üzeri'}</span></div>
                     <div class="mod-field"><span class="mod-field-label">Hakkımda</span><span class="mod-field-value">${esc(u.about_me || '—')}</span></div>
                     <div class="mod-field">
@@ -358,7 +372,7 @@
             const r = data.report;
 
             const historyHtml = r.history.length
-                ? r.history.map(h => `<div class="mod-history-row">${esc(h.created_at)} — ${esc(h.moderator_username || 'CLI')} → <strong>${esc(statusLabel(h.action))}</strong>${h.reason ? ' (' + esc(h.reason) + ')' : ''}</div>`).join('')
+                ? r.history.map(h => `<div class="mod-history-row">${esc(fmtTime(h.created_at))} — ${esc(h.moderator_username || 'CLI')} → <strong>${esc(statusLabel(h.action))}</strong>${h.reason ? ' (' + esc(h.reason) + ')' : ''}</div>`).join('')
                 : '<div class="mod-history-row">Henüz işlem yok.</div>';
 
             document.getElementById('mod-detail-body').innerHTML = `
@@ -369,7 +383,7 @@
                 <div class="mod-field"><span class="mod-field-label">Bağlam</span><span class="mod-field-value">${describeContext(r)}</span></div>
                 ${r.target_type === 'message' ? renderMessageEvidence(r) : ''}
                 <div class="mod-field"><span class="mod-field-label">Açıklama</span><span class="mod-field-value">${esc(r.description || '—')}</span></div>
-                <div class="mod-field"><span class="mod-field-label">Tarih</span><span class="mod-field-value">${esc(r.created_at)}</span></div>
+                <div class="mod-field"><span class="mod-field-label">Tarih</span><span class="mod-field-value">${esc(fmtTime(r.created_at))}</span></div>
                 <div class="mod-field"><span class="mod-field-label">Durum</span><span class="mod-field-value">${esc(statusLabel(r.status))}</span></div>
 
                 ${r.target_type === 'user' && r.target_context?.exists ? `
