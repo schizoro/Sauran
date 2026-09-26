@@ -10291,7 +10291,8 @@ function renderHubMembers() {
         const isSelf = m.user_id === currentUser.id;
         const tierBadge = m.permission_tier === 'owner' ? ' 👑' : m.permission_tier === 'moderator' ? ' 🛡️' : '';
 
-        const showMenu = canModerate && !isSelf && m.permission_tier !== 'owner';
+        // Kurucu herkese (kendisi hariç) işlem yapabilir; moderatör yalnızca üyelere — diğer moderatör ve kurucuya değil.
+        const showMenu = canModerate && !isSelf && m.permission_tier !== 'owner' && (myTier === 'owner' || m.permission_tier === 'member');
 
         const divider = (idx > 0 && !isStaffTier(m) && isStaffTier(orderedMembers[idx - 1])) ? '<div class="hub-member-divider" role="separator"></div>' : '';
 

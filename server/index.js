@@ -2802,6 +2802,15 @@ app.post('/api/hubs/:id/members/:userId/mute', (req, res) => {
     return res.status(403).json({ success: false, error: 'Bu işlem için yetkin yok.' });
   }
 
+  // Hedef bu lobinin üyesi olmalı; kurucu susturulamaz; moderatör yalnızca üyeleri susturabilir (moderatörü yalnızca kurucu).
+  const targetTier = getMemberTier(hubId, targetId);
+  if (targetId === user.id) return res.status(400).json({ success: false, error: 'Kendini susturamazsın.' });
+  if (!targetTier) return res.status(400).json({ success: false, error: 'Kullanıcı bu Hub üyesi değil.' });
+  if (targetTier === 'owner') return res.status(403).json({ success: false, error: 'Hub sahibi susturulamaz.' });
+  if (targetTier === 'moderator' && actorTier !== 'owner') {
+    return res.status(403).json({ success: false, error: 'Yalnızca Hub sahibi bir moderatörü susturabilir.' });
+  }
+
   const sockets = activeUsers.get(targetId);
   if (sockets) sockets.forEach(sid => io.to(sid).emit('hub_force_muted', { hub_id: hubId }));
 
