@@ -1308,6 +1308,8 @@
 
     <div id="call-overlay" class="call-overlay" style="display:none;">
 
+        <div id="call-ring-bg" class="call-ring-bg" style="display:none;" aria-hidden="true"></div>
+
         <div class="call-header">
             <span id="call-hub-name">🎙️ Sesli Sohbet</span>
             <span id="call-header-duration" class="call-duration-text" style="display:none;"></span>
@@ -1366,7 +1368,7 @@
             </div>
         </div>
         <div id="call-ringing-state" class="call-ringing-state" style="display:none;">
-            <div class="call-ringing-avatar">📞</div>
+            <div id="call-ringing-avatar" class="call-ringing-avatar">📞</div>
             <div id="call-ringing-text" class="call-ringing-text" data-i18n="call-ringing">Aranıyor...</div>
             <button id="call-ringing-cancel-btn" type="button" class="call-ringing-cancel-btn" data-i18n="call-cancel">İptal Et</button>
         </div>
@@ -1395,7 +1397,7 @@
 
         <div class="dm-incoming-call-box">
 
-            <div class="call-ringing-avatar">📞</div>
+            <div id="dm-incoming-call-avatar" class="call-ringing-avatar">📞</div>
             <div id="dm-incoming-call-username" class="dm-incoming-call-username"></div>
             <div class="dm-incoming-call-sub" data-i18n="call-incoming-sub">seni arıyor...</div>
 

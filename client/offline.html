@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="robots" content="noindex">
+    <title>Sauran — Bağlantı kurulamadı</title>
+    <style>
+        :root { color-scheme: dark; }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 16px; background: #0a0d11; color: #e8edf2; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+        body::before { content: ""; position: fixed; inset: 0; pointer-events: none; background: radial-gradient(900px 520px at 78% -8%, rgba(60, 150, 210, 0.16), transparent 65%); }
+        .card { position: relative; width: min(440px, 100%); padding: 34px 28px; text-align: center; border-radius: 28px; background: rgba(24, 31, 40, 0.62); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 0 0 1px rgba(255, 255, 255, 0.12), 0 24px 60px -16px rgba(0, 0, 0, 0.7); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); }
+        .logo { width: 56px; height: 56px; border-radius: 14px; margin: 0 auto 18px; display: block; }
+        h1 { margin: 0 0 10px; font-size: 20px; font-weight: 650; }
+        p { margin: 0 0 8px; font-size: 14.5px; line-height: 1.55; color: #a4afbb; }
+        .count { margin: 18px 0 20px; font-size: 13.5px; color: #7a8693; }
+        .count b { color: #5cc8ff; font-variant-numeric: tabular-nums; }
+        button { min-height: 46px; padding: 0 26px; border: 0; border-radius: 999px; background: #5cc8ff; color: #04202e; font-size: 14px; font-weight: 650; cursor: pointer; }
+        button:active { transform: scale(0.98); }
+    </style>
+</head>
+<body>
+    <main class="card">
+        <img class="logo" src="/icons/icon-192.png" alt="" width="56" height="56">
+        <h1 id="title">Sauran şu an ulaşılamıyor</h1>
+        <p id="text">Sunucu güncelleniyor ya da kısa süreli olarak yanıt vermiyor. Bu genellikle birkaç saniye sürer.</p>
+        <p class="count">Otomatik olarak <b id="sec">10</b> saniye sonra yeniden denenecek.</p>
+        <button id="retry" type="button">Şimdi dene</button>
+    </main>
+    <script>
+        (function () {
+            var remaining = 10;
+            var secEl = document.getElementById('sec');
+            if (navigator.onLine === false) {
+                document.getElementById('title').textContent = 'İnternet bağlantısı yok';
+                document.getElementById('text').textContent = 'Cihazının internete bağlı olduğundan emin ol. Bağlantı gelince sayfa yeniden denenecek.';
+            }
+            function retry() { location.reload(); }
+            document.getElementById('retry').addEventListener('click', retry);
+            window.addEventListener('online', retry);
+            setInterval(function () {
+                remaining -= 1;
+                if (remaining <= 0) { retry(); return; }
+                secEl.textContent = String(remaining);
+            }, 1000);
+        })();
+    </script>
+</body>
+</html>

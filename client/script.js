@@ -7571,6 +7571,9 @@ const VOICE_SPK_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="non
 // düğme, başkalarında yalnızca durum göstergesi. Konuşma ışığı mikrofon simgesinde.
 function voiceStatusIconsHtml(p, allowSelfAction) {
 
+    // Görüşme ekranında kendi satırında mikrofon/hoparlör düğmeleri gösterilmez (mikrofon alt çubukta).
+    if (allowSelfAction && p.user_id === currentUser?.id) return '';
+
     const interactive = Boolean(allowSelfAction) && p.user_id === currentUser?.id && callMode === 'hub-room';
     const tag = interactive ? 'button' : 'span';
     const attrs = (action) => interactive ? ` type="button" data-voice-action="${action}"` : '';
@@ -9359,6 +9362,7 @@ dmCallBtn.addEventListener('click', () => {
     callFrameContainer.style.display = 'none';
     callRingingText.textContent = `${activeDmUsername} aranıyor...`;
     setRingingUi(true);
+    setCallAvatar(document.getElementById('call-ringing-avatar'), activeDmUserId, activeDmUsername, setCallRingBackground);
     callOverlay.style.display = 'flex';
 
 });
@@ -9379,6 +9383,40 @@ let incomingCallRingTimer = null;
 function setRingingUi(on) {
     callRingingState.style.display = on ? 'flex' : 'none';
     callLeaveBtn.style.display = on ? 'none' : '';
+    if (!on) setCallRingBackground(null);
+}
+
+// Arama/gelen arama ekranı avatarı: profil görseli varsa görsel, yoksa kullanıcı adının baş harfi.
+// Görsel bilinmiyorsa profilden alınır (gizlilik ayarına göre sunucu süzer). onPhoto: görsel bulunduğunda çağrılır.
+function setCallAvatar(el, userId, username, onPhoto) {
+    if (!el) return;
+    const paint = () => {
+        const avatar = knownAvatars.get(userId) || null;
+        el.classList.toggle('has-photo', Boolean(avatar));
+        el.style.setProperty('--user-color', getUserColor(username || ''));
+        el.innerHTML = avatar
+            ? `<img src="${escapeAttr(avatar)}" alt="">`
+            : `<span class="call-avatar-initial">${escapeHtml((username || '?').charAt(0).toUpperCase())}</span>`;
+        if (avatar && onPhoto) onPhoto(avatar);
+    };
+    paint();
+    if (!knownAvatars.get(userId)) {
+        fetch(`/api/users/${userId}/profile`, { credentials: 'include' })
+            .then((r) => r.json())
+            .then((data) => {
+                const avatar = data && data.success && data.profile && data.profile.avatar_data;
+                if (avatar) { knownAvatars.set(userId, avatar); paint(); }
+            })
+            .catch(() => { /* görsel alınamazsa baş harf kalır */ });
+    }
+}
+
+// Aranan kişinin görseli varsa arama ekranının arkasında bulanık arka plan olarak gösterilir.
+function setCallRingBackground(url) {
+    const bg = document.getElementById('call-ring-bg');
+    if (!bg) return;
+    if (url) { bg.style.backgroundImage = `url("${String(url).replace(/"/g, '%22')}")`; bg.style.display = 'block'; }
+    else { bg.style.display = 'none'; bg.style.backgroundImage = ''; }
 }
 
 function showIncomingCall(fromId, fromUsername) {
@@ -9389,6 +9427,7 @@ function showIncomingCall(fromId, fromUsername) {
     incomingCallFromUsername = fromUsername;
 
     dmIncomingCallUsername.textContent = fromUsername;
+    setCallAvatar(document.getElementById('dm-incoming-call-avatar'), fromId, fromUsername);
     dmIncomingCallModal.style.display = 'flex';
     startRingtone();
 

@@ -1,7 +1,37 @@
-// Sauran service worker — yalnızca Web Push bildirimleri için (önbellekleme yok).
+// Sauran service worker — Web Push bildirimleri + sunucu ulaşılamazken (502/503/504 ya da ağ hatası) sayfa yerine dost bir yeniden deneme ekranı.
+// Uygulama içeriği ÖNBELLEKLENMEZ; yalnızca /offline.html yedek sayfası saklanır.
 
-self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+const FALLBACK_CACHE = 'sauran-fallback-v1';
+const FALLBACK_URL = '/offline.html';
+
+self.addEventListener('install', (event) => {
+    // Yedek sayfa alınamazsa (ağ yok) kurulum yine de tamamlanır.
+    event.waitUntil(caches.open(FALLBACK_CACHE).then((cache) => cache.add(FALLBACK_URL)).catch(() => {}).then(() => self.skipWaiting()));
+});
+self.addEventListener('activate', (event) => event.waitUntil(
+    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== FALLBACK_CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())
+));
+
+async function fallbackResponse() {
+    const cached = await caches.match(FALLBACK_URL);
+    return cached || null;
+}
+
+// Yalnızca sayfa gezinmeleri: sunucu 502/503/504 (ör. deploy sırasında) ya da hiç yanıt vermezse yedek sayfa gösterilir. API/medya istekleri etkilenmez.
+self.addEventListener('fetch', (event) => {
+    const request = event.request;
+    if (request.mode !== 'navigate') return;
+
+    event.respondWith((async () => {
+        try {
+            const response = await fetch(request);
+            if (response.status === 502 || response.status === 503 || response.status === 504) return (await fallbackResponse()) || response;
+            return response;
+        } catch (error) {
+            return (await fallbackResponse()) || Response.error();
+        }
+    })());
+});
 
 // Web Push yükü (sunucudan) yalnızca genel bir başlık, sabit bir metin ve genel `type` taşır: kullanıcıya/sohbete özgü hiçbir bilgi yoktur.
 // Yükteki url/name gibi alanlar bilerek KULLANILMAZ.
