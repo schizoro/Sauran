@@ -2345,7 +2345,7 @@ const DISCOVER_FIELD_KEYS = ['visibility', 'category', 'topic', 'description', '
 
 // Keşfet alanlarını doğrular. Yalnızca verilen (undefined olmayan) alanlar işlenir; geçerli olanlar { alan: değer } olarak döner.
 // current: mevcut Lobi satırı (keşfedilebilir yapma koşulları için birleşik değer kontrolü).
-function validateHubDiscoveryFields(input, current, { isMinor } = {}) {
+function validateHubDiscoveryFields(input, current) {
   const out = {};
   const pick = (key, list, error) => {
     if (input[key] === undefined) return null;
@@ -2357,7 +2357,6 @@ function validateHubDiscoveryFields(input, current, { isMinor } = {}) {
 
   if (input.visibility !== undefined) {
     if (!HUB_VISIBILITIES.includes(input.visibility)) return { success: false, error: 'Geçersiz görünürlük.' };
-    if (input.visibility === 'discoverable' && isMinor) return { success: false, error: 'Keşfet, 18 yaşından küçük hesaplar için kapalıdır.' };
     out.visibility = input.visibility;
   }
   const errors = [
@@ -2396,7 +2395,7 @@ function validateHubDiscoveryFields(input, current, { isMinor } = {}) {
   return { success: true, fields: out };
 }
 
-function createHub(userId, { name, image_data, ...discovery }, { isMinor } = {}) {
+function createHub(userId, { name, image_data, ...discovery }) {
   try {
     name = String(name || '').trim();
 
@@ -2416,7 +2415,7 @@ function createHub(userId, { name, image_data, ...discovery }, { isMinor } = {})
     // Keşfet alanları (isteğe bağlı) — geçersizse Lobi hiç oluşturulmaz.
     const discoveryInput = {};
     for (const key of DISCOVER_FIELD_KEYS) if (discovery[key] !== undefined) discoveryInput[key] = discovery[key];
-    const checked = Object.keys(discoveryInput).length ? validateHubDiscoveryFields(discoveryInput, null, { isMinor }) : { success: true, fields: {} };
+    const checked = Object.keys(discoveryInput).length ? validateHubDiscoveryFields(discoveryInput, null) : { success: true, fields: {} };
     if (!checked.success) return checked;
 
     const hubResult = insertHub.run(name, stripImageMetadata(image_data) || null, userId);
@@ -2436,7 +2435,7 @@ function createHub(userId, { name, image_data, ...discovery }, { isMinor } = {})
   }
 }
 
-function updateHub(hubId, userId, { name, image_data, ...discovery }, { isMinor } = {}) {
+function updateHub(hubId, userId, { name, image_data, ...discovery }) {
   const hub = db.prepare(`SELECT * FROM hubs WHERE id = ?`).get(hubId);
   if (!hub) return { success: false, error: 'Hub bulunamadı.' };
   if (hub.created_by !== userId) return { success: false, error: 'Sadece Hub sahibi düzenleyebilir.' };
@@ -2444,7 +2443,7 @@ function updateHub(hubId, userId, { name, image_data, ...discovery }, { isMinor 
   // Keşfet alanları: hepsi doğrulanmadan hiçbir alan (ad/görsel dahil) değiştirilmez.
   const discoveryInput = {};
   for (const key of DISCOVER_FIELD_KEYS) if (discovery[key] !== undefined) discoveryInput[key] = discovery[key];
-  const checked = Object.keys(discoveryInput).length ? validateHubDiscoveryFields(discoveryInput, hub, { isMinor }) : { success: true, fields: {} };
+  const checked = Object.keys(discoveryInput).length ? validateHubDiscoveryFields(discoveryInput, hub) : { success: true, fields: {} };
   if (!checked.success) return checked;
 
   if (name !== undefined) {
@@ -2544,11 +2543,16 @@ function getDiscoverableHubImage(hubId, userId) {
 
 const JOIN_REQUEST_RETENTION_DAYS = 30;
 
+// Karar verilmiş (onaylı/reddedilmiş) katılma istekleri 30 gün sonra silinir; bekleyen istekler sahibi karar verene kadar durur.
+// Günlük temizlikten (index.js) ve yeni istek sırasında çağrılır.
+function purgeExpiredJoinRequests() {
+  return db.prepare(`DELETE FROM hub_join_requests WHERE status != 'pending' AND decided_at < datetime('now', ?)`).run(`-${JOIN_REQUEST_RETENTION_DAYS} days`).changes;
+}
+
 // Keşfet'ten katılım: koşullar kontrol edilir; görünür olmak otomatik üyelik demek değildir.
-function joinDiscoverableHub(hubId, userId, { isMinor } = {}) {
+function joinDiscoverableHub(hubId, userId) {
   const hub = db.prepare(`SELECT id, created_by, join_policy, capacity FROM hubs WHERE id = ? AND visibility = 'discoverable'`).get(hubId);
   if (!hub) return { success: false, status: 404, error: 'Lobi bulunamadı.' };
-  if (isMinor) return { success: false, status: 403, error: 'Keşfet, 18 yaşından küçük hesaplar için kapalıdır.' };
   if (isHubBanned(hubId, userId)) return { success: false, status: 404, error: 'Lobi bulunamadı.' };
   if (isHubMember(hubId, userId)) return { success: false, status: 400, error: 'Bu Lobi\'ye zaten üyesin.' };
 
@@ -2562,7 +2566,7 @@ function joinDiscoverableHub(hubId, userId, { isMinor } = {}) {
   }
 
   // request / owner_approval: onay bekleyen istek. Eski karar kayıtları saklama süresi sonunda silinir.
-  db.prepare(`DELETE FROM hub_join_requests WHERE status != 'pending' AND decided_at < datetime('now', ?)`).run(`-${JOIN_REQUEST_RETENTION_DAYS} days`);
+  purgeExpiredJoinRequests();
 
   const existing = db.prepare(`SELECT status, decided_at FROM hub_join_requests WHERE hub_id = ? AND user_id = ?`).get(hubId, userId);
   if (existing && existing.status === 'pending') return { success: true, status: 'already_requested', owner_id: hub.created_by };
@@ -3635,6 +3639,9 @@ function deleteAccount(userId) {
 
     const owned = db.prepare(`SELECT id FROM hubs WHERE created_by = ?`).all(userId);
     const purgedHubs = owned.map(h => purgeHubData(h.id));
+
+    // Keşfet katılma istekleri: bu hesabın kendi istekleri yabancı anahtar (CASCADE) ile silinir; başkalarının isteklerinde karar veren olarak geçen numarası temizlenir.
+    db.prepare(`UPDATE hub_join_requests SET decided_by = NULL WHERE decided_by = ?`).run(userId);
 
     // DM çağrı odaları Daily'de çağrıya katılınca tembel oluşturulur (sauran-dm-<küçük no>-<büyük no>) ve hiçbir yerde silinmez; hesap silinince adında bu
     // hesabın numarası geçen odalar artık öksüzdür. Odanın var olup olmadığı bilinmez: Daily'de yoksa (404) silme başarılı sayılır.
@@ -5862,6 +5869,7 @@ module.exports = {
   saveDmVoiceMessage,
   createDmFileMessage,
   saveDmSticker,
+  purgeExpiredJoinRequests,
   listDiscoverableHubs,
   getDiscoverableHubDetail,
   getDiscoverableHubImage,

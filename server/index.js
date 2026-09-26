@@ -74,6 +74,7 @@ const {
   saveDmVoiceMessage,
   createDmFileMessage,
   saveDmSticker,
+  purgeExpiredJoinRequests,
   listDiscoverableHubs,
   getDiscoverableHubDetail,
   getDiscoverableHubImage,
@@ -1640,7 +1641,7 @@ app.post('/api/hubs', hubCreateLimiter, (req, res) => {
   if (!user) return;
 
   try {
-    const result = createHub(user.id, req.body || {}, { isMinor: user.is_minor });
+    const result = createHub(user.id, req.body || {});
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -1660,7 +1661,7 @@ app.patch('/api/hubs/:id', (req, res) => {
 
   try {
     const hubId = Number(req.params.id);
-    const result = updateHub(hubId, user.id, req.body || {}, { isMinor: user.is_minor });
+    const result = updateHub(hubId, user.id, req.body || {});
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -1764,7 +1765,7 @@ app.post('/api/hubs/:id/invite-friend', (req, res) => {
 // =====================================================
 // KEŞFET (keşfedilebilir Lobiler)
 // =====================================================
-// Yalnızca visibility='discoverable' Lobiler; private/invite_only Lobiler hiçbir uçta sızmaz (404). 18 yaş altı hesaplar Keşfet'i kullanamaz.
+// Yalnızca visibility='discoverable' Lobiler; private/invite_only Lobiler hiçbir uçta sızmaz (404).
 
 function voiceActiveByHub() {
   const counts = new Map();
@@ -1775,13 +1776,7 @@ function voiceActiveByHub() {
 }
 
 function requireDiscoverUser(req, res) {
-  const user = requireAuth(req, res);
-  if (!user) return null;
-  if (user.is_minor) {
-    res.status(403).json({ success: false, error: 'Keşfet, 18 yaşından küçük hesaplar için kapalıdır.' });
-    return null;
-  }
-  return user;
+  return requireAuth(req, res); // Keşfet yaşa göre kısıtlanmaz (yalnızca oturum gerekir)
 }
 
 app.get('/api/discover/lobbies', discoverLimiter, (req, res) => {
@@ -1836,7 +1831,7 @@ app.post('/api/discover/lobbies/:id/join', discoverJoinLimiter, (req, res) => {
 
   try {
     const hubId = Number(req.params.id);
-    const result = joinDiscoverableHub(hubId, user.id, { isMinor: user.is_minor });
+    const result = joinDiscoverableHub(hubId, user.id);
     if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
 
     if (result.status === 'joined') io.to(`hub:${hubId}`).emit('hub_members_changed', { hub_id: hubId });
@@ -3846,6 +3841,16 @@ server.listen(PORT, () => {
   };
   runEvidencePurge();
   setInterval(runEvidencePurge, 24 * 60 * 60 * 1000).unref();
+
+  // Karar verilmiş Keşfet katılma istekleri 30 gün sonra silinir (açılışta ve günde bir).
+  const runJoinRequestPurge = () => {
+    try {
+      const purged = purgeExpiredJoinRequests();
+      if (purged) console.log(`Katılma isteği temizliği: ${purged} kayıt silindi.`);
+    } catch (error) { console.error('Katılma isteği temizleme hatası:', error); }
+  };
+  runJoinRequestPurge();
+  setInterval(runJoinRequestPurge, 24 * 60 * 60 * 1000).unref();
 
   // Admin audit log saklama temizliği (açılışta ve günde bir): eski serbest metin gerekçeler ve süresi dolan kayıtlar silinir.
   const runAuditPurge = () => {

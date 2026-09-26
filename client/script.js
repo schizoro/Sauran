@@ -3497,7 +3497,6 @@ const I18N = {
     'discover-empty': { tr: 'Aramana uygun Lobi bulunamadı. Filtreleri değiştirmeyi dene.', en: 'No lobbies match your search. Try changing the filters.' },
     'discover-empty-none': { tr: 'Henüz keşfedilebilir Lobi yok.', en: 'There are no discoverable lobbies yet.' },
     'discover-error': { tr: 'Lobiler şu an alınamadı. Biraz sonra tekrar dene.', en: 'Could not load lobbies. Please try again shortly.' },
-    'discover-minor': { tr: 'Keşfet, 18 yaşından küçük hesaplar için kapalıdır.', en: 'Discover is not available for accounts under 18.' },
     'discover-all-cats': { tr: 'Tümü', en: 'All' },
     'discover-all-langs': { tr: 'Tüm diller', en: 'All languages' },
     'discover-all-policies': { tr: 'Her katılım türü', en: 'Any join type' },
@@ -3548,7 +3547,6 @@ const I18N = {
     'hubset-vis-hint-private': { tr: 'Keşfet\'te görünmez. Üyeler davet koduyla katılır.', en: 'Not shown in Discover. Members join with an invite code.' },
     'hubset-vis-hint-invite_only': { tr: 'Keşfet\'te görünmez. Yalnızca davetle katılım.', en: 'Not shown in Discover. Join by invite only.' },
     'hubset-vis-hint-discoverable': { tr: 'Keşfet\'te herkes görebilir. Görünmek otomatik üyelik demek değildir; katılım yöntemini sen belirlersin.', en: 'Anyone can see it in Discover. Being visible does not mean automatic membership; you choose how people join.' },
-    'hubset-vis-minor': { tr: 'Keşfet 18 yaşından küçük hesaplar için kapalıdır.', en: 'Discover is not available for accounts under 18.' },
     'hubset-category': { tr: 'Kategori', en: 'Category' },
     'hubset-category-pick': { tr: 'Kategori seç', en: 'Choose a category' },
     'hubset-topic': { tr: 'Konu / etiket (isteğe bağlı)', en: 'Topic / tag (optional)' },
@@ -8638,13 +8636,6 @@ async function loadDiscover(reset) {
     discoverNoticeEl.style.display = 'none';
     const seq = ++discoverState.seq;
 
-    if (currentUser && currentUser.is_minor) {
-        discoverNoticeEl.textContent = t('discover-minor');
-        discoverNoticeEl.style.display = 'block';
-        discoverMoreBtn.style.display = 'none';
-        return;
-    }
-
     const params = new URLSearchParams({ page: String(discoverState.page), limit: '12' });
     if (discoverState.q) params.set('q', discoverState.q);
     if (discoverState.category) params.set('category', discoverState.category);
@@ -8656,7 +8647,6 @@ async function loadDiscover(reset) {
         const data = await response.json();
         if (seq !== discoverState.seq) return; // daha yeni bir arama başladı
 
-        if (response.status === 403) { discoverNoticeEl.textContent = data.error || t('discover-minor'); discoverNoticeEl.style.display = 'block'; discoverMoreBtn.style.display = 'none'; return; }
         if (!data.success) throw new Error(data.error || 'hata');
 
         data.lobbies.forEach((lobby) => discoverResultsEl.appendChild(buildDiscoverCard(lobby)));
@@ -8832,8 +8822,7 @@ function syncHubsetVisibilityUi() {
     document.getElementById('hubset-discover-fields').style.display = value === 'discoverable' ? 'flex' : 'none';
     document.getElementById('hubset-discover-fields').style.flexDirection = 'column';
     document.getElementById('hubset-discover-fields').style.gap = '8px';
-    const hint = currentUser && currentUser.is_minor && value !== 'discoverable' ? t('hubset-vis-minor') : t('hubset-vis-hint-' + value);
-    document.getElementById('hubset-visibility-hint').textContent = hint;
+    document.getElementById('hubset-visibility-hint').textContent = t('hubset-vis-hint-' + value);
 }
 
 function populateHubDiscoverSettings(isOwner) {
@@ -8851,8 +8840,7 @@ function populateHubDiscoverSettings(isOwner) {
     box.style.display = isOwner ? 'flex' : 'none';
     if (!isOwner) return;
 
-    const visValues = (currentUser && currentUser.is_minor) ? ['private', 'invite_only'] : ['private', 'invite_only', 'discoverable'];
-    hubsetSelect('hubset-visibility', visValues, (v) => t('hubset-vis-' + v));
+    hubsetSelect('hubset-visibility', ['private', 'invite_only', 'discoverable'], (v) => t('hubset-vis-' + v));
     hubsetSelect('hubset-category', DISCOVER_CATEGORIES, (v) => t('discover-cat-' + v), t('hubset-category-pick'));
     hubsetSelect('hubset-language', DISCOVER_LANGUAGES, (v) => t('discover-lang-' + v), '—');
     hubsetSelect('hubset-join-policy', DISCOVER_POLICIES, (v) => t('discover-policy-' + v));
