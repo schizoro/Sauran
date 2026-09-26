@@ -10029,7 +10029,11 @@ const NC_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><
     syncNoiseCancelUi();
 })();
 
-const supportsSinkId = typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype;
+// Safari/iOS (WebKit) setSinkId'i sunar ama WebRTC uzak sesi için sessizce yok sayar (ses iOS'un kendi rotasında kalır; gerçek cihazda doğrulandı:
+// Bluetooth bağlıyken "Hoparlör" seçimi bir şey değiştirmedi). Çalışmayan seçenek gösterilmesin diye WebKit'te web çıkış seçimi kapalıdır;
+// çıkışı iOS'un kendi denetim merkezi/ses yönlendirme menüsünden değiştirir.
+const isWebKitAudio = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || (/^((?!chrome|chromium|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent));
+const supportsSinkId = typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype && !isWebKitAudio;
 const callMicArrowBtn = document.getElementById('call-mic-arrow-btn');
 const callSpeakerBtn = document.getElementById('call-speaker-btn');
 const callOutArrowBtn = document.getElementById('call-out-arrow-btn');
