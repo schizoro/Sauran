@@ -3424,6 +3424,8 @@ const I18N = {
     'call-log-min': { tr: 'dk', en: 'min' },
     'call-log-sec': { tr: 'sn', en: 's' },
     'call-no-answer': { tr: 'Cevap vermedi.', en: 'No answer.' },
+    'hint-call-controls-room': { tr: 'Mikrofon, gürültü engelleme ve diğer ses ayarları için yeşil oda etiketine dokun.', en: 'For microphone, noise suppression and other audio controls, tap the green room label.' },
+    'hint-call-controls-dm': { tr: 'Mikrofon ve gürültü engelleme için küçük görüşme çubuğundaki genişlet düğmesine dokun.', en: 'For microphone and noise suppression, tap the expand button on the small call bar.' },
     'nc-label': { tr: 'Gürültü engelleme (yalnızca konuşma)', en: 'Noise suppression (voice only)' },
     'nc-failed': { tr: 'Gürültü engelleme bu cihazda çalışmadı; kapatıldı.', en: 'Noise suppression did not work on this device; turned off.' },
     'voice-recovering': { tr: 'Ses bağlantısı yeniden kuruluyor...', en: 'Restoring audio connection...' },
@@ -8503,7 +8505,18 @@ callMinimizeBtn.addEventListener('click', () => {
     callMiniBar.style.display = 'flex';
     document.body.classList.add('call-mini-active');
     if (callMode === 'hub-room') updateVoiceSessionSummary();
+    showCallControlsHintOnce();
 });
+
+// Görüşme ekranı küçültülünce mikrofon/gürültü engelleme gibi kontrollerin nerede olduğunu bir kez hatırlat (cihaz başına bir kez).
+function showCallControlsHintOnce() {
+    const KEY = 'sauran_hint_call_controls';
+    try {
+        if (localStorage.getItem(KEY)) return;
+        localStorage.setItem(KEY, '1');
+    } catch (_) { /* depolama yok: her seferinde göstermek yerine hiç gösterme */ return; }
+    showToast(t(callMode === 'hub-room' ? 'hint-call-controls-room' : 'hint-call-controls-dm'));
+}
 
 callMiniExpandBtn.addEventListener('click', () => {
     callMiniBar.style.display = 'none';
