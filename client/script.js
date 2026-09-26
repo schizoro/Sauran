@@ -2611,6 +2611,54 @@ function urlBase64ToUint8Array(base64) {
     return Uint8Array.from(raw, (char) => char.charCodeAt(0));
 }
 
+// Girişten sonra bildirim izni henüz sorulmadıysa küçük, kapatılabilir bir istek gösterir (izin, yalnızca kullanıcı "Bildirimleri aç"a basınca istenir).
+// Reddedilmiş izin için gösterilmez; "Şimdi değil" 14 gün boyunca tekrar göstermez. Yerel Android uygulaması (FCM) kendi akışını kullanır.
+const NOTIF_PROMPT_KEY = 'sauran_notif_prompt_until';
+
+async function maybeShowNotificationPrompt() {
+
+    if (getNativeNotify()) return;
+    if (getBrowserNotifState() !== 'default') return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (document.getElementById('notif-prompt')) return;
+
+    try {
+        const until = Number(localStorage.getItem(NOTIF_PROMPT_KEY) || 0);
+        if (until && Date.now() < until) return;
+    } catch (_) { /* depolama yok: yine de göster */ }
+
+    // Sunucuda Web Push yapılandırılmamışsa izin istemenin anlamı yok.
+    try {
+        const keyResponse = await fetch('/api/push/public-key', { credentials: 'include' });
+        const keyData = await keyResponse.json();
+        if (!keyData.success || !keyData.configured) return;
+    } catch (_) { return; }
+
+    const box = document.createElement('div');
+    box.id = 'notif-prompt';
+    box.className = 'notif-prompt liquid-glass';
+    box.setAttribute('role', 'dialog');
+    box.innerHTML = `
+        <span class="notif-prompt-text">${escapeHtml(t('notif-prompt-text'))}</span>
+        <span class="notif-prompt-actions">
+            <button type="button" class="notif-prompt-later">${escapeHtml(t('notif-prompt-later'))}</button>
+            <button type="button" class="notif-prompt-enable">${escapeHtml(t('notif-prompt-enable'))}</button>
+        </span>`;
+    document.body.appendChild(box);
+
+    const close = (snooze) => {
+        if (snooze) { try { localStorage.setItem(NOTIF_PROMPT_KEY, String(Date.now() + 14 * 24 * 60 * 60 * 1000)); } catch (_) { /* yoksay */ } }
+        box.remove();
+    };
+
+    box.querySelector('.notif-prompt-later').addEventListener('click', () => close(true));
+    box.querySelector('.notif-prompt-enable').addEventListener('click', async () => {
+        close(false);
+        // Ayarlar'daki izin düğmesiyle aynı akış (izin → tercihi aç → push aboneliği).
+        document.getElementById('browser-notif-permission-btn')?.click();
+    });
+}
+
 async function ensurePushSubscription() {
 
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
@@ -3424,6 +3472,9 @@ const I18N = {
     'call-log-min': { tr: 'dk', en: 'min' },
     'call-log-sec': { tr: 'sn', en: 's' },
     'call-no-answer': { tr: 'Cevap vermedi.', en: 'No answer.' },
+    'notif-prompt-text': { tr: 'Arama ve mesajları uygulama kapalıyken de alabilmek için bildirimleri aç.', en: 'Turn on notifications to get calls and messages even when the app is closed.' },
+    'notif-prompt-enable': { tr: 'Bildirimleri aç', en: 'Turn on' },
+    'notif-prompt-later': { tr: 'Şimdi değil', en: 'Not now' },
     'hint-call-controls-room': { tr: 'Mikrofon, gürültü engelleme ve diğer ses ayarları için yeşil oda etiketine dokun.', en: 'For microphone, noise suppression and other audio controls, tap the green room label.' },
     'hint-call-controls-dm': { tr: 'Mikrofon ve gürültü engelleme için küçük görüşme çubuğundaki genişlet düğmesine dokun.', en: 'For microphone and noise suppression, tap the expand button on the small call bar.' },
     'nc-label': { tr: 'Gürültü engelleme (yalnızca konuşma)', en: 'Noise suppression (voice only)' },
@@ -4185,6 +4236,7 @@ function connectToChat() {
     refreshNotificationsBadge();
     loadNotificationPreferences();
     ensurePushSubscription();
+    setTimeout(maybeShowNotificationPrompt, 4000);
     handlePendingNotificationOpen();
     initNativeNotifications();
 
