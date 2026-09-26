@@ -3411,6 +3411,8 @@ const I18N = {
     'voice-room-user-left': { tr: 'odadan ayrıldı', en: 'left the room' },
     'voice-room-removed': { tr: 'Sesli odadan çıkarıldın.', en: 'You were removed from the voice room.' },
     'session-check-unreachable': { tr: 'Sunucuya şu an ulaşılamıyor; oturumun kapanmış olmayabilir. Biraz sonra sayfayı yenile.', en: 'The server is unreachable right now; your session may still be valid. Refresh in a moment.' },
+    'nc-label': { tr: 'Gürültü engelleme (yalnızca konuşma)', en: 'Noise suppression (voice only)' },
+    'nc-failed': { tr: 'Gürültü engelleme bu cihazda çalışmadı; kapatıldı.', en: 'Noise suppression did not work on this device; turned off.' },
     'voice-recovering': { tr: 'Ses bağlantısı yeniden kuruluyor...', en: 'Restoring audio connection...' },
     'voice-recover-failed': { tr: 'Mikrofon geri açılamadı. Mikrofon iznini kontrol et; sorun sürerse odadan çıkıp tekrar gir.', en: 'Could not restore the microphone. Check the microphone permission; if it persists, leave and rejoin.' },
     'audio-mic-title': { tr: 'Mikrofon', en: 'Microphone' },
@@ -9399,6 +9401,10 @@ async function joinCallFrame(roomUrl, token) {
         startCallTimer();
     });
 
+    callFrame.on('nonfatal-error', (event) => {
+        if (event?.type === 'audio-processor-error') noiseCancelFailed();
+    });
+
     callFrame.on('left-meeting', leaveCall);
     callFrame.on('error', (event) => {
         console.error('Daily.co çağrı hatası:', event);
@@ -9442,6 +9448,7 @@ async function joinCallFrame(roomUrl, token) {
         startCallBackgroundKeepAlive();
         startCallHealthMonitor();
         refreshAudioDevices();
+        applyNoiseCancellation();
 
     } catch (error) {
         callFrame.destroy();
@@ -9797,6 +9804,7 @@ async function reacquireLocalMic() {
     if (callCustomMicTrack && callCustomMicTrack !== track) { try { callCustomMicTrack.stop(); } catch (_) { /* yoksay */ } }
     callCustomMicTrack = track;
     await callFrame.setInputDevicesAsync({ audioSource: track });
+    applyNoiseCancellation();
 }
 
 // Öne dönünce / ağ gelince / iz olayında / periyodik: uzak sesi tekrar oynat ve —
@@ -9951,6 +9959,38 @@ const audioSession = {
     devicechangeWired: false
 };
 
+// ─── GÜRÜLTÜ ENGELLEME (yalnızca konuşma) ─────────────────────────────────
+// Daily'nin (Krisp tabanlı) mikrofon işlemcisi: arka plan gürültüsünü tarayıcıda, yerelde bastırır (ses Krisp'e gönderilmez).
+// Desteklenmeyen ortamda updateInputSettings hata verir → özellik gizlenir. Tercih yalnızca bu cihazda (localStorage, açık/kapalı).
+const NC_STORAGE_KEY = 'sauran_noise_cancel';
+const noiseCancel = { supported: null, enabled: true, failedShown: false };
+try { noiseCancel.enabled = localStorage.getItem(NC_STORAGE_KEY) !== 'off'; } catch (_) { /* depolama yok → varsayılan açık */ }
+
+async function applyNoiseCancellation() {
+    if (!callFrame || noiseCancel.supported === false || typeof callFrame.updateInputSettings !== 'function') return;
+    try {
+        await callFrame.updateInputSettings({ audio: { processor: { type: noiseCancel.enabled ? 'noise-cancellation' : 'none' } } });
+        noiseCancel.supported = true;
+    } catch (error) {
+        console.warn('Gürültü engelleme uygulanamadı:', error?.message || error);
+        noiseCancelFailed();
+        return;
+    }
+    updateAudioControls();
+}
+
+function noiseCancelFailed() {
+    noiseCancel.supported = false;
+    if (noiseCancel.enabled && !noiseCancel.failedShown) { noiseCancel.failedShown = true; showToast(t('nc-failed')); }
+    updateAudioControls();
+}
+
+function setNoiseCancel(enabled) {
+    noiseCancel.enabled = enabled;
+    try { localStorage.setItem(NC_STORAGE_KEY, enabled ? 'on' : 'off'); } catch (_) { /* yoksay */ }
+    applyNoiseCancellation();
+}
+
 const supportsSinkId = typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype;
 const callMicArrowBtn = document.getElementById('call-mic-arrow-btn');
 const callSpeakerBtn = document.getElementById('call-speaker-btn');
@@ -10045,7 +10085,7 @@ function nativeSpeakerToggleAvailable() {
 function updateAudioControls() {
 
     const inCall = Boolean(callFrame);
-    const showMicArrow = inCall && audioSession.inputs.length > 1;
+    const showMicArrow = inCall && (audioSession.inputs.length > 1 || noiseCancel.supported === true);
     const nativeToggle = inCall && nativeSpeakerToggleAvailable();
     const webOutMenu = inCall && !nativeToggle && audioSession.outputs.length > 1;
 
@@ -10100,12 +10140,15 @@ function openDeviceMenu(kind, anchor) {
         title = t('audio-out-title');
         items = audioSession.outputs.map((d) => ({ id: d.id, label: d.label, selected: (audioSession.selectedOutputId || 'default') === d.id }));
     }
-    if (!items.length) return;
+    const showNc = kind === 'input' && noiseCancel.supported === true;
+    if (!items.length && !showNc) return;
 
     callDeviceMenu.dataset.kind = kind;
-    callDeviceMenu.innerHTML = `<div class="call-device-menu-title">${escapeHtml(title)}</div>` + items.map((it) =>
+    callDeviceMenu.innerHTML = `<div class="call-device-menu-title">${escapeHtml(title)}</div>` + (audioSession.inputs.length > 1 || kind !== 'input' ? items : []).map((it) =>
         `<button type="button" role="menuitemradio" aria-checked="${it.selected ? 'true' : 'false'}" data-device-id="${escapeAttr(it.id)}" class="${it.selected ? 'selected' : ''}"><span>${escapeHtml(it.label)}</span><span class="call-device-check" aria-hidden="true">${it.selected ? '✓' : ''}</span></button>`
-    ).join('');
+    ).join('') + (showNc
+        ? `<button type="button" role="menuitemcheckbox" aria-checked="${noiseCancel.enabled ? 'true' : 'false'}" data-nc-toggle="1" class="call-device-nc${noiseCancel.enabled ? ' selected' : ''}"><span>${escapeHtml(t('nc-label'))}</span><span class="call-device-check" aria-hidden="true">${noiseCancel.enabled ? '✓' : ''}</span></button>`
+        : '');
 
     const rect = anchor.getBoundingClientRect();
     callDeviceMenu.style.display = 'flex';
@@ -10126,6 +10169,7 @@ async function chooseInputDevice(id) {
         if (callCustomMicTrack) { try { callCustomMicTrack.stop(); } catch (_) { /* yoksay */ } callCustomMicTrack = null; }
         if (!voiceUserMuted) callFrame.setLocalAudio(true);
         watchLocalAudioTrack();
+        applyNoiseCancellation();
     } catch (error) {
         console.warn('Mikrofon değiştirilemedi:', error);
         showToast(t('voice-recover-failed'));
@@ -10176,6 +10220,13 @@ if (callSpeakerBtn) callSpeakerBtn.addEventListener('click', (event) => { event.
 if (callOutArrowBtn) callOutArrowBtn.addEventListener('click', (event) => { event.stopPropagation(); openDeviceMenu('output', callOutArrowBtn); });
 if (callDeviceMenu) {
     callDeviceMenu.addEventListener('click', (event) => {
+        const ncBtn = event.target.closest('button[data-nc-toggle]');
+        if (ncBtn) {
+            event.stopPropagation();
+            setNoiseCancel(!noiseCancel.enabled);
+            closeDeviceMenu();
+            return;
+        }
         const btn = event.target.closest('button[data-device-id]');
         if (!btn) return;
         event.stopPropagation();
@@ -10190,6 +10241,7 @@ document.addEventListener('keydown', (event) => { if (event.key === 'Escape') cl
 
 function resetAudioSession() {
     closeDeviceMenu();
+    noiseCancel.failedShown = false;
     audioSession.inputs = [];
     audioSession.outputs = [];
     audioSession.selectedInputId = null;
