@@ -3416,6 +3416,14 @@ const I18N = {
     'nc-unsupported': { tr: 'Bu cihazda gürültü engelleme desteklenmiyor.', en: 'Noise suppression is not supported on this device.' },
     'nc-state-on': { tr: 'Gürültü engelleme: açık', en: 'Noise suppression: on' },
     'nc-state-off': { tr: 'Gürültü engelleme: kapalı', en: 'Noise suppression: off' },
+    'call-log-answered': { tr: 'Sesli arama', en: 'Voice call' },
+    'call-log-missed-in': { tr: 'Cevapsız arama', en: 'Missed call' },
+    'call-log-missed-out': { tr: 'Arama cevaplanmadı', en: 'Call not answered' },
+    'call-log-declined-in': { tr: 'Aramayı reddettin', en: 'You declined the call' },
+    'call-log-declined-out': { tr: 'Arama reddedildi', en: 'Call declined' },
+    'call-log-min': { tr: 'dk', en: 'min' },
+    'call-log-sec': { tr: 'sn', en: 's' },
+    'call-no-answer': { tr: 'Cevap vermedi.', en: 'No answer.' },
     'nc-label': { tr: 'Gürültü engelleme (yalnızca konuşma)', en: 'Noise suppression (voice only)' },
     'nc-failed': { tr: 'Gürültü engelleme bu cihazda çalışmadı; kapatıldı.', en: 'Noise suppression did not work on this device; turned off.' },
     'voice-recovering': { tr: 'Ses bağlantısı yeniden kuruluyor...', en: 'Restoring audio connection...' },
@@ -3946,6 +3954,10 @@ function connectToChat() {
 
                 appendDmMessage(msg);
 
+            } else if (msg.kind === 'dm_call') {
+
+                // Arama kaydı yalnızca sohbet geçmişine yazılır; okunmamış sayacı, ses ya da bildirim üretmez.
+
             } else if (msg.user_id !== currentUser.id) {
 
                 unreadDmCounts.set(otherId, (unreadDmCounts.get(otherId) || 0) + 1);
@@ -3955,7 +3967,7 @@ function connectToChat() {
 
             }
 
-            if (msg.user_id !== currentUser.id) maybeNotifyIncomingDm(msg);
+            if (msg.user_id !== currentUser.id && msg.kind !== 'dm_call') maybeNotifyIncomingDm(msg);
 
         }
     );
@@ -4006,6 +4018,13 @@ function connectToChat() {
     socket.on('dm_call_declined', (data) => {
         if (data.from_user_id === outgoingCallToId) {
             showToast('Arama reddedildi.');
+            endDmCallUi();
+        }
+    });
+    // Sunucu çalma süresi doldu (karşı taraf cevap vermedi): "Aranıyor" ekranı sonsuza dek açık kalmasın.
+    socket.on('dm_call_missed', (data) => {
+        if (callMode === 'dm-ringing' && data.to_user_id === outgoingCallToId) {
+            showToast(t('call-no-answer'));
             endDmCallUi();
         }
     });
@@ -6201,7 +6220,52 @@ async function openDm(userId, username) {
 }
 
 
+function formatCallLogDuration(totalSeconds) {
+    const seconds = Math.max(0, Math.round(Number(totalSeconds) || 0));
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    const parts = [];
+    if (h) parts.push(`${h} ${t('call-log-min') === 'dk' ? 'sa' : 'h'}`);
+    if (h || m) parts.push(`${m} ${t('call-log-min')}`);
+    parts.push(`${s} ${t('call-log-sec')}`);
+    return parts.join(' ');
+}
+
+// Arama kaydı: konuşma balonu değil, ortalanmış sistem satırı (eylem menüsü/tepki yok).
+function appendDmCallLog(msg) {
+
+    const status = msg.payload && msg.payload.status;
+    const iAmCaller = msg.user_id === currentUser.id;
+    let label;
+    let icon = '📞';
+
+    if (status === 'answered') {
+        label = `${t('call-log-answered')} · ${formatCallLogDuration(msg.payload.duration)}`;
+    } else if (status === 'declined') {
+        label = t(iAmCaller ? 'call-log-declined-out' : 'call-log-declined-in');
+        icon = '📵';
+    } else {
+        label = t(iAmCaller ? 'call-log-missed-out' : 'call-log-missed-in');
+        icon = '📵';
+    }
+
+    const time = msg.created_at
+        ? new Date(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+        : '';
+
+    const row = document.createElement('div');
+    row.className = `dm-call-log${status === 'answered' ? '' : ' is-missed'}`;
+    row.dataset.messageId = msg.id;
+    row.innerHTML = `<span class="dm-call-log-pill"><span aria-hidden="true">${icon}</span><span class="dm-call-log-text">${escapeHtml(label)}</span><span class="dm-call-log-time">${escapeHtml(time)}</span></span>`;
+
+    dmFeed.appendChild(row);
+    dmFeed.scrollTop = dmFeed.scrollHeight;
+}
+
 function appendDmMessage(msg) {
+
+    if (msg.kind === 'dm_call') { appendDmCallLog(msg); return; }
 
     const row = document.createElement('div');
 

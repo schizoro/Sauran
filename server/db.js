@@ -3153,6 +3153,25 @@ function saveDmSticker(fromId, fromUsername, toId, stickerId) {
   return { success: true, message: getMessageById(info.lastInsertRowid) };
 }
 
+// DM sesli aramasının sohbet kaydı: yalnızca durum (cevaplandı/cevapsız/reddedildi), süre ve zaman. Ses içeriği HİÇBİR ZAMAN kaydedilmez.
+// Gönderen = arayan; kayıt iki tarafın sohbetinde sistem satırı olarak görünür (bildirim/push üretmez).
+const DM_CALL_STATUSES = ['answered', 'missed', 'declined'];
+
+function saveDmCallLog(callerId, callerUsername, calleeId, status, durationSec) {
+  if (!DM_CALL_STATUSES.includes(status)) return { success: false, error: 'Geçersiz arama durumu.' };
+  if (!areFriends(callerId, calleeId)) return { success: false, error: 'Sadece arkadaşlarınla mesajlaşabilirsin.' };
+
+  const duration = status === 'answered' ? Math.max(0, Math.min(Math.round(Number(durationSec) || 0), 24 * 60 * 60)) : 0;
+  const payload = JSON.stringify({ status, duration });
+
+  const info = db.prepare(`
+    INSERT INTO messages (user_id, username, content, room, to_user_id, kind, payload)
+    VALUES (?, ?, '', ?, ?, 'dm_call', ?)
+  `).run(callerId, callerUsername, dmRoom(callerId, calleeId), calleeId, payload);
+
+  return { success: true, message: getMessageById(info.lastInsertRowid) };
+}
+
 function getHubDailyRoomName(hubId) {
   const hub = db.prepare(`SELECT daily_room_name FROM hubs WHERE id = ?`).get(hubId);
   return hub ? hub.daily_room_name : null;
@@ -5574,6 +5593,7 @@ module.exports = {
   saveDmVoiceMessage,
   createDmFileMessage,
   saveDmSticker,
+  saveDmCallLog,
   getDmMessages,
   addReaction,
   removeReaction,

@@ -74,6 +74,7 @@ const {
   saveDmVoiceMessage,
   createDmFileMessage,
   saveDmSticker,
+  saveDmCallLog,
   getDmMessages,
   findUserByUsername,
   blockUser,
@@ -2562,6 +2563,52 @@ function pushNotification(userId, type, data) {
 }
 
 // =====================================================
+// DM SESLİ ARAMA YAŞAM DÖNGÜSÜ (bellek içi)
+// =====================================================
+// Sunucu, çalan ve cevaplanmış aramaları izler: (1) alıcı uygulamayı sonradan açarsa (bildirime dokunarak) çalan arama yeniden iletilir,
+// (2) arama bitince sohbete "Sesli arama · süre / Cevapsız / Reddedildi" kaydı yazılır. Kayıt yalnızca durum + süre + zaman içerir.
+const DM_CALL_RING_MS = 45 * 1000;
+const pendingDmCalls = new Map(); // arayanId -> { toId, callerName, at, timer }
+const activeDmCalls = new Map();  // "küçükId:büyükId" -> { callerId, calleeId, callerName, answeredAt }
+const dmPairKey = (a, b) => (a < b ? `${a}:${b}` : `${b}:${a}`);
+
+function logDmCall(callerId, callerName, calleeId, status, durationSec) {
+  try {
+    const result = saveDmCallLog(callerId, callerName, calleeId, status, durationSec);
+    if (result && result.success) io.to(`user:${callerId}`).to(`user:${calleeId}`).emit('dm_message', result.message);
+  } catch (error) {
+    console.error('Arama kaydı yazılamadı:', error);
+  }
+}
+
+function clearPendingDmCall(callerId) {
+  const pending = pendingDmCalls.get(callerId);
+  if (!pending) return null;
+  clearTimeout(pending.timer);
+  pendingDmCalls.delete(callerId);
+  return pending;
+}
+
+// Çalan arama cevapsız bitti (arayan iptal etti, süre doldu ya da bağlantısı koptu).
+function finishMissedDmCall(callerId, reason) {
+  const pending = clearPendingDmCall(callerId);
+  if (!pending) return;
+  logDmCall(callerId, pending.callerName, pending.toId, 'missed');
+  io.to(`user:${pending.toId}`).emit('dm_call_cancelled', { from_user_id: callerId });
+  if (reason === 'timeout') io.to(`user:${callerId}`).emit('dm_call_missed', { to_user_id: pending.toId });
+}
+
+// Cevaplanmış arama bitti: süreyi hesapla ve kaydı yaz (tek sefer; iki taraf da 'end' gönderse de tekrar yazılmaz).
+function finishAnsweredDmCall(userA, userB) {
+  const key = dmPairKey(userA, userB);
+  const call = activeDmCalls.get(key);
+  if (!call) return false;
+  activeDmCalls.delete(key);
+  logDmCall(call.callerId, call.callerName, call.calleeId, 'answered', Math.round((Date.now() - call.answeredAt) / 1000));
+  return true;
+}
+
+// =====================================================
 // SESLİ ODA PRESENCE (bellek içi, sunucu otoritesi)
 // roomId -> Map(userId -> { user_id, username, muted, socketId, hubId })
 // =====================================================
@@ -3233,6 +3280,13 @@ io.on('connection', (socket) => {
 
     socket.join(`user:${userId}`);
 
+    // Alıcı uygulamayı arama çalarken (ör. bildirime dokunarak) açtıysa çalan aramayı yeniden ilet.
+    for (const [callerId, pending] of pendingDmCalls.entries()) {
+      if (pending.toId === userId && Date.now() - pending.at < DM_CALL_RING_MS) {
+        socket.emit('dm_call_incoming', { from_user_id: callerId, from_username: pending.callerName });
+      }
+    }
+
     socket.emit('login_success', { id: userId, username });
     io.emit('presence_changed');
 
@@ -3365,6 +3419,12 @@ io.on('connection', (socket) => {
       const toUserId = Number(data?.to_user_id);
       if (!toUserId || !areFriends(socket.userId, toUserId)) return;
 
+      // Aynı arayan için önceki çalan arama varsa sessizce değiştirilir (çift kayıt yazılmaz).
+      clearPendingDmCall(socket.userId);
+      const ringTimer = setTimeout(() => finishMissedDmCall(socket.userId, 'timeout'), DM_CALL_RING_MS);
+      if (ringTimer.unref) ringTimer.unref();
+      pendingDmCalls.set(socket.userId, { toId: toUserId, callerName: socket.username, at: Date.now(), timer: ringTimer });
+
       io.to(`user:${toUserId}`).emit('dm_call_incoming', {
         from_user_id: socket.userId,
         from_username: socket.username
@@ -3383,12 +3443,22 @@ io.on('connection', (socket) => {
     const toUserId = Number(data?.to_user_id);
     if (!toUserId || !socket.userId) return;
     io.to(`user:${toUserId}`).emit('dm_call_cancelled', { from_user_id: socket.userId });
+    const pending = pendingDmCalls.get(socket.userId);
+    if (pending && pending.toId === toUserId) {
+      clearPendingDmCall(socket.userId);
+      logDmCall(socket.userId, pending.callerName, toUserId, 'missed');
+    }
   });
 
   socket.on('dm_call_decline', (data) => {
     const toUserId = Number(data?.to_user_id);
     if (!toUserId || !socket.userId) return;
     io.to(`user:${toUserId}`).emit('dm_call_declined', { from_user_id: socket.userId });
+    const pendingDecline = pendingDmCalls.get(toUserId);
+    if (pendingDecline && pendingDecline.toId === socket.userId) {
+      clearPendingDmCall(toUserId);
+      logDmCall(toUserId, pendingDecline.callerName, socket.userId, 'declined');
+    }
     // Aynı hesabın diğer cihazlarında çalan gelen arama kapansın.
     socket.to(`user:${socket.userId}`).emit('dm_call_handled', { from_user_id: toUserId });
   });
@@ -3397,6 +3467,11 @@ io.on('connection', (socket) => {
     const toUserId = Number(data?.to_user_id);
     if (!toUserId || !socket.userId) return;
     io.to(`user:${toUserId}`).emit('dm_call_accepted', { from_user_id: socket.userId });
+    const pendingAccept = pendingDmCalls.get(toUserId);
+    if (pendingAccept && pendingAccept.toId === socket.userId) {
+      clearPendingDmCall(toUserId);
+      activeDmCalls.set(dmPairKey(toUserId, socket.userId), { callerId: toUserId, calleeId: socket.userId, callerName: pendingAccept.callerName, answeredAt: Date.now() });
+    }
     socket.to(`user:${socket.userId}`).emit('dm_call_handled', { from_user_id: toUserId });
   });
 
@@ -3404,6 +3479,7 @@ io.on('connection', (socket) => {
     const toUserId = Number(data?.to_user_id);
     if (!toUserId || !socket.userId) return;
     io.to(`user:${toUserId}`).emit('dm_call_ended', { from_user_id: socket.userId });
+    finishAnsweredDmCall(socket.userId, toUserId);
   });
 
   socket.on('join_hub', (hubId) => {
@@ -3600,6 +3676,16 @@ io.on('connection', (socket) => {
 
     if (userSockets.size === 0) {
       activeUsers.delete(socket.userId);
+
+      // Kullanıcının hiç bağlantısı kalmadı: çalan aramasını cevapsız say, cevaplanmış aramasını sonlandır.
+      finishMissedDmCall(socket.userId, 'disconnect');
+      for (const [key, call] of Array.from(activeDmCalls.entries())) {
+        if (call.callerId === socket.userId || call.calleeId === socket.userId) {
+          const otherId = call.callerId === socket.userId ? call.calleeId : call.callerId;
+          finishAnsweredDmCall(socket.userId, otherId);
+          io.to(`user:${otherId}`).emit('dm_call_ended', { from_user_id: socket.userId });
+        }
+      }
     }
 
     io.emit('presence_changed');
