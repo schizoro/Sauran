@@ -20,6 +20,7 @@
     function labelButtons() {
         const map = {
             'rail-home': ['hubs-title', 'Ana Menü'],
+            'rail-discover': ['menu-discover', 'Keşfet'],
             'rail-notifications': ['menu-notifications', 'Bildirimler'],
             'rail-friend': ['menu-add-friend', 'Arkadaş Ekle'],
             'rail-settings': ['menu-settings', 'Ayarlar'],
@@ -246,6 +247,10 @@
     document.querySelectorAll('[data-rail]').forEach((btn) => {
         btn.addEventListener('click', () => {
             const k = btn.dataset.rail;
+            if (k === 'discover') {
+                if (typeof openDiscover === 'function') openDiscover();
+                return;
+            }
             if (k === 'home') {
                 if (typeof switchToView === 'function') { switchToView('hubs'); }
                 if (typeof loadHubList === 'function') loadHubList();

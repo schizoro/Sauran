@@ -74,6 +74,14 @@ const {
   saveDmVoiceMessage,
   createDmFileMessage,
   saveDmSticker,
+  listDiscoverableHubs,
+  getDiscoverableHubDetail,
+  getDiscoverableHubImage,
+  joinDiscoverableHub,
+  listHubJoinRequests,
+  decideHubJoinRequest,
+  countPendingHubJoinRequests,
+  canDecideJoinRequests,
   saveDmCallLog,
   getDmMessages,
   findUserByUsername,
@@ -254,6 +262,8 @@ const lookupLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 60, keyFn: byIp
 const profileViewLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, keyFn: byIp, message: 'Çok fazla profil isteği. Biraz sonra tekrar dene.' });
 const passwordResetLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyFn: byIp, message: 'Çok fazla istek. Biraz sonra tekrar dene.' });
 const friendRequestLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla arkadaşlık isteği gönderildi. Biraz sonra tekrar dene.' });
+const discoverLimiter = rateLimit({ windowMs: 60 * 1000, max: 90, keyFn: byIp, message: 'Çok fazla istek gönderdin. Biraz sonra tekrar dene.' });
+const discoverJoinLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 20, keyFn: byIp, message: 'Çok fazla katılma denemesi. Biraz sonra tekrar dene.' });
 const hubCreateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, keyFn: byIp, message: 'Çok fazla Hub oluşturuldu. Biraz sonra tekrar dene.' });
 const inviteCreateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla davet oluşturuldu. Biraz sonra tekrar dene.' });
 const reportLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, keyFn: byIp, message: 'Çok fazla bildirim gönderildi. Biraz sonra tekrar dene.' });
@@ -1630,7 +1640,7 @@ app.post('/api/hubs', hubCreateLimiter, (req, res) => {
   if (!user) return;
 
   try {
-    const result = createHub(user.id, req.body);
+    const result = createHub(user.id, req.body || {}, { isMinor: user.is_minor });
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -1650,7 +1660,7 @@ app.patch('/api/hubs/:id', (req, res) => {
 
   try {
     const hubId = Number(req.params.id);
-    const result = updateHub(hubId, user.id, req.body || {});
+    const result = updateHub(hubId, user.id, req.body || {}, { isMinor: user.is_minor });
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -1682,6 +1692,7 @@ app.get('/api/hubs/:id', (req, res) => {
     }
 
     hub.members = hub.members.map(m => ({ ...m, online: isVisiblyOnline(m.user_id, m.status) }));
+    if (canDecideJoinRequests(hubId, user.id)) hub.pending_join_requests = countPendingHubJoinRequests(hubId);
 
     return res.json({ success: true, hub });
 
@@ -1748,6 +1759,119 @@ app.post('/api/hubs/:id/invite-friend', (req, res) => {
     console.error('Hub daveti gönderme hatası:', error);
     res.status(500).json({ success: false, error: 'Davet gönderilemedi.' });
   }
+});
+
+// =====================================================
+// KEŞFET (keşfedilebilir Lobiler)
+// =====================================================
+// Yalnızca visibility='discoverable' Lobiler; private/invite_only Lobiler hiçbir uçta sızmaz (404). 18 yaş altı hesaplar Keşfet'i kullanamaz.
+
+function voiceActiveByHub() {
+  const counts = new Map();
+  for (const members of voiceRoomParticipants.values()) {
+    for (const entry of members.values()) counts.set(entry.hubId, (counts.get(entry.hubId) || 0) + 1);
+  }
+  return counts;
+}
+
+function requireDiscoverUser(req, res) {
+  const user = requireAuth(req, res);
+  if (!user) return null;
+  if (user.is_minor) {
+    res.status(403).json({ success: false, error: 'Keşfet, 18 yaşından küçük hesaplar için kapalıdır.' });
+    return null;
+  }
+  return user;
+}
+
+app.get('/api/discover/lobbies', discoverLimiter, (req, res) => {
+  const user = requireDiscoverUser(req, res);
+  if (!user) return;
+
+  try {
+    const result = listDiscoverableHubs(user.id, {
+      q: req.query.q, category: req.query.category, language: req.query.language,
+      join_policy: req.query.join_policy, page: req.query.page, limit: req.query.limit
+    });
+    const active = voiceActiveByHub();
+    result.lobbies = result.lobbies.map((l) => ({ ...l, voice_active: active.get(l.id) || 0 }));
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Keşfet listeleme hatası:', error);
+    return res.status(500).json({ success: false, error: 'Lobiler alınamadı.' });
+  }
+});
+
+app.get('/api/discover/lobbies/:id/image', discoverLimiter, (req, res) => {
+  const user = requireDiscoverUser(req, res);
+  if (!user) return;
+
+  const image = getDiscoverableHubImage(Number(req.params.id), user.id);
+  const match = image && /^data:(image\/(?:png|jpe?g|webp|gif));base64,(.+)$/s.exec(image);
+  if (!match) return res.status(404).end();
+
+  res.set('Content-Type', match[1]);
+  res.set('Cache-Control', 'private, max-age=300');
+  return res.send(Buffer.from(match[2], 'base64'));
+});
+
+app.get('/api/discover/lobbies/:id', discoverLimiter, (req, res) => {
+  const user = requireDiscoverUser(req, res);
+  if (!user) return;
+
+  try {
+    const hub = getDiscoverableHubDetail(Number(req.params.id), user.id);
+    if (!hub) return res.status(404).json({ success: false, error: 'Lobi bulunamadı.' });
+    hub.voice_active = voiceActiveByHub().get(hub.id) || 0;
+    return res.json({ success: true, lobby: hub });
+  } catch (error) {
+    console.error('Keşfet detay hatası:', error);
+    return res.status(500).json({ success: false, error: 'Lobi alınamadı.' });
+  }
+});
+
+app.post('/api/discover/lobbies/:id/join', discoverJoinLimiter, (req, res) => {
+  const user = requireDiscoverUser(req, res);
+  if (!user) return;
+
+  try {
+    const hubId = Number(req.params.id);
+    const result = joinDiscoverableHub(hubId, user.id, { isMinor: user.is_minor });
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+
+    if (result.status === 'joined') io.to(`hub:${hubId}`).emit('hub_members_changed', { hub_id: hubId });
+    if (result.status === 'requested') io.to(`user:${result.owner_id}`).emit('hub_join_request', { hub_id: hubId });
+
+    return res.json({ success: true, status: result.status, hub_id: hubId });
+  } catch (error) {
+    console.error('Keşfet katılım hatası:', error);
+    return res.status(500).json({ success: false, error: 'Katılınamadı.' });
+  }
+});
+
+app.get('/api/hubs/:id/join-requests', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const result = listHubJoinRequests(Number(req.params.id), user.id);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+  return res.json(result);
+});
+
+app.post('/api/hubs/:id/join-requests/:requestId/:decision', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const decision = req.params.decision;
+  if (decision !== 'approve' && decision !== 'reject') return res.status(400).json({ success: false, error: 'Geçersiz işlem.' });
+
+  const hubId = Number(req.params.id);
+  const result = decideHubJoinRequest(hubId, Number(req.params.requestId), user.id, decision === 'approve');
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+
+  io.to(`user:${result.user_id}`).emit('hub_join_decision', { hub_id: hubId, approved: result.approved });
+  if (result.approved) io.to(`hub:${hubId}`).emit('hub_members_changed', { hub_id: hubId });
+  return res.json({ success: true, approved: result.approved });
 });
 
 app.post('/api/hubs/join', joinLimiter, (req, res) => {

@@ -250,6 +250,7 @@
         <nav id="app-rail" class="app-rail" aria-label="Ana gezinme">
             <span class="app-rail-logo" aria-hidden="true"></span>
             <button type="button" class="rail-btn on" data-rail="home" id="rail-home"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 11l8-6.5 8 6.5v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg></button>
+            <button type="button" class="rail-btn" data-rail="discover" id="rail-discover"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M15.500 8.500l-2 5-5 2 2-5z"/></svg></button>
             <button type="button" class="rail-btn" data-rail="notifications" id="rail-notifications"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15zM10 21h4"/></svg><i class="rail-dot" id="rail-notif-dot" style="display:none;"></i></button>
             <button type="button" class="rail-btn" data-rail="friend" id="rail-friend"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="10" cy="8" r="4"/><path d="M2 20c1.5-4 4.5-5.5 8-5.5S16.500 16 18 20M19 8v6M16 11h6"/></svg></button>
             <span class="rail-spacer"></span>
@@ -297,6 +298,8 @@
             </div>
 
             <div id="topbar-menu-dropdown" class="topbar-menu-dropdown liquid-glass" style="display:none;">
+
+                <button id="discover-open-btn" class="topbar-menu-item" type="button">🧭 <span data-i18n="menu-discover">Keşfet</span></button>
 
                 <button id="hub-join-open-btn" class="topbar-menu-item" title="Davet koduyla katıl" type="button">🔑 <span data-i18n="menu-join-code">Davet Koduyla Katıl</span></button>
 
@@ -354,6 +357,32 @@
                     <p data-i18n="hubs-empty">İlk Lobini oluştur</p>
 
                 </div>
+
+            </div>
+
+
+            <!-- KEŞFET -->
+
+            <div id="discover-view" class="view-panel discover-view" style="display:none;">
+
+                <div class="discover-head">
+                    <h2 class="discover-title" data-i18n="discover-title">Keşfet</h2>
+                    <p class="discover-subtitle" data-i18n="discover-subtitle">İlgi alanına uygun bir Lobi bul.</p>
+
+                    <input type="search" id="discover-search" class="discover-search" data-i18n-placeholder="discover-search-placeholder" placeholder="Lobi ara..." maxlength="60" autocomplete="off" enterkeyhint="search">
+
+                    <div id="discover-categories" class="discover-chips" role="group" aria-label="Kategori"></div>
+
+                    <div class="discover-filters">
+                        <select id="discover-language" class="discover-select" aria-label="Dil"></select>
+                        <select id="discover-policy" class="discover-select" aria-label="Katılım türü"></select>
+                    </div>
+                </div>
+
+                <div id="discover-notice" class="discover-empty" style="display:none;"></div>
+                <div id="discover-results" class="discover-grid"></div>
+                <div id="discover-empty" class="discover-empty" style="display:none;"></div>
+                <button id="discover-more" class="discover-more" type="button" style="display:none;" data-i18n="discover-more">Daha fazla göster</button>
 
             </div>
 
@@ -582,6 +611,29 @@
     <!-- HUB AYARLARI -->
     <!-- ================================================= -->
 
+    <div id="discover-detail-modal" class="modal-overlay" style="display:none;">
+
+        <div class="modal-box discover-detail-box">
+
+            <div class="modal-header">
+                <span id="discover-detail-title"></span>
+                <button id="discover-detail-close" type="button">✕</button>
+            </div>
+
+            <div id="discover-detail-body" class="discover-detail-body"></div>
+
+            <div id="discover-detail-error" class="hub-create-error"></div>
+
+            <div class="discover-detail-actions">
+                <button id="discover-detail-join" class="hub-create-submit" type="button"></button>
+                <button id="discover-detail-report" class="discover-report-btn" type="button">🚩 <span data-i18n="discover-report">Lobiyi Bildir</span></button>
+            </div>
+
+        </div>
+
+    </div>
+
+
     <div id="hub-settings-modal" class="modal-overlay" style="display:none;">
 
         <div class="modal-box hub-settings-box hub-settings-panel">
@@ -600,6 +652,44 @@
                 </div>
 
                 <input type="text" id="hub-settings-name-input" class="hub-name-input" placeholder="Lobi adı" maxlength="40">
+
+                <div id="hub-discover-settings" class="hub-discover-settings" style="display:none;">
+
+                    <span class="profile-field-label" data-i18n="hubset-visibility">Görünürlük</span>
+                    <select id="hubset-visibility" class="discover-select"></select>
+                    <p id="hubset-visibility-hint" class="hubset-hint"></p>
+
+                    <div id="hubset-discover-fields" style="display:none;">
+
+                        <span class="profile-field-label" data-i18n="hubset-category">Kategori</span>
+                        <select id="hubset-category" class="discover-select"></select>
+
+                        <span class="profile-field-label" data-i18n="hubset-topic">Konu / etiket (isteğe bağlı)</span>
+                        <input type="text" id="hubset-topic" class="hub-name-input" maxlength="40" data-i18n-placeholder="hubset-topic-placeholder" placeholder="Örn. Valorant">
+
+                        <span class="profile-field-label" data-i18n="hubset-description">Amaç / açıklama</span>
+                        <textarea id="hubset-description" class="about-me-input" maxlength="300" data-i18n-placeholder="hubset-description-placeholder" placeholder="Lobi ne amaçla kullanılacak?"></textarea>
+
+                        <span class="profile-field-label" data-i18n="hubset-rules">Kurallar (her satıra bir kural)</span>
+                        <textarea id="hubset-rules" class="about-me-input" maxlength="800" data-i18n-placeholder="hubset-rules-placeholder" placeholder="Saygılı iletişim.&#10;Hakaret ve taciz yok."></textarea>
+
+                        <span class="profile-field-label" data-i18n="hubset-language">Dil</span>
+                        <select id="hubset-language" class="discover-select"></select>
+
+                        <span class="profile-field-label" data-i18n="hubset-join-policy">Katılım yöntemi</span>
+                        <select id="hubset-join-policy" class="discover-select"></select>
+
+                        <span class="profile-field-label" data-i18n="hubset-mic">Mikrofon koşulu</span>
+                        <select id="hubset-mic" class="discover-select"></select>
+
+                        <span class="profile-field-label" data-i18n="hubset-capacity">Kapasite (boş = sınırsız)</span>
+                        <input type="number" id="hubset-capacity" class="hub-name-input" min="2" max="500" inputmode="numeric" placeholder="2 - 500">
+
+                    </div>
+
+                </div>
+
+                <button id="hub-requests-open-btn" class="hub-settings-action-btn" type="button" style="display:none;">📥 <span data-i18n="hubset-requests">Katılma İstekleri</span> <span id="hub-requests-count" class="hubset-count"></span></button>
 
                 <div id="hub-settings-error" class="hub-create-error"></div>
 
@@ -629,6 +719,12 @@
                 <span class="profile-field-label" data-i18n="hub-ban-member">Katılımcı Yasakla</span>
                 <input type="text" id="hub-ban-search-input" class="hub-name-input" data-i18n-placeholder="hub-ban-search-placeholder" placeholder="Kullanıcı adı ara..." autocomplete="off">
                 <div id="hub-ban-picker" class="settings-blocked-list settings-blocked-list-tall"></div>
+            </div>
+
+            <div class="hub-settings-body" id="hub-settings-requests-view" style="display:none;">
+                <button id="hub-requests-back-btn" class="hub-settings-back-btn" type="button">← <span data-i18n="bans-back">Geri</span></button>
+                <span class="profile-field-label" data-i18n="hubset-requests">Katılma İstekleri</span>
+                <div id="hub-settings-requests-list" class="settings-blocked-list"></div>
             </div>
 
             <div class="hub-settings-body" id="hub-settings-bans-view" style="display:none;">

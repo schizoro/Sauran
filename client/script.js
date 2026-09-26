@@ -3487,6 +3487,84 @@ const I18N = {
     'notif-prompt-text': { tr: 'Arama ve mesajları uygulama kapalıyken de alabilmek için bildirimleri aç.', en: 'Turn on notifications to get calls and messages even when the app is closed.' },
     'notif-prompt-enable': { tr: 'Bildirimleri aç', en: 'Turn on' },
     'notif-prompt-later': { tr: 'Şimdi değil', en: 'Not now' },
+    'menu-discover': { tr: 'Keşfet', en: 'Discover' },
+    'discover-title': { tr: 'Keşfet', en: 'Discover' },
+    'discover-subtitle': { tr: 'İlgi alanına uygun bir Lobi bul.', en: 'Find a Lobby that fits your interests.' },
+    'discover-search-placeholder': { tr: 'Lobi ara...', en: 'Search lobbies...' },
+    'discover-more': { tr: 'Daha fazla göster', en: 'Show more' },
+    'discover-view-lobby': { tr: 'Lobiyi Gör', en: 'View Lobby' },
+    'discover-report': { tr: 'Lobiyi Bildir', en: 'Report Lobby' },
+    'discover-empty': { tr: 'Aramana uygun Lobi bulunamadı. Filtreleri değiştirmeyi dene.', en: 'No lobbies match your search. Try changing the filters.' },
+    'discover-empty-none': { tr: 'Henüz keşfedilebilir Lobi yok.', en: 'There are no discoverable lobbies yet.' },
+    'discover-error': { tr: 'Lobiler şu an alınamadı. Biraz sonra tekrar dene.', en: 'Could not load lobbies. Please try again shortly.' },
+    'discover-minor': { tr: 'Keşfet, 18 yaşından küçük hesaplar için kapalıdır.', en: 'Discover is not available for accounts under 18.' },
+    'discover-all-cats': { tr: 'Tümü', en: 'All' },
+    'discover-all-langs': { tr: 'Tüm diller', en: 'All languages' },
+    'discover-all-policies': { tr: 'Her katılım türü', en: 'Any join type' },
+    'discover-cat-oyun': { tr: 'Oyun', en: 'Gaming' },
+    'discover-cat-sohbet': { tr: 'Sohbet', en: 'Chat' },
+    'discover-cat-muzik': { tr: 'Müzik', en: 'Music' },
+    'discover-cat-yayin': { tr: 'Yayın', en: 'Streaming' },
+    'discover-cat-teknoloji': { tr: 'Teknoloji', en: 'Technology' },
+    'discover-cat-spor': { tr: 'Spor', en: 'Sports' },
+    'discover-cat-diger': { tr: 'Diğer', en: 'Other' },
+    'discover-lang-tr': { tr: 'Türkçe', en: 'Turkish' },
+    'discover-lang-en': { tr: 'English', en: 'English' },
+    'discover-lang-other': { tr: 'Diğer / belirtilmemiş', en: 'Other / unspecified' },
+    'discover-policy-everyone': { tr: 'Herkes katılabilir', en: 'Anyone can join' },
+    'discover-policy-request': { tr: 'İstekle katılım', en: 'Join by request' },
+    'discover-policy-owner_approval': { tr: 'Sahip onayıyla katılım', en: 'Owner approval required' },
+    'discover-mic-required': { tr: 'Mikrofon zorunlu', en: 'Microphone required' },
+    'discover-mic-preferred': { tr: 'Mikrofon tercih edilir', en: 'Microphone preferred' },
+    'discover-mic-none': { tr: 'Mikrofon gerekli değil', en: 'Microphone not required' },
+    'discover-members': { tr: 'üye', en: 'members' },
+    'discover-in-voice': { tr: 'sesli odada', en: 'in voice' },
+    'discover-owner': { tr: 'Sahibi', en: 'Owner' },
+    'discover-fact-members': { tr: 'Üye', en: 'Members' },
+    'discover-fact-category': { tr: 'Kategori', en: 'Category' },
+    'discover-fact-topic': { tr: 'Konu', en: 'Topic' },
+    'discover-fact-language': { tr: 'Dil', en: 'Language' },
+    'discover-fact-join': { tr: 'Katılım', en: 'Joining' },
+    'discover-fact-mic': { tr: 'Mikrofon', en: 'Microphone' },
+    'discover-fact-status': { tr: 'Durum', en: 'Status' },
+    'discover-status-open': { tr: 'Yer var', en: 'Open' },
+    'discover-status-full': { tr: 'Dolu', en: 'Full' },
+    'discover-purpose': { tr: 'Amaç', en: 'Purpose' },
+    'discover-rules': { tr: 'Kurallar', en: 'Rules' },
+    'discover-join': { tr: 'Lobiye Katıl', en: 'Join Lobby' },
+    'discover-join-request': { tr: 'Katılma İsteği Gönder', en: 'Send Join Request' },
+    'discover-go': { tr: 'Lobiye Git', en: 'Open Lobby' },
+    'discover-requested': { tr: 'İstek gönderildi', en: 'Request sent' },
+    'discover-full': { tr: 'Lobi dolu', en: 'Lobby is full' },
+    'discover-joined-toast': { tr: 'Lobiye katıldın.', en: 'You joined the lobby.' },
+    'discover-requested-toast': { tr: 'Katılma isteğin gönderildi. Sahibi onaylayınca üye olacaksın.', en: 'Join request sent. You will become a member once approved.' },
+    'discover-decision-approved': { tr: 'Bir Lobiye katılma isteğin onaylandı.', en: 'Your join request was approved.' },
+    'discover-decision-rejected': { tr: 'Bir Lobiye katılma isteğin reddedildi.', en: 'Your join request was declined.' },
+    'discover-new-request': { tr: 'Lobinde yeni bir katılma isteği var.', en: 'There is a new join request in your lobby.' },
+    'hubset-visibility': { tr: 'Görünürlük', en: 'Visibility' },
+    'hubset-vis-private': { tr: 'Gizli (yalnızca üyeler)', en: 'Private (members only)' },
+    'hubset-vis-invite_only': { tr: 'Yalnızca davetle', en: 'Invite only' },
+    'hubset-vis-discoverable': { tr: 'Keşfedilebilir (Keşfet\'te listelenir)', en: 'Discoverable (listed in Discover)' },
+    'hubset-vis-hint-private': { tr: 'Keşfet\'te görünmez. Üyeler davet koduyla katılır.', en: 'Not shown in Discover. Members join with an invite code.' },
+    'hubset-vis-hint-invite_only': { tr: 'Keşfet\'te görünmez. Yalnızca davetle katılım.', en: 'Not shown in Discover. Join by invite only.' },
+    'hubset-vis-hint-discoverable': { tr: 'Keşfet\'te herkes görebilir. Görünmek otomatik üyelik demek değildir; katılım yöntemini sen belirlersin.', en: 'Anyone can see it in Discover. Being visible does not mean automatic membership; you choose how people join.' },
+    'hubset-vis-minor': { tr: 'Keşfet 18 yaşından küçük hesaplar için kapalıdır.', en: 'Discover is not available for accounts under 18.' },
+    'hubset-category': { tr: 'Kategori', en: 'Category' },
+    'hubset-category-pick': { tr: 'Kategori seç', en: 'Choose a category' },
+    'hubset-topic': { tr: 'Konu / etiket (isteğe bağlı)', en: 'Topic / tag (optional)' },
+    'hubset-topic-placeholder': { tr: 'Örn. Valorant', en: 'e.g. Valorant' },
+    'hubset-description': { tr: 'Amaç / açıklama', en: 'Purpose / description' },
+    'hubset-description-placeholder': { tr: 'Lobi ne amaçla kullanılacak?', en: 'What is this lobby for?' },
+    'hubset-rules': { tr: 'Kurallar (her satıra bir kural)', en: 'Rules (one per line)' },
+    'hubset-rules-placeholder': { tr: 'Saygılı iletişim.\nHakaret ve taciz yok.', en: 'Be respectful.\nNo insults or harassment.' },
+    'hubset-language': { tr: 'Dil', en: 'Language' },
+    'hubset-join-policy': { tr: 'Katılım yöntemi', en: 'Join method' },
+    'hubset-mic': { tr: 'Mikrofon koşulu', en: 'Microphone requirement' },
+    'hubset-capacity': { tr: 'Kapasite (boş = sınırsız)', en: 'Capacity (empty = unlimited)' },
+    'hubset-requests': { tr: 'Katılma İstekleri', en: 'Join Requests' },
+    'hubset-requests-empty': { tr: 'Bekleyen istek yok.', en: 'No pending requests.' },
+    'hubset-approve': { tr: 'Onayla', en: 'Approve' },
+    'hubset-reject': { tr: 'Reddet', en: 'Decline' },
     'hint-call-controls-room': { tr: 'Mikrofon, gürültü engelleme ve diğer ses ayarları için yeşil oda etiketine dokun.', en: 'For microphone, noise suppression and other audio controls, tap the green room label.' },
     'hint-call-controls-dm': { tr: 'Mikrofon ve gürültü engelleme için küçük görüşme çubuğundaki genişlet düğmesine dokun.', en: 'For microphone and noise suppression, tap the expand button on the small call bar.' },
     'nc-label': { tr: 'Gürültü engelleme (yalnızca konuşma)', en: 'Noise suppression (voice only)' },
@@ -4134,6 +4212,16 @@ function connectToChat() {
         if (currentHub && data.hub_id === currentHub.id) {
             openHub(currentHub.id);
         }
+    });
+
+    // Keşfet: sahibe yeni katılma isteği / isteği gönderene karar bildirimi
+    socket.on('hub_join_request', () => {
+        showToast(t('discover-new-request'));
+        if (currentHub && hubSettingsModal.style.display === 'flex') openHub(currentHub.id);
+    });
+    socket.on('hub_join_decision', (data) => {
+        showToast(t(data && data.approved ? 'discover-decision-approved' : 'discover-decision-rejected'));
+        loadHubList();
     });
 
     socket.on('hub_chat_cleared', (data) => {
@@ -8288,6 +8376,7 @@ hubSettingsOpenBtn.addEventListener('click', () => {
     hubSettingsModal.style.display = 'flex';
 
     const isOwner = !!currentHub.is_owner;
+    populateHubDiscoverSettings(isOwner);
     hubSettingsNameInput.disabled = !isOwner;
     hubSettingsImageBtn.disabled = !isOwner;
     hubSettingsSaveBtn.style.display = isOwner ? '' : 'none';
@@ -8462,6 +8551,392 @@ hubSettingsImageInput.addEventListener('change', () => {
 
 });
 
+// ═══ KEŞFET ══════════════════════════════════════════════════════════════
+// Yalnızca keşfedilebilir Lobiler; arama/filtre/sayfalama SUNUCUDA yapılır. Kartta tek eylem "Lobiyi Gör"; katılım yalnızca detay ekranındadır.
+
+const DISCOVER_CATEGORIES = ['oyun', 'sohbet', 'muzik', 'yayin', 'teknoloji', 'spor', 'diger'];
+const DISCOVER_LANGUAGES = ['tr', 'en', 'other'];
+const DISCOVER_POLICIES = ['everyone', 'request', 'owner_approval'];
+const DISCOVER_MICS = ['none', 'preferred', 'required'];
+const discoverState = { q: '', category: '', language: '', join_policy: '', page: 1, hasMore: false, seq: 0, ready: false };
+
+const discoverSearchEl = document.getElementById('discover-search');
+const discoverCategoriesEl = document.getElementById('discover-categories');
+const discoverLanguageEl = document.getElementById('discover-language');
+const discoverPolicyEl = document.getElementById('discover-policy');
+const discoverResultsEl = document.getElementById('discover-results');
+const discoverEmptyEl = document.getElementById('discover-empty');
+const discoverNoticeEl = document.getElementById('discover-notice');
+const discoverMoreBtn = document.getElementById('discover-more');
+const discoverDetailModal = document.getElementById('discover-detail-modal');
+const discoverDetailBody = document.getElementById('discover-detail-body');
+const discoverDetailTitle = document.getElementById('discover-detail-title');
+const discoverDetailError = document.getElementById('discover-detail-error');
+const discoverDetailJoinBtn = document.getElementById('discover-detail-join');
+let discoverDetail = null;
+
+function discoverFillSelect(select, firstLabel, values, labelFor, selected) {
+    select.innerHTML = (firstLabel != null ? `<option value="">${escapeHtml(firstLabel)}</option>` : '')
+        + values.map((v) => `<option value="${escapeAttr(v)}">${escapeHtml(labelFor(v))}</option>`).join('');
+    select.value = selected == null ? '' : selected;
+}
+
+function renderDiscoverFilters() {
+    discoverCategoriesEl.innerHTML = [''].concat(DISCOVER_CATEGORIES).map((c) =>
+        `<button type="button" class="discover-chip${discoverState.category === c ? ' on' : ''}" data-category="${escapeAttr(c)}" aria-pressed="${discoverState.category === c}">${escapeHtml(c ? t('discover-cat-' + c) : t('discover-all-cats'))}</button>`
+    ).join('');
+    discoverFillSelect(discoverLanguageEl, t('discover-all-langs'), DISCOVER_LANGUAGES, (v) => t('discover-lang-' + v), discoverState.language);
+    discoverFillSelect(discoverPolicyEl, t('discover-all-policies'), DISCOVER_POLICIES, (v) => t('discover-policy-' + v), discoverState.join_policy);
+}
+
+function discoverAvatarHtml(lobby) {
+    return lobby.has_image
+        ? `<img src="/api/discover/lobbies/${lobby.id}/image" alt="" loading="lazy" decoding="async">`
+        : hubInitialHtml(lobby.name);
+}
+
+function buildDiscoverCard(lobby) {
+    const card = document.createElement('div');
+    card.className = 'discover-card';
+    card.tabIndex = 0;
+    card.setAttribute('role', 'article');
+
+    const cap = lobby.capacity ? `${lobby.member_count}/${lobby.capacity}` : String(lobby.member_count);
+    const tags = [
+        lobby.category ? `<span class="discover-tag">${escapeHtml(t('discover-cat-' + lobby.category))}</span>` : '',
+        lobby.topic ? `<span class="discover-tag muted">${escapeHtml(lobby.topic)}</span>` : ''
+    ].join('');
+    const voice = lobby.voice_active > 0 ? `<span class="voice-live">🎙 ${lobby.voice_active} ${escapeHtml(t('discover-in-voice'))}</span>` : '';
+    const lang = lobby.language ? `<span>${escapeHtml(t('discover-lang-' + lobby.language))}</span>` : '';
+
+    card.innerHTML = `
+        <div class="discover-card-top">
+            <span class="discover-card-avatar">${discoverAvatarHtml(lobby)}</span>
+            <div style="min-width:0;">
+                <div class="discover-card-name">${escapeHtml(lobby.name)}</div>
+                <div class="discover-card-tags">${tags}</div>
+            </div>
+        </div>
+        <p class="discover-card-desc">${escapeHtml(lobby.description || '')}</p>
+        <div class="discover-card-meta">
+            <span>👥 ${escapeHtml(cap)} ${escapeHtml(t('discover-members'))}</span>${lang}${voice}
+            <span>${escapeHtml(t('discover-owner'))}: ${escapeHtml(lobby.owner_username)}</span>
+        </div>
+        <button type="button" class="discover-card-cta">${escapeHtml(t('discover-view-lobby'))}</button>
+    `;
+
+    const open = () => openDiscoverDetail(lobby.id);
+    card.addEventListener('click', open);
+    card.addEventListener('keydown', (event) => { if (event.key === 'Enter') open(); });
+    return card;
+}
+
+async function loadDiscover(reset) {
+
+    if (reset) { discoverState.page = 1; discoverResultsEl.innerHTML = ''; }
+    discoverEmptyEl.style.display = 'none';
+    discoverNoticeEl.style.display = 'none';
+    const seq = ++discoverState.seq;
+
+    if (currentUser && currentUser.is_minor) {
+        discoverNoticeEl.textContent = t('discover-minor');
+        discoverNoticeEl.style.display = 'block';
+        discoverMoreBtn.style.display = 'none';
+        return;
+    }
+
+    const params = new URLSearchParams({ page: String(discoverState.page), limit: '12' });
+    if (discoverState.q) params.set('q', discoverState.q);
+    if (discoverState.category) params.set('category', discoverState.category);
+    if (discoverState.language) params.set('language', discoverState.language);
+    if (discoverState.join_policy) params.set('join_policy', discoverState.join_policy);
+
+    try {
+        const response = await fetch(`/api/discover/lobbies?${params}`, { credentials: 'include' });
+        const data = await response.json();
+        if (seq !== discoverState.seq) return; // daha yeni bir arama başladı
+
+        if (response.status === 403) { discoverNoticeEl.textContent = data.error || t('discover-minor'); discoverNoticeEl.style.display = 'block'; discoverMoreBtn.style.display = 'none'; return; }
+        if (!data.success) throw new Error(data.error || 'hata');
+
+        data.lobbies.forEach((lobby) => discoverResultsEl.appendChild(buildDiscoverCard(lobby)));
+        discoverState.hasMore = Boolean(data.has_more);
+        discoverMoreBtn.style.display = discoverState.hasMore ? 'block' : 'none';
+
+        if (data.total === 0) {
+            const filtered = discoverState.q || discoverState.category || discoverState.language || discoverState.join_policy;
+            discoverEmptyEl.textContent = t(filtered ? 'discover-empty' : 'discover-empty-none');
+            discoverEmptyEl.style.display = 'block';
+        }
+    } catch (error) {
+        if (seq !== discoverState.seq) return;
+        console.error('Keşfet yüklenemedi:', error);
+        discoverEmptyEl.textContent = t('discover-error');
+        discoverEmptyEl.style.display = 'block';
+        discoverMoreBtn.style.display = 'none';
+    }
+}
+
+function openDiscover() {
+    switchToView('discover');
+    renderDiscoverFilters();
+    loadDiscover(true);
+}
+
+(function wireDiscover() {
+    if (!discoverSearchEl) return;
+    let timer = null;
+    discoverSearchEl.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => { discoverState.q = discoverSearchEl.value.trim(); loadDiscover(true); }, 300);
+    });
+    discoverCategoriesEl.addEventListener('click', (event) => {
+        const btn = event.target.closest('[data-category]');
+        if (!btn) return;
+        discoverState.category = btn.dataset.category;
+        renderDiscoverFilters();
+        loadDiscover(true);
+    });
+    discoverLanguageEl.addEventListener('change', () => { discoverState.language = discoverLanguageEl.value; loadDiscover(true); });
+    discoverPolicyEl.addEventListener('change', () => { discoverState.join_policy = discoverPolicyEl.value; loadDiscover(true); });
+    discoverMoreBtn.addEventListener('click', () => { discoverState.page += 1; loadDiscover(false); });
+
+    const menuBtn = document.getElementById('discover-open-btn');
+    if (menuBtn) menuBtn.addEventListener('click', () => {
+        const dropdown = document.getElementById('topbar-menu-dropdown');
+        if (dropdown) dropdown.style.display = 'none';
+        openDiscover();
+    });
+
+    document.getElementById('discover-detail-close').addEventListener('click', () => { discoverDetailModal.style.display = 'none'; });
+    discoverDetailModal.addEventListener('click', (event) => { if (event.target === discoverDetailModal) discoverDetailModal.style.display = 'none'; });
+    document.getElementById('discover-detail-report').addEventListener('click', () => {
+        if (discoverDetail) openReportModal('hub', discoverDetail.id, discoverDetail.name);
+    });
+    discoverDetailJoinBtn.addEventListener('click', joinDiscoverDetail);
+})();
+
+function discoverDetailButtonState(lobby) {
+    const full = lobby.capacity && lobby.member_count >= lobby.capacity;
+    if (lobby.is_member) return { label: t('discover-go'), disabled: false, mode: 'open' };
+    if (lobby.my_request_status === 'pending') return { label: t('discover-requested'), disabled: true, mode: 'none' };
+    if (full) return { label: t('discover-full'), disabled: true, mode: 'none' };
+    return { label: t(lobby.join_policy === 'everyone' ? 'discover-join' : 'discover-join-request'), disabled: false, mode: 'join' };
+}
+
+function renderDiscoverDetail(lobby) {
+    discoverDetail = lobby;
+    discoverDetailTitle.textContent = lobby.name;
+    discoverDetailError.textContent = '';
+
+    const full = lobby.capacity && lobby.member_count >= lobby.capacity;
+    const cap = lobby.capacity ? `${lobby.member_count}/${lobby.capacity}` : String(lobby.member_count);
+    const fact = (label, value) => value ? `<div class="discover-fact"><b>${escapeHtml(label)}</b><span>${escapeHtml(value)}</span></div>` : '';
+    const rules = (lobby.rules || '').split('\n').map((l) => l.trim()).filter(Boolean);
+
+    discoverDetailBody.innerHTML = `
+        <div class="discover-detail-top">
+            <span class="discover-card-avatar">${discoverAvatarHtml(lobby)}</span>
+            <div style="min-width:0;">
+                <div class="discover-card-name" style="white-space:normal;">${escapeHtml(lobby.name)}</div>
+                <div class="discover-detail-owner">${escapeHtml(t('discover-owner'))}: ${escapeHtml(lobby.owner_username)}</div>
+            </div>
+        </div>
+        <div class="discover-facts">
+            ${fact(t('discover-fact-members'), cap)}
+            ${fact(t('discover-fact-status'), t(full ? 'discover-status-full' : 'discover-status-open'))}
+            ${fact(t('discover-fact-category'), lobby.category ? t('discover-cat-' + lobby.category) : '')}
+            ${fact(t('discover-fact-topic'), lobby.topic)}
+            ${fact(t('discover-fact-language'), lobby.language ? t('discover-lang-' + lobby.language) : '')}
+            ${fact(t('discover-fact-join'), t('discover-policy-' + lobby.join_policy))}
+            ${fact(t('discover-fact-mic'), t('discover-mic-' + lobby.mic_requirement))}
+            ${lobby.voice_active > 0 ? fact('🎙', `${lobby.voice_active} ${t('discover-in-voice')}`) : ''}
+        </div>
+        ${lobby.description ? `<div class="discover-detail-section"><h4>${escapeHtml(t('discover-purpose'))}</h4><p>${escapeHtml(lobby.description)}</p></div>` : ''}
+        ${rules.length ? `<div class="discover-detail-section"><h4>${escapeHtml(t('discover-rules'))}</h4><ul class="discover-rules">${rules.map((r) => `<li>${escapeHtml(r)}</li>`).join('')}</ul></div>` : ''}
+    `;
+
+    const state = discoverDetailButtonState(lobby);
+    discoverDetailJoinBtn.textContent = state.label;
+    discoverDetailJoinBtn.disabled = state.disabled;
+    discoverDetailJoinBtn.dataset.mode = state.mode;
+    document.getElementById('discover-detail-report').style.display = lobby.is_owner ? 'none' : '';
+}
+
+async function openDiscoverDetail(id) {
+    try {
+        const response = await fetch(`/api/discover/lobbies/${id}`, { credentials: 'include' });
+        const data = await response.json();
+        if (!data.success) { showToast(data.error || t('discover-error')); return; }
+        renderDiscoverDetail(data.lobby);
+        discoverDetailModal.style.display = 'flex';
+    } catch (error) {
+        console.error('Lobi detayı alınamadı:', error);
+        showToast(t('discover-error'));
+    }
+}
+
+async function joinDiscoverDetail() {
+    if (!discoverDetail) return;
+    const mode = discoverDetailJoinBtn.dataset.mode;
+
+    if (mode === 'open') {
+        discoverDetailModal.style.display = 'none';
+        openHub(discoverDetail.id);
+        return;
+    }
+    if (mode !== 'join') return;
+
+    discoverDetailJoinBtn.disabled = true;
+    discoverDetailError.textContent = '';
+
+    try {
+        const response = await fetch(`/api/discover/lobbies/${discoverDetail.id}/join`, { method: 'POST', credentials: 'include' });
+        const data = await response.json();
+
+        if (!data.success) {
+            discoverDetailError.textContent = data.error || t('discover-error');
+            discoverDetailJoinBtn.disabled = false;
+            return;
+        }
+
+        if (data.status === 'joined') {
+            showToast(t('discover-joined-toast'));
+            discoverDetailModal.style.display = 'none';
+            loadHubList();
+            openHub(discoverDetail.id);
+        } else {
+            showToast(t('discover-requested-toast'));
+            discoverDetail.my_request_status = 'pending';
+            renderDiscoverDetail(discoverDetail);
+        }
+    } catch (error) {
+        console.error('Keşfet katılım hatası:', error);
+        discoverDetailError.textContent = t('discover-error');
+        discoverDetailJoinBtn.disabled = false;
+    }
+}
+
+// ─── Lobi ayarları: Keşfet alanları (yalnızca sahip) ────────────────────────
+const hubsetVisibility = document.getElementById('hubset-visibility');
+
+function hubsetSelect(id, values, labelFor, first) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    el.innerHTML = (first ? `<option value="">${escapeHtml(first)}</option>` : '') + values.map((v) => `<option value="${escapeAttr(v)}">${escapeHtml(labelFor(v))}</option>`).join('');
+    return el;
+}
+
+function syncHubsetVisibilityUi() {
+    const value = hubsetVisibility.value;
+    document.getElementById('hubset-discover-fields').style.display = value === 'discoverable' ? 'flex' : 'none';
+    document.getElementById('hubset-discover-fields').style.flexDirection = 'column';
+    document.getElementById('hubset-discover-fields').style.gap = '8px';
+    const hint = currentUser && currentUser.is_minor && value !== 'discoverable' ? t('hubset-vis-minor') : t('hubset-vis-hint-' + value);
+    document.getElementById('hubset-visibility-hint').textContent = hint;
+}
+
+function populateHubDiscoverSettings(isOwner) {
+    const box = document.getElementById('hub-discover-settings');
+    const reqBtn = document.getElementById('hub-requests-open-btn');
+    document.getElementById('hub-settings-main-view').style.display = '';
+    document.getElementById('hub-settings-requests-view').style.display = 'none';
+
+    // Katılma istekleri: sunucu yalnızca yetkili kullanıcıya sayıyı gönderir.
+    const pending = currentHub && currentHub.pending_join_requests;
+    reqBtn.style.display = typeof pending === 'number' ? 'flex' : 'none';
+    document.getElementById('hub-requests-count').textContent = pending ? String(pending) : '';
+
+    if (!box) return;
+    box.style.display = isOwner ? 'flex' : 'none';
+    if (!isOwner) return;
+
+    const visValues = (currentUser && currentUser.is_minor) ? ['private', 'invite_only'] : ['private', 'invite_only', 'discoverable'];
+    hubsetSelect('hubset-visibility', visValues, (v) => t('hubset-vis-' + v));
+    hubsetSelect('hubset-category', DISCOVER_CATEGORIES, (v) => t('discover-cat-' + v), t('hubset-category-pick'));
+    hubsetSelect('hubset-language', DISCOVER_LANGUAGES, (v) => t('discover-lang-' + v), '—');
+    hubsetSelect('hubset-join-policy', DISCOVER_POLICIES, (v) => t('discover-policy-' + v));
+    hubsetSelect('hubset-mic', DISCOVER_MICS, (v) => t('discover-mic-' + v));
+
+    hubsetVisibility.value = currentHub.visibility || 'private';
+    document.getElementById('hubset-category').value = currentHub.category || '';
+    document.getElementById('hubset-topic').value = currentHub.topic || '';
+    document.getElementById('hubset-description').value = currentHub.description || '';
+    document.getElementById('hubset-rules').value = currentHub.rules || '';
+    document.getElementById('hubset-language').value = currentHub.language || '';
+    document.getElementById('hubset-join-policy').value = currentHub.join_policy || 'everyone';
+    document.getElementById('hubset-mic').value = currentHub.mic_requirement || 'none';
+    document.getElementById('hubset-capacity').value = currentHub.capacity || '';
+    syncHubsetVisibilityUi();
+}
+
+if (hubsetVisibility) hubsetVisibility.addEventListener('change', syncHubsetVisibilityUi);
+
+// Sunucuya yalnızca sahibin gördüğü alanlar gönderilir; keşfedilebilir değilse ayrıntı alanları değiştirilmez.
+function collectHubDiscoverSettings() {
+    const visibility = hubsetVisibility.value || 'private';
+    const body = { visibility };
+    if (visibility === 'discoverable') {
+        const capacity = document.getElementById('hubset-capacity').value.trim();
+        Object.assign(body, {
+            category: document.getElementById('hubset-category').value || null,
+            topic: document.getElementById('hubset-topic').value,
+            description: document.getElementById('hubset-description').value,
+            rules: document.getElementById('hubset-rules').value,
+            language: document.getElementById('hubset-language').value || null,
+            join_policy: document.getElementById('hubset-join-policy').value || 'everyone',
+            mic_requirement: document.getElementById('hubset-mic').value || 'none',
+            capacity: capacity ? Number(capacity) : null
+        });
+    }
+    return body;
+}
+
+// ─── Katılma istekleri (Lobi ayarları alt görünümü) ─────────────────────────
+async function loadHubJoinRequests() {
+    const list = document.getElementById('hub-settings-requests-list');
+    list.innerHTML = '';
+    try {
+        const response = await fetch(`/api/hubs/${currentHub.id}/join-requests`, { credentials: 'include' });
+        const data = await response.json();
+        if (!data.success) { list.textContent = data.error || ''; return; }
+        if (!data.requests.length) { list.innerHTML = `<p class="hubset-hint">${escapeHtml(t('hubset-requests-empty'))}</p>`; }
+        data.requests.forEach((req) => {
+            const row = document.createElement('div');
+            row.className = 'join-request-row';
+            row.innerHTML = `<span class="join-request-name">${escapeHtml(req.username)}</span>
+                <button type="button" class="join-request-approve">${escapeHtml(t('hubset-approve'))}</button>
+                <button type="button" class="join-request-reject">${escapeHtml(t('hubset-reject'))}</button>`;
+            const decide = async (decision) => {
+                row.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+                try {
+                    const r = await fetch(`/api/hubs/${currentHub.id}/join-requests/${req.id}/${decision}`, { method: 'POST', credentials: 'include' });
+                    const d = await r.json();
+                    if (!d.success) showToast(d.error || t('discover-error'));
+                } catch (_) { showToast(t('discover-error')); }
+                loadHubJoinRequests();
+            };
+            row.querySelector('.join-request-approve').addEventListener('click', () => decide('approve'));
+            row.querySelector('.join-request-reject').addEventListener('click', () => decide('reject'));
+            list.appendChild(row);
+        });
+        currentHub.pending_join_requests = data.requests.length;
+        document.getElementById('hub-requests-count').textContent = data.requests.length ? String(data.requests.length) : '';
+    } catch (error) {
+        console.error('Katılma istekleri alınamadı:', error);
+    }
+}
+
+document.getElementById('hub-requests-open-btn')?.addEventListener('click', () => {
+    document.getElementById('hub-settings-main-view').style.display = 'none';
+    document.getElementById('hub-settings-requests-view').style.display = '';
+    loadHubJoinRequests();
+});
+document.getElementById('hub-requests-back-btn')?.addEventListener('click', () => {
+    document.getElementById('hub-settings-requests-view').style.display = 'none';
+    document.getElementById('hub-settings-main-view').style.display = '';
+});
+
 hubSettingsSaveBtn.addEventListener('click', async () => {
 
     if (!currentHub) return;
@@ -8475,6 +8950,7 @@ hubSettingsSaveBtn.addEventListener('click', async () => {
 
     const body = { name };
     if (hubSettingsNewImageData !== undefined) body.image_data = hubSettingsNewImageData;
+    if (currentHub.is_owner) Object.assign(body, collectHubDiscoverSettings());
 
     try {
 
@@ -8636,6 +9112,8 @@ function switchToView(view) {
 
     hubListView.style.display = view === 'hubs' ? 'flex' : 'none';
     hubDetailView.style.display = view === 'hub-detail' ? 'flex' : 'none';
+    const discoverViewEl = document.getElementById('discover-view');
+    if (discoverViewEl) discoverViewEl.style.display = view === 'discover' ? 'flex' : 'none';
 
     // "Ana Menü" başlığı üst çubukta sadece Ana Menü (Lobi listesi) ekranındayken görünür.
     const topbarContextTitle = document.getElementById('topbar-context-title');

@@ -223,6 +223,42 @@ if (!hubColumns.includes('daily_room_name')) {
 }
 
 // =====================================================
+// KEŞFET (keşfedilebilir Lobiler) — GERİYE UYUMLU EK ALANLAR
+// =====================================================
+// Mevcut Lobiler 'private' (mevcut davranış: yalnızca davet koduyla katılım, Keşfet'te görünmez) olarak kalır; hiçbiri kendiliğinden keşfedilebilir olmaz.
+// `description` sütunu zaten vardı; Keşfet'te "amaç/açıklama" olarak kullanılır.
+const DISCOVER_HUB_COLUMNS = {
+  visibility: `TEXT NOT NULL DEFAULT 'private'`,     // private | invite_only | discoverable
+  category: `TEXT`,                                  // oyun | sohbet | muzik | yayin | teknoloji | spor | diger
+  topic: `TEXT`,                                     // serbest kısa konu/etiket (ör. Valorant)
+  rules: `TEXT`,                                     // düz metin, satır satır
+  language: `TEXT`,                                  // tr | en | other
+  join_policy: `TEXT NOT NULL DEFAULT 'everyone'`,   // everyone | request | owner_approval
+  mic_requirement: `TEXT NOT NULL DEFAULT 'none'`,   // required | preferred | none
+  capacity: `INTEGER`                                // NULL = sınırsız
+};
+for (const [column, definition] of Object.entries(DISCOVER_HUB_COLUMNS)) {
+  if (!hubColumns.includes(column)) db.exec(`ALTER TABLE hubs ADD COLUMN ${column} ${definition}`);
+}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS hub_join_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hub_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',            -- pending | approved | rejected
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    decided_by INTEGER,
+    decided_at DATETIME,
+    UNIQUE(hub_id, user_id),
+    FOREIGN KEY (hub_id) REFERENCES hubs(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_hubs_discover ON hubs(visibility, category, language);
+  CREATE INDEX IF NOT EXISTS idx_hub_join_requests_hub ON hub_join_requests(hub_id, status);
+`);
+
+// =====================================================
 // v1.16 MIGRATION — SESLİ ODALAR (BİRDEN FAZLA)
 // =====================================================
 
@@ -2300,7 +2336,67 @@ function getMessages(limit = 50, room = 'general') {
 // HUB SİSTEMİ
 // =====================================================
 
-function createHub(userId, { name, image_data }) {
+const HUB_VISIBILITIES = ['private', 'invite_only', 'discoverable'];
+const HUB_CATEGORIES = ['oyun', 'sohbet', 'muzik', 'yayin', 'teknoloji', 'spor', 'diger'];
+const HUB_LANGUAGES = ['tr', 'en', 'other'];
+const HUB_JOIN_POLICIES = ['everyone', 'request', 'owner_approval'];
+const HUB_MIC_REQUIREMENTS = ['required', 'preferred', 'none'];
+const DISCOVER_FIELD_KEYS = ['visibility', 'category', 'topic', 'description', 'rules', 'language', 'join_policy', 'mic_requirement', 'capacity'];
+
+// Keşfet alanlarını doğrular. Yalnızca verilen (undefined olmayan) alanlar işlenir; geçerli olanlar { alan: değer } olarak döner.
+// current: mevcut Lobi satırı (keşfedilebilir yapma koşulları için birleşik değer kontrolü).
+function validateHubDiscoveryFields(input, current, { isMinor } = {}) {
+  const out = {};
+  const pick = (key, list, error) => {
+    if (input[key] === undefined) return null;
+    if (input[key] === null || input[key] === '') { out[key] = null; return null; }
+    if (!list.includes(input[key])) return error;
+    out[key] = input[key];
+    return null;
+  };
+
+  if (input.visibility !== undefined) {
+    if (!HUB_VISIBILITIES.includes(input.visibility)) return { success: false, error: 'Geçersiz görünürlük.' };
+    if (input.visibility === 'discoverable' && isMinor) return { success: false, error: 'Keşfet, 18 yaşından küçük hesaplar için kapalıdır.' };
+    out.visibility = input.visibility;
+  }
+  const errors = [
+    pick('category', HUB_CATEGORIES, 'Geçersiz kategori.'),
+    pick('language', HUB_LANGUAGES, 'Geçersiz dil.'),
+    pick('join_policy', HUB_JOIN_POLICIES, 'Geçersiz katılım yöntemi.'),
+    pick('mic_requirement', HUB_MIC_REQUIREMENTS, 'Geçersiz mikrofon koşulu.')
+  ].filter(Boolean);
+  if (errors.length) return { success: false, error: errors[0] };
+
+  const text = (key, max, label) => {
+    if (input[key] === undefined) return null;
+    const value = input[key] === null ? '' : String(input[key]).replace(/\r\n/g, '\n').trim();
+    if (value.length > max) return `${label} en fazla ${max} karakter olabilir.`;
+    out[key] = value || null;
+    return null;
+  };
+  const textError = text('topic', 40, 'Konu') || text('description', 300, 'Açıklama') || text('rules', 800, 'Kurallar');
+  if (textError) return { success: false, error: textError };
+
+  if (input.capacity !== undefined) {
+    if (input.capacity === null || input.capacity === '') out.capacity = null;
+    else {
+      const cap = Number(input.capacity);
+      if (!Number.isInteger(cap) || cap < 2 || cap > 500) return { success: false, error: 'Kapasite 2 ile 500 arasında olmalıdır.' };
+      out.capacity = cap;
+    }
+  }
+
+  // Keşfedilebilir bir Lobi anlamlı bir kart gösterebilmeli: kategori + kısa amaç zorunlu.
+  const merged = { ...(current || {}), ...out };
+  if (merged.visibility === 'discoverable') {
+    if (!merged.category) return { success: false, error: 'Keşfedilebilir Lobi için kategori seçmelisin.' };
+    if (!merged.description || merged.description.length < 10) return { success: false, error: 'Keşfedilebilir Lobi için en az 10 karakterlik bir amaç/açıklama yazmalısın.' };
+  }
+  return { success: true, fields: out };
+}
+
+function createHub(userId, { name, image_data, ...discovery }, { isMinor } = {}) {
   try {
     name = String(name || '').trim();
 
@@ -2317,8 +2413,18 @@ function createHub(userId, { name, image_data }) {
       VALUES (?, 'custom', '🧩', ?, ?)
     `);
 
+    // Keşfet alanları (isteğe bağlı) — geçersizse Lobi hiç oluşturulmaz.
+    const discoveryInput = {};
+    for (const key of DISCOVER_FIELD_KEYS) if (discovery[key] !== undefined) discoveryInput[key] = discovery[key];
+    const checked = Object.keys(discoveryInput).length ? validateHubDiscoveryFields(discoveryInput, null, { isMinor }) : { success: true, fields: {} };
+    if (!checked.success) return checked;
+
     const hubResult = insertHub.run(name, stripImageMetadata(image_data) || null, userId);
     const hubId = hubResult.lastInsertRowid;
+
+    for (const [key, value] of Object.entries(checked.fields)) {
+      db.prepare(`UPDATE hubs SET ${key} = ? WHERE id = ?`).run(value, hubId);
+    }
 
     db.prepare(`INSERT INTO hub_members (hub_id, user_id, permission_tier) VALUES (?, ?, 'owner')`).run(hubId, userId);
 
@@ -2330,10 +2436,16 @@ function createHub(userId, { name, image_data }) {
   }
 }
 
-function updateHub(hubId, userId, { name, image_data }) {
-  const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
+function updateHub(hubId, userId, { name, image_data, ...discovery }, { isMinor } = {}) {
+  const hub = db.prepare(`SELECT * FROM hubs WHERE id = ?`).get(hubId);
   if (!hub) return { success: false, error: 'Hub bulunamadı.' };
   if (hub.created_by !== userId) return { success: false, error: 'Sadece Hub sahibi düzenleyebilir.' };
+
+  // Keşfet alanları: hepsi doğrulanmadan hiçbir alan (ad/görsel dahil) değiştirilmez.
+  const discoveryInput = {};
+  for (const key of DISCOVER_FIELD_KEYS) if (discovery[key] !== undefined) discoveryInput[key] = discovery[key];
+  const checked = Object.keys(discoveryInput).length ? validateHubDiscoveryFields(discoveryInput, hub, { isMinor }) : { success: true, fields: {} };
+  if (!checked.success) return checked;
 
   if (name !== undefined) {
     name = String(name || '').trim();
@@ -2350,7 +2462,162 @@ function updateHub(hubId, userId, { name, image_data }) {
     db.prepare(`UPDATE hubs SET image_data = ? WHERE id = ?`).run(stripImageMetadata(image_data) || null, hubId);
   }
 
+  for (const [key, value] of Object.entries(checked.fields)) {
+    db.prepare(`UPDATE hubs SET ${key} = ? WHERE id = ?`).run(value, hubId);
+  }
+
   return { success: true };
+}
+
+// =====================================================
+// KEŞFET — listeleme, detay, katılım
+// =====================================================
+// Yalnızca visibility='discoverable' Lobiler. Private/invite_only Lobiler hiçbir Keşfet sorgusunda yer almaz (sunucu tarafında zorunlu).
+// Yasaklı (ban) kullanıcıya ilgili Lobi hiç gösterilmez. Mesaj/üye listesi döndürülmez; yalnızca özet.
+
+const DISCOVER_SUMMARY_SELECT = `
+  hubs.id, hubs.name, hubs.category, hubs.topic, hubs.description, hubs.language, hubs.join_policy, hubs.mic_requirement,
+  hubs.capacity, hubs.created_at, hubs.created_by, users.username AS owner_username,
+  CASE WHEN hubs.image_data IS NOT NULL AND hubs.image_data != '' THEN 1 ELSE 0 END AS has_image,
+  (SELECT COUNT(*) FROM hub_members WHERE hub_members.hub_id = hubs.id) AS member_count,
+  (SELECT MAX(messages.created_at) FROM messages WHERE messages.hub_id = hubs.id) AS last_activity,
+  EXISTS(SELECT 1 FROM hub_members WHERE hub_members.hub_id = hubs.id AND hub_members.user_id = @uid) AS is_member,
+  (SELECT status FROM hub_join_requests WHERE hub_join_requests.hub_id = hubs.id AND hub_join_requests.user_id = @uid) AS my_request_status
+`;
+
+function listDiscoverableHubs(userId, { q, category, language, join_policy, page, limit } = {}) {
+  const pageNum = Math.max(1, Math.min(Number(page) || 1, 1000));
+  const pageSize = Math.max(1, Math.min(Number(limit) || 12, 24));
+
+  const where = [`hubs.visibility = 'discoverable'`, `NOT EXISTS (SELECT 1 FROM hub_bans WHERE hub_bans.hub_id = hubs.id AND hub_bans.user_id = @uid)`];
+  const params = { uid: userId };
+
+  const search = String(q || '').trim().toLowerCase().slice(0, 60);
+  if (search) {
+    where.push(`(LOWER(hubs.name) LIKE @q ESCAPE '\\' OR LOWER(COALESCE(hubs.description, '')) LIKE @q ESCAPE '\\' OR LOWER(COALESCE(hubs.topic, '')) LIKE @q ESCAPE '\\')`);
+    params.q = `%${escapeLike(search)}%`;
+  }
+  if (category && HUB_CATEGORIES.includes(category)) { where.push(`hubs.category = @category`); params.category = category; }
+  if (language && HUB_LANGUAGES.includes(language)) { where.push(`hubs.language = @language`); params.language = language; }
+  if (join_policy && HUB_JOIN_POLICIES.includes(join_policy)) { where.push(`hubs.join_policy = @join_policy`); params.join_policy = join_policy; }
+
+  const whereSql = where.join(' AND ');
+  const total = db.prepare(`SELECT COUNT(*) AS c FROM hubs WHERE ${whereSql}`).get(params).c;
+
+  const rows = db.prepare(`
+    SELECT ${DISCOVER_SUMMARY_SELECT}
+    FROM hubs INNER JOIN users ON users.id = hubs.created_by
+    WHERE ${whereSql}
+    ORDER BY COALESCE(last_activity, hubs.created_at) DESC, hubs.id DESC
+    LIMIT @limit OFFSET @offset
+  `).all({ ...params, limit: pageSize, offset: (pageNum - 1) * pageSize });
+
+  const lobbies = rows.map((r) => ({
+    ...r,
+    description: r.description && r.description.length > 140 ? r.description.slice(0, 140).trimEnd() + '…' : r.description,
+    has_image: Boolean(r.has_image),
+    is_member: Boolean(r.is_member)
+  }));
+
+  return { lobbies, total, page: pageNum, limit: pageSize, has_more: pageNum * pageSize < total };
+}
+
+// Keşfet detayı: yalnızca keşfedilebilir Lobi; aksi halde (özel/davetli/yok/yasaklı) null → çağıran 404 döner (varlık sızdırılmaz).
+function getDiscoverableHubDetail(hubId, userId) {
+  const row = db.prepare(`
+    SELECT ${DISCOVER_SUMMARY_SELECT}, hubs.rules
+    FROM hubs INNER JOIN users ON users.id = hubs.created_by
+    WHERE hubs.id = @hubId AND hubs.visibility = 'discoverable'
+      AND NOT EXISTS (SELECT 1 FROM hub_bans WHERE hub_bans.hub_id = hubs.id AND hub_bans.user_id = @uid)
+  `).get({ hubId, uid: userId });
+  if (!row) return null;
+  return { ...row, has_image: Boolean(row.has_image), is_member: Boolean(row.is_member), is_owner: row.created_by === userId };
+}
+
+// Keşfet görseli (yalnızca keşfedilebilir Lobi ya da üye).
+function getDiscoverableHubImage(hubId, userId) {
+  const row = db.prepare(`SELECT visibility, image_data FROM hubs WHERE id = ?`).get(hubId);
+  if (!row || !row.image_data) return null;
+  if (row.visibility !== 'discoverable' && !isHubMember(hubId, userId)) return null;
+  return row.image_data;
+}
+
+const JOIN_REQUEST_RETENTION_DAYS = 30;
+
+// Keşfet'ten katılım: koşullar kontrol edilir; görünür olmak otomatik üyelik demek değildir.
+function joinDiscoverableHub(hubId, userId, { isMinor } = {}) {
+  const hub = db.prepare(`SELECT id, created_by, join_policy, capacity FROM hubs WHERE id = ? AND visibility = 'discoverable'`).get(hubId);
+  if (!hub) return { success: false, status: 404, error: 'Lobi bulunamadı.' };
+  if (isMinor) return { success: false, status: 403, error: 'Keşfet, 18 yaşından küçük hesaplar için kapalıdır.' };
+  if (isHubBanned(hubId, userId)) return { success: false, status: 404, error: 'Lobi bulunamadı.' };
+  if (isHubMember(hubId, userId)) return { success: false, status: 400, error: 'Bu Lobi\'ye zaten üyesin.' };
+
+  const count = () => db.prepare(`SELECT COUNT(*) AS c FROM hub_members WHERE hub_id = ?`).get(hubId).c;
+  if (hub.capacity && count() >= hub.capacity) return { success: false, status: 400, error: 'Bu Lobi dolu.' };
+
+  if (hub.join_policy === 'everyone') {
+    db.prepare(`INSERT INTO hub_members (hub_id, user_id) VALUES (?, ?)`).run(hubId, userId);
+    db.prepare(`DELETE FROM hub_join_requests WHERE hub_id = ? AND user_id = ?`).run(hubId, userId);
+    return { success: true, status: 'joined', owner_id: hub.created_by };
+  }
+
+  // request / owner_approval: onay bekleyen istek. Eski karar kayıtları saklama süresi sonunda silinir.
+  db.prepare(`DELETE FROM hub_join_requests WHERE status != 'pending' AND decided_at < datetime('now', ?)`).run(`-${JOIN_REQUEST_RETENTION_DAYS} days`);
+
+  const existing = db.prepare(`SELECT status, decided_at FROM hub_join_requests WHERE hub_id = ? AND user_id = ?`).get(hubId, userId);
+  if (existing && existing.status === 'pending') return { success: true, status: 'already_requested', owner_id: hub.created_by };
+  if (existing && existing.status === 'rejected' && existing.decided_at > sqlTimeAgo(new Date(), 1)) {
+    return { success: false, status: 400, error: 'Katılma isteğin yakın zamanda reddedildi. Daha sonra tekrar deneyebilirsin.' };
+  }
+
+  db.prepare(`
+    INSERT INTO hub_join_requests (hub_id, user_id, status) VALUES (?, ?, 'pending')
+    ON CONFLICT(hub_id, user_id) DO UPDATE SET status = 'pending', created_at = CURRENT_TIMESTAMP, decided_by = NULL, decided_at = NULL
+  `).run(hubId, userId);
+  return { success: true, status: 'requested', owner_id: hub.created_by };
+}
+
+// Katılma istekleri: 'request' yönteminde sahip veya moderatör, 'owner_approval'da yalnızca sahip görür/karar verir.
+function canDecideJoinRequests(hubId, actorId) {
+  const hub = db.prepare(`SELECT join_policy FROM hubs WHERE id = ?`).get(hubId);
+  if (!hub) return false;
+  const tier = getMemberTier(hubId, actorId);
+  if (tier === 'owner') return true;
+  return tier === 'moderator' && hub.join_policy === 'request';
+}
+
+function listHubJoinRequests(hubId, actorId) {
+  if (!canDecideJoinRequests(hubId, actorId)) return { success: false, status: 403, error: 'Bu işlem için yetkin yok.' };
+  const requests = db.prepare(`
+    SELECT hub_join_requests.id, hub_join_requests.user_id, hub_join_requests.created_at, users.username
+    FROM hub_join_requests INNER JOIN users ON users.id = hub_join_requests.user_id
+    WHERE hub_join_requests.hub_id = ? AND hub_join_requests.status = 'pending'
+    ORDER BY hub_join_requests.created_at ASC LIMIT 100
+  `).all(hubId);
+  return { success: true, requests };
+}
+
+function decideHubJoinRequest(hubId, requestId, actorId, approve) {
+  if (!canDecideJoinRequests(hubId, actorId)) return { success: false, status: 403, error: 'Bu işlem için yetkin yok.' };
+  const request = db.prepare(`SELECT id, user_id FROM hub_join_requests WHERE id = ? AND hub_id = ? AND status = 'pending'`).get(requestId, hubId);
+  if (!request) return { success: false, status: 404, error: 'İstek bulunamadı.' };
+
+  if (approve) {
+    const hub = db.prepare(`SELECT capacity FROM hubs WHERE id = ?`).get(hubId);
+    if (hub.capacity && db.prepare(`SELECT COUNT(*) AS c FROM hub_members WHERE hub_id = ?`).get(hubId).c >= hub.capacity) {
+      return { success: false, status: 400, error: 'Lobi dolu.' };
+    }
+    if (isHubBanned(hubId, request.user_id)) return { success: false, status: 400, error: 'Bu kullanıcı Lobiden yasaklı.' };
+    if (!isHubMember(hubId, request.user_id)) db.prepare(`INSERT INTO hub_members (hub_id, user_id) VALUES (?, ?)`).run(hubId, request.user_id);
+  }
+
+  db.prepare(`UPDATE hub_join_requests SET status = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP WHERE id = ?`)
+    .run(approve ? 'approved' : 'rejected', actorId, requestId);
+  return { success: true, user_id: request.user_id, approved: Boolean(approve) };
+}
+
+function countPendingHubJoinRequests(hubId) {
+  return db.prepare(`SELECT COUNT(*) AS c FROM hub_join_requests WHERE hub_id = ? AND status = 'pending'`).get(hubId).c;
 }
 
 function listHubs(userId) {
@@ -4050,7 +4317,8 @@ function getAccountExport(userId) {
   // Kullanıcının oluşturduğu lobilere ait KENDİ verisi (ayarlar, roller, sesli odalar, davet istatistikleri). Üye listesi/ban listesi
   // başkalarının verisi olduğundan yalnızca sayı olarak verilir; davet kodları erişim sırrı olduğundan verilmez.
   const ownedHubs = db.prepare(`
-    SELECT id, name, type, template, icon, description, image_data, created_at FROM hubs WHERE created_by = ?
+    SELECT id, name, type, template, icon, description, image_data, created_at,
+           visibility, category, topic, rules, language, join_policy, mic_requirement, capacity FROM hubs WHERE created_by = ?
   `).all(userId).map((hub) => ({
     ...hub,
     member_count: db.prepare(`SELECT COUNT(*) AS c FROM hub_members WHERE hub_id = ?`).get(hub.id).c,
@@ -4117,6 +4385,7 @@ function getAccountExport(userId) {
     messages,
     hub_memberships: hubs,
     owned_hubs: ownedHubs,
+    hub_join_requests: db.prepare(`SELECT hubs.name AS hub_name, hub_join_requests.status, hub_join_requests.created_at, hub_join_requests.decided_at FROM hub_join_requests INNER JOIN hubs ON hubs.id = hub_join_requests.hub_id WHERE hub_join_requests.user_id = ?`).all(userId),
     friendships,
     blocked_users: blocked,
     reactions,
@@ -5593,6 +5862,14 @@ module.exports = {
   saveDmVoiceMessage,
   createDmFileMessage,
   saveDmSticker,
+  listDiscoverableHubs,
+  getDiscoverableHubDetail,
+  getDiscoverableHubImage,
+  joinDiscoverableHub,
+  listHubJoinRequests,
+  decideHubJoinRequest,
+  countPendingHubJoinRequests,
+  canDecideJoinRequests,
   saveDmCallLog,
   getDmMessages,
   addReaction,
