@@ -3410,6 +3410,18 @@ const I18N = {
     'voice-room-user-joined': { tr: 'odaya katıldı', en: 'joined the room' },
     'voice-room-user-left': { tr: 'odadan ayrıldı', en: 'left the room' },
     'voice-room-removed': { tr: 'Sesli odadan çıkarıldın.', en: 'You were removed from the voice room.' },
+    'session-check-unreachable': { tr: 'Sunucuya şu an ulaşılamıyor; oturumun kapanmış olmayabilir. Biraz sonra sayfayı yenile.', en: 'The server is unreachable right now; your session may still be valid. Refresh in a moment.' },
+    'voice-recovering': { tr: 'Ses bağlantısı yeniden kuruluyor...', en: 'Restoring audio connection...' },
+    'voice-recover-failed': { tr: 'Mikrofon geri açılamadı. Mikrofon iznini kontrol et; sorun sürerse odadan çıkıp tekrar gir.', en: 'Could not restore the microphone. Check the microphone permission; if it persists, leave and rejoin.' },
+    'audio-mic-title': { tr: 'Mikrofon', en: 'Microphone' },
+    'audio-out-title': { tr: 'Ses çıkışı', en: 'Audio output' },
+    'audio-default': { tr: 'Varsayılan', en: 'Default' },
+    'audio-route-speaker': { tr: 'Hoparlör', en: 'Speaker' },
+    'audio-route-earpiece': { tr: 'Telefon ahizesi', en: 'Phone earpiece' },
+    'audio-route-bluetooth': { tr: 'Bluetooth', en: 'Bluetooth' },
+    'audio-route-wired': { tr: 'Kablolu kulaklık', en: 'Wired headset' },
+    'audio-route-usb': { tr: 'USB ses', en: 'USB audio' },
+    'audio-route-other': { tr: 'Diğer', en: 'Other' },
     'voice-room-replaced': { tr: 'Başka bir cihazdan bu odaya katıldın.', en: 'You joined this room from another device.' },
     'notif-pref-voice-presence': { tr: 'Sesli oda katılma/ayrılma bildirimleri', en: 'Voice room join/leave notices' },
     'notif-pref-voice-sound': { tr: 'Sesli oda katılma/ayrılma sesi', en: 'Voice room join/leave sound' },
@@ -3620,6 +3632,17 @@ document.getElementById('about-me-input')?.addEventListener('input', (event) => 
     if (count) count.textContent = `${event.target.value.length}/300`;
 });
 
+// Hakkımda bilgi balonu: masaüstünde hover/odak (CSS), dokunmatikte/tıklamada aç-kapa
+(function initAboutInfoTip() {
+    const btn = document.getElementById('about-info-btn');
+    const row = btn && btn.closest('.about-label-row');
+    if (!btn || !row) return;
+    const setOpen = (open) => { row.classList.toggle('open', open); btn.setAttribute('aria-expanded', open ? 'true' : 'false'); };
+    btn.addEventListener('click', (event) => { event.stopPropagation(); setOpen(!row.classList.contains('open')); });
+    document.addEventListener('click', (event) => { if (!row.contains(event.target)) setOpen(false); });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') setOpen(false); });
+})();
+
 document.getElementById('about-me-save-btn')?.addEventListener('click', async () => {
 
     const input = document.getElementById('about-me-input');
@@ -3632,17 +3655,6 @@ document.getElementById('about-me-save-btn')?.addEventListener('click', async ()
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify({ about_me: input.value })
-// Hakkımda bilgi balonu: masaüstünde hover/odak (CSS), dokunmatikte/tıklamada aç-kapa
-(function initAboutInfoTip() {
-    const btn = document.getElementById('about-info-btn');
-    const row = btn && btn.closest('.about-label-row');
-    if (!btn || !row) return;
-    const setOpen = (open) => { row.classList.toggle('open', open); btn.setAttribute('aria-expanded', open ? 'true' : 'false'); };
-    btn.addEventListener('click', (event) => { event.stopPropagation(); setOpen(!row.classList.contains('open')); });
-    document.addEventListener('click', (event) => { if (!row.contains(event.target)) setOpen(false); });
-    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') setOpen(false); });
-})();
-
         });
 
         const data = await response.json();
@@ -4658,61 +4670,48 @@ document.addEventListener('keydown', (event) => {
 // SESSION KONTROLÜ
 // =====================================================
 
+// Sayfa yenilenince oturum kontrolü: yalnızca sunucu oturumu gerçekten yok dediğinde (401) giriş formu gösterilir.
+// Geçici sorunlar (ağ kopması, 5xx, 429 hız sınırı) geçerli oturumu "çıkış yapılmış" gibi göstermesin diye
+// birkaç kez yeniden denenir; hâlâ ulaşılamıyorsa kullanıcı, gerçek sebebi anlatan bir mesajla giriş formuna alınır.
 async function checkExistingSession() {
 
-    try {
+    const RETRY_DELAYS_MS = [800, 2000, 4000];
+    let transientFailure = false;
 
-        const response =
-            await fetch(
-                '/api/me',
-                {
-                    method: 'GET',
-                    credentials: 'include'
+    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+
+        try {
+
+            const response = await fetch('/api/me', { method: 'GET', credentials: 'include' });
+
+            if (response.status === 401) { showLoginForm(); return; }
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.user) {
+                    setCurrentUser(data.user);
+                    connectToChat();
+                } else {
+                    showLoginForm();
                 }
-            );
+                return;
+            }
 
+            transientFailure = true; // 5xx / 429 / diğer: oturumun geçersiz olduğu anlamına GELMEZ
 
-        if (!response.ok) {
+        } catch (error) {
 
-            showLoginForm();
-
-            return;
-
-        }
-
-
-        const data =
-            await response.json();
-
-
-        if (
-            data.success &&
-            data.user
-        ) {
-
-            setCurrentUser(
-                data.user
-            );
-
-
-            connectToChat();
-
-        } else {
-
-            showLoginForm();
+            console.error('Session kontrolü başarısız:', error);
+            transientFailure = true;
 
         }
 
-    } catch (error) {
-
-        console.error(
-            'Session kontrolü başarısız:',
-            error
-        );
-
-        showLoginForm();
+        if (attempt < RETRY_DELAYS_MS.length) await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
 
     }
+
+    showLoginForm();
+    if (transientFailure) showAuthError(t('session-check-unreachable'));
 
 }
 
@@ -9441,6 +9440,8 @@ async function joinCallFrame(roomUrl, token) {
 
         callMicEverLive = callMicEverLive || Boolean(callFrame.localAudio());
         startCallBackgroundKeepAlive();
+        startCallHealthMonitor();
+        refreshAudioDevices();
 
     } catch (error) {
         callFrame.destroy();
@@ -9499,6 +9500,7 @@ function wireCallAudioUnlock() {
 
         audioEl.srcObject = new MediaStream([event.track]);
         audioEl.muted = voiceDeafened;
+        applySinkToAudioEl(audioEl);
         audioEl.play().catch(() => {});
 
     });
@@ -9703,6 +9705,8 @@ function startCallBackgroundKeepAlive() {
 function stopCallBackgroundKeepAlive() {
 
     stopNativeVoiceService();
+    stopCallHealthMonitor();
+    resetAudioSession();
 
     callRecoveryTimers.forEach(clearTimeout);
     callRecoveryTimers = [];
@@ -9733,38 +9737,128 @@ function stopCallBackgroundKeepAlive() {
     }
 }
 
-// Öne dönünce: uzak sesi tekrar oynat ve — kullanıcı KENDİSİ susturmadıysa — mikrofonu geri aç.
+// ─── MİKROFON SAĞLIĞI VE KURTARMA ────────────────────────────────────────
+// Sorun yalnızca "sessize alma" değildir; yerel ses izi şu durumlarda bozulabilir:
+//   disabled     : Daily'de yerel ses kapalı (biz kapatmadıysak açmak yeter)
+//   interrupted  : tarayıcı/OS yakalamayı askıya aldı (başka uygulama sesi/mikrofonu aldı)
+//   ended        : iz sonlandı (cihaz çıkarıldı, izin geri alındı, OS yakalamayı kapattı)
+//   os-muted     : iz "muted" (OS/ses odağı kaybı); iz sonlanmamış ama ses yok
+//   no-track     : iz hiç yok
+// Yalnızca gerçekten bozuk durumda, sınırlı sayıda ve kullanıcıya bildirerek yeniden alınır.
+
+const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const CALL_RECOVERY_MAX_PER_MIN = 3;
+const CALL_HEALTH_TICK_MS = 10_000;
+let callHealthTimer = null;
+let callHealthTicks = 0;
+let callRecoveryBusy = false;
+let callRecoveryHistory = [];
+let callRecoveryFailedShown = false;
+let callWatchedTrack = null;
+let callCustomMicTrack = null; // getUserMedia ile kendimizin aldığı yedek iz (Daily'ye verilir; çıkışta durdurulur)
+
+function localAudioHealth() {
+    if (!callFrame) return { ok: true, reason: 'no-call' };
+    const audio = callFrame.participants()?.local?.tracks?.audio;
+    const track = audio?.persistentTrack || null;
+    if (!callFrame.localAudio()) return { ok: false, reason: 'disabled', track };
+    if (audio?.state === 'interrupted') return { ok: false, reason: 'interrupted', track };
+    if (!track) return { ok: false, reason: 'no-track', track };
+    if (track.readyState === 'ended') return { ok: false, reason: 'ended', track };
+    if (track.muted) return { ok: false, reason: 'os-muted', track };
+    return { ok: true, reason: 'ok', track };
+}
+
+function watchLocalAudioTrack() {
+    const track = callFrame?.participants()?.local?.tracks?.audio?.persistentTrack || null;
+    if (!track || track === callWatchedTrack) return;
+    callWatchedTrack = track;
+    const onChange = () => { if (callFrame && callWatchedTrack === track) scheduleCallRecovery(); };
+    track.addEventListener('ended', onChange);
+    track.addEventListener('mute', onChange);
+    track.addEventListener('unmute', onChange);
+}
+
+// Kendi aldığımız izi (seçili cihazla) Daily'ye verir; seçili cihaz artık yoksa varsayılana düşer.
+async function reacquireLocalMic() {
+    let stream = null;
+    const wanted = audioSession.selectedInputId;
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: wanted ? { deviceId: { exact: wanted } } : true });
+    } catch (error) {
+        if (wanted && (error?.name === 'OverconstrainedError' || error?.name === 'NotFoundError')) {
+            audioSession.selectedInputId = null; // seçilen cihaz gitti → varsayılan mikrofona düş
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } else {
+            throw error;
+        }
+    }
+    const track = stream.getAudioTracks()[0];
+    if (callCustomMicTrack && callCustomMicTrack !== track) { try { callCustomMicTrack.stop(); } catch (_) { /* yoksay */ } }
+    callCustomMicTrack = track;
+    await callFrame.setInputDevicesAsync({ audioSource: track });
+}
+
+// Öne dönünce / ağ gelince / iz olayında / periyodik: uzak sesi tekrar oynat ve —
+// kullanıcı KENDİSİ susturmadıysa — bozuk mikrofonu onar.
 async function recoverCallMedia() {
 
-    if (!callFrame || document.visibilityState !== 'visible') return;
+    if (!callFrame || document.visibilityState !== 'visible' || callRecoveryBusy) return;
 
     tryPlayAllCallAudio();
 
     // Kullanıcı (ya da moderatör) bilerek sessize aldıysa dokunma. İzin hiç verilmediyse de deneme.
     if (voiceUserMuted || !callMicEverLive) return;
 
+    let health = localAudioHealth();
+    if (health.ok) { watchLocalAudioTrack(); return; }
+
+    callRecoveryBusy = true;
+
     try {
-        const local = callFrame.participants()?.local;
-        const audio = local?.tracks?.audio;
-        const track = audio?.persistentTrack;
 
-        const interrupted = audio?.state === 'interrupted';
-        const ended = track?.readyState === 'ended';
-        const lost = !callFrame.localAudio() || interrupted || ended || Boolean(track?.muted);
-        if (!lost) return;
-
-        callFrame.setLocalAudio(true);
-
-        // Yakalama gerçekten sonlanmışsa (track kapanmış / kesintiye uğramış) mikrofonu yeniden al.
-        if ((interrupted || ended) && typeof callFrame.setInputDevicesAsync === 'function') {
-            await callFrame.setInputDevicesAsync({ audioSource: true });
+        // 1) Yalnızca "kapalı" ise açmak yeter.
+        if (health.reason === 'disabled') {
             callFrame.setLocalAudio(true);
+            await sleepMs(500);
+            health = localAudioHealth();
         }
 
-        if (callMode === 'hub-room' && voiceLocalMuted) syncLocalMuteState(false);
+        // 2) İz gerçekten bozuk: mikrofonu yeniden al. Sonsuz döngüye karşı dakikada en fazla 3 deneme.
+        if (!health.ok) {
+            const now = Date.now();
+            callRecoveryHistory = callRecoveryHistory.filter((at) => now - at < 60_000);
+            if (callRecoveryHistory.length >= CALL_RECOVERY_MAX_PER_MIN) {
+                if (!callRecoveryFailedShown) { callRecoveryFailedShown = true; showToast(t('voice-recover-failed')); }
+                return;
+            }
+            callRecoveryHistory.push(now);
+
+            showToast(t('voice-recovering'));
+            callFrame.setLocalAudio(true);
+            try {
+                await reacquireLocalMic();
+            } catch (error) {
+                // Kendi yakalamamız olmadıysa Daily'nin kendi yeniden almasını dene.
+                console.warn('Mikrofon yeniden alınamadı, Daily ile denenecek:', error?.name || error);
+                if (typeof callFrame.setInputDevicesAsync === 'function') await callFrame.setInputDevicesAsync({ audioSource: true });
+            }
+            callFrame.setLocalAudio(true);
+            await sleepMs(700);
+            health = localAudioHealth();
+        }
+
+        if (health.ok) {
+            callRecoveryFailedShown = false;
+            if (callMode === 'hub-room' && voiceLocalMuted) syncLocalMuteState(false);
+            watchLocalAudioTrack();
+        }
 
     } catch (error) {
         console.warn('Mikrofon geri açılamadı:', error);
+        if (!callRecoveryFailedShown) { callRecoveryFailedShown = true; showToast(t('voice-recover-failed')); }
+    } finally {
+        callRecoveryBusy = false;
     }
 }
 
@@ -9774,14 +9868,335 @@ function scheduleCallRecovery() {
     callRecoveryTimers = [0, 400, 1500, 4000].map((ms) => setTimeout(recoverCallMedia, ms));
 }
 
+// Sesli oda üyeliği sunucuda bellekte tutulur; socket kopmasında/sunucu yeniden başlamasında silinebilir.
+// Daily bağlantısı açıkken listede kaybolmamak için üyelik periyodik ve öne dönünce yeniden ilan edilir (idempotent).
+const VOICE_PRESENCE_TRANSIENT_ERRORS = ['Sunucu yanıt vermedi.', 'Gerçek zamanlı bağlantı yok.'];
+
+async function syncVoicePresence() {
+
+    if (callMode !== 'hub-room' || !voiceSessionConfirmed || voiceRejoining || !socket || !socket.connected) return;
+
+    voiceRejoining = true;
+    let ack;
+    try { ack = await emitVoiceRoomJoin(); } finally { voiceRejoining = false; }
+
+    if (callMode !== 'hub-room') return;
+
+    if (!ack.success) {
+        if (VOICE_PRESENCE_TRANSIENT_ERRORS.includes(ack.error)) return; // geçici: bir sonraki turda tekrar dene
+        showToast(ack.error || t('voice-room-removed'));
+        leaveCall();
+        return;
+    }
+
+    if (JSON.stringify(ack.participants) !== JSON.stringify(currentVoiceParticipants)) {
+        currentVoiceParticipants = ack.participants;
+        renderHubRoomGrid(currentVoiceParticipants);
+        updateVoiceSessionSummary();
+        if (currentHub) renderVoiceRoomsList();
+    }
+}
+
+function startCallHealthMonitor() {
+    stopCallHealthMonitor();
+    callHealthTicks = 0;
+    callHealthTimer = setInterval(() => {
+        if (!callFrame) return;
+        callHealthTicks += 1;
+        if (document.visibilityState === 'visible') {
+            const health = localAudioHealth();
+            if (!health.ok && !voiceUserMuted && callMicEverLive) recoverCallMedia();
+        }
+        if (callHealthTicks % 3 === 0) syncVoicePresence(); // ~30 sn
+    }, CALL_HEALTH_TICK_MS);
+    setTimeout(watchLocalAudioTrack, 1500);
+}
+
+function stopCallHealthMonitor() {
+    if (callHealthTimer) { clearInterval(callHealthTimer); callHealthTimer = null; }
+    callRecoveryHistory = [];
+    callRecoveryFailedShown = false;
+    callWatchedTrack = null;
+    if (callCustomMicTrack) { try { callCustomMicTrack.stop(); } catch (_) { /* yoksay */ } callCustomMicTrack = null; }
+}
+
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && callFrame) {
         requestCallWakeLock();
         scheduleCallRecovery();
+        syncVoicePresence();
     }
 });
 window.addEventListener('pageshow', () => { if (callFrame) { requestCallWakeLock(); scheduleCallRecovery(); } });
 window.addEventListener('focus', () => { if (callFrame) scheduleCallRecovery(); });
+window.addEventListener('online', () => { if (callFrame) { scheduleCallRecovery(); syncVoicePresence(); } });
+
+
+
+// ─── SES OTURUMU: mikrofon/çıkış seçimi, hoparlör↔ahize, yakınlık algılama ─
+// Ses odası ve DM araması aynı callFrame (Daily) üzerinde çalıştığı için tek ortak katman kullanılır.
+// Özellik algılama: desteklenmeyen platformda ilgili düğme HİÇ gösterilmez.
+//   • Mikrofon seçimi   : navigator.mediaDevices.enumerateDevices + Daily setInputDevicesAsync (tüm platformlar)
+//   • Çıkış seçimi (web): HTMLMediaElement.setSinkId — yalnızca masaüstü Chromium/Edge; Android Chrome/WebView'da YOK
+//   • Hoparlör↔ahize    : yalnızca yerel Android uygulamasında (SauranVoice eklentisi, AudioManager) — yeni APK gerekir
+//   • Yakınlık sensörü  : yalnızca yerel Android uygulamasında, ahize seçiliyken
+// Cihaz adları/kimlikleri yalnızca bellekte tutulur; sunucuya gönderilmez, depoya yazılmaz.
+
+const audioSession = {
+    inputs: [],            // { id, label }
+    outputs: [],           // web setSinkId çıkışları { id, label }
+    selectedInputId: null,
+    selectedOutputId: null,
+    native: { available: false, routes: [], active: null },
+    devicechangeWired: false
+};
+
+const supportsSinkId = typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype;
+const callMicArrowBtn = document.getElementById('call-mic-arrow-btn');
+const callSpeakerBtn = document.getElementById('call-speaker-btn');
+const callOutArrowBtn = document.getElementById('call-out-arrow-btn');
+const callDeviceMenu = document.getElementById('call-device-menu');
+
+const AUDIO_ICONS = {
+    speaker: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 0 1 0 6M18.500 6.500a8 8 0 0 1 0 11"/></svg>',
+    earpiece: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.500 3.500h3l1.500 4-2 1.500a11 11 0 0 0 6 6l1.500-2 4 1.500v3a2 2 0 0 1-2 2A16 16 0 0 1 4.500 5.500a2 2 0 0 1 2-2z"/></svg>',
+    chevron: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 10l5 5 5-5"/></svg>'
+};
+
+function audioRouteLabel(type, name) {
+    const key = { speaker: 'audio-route-speaker', earpiece: 'audio-route-earpiece', bluetooth: 'audio-route-bluetooth', wired: 'audio-route-wired', usb: 'audio-route-usb' }[type];
+    const base = key ? t(key) : t('audio-route-other');
+    return name && type !== 'speaker' && type !== 'earpiece' ? `${base} · ${name}` : base;
+}
+
+function applySinkToAudioEl(el) {
+    if (!supportsSinkId || !audioSession.selectedOutputId || typeof el.setSinkId !== 'function') return;
+    el.setSinkId(audioSession.selectedOutputId).catch(() => { /* cihaz yok/izin yok → varsayılan çıkışta kalır */ });
+}
+
+function isMobileNative() {
+    return Boolean(getNativeVoice());
+}
+
+async function refreshNativeRoutes() {
+    const plugin = getNativeVoice();
+    if (!plugin || typeof plugin.getAudioRoutes !== 'function') { audioSession.native = { available: false, routes: [], active: null }; return; }
+    try {
+        const result = await plugin.getAudioRoutes();
+        const routes = Array.isArray(result?.routes) ? result.routes : [];
+        audioSession.native = { available: routes.length > 0, routes, active: result?.active ?? null };
+        if (!audioSession.nativeWired && typeof plugin.addListener === 'function') {
+            audioSession.nativeWired = true;
+            plugin.addListener('audioRoutesChanged', () => refreshAudioDevices());
+        }
+    } catch (_) {
+        // Eski APK: yöntem yok → yerel yönlendirme desteklenmiyor, düğme gösterilmez.
+        audioSession.native = { available: false, routes: [], active: null };
+    }
+}
+
+let audioRefreshTimer = null;
+
+async function refreshAudioDevices() {
+
+    if (!callFrame) return;
+
+    try {
+        if (navigator.mediaDevices && typeof navigator.mediaDevices.enumerateDevices === 'function') {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const clean = (kind) => devices
+                .filter((d) => d.kind === kind && d.deviceId && d.deviceId !== 'communications')
+                .map((d) => ({ id: d.deviceId, label: d.deviceId === 'default' ? t('audio-default') : (d.label || t('audio-route-other')) }));
+            audioSession.inputs = clean('audioinput');
+            audioSession.outputs = supportsSinkId ? clean('audiooutput') : [];
+        }
+    } catch (_) { /* izin/destek yok → liste boş kalır */ }
+
+    await refreshNativeRoutes();
+
+    // Seçili cihaz artık yoksa (kulaklık çıkarıldı) güvenli varsayılana düş.
+    if (audioSession.selectedInputId && !audioSession.inputs.some((d) => d.id === audioSession.selectedInputId)) {
+        audioSession.selectedInputId = null;
+        scheduleCallRecovery();
+    }
+    if (audioSession.selectedOutputId && !audioSession.outputs.some((d) => d.id === audioSession.selectedOutputId)) {
+        audioSession.selectedOutputId = null;
+        document.querySelectorAll('audio[data-call-audio]').forEach((el) => { if (typeof el.setSinkId === 'function') el.setSinkId('').catch(() => {}); });
+    }
+
+    updateAudioControls();
+}
+
+function wireAudioDeviceChange() {
+    if (audioSession.devicechangeWired || !navigator.mediaDevices || typeof navigator.mediaDevices.addEventListener !== 'function') return;
+    audioSession.devicechangeWired = true;
+    navigator.mediaDevices.addEventListener('devicechange', () => {
+        clearTimeout(audioRefreshTimer);
+        audioRefreshTimer = setTimeout(() => { if (callFrame) refreshAudioDevices(); }, 400);
+    });
+}
+wireAudioDeviceChange();
+
+function nativeSpeakerToggleAvailable() {
+    const types = audioSession.native.routes.map((r) => r.type);
+    return audioSession.native.available && types.includes('speaker') && types.includes('earpiece');
+}
+
+function updateAudioControls() {
+
+    const inCall = Boolean(callFrame);
+    const showMicArrow = inCall && audioSession.inputs.length > 1;
+    const nativeToggle = inCall && nativeSpeakerToggleAvailable();
+    const webOutMenu = inCall && !nativeToggle && audioSession.outputs.length > 1;
+
+    // Mikrofon oku: hub odasında ana mikrofon düğmesinin yanında; DM aramasında (mute düğmesi yok) mikrofon simgesiyle.
+    if (callMicArrowBtn) {
+        callMicArrowBtn.style.display = showMicArrow ? 'inline-flex' : 'none';
+        callMicArrowBtn.classList.toggle('has-mic-icon', callMuteBtn.style.display === 'none');
+        callMicArrowBtn.innerHTML = (callMuteBtn.style.display === 'none' ? VOICE_CTRL_ICONS.mic : '') + AUDIO_ICONS.chevron;
+        callMicArrowBtn.setAttribute('aria-label', t('audio-mic-title'));
+        callMicArrowBtn.title = t('audio-mic-title');
+    }
+
+    if (callSpeakerBtn) {
+        const active = audioSession.native.routes.find((r) => r.id === audioSession.native.active);
+        const onEarpiece = nativeToggle && active && active.type === 'earpiece';
+        callSpeakerBtn.style.display = (nativeToggle || webOutMenu) ? 'inline-flex' : 'none';
+        callSpeakerBtn.innerHTML = onEarpiece ? AUDIO_ICONS.earpiece : AUDIO_ICONS.speaker;
+        callSpeakerBtn.classList.toggle('on-earpiece', Boolean(onEarpiece));
+        const label = nativeToggle ? (onEarpiece ? t('audio-route-earpiece') : t('audio-route-speaker')) : t('audio-out-title');
+        callSpeakerBtn.setAttribute('aria-label', label);
+        callSpeakerBtn.title = label;
+        callSpeakerBtn.setAttribute('aria-pressed', nativeToggle ? String(!onEarpiece) : 'false');
+    }
+
+    if (callOutArrowBtn) {
+        // Yerel modda ok yalnızca ikiden fazla rota (Bluetooth/kablolu/USB) varken anlamlıdır.
+        callOutArrowBtn.style.display = (nativeToggle && audioSession.native.routes.length > 2) ? 'inline-flex' : 'none';
+        callOutArrowBtn.innerHTML = AUDIO_ICONS.chevron;
+        callOutArrowBtn.setAttribute('aria-label', t('audio-out-title'));
+        callOutArrowBtn.title = t('audio-out-title');
+    }
+}
+
+function closeDeviceMenu() {
+    if (callDeviceMenu) { callDeviceMenu.style.display = 'none'; callDeviceMenu.innerHTML = ''; }
+}
+
+function openDeviceMenu(kind, anchor) {
+
+    if (!callDeviceMenu || !anchor) return;
+    if (callDeviceMenu.style.display === 'flex' && callDeviceMenu.dataset.kind === kind) { closeDeviceMenu(); return; }
+
+    let items = [];
+    let title = '';
+    if (kind === 'input') {
+        title = t('audio-mic-title');
+        items = audioSession.inputs.map((d) => ({ id: d.id, label: d.label, selected: (audioSession.selectedInputId || 'default') === d.id || (!audioSession.selectedInputId && d.id === audioSession.inputs[0]?.id && !audioSession.inputs.some((x) => x.id === 'default')) }));
+    } else if (audioSession.native.available && nativeSpeakerToggleAvailable()) {
+        title = t('audio-out-title');
+        items = audioSession.native.routes.map((r) => ({ id: r.id, label: audioRouteLabel(r.type, r.name), selected: r.id === audioSession.native.active }));
+    } else {
+        title = t('audio-out-title');
+        items = audioSession.outputs.map((d) => ({ id: d.id, label: d.label, selected: (audioSession.selectedOutputId || 'default') === d.id }));
+    }
+    if (!items.length) return;
+
+    callDeviceMenu.dataset.kind = kind;
+    callDeviceMenu.innerHTML = `<div class="call-device-menu-title">${escapeHtml(title)}</div>` + items.map((it) =>
+        `<button type="button" role="menuitemradio" aria-checked="${it.selected ? 'true' : 'false'}" data-device-id="${escapeAttr(it.id)}" class="${it.selected ? 'selected' : ''}"><span>${escapeHtml(it.label)}</span><span class="call-device-check" aria-hidden="true">${it.selected ? '✓' : ''}</span></button>`
+    ).join('');
+
+    const rect = anchor.getBoundingClientRect();
+    callDeviceMenu.style.display = 'flex';
+    const width = Math.min(callDeviceMenu.offsetWidth || 240, window.innerWidth - 16);
+    callDeviceMenu.style.left = `${Math.max(8, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - 8))}px`;
+    // Alt çubukta (mobil/masaüstü sesli oda çubuğu) menü yukarı, aksi hâlde aşağı açılır.
+    const menuHeight = callDeviceMenu.offsetHeight || 160;
+    const openUp = rect.bottom + 8 + menuHeight > window.innerHeight - 8;
+    callDeviceMenu.style.top = `${Math.max(8, openUp ? rect.top - menuHeight - 8 : rect.bottom + 8)}px`;
+}
+
+async function chooseInputDevice(id) {
+    closeDeviceMenu();
+    if (!callFrame) return;
+    try {
+        await callFrame.setInputDevicesAsync({ audioDeviceId: id });
+        audioSession.selectedInputId = id === 'default' ? null : id;
+        if (callCustomMicTrack) { try { callCustomMicTrack.stop(); } catch (_) { /* yoksay */ } callCustomMicTrack = null; }
+        if (!voiceUserMuted) callFrame.setLocalAudio(true);
+        watchLocalAudioTrack();
+    } catch (error) {
+        console.warn('Mikrofon değiştirilemedi:', error);
+        showToast(t('voice-recover-failed'));
+    }
+    updateAudioControls();
+}
+
+async function chooseOutputDevice(id) {
+    closeDeviceMenu();
+    const native = audioSession.native.available && nativeSpeakerToggleAvailable();
+    if (native) {
+        await setNativeRoute(id);
+        return;
+    }
+    audioSession.selectedOutputId = id === 'default' ? null : id;
+    document.querySelectorAll('audio[data-call-audio]').forEach((el) => {
+        if (typeof el.setSinkId === 'function') el.setSinkId(audioSession.selectedOutputId || '').catch(() => {});
+    });
+    updateAudioControls();
+}
+
+async function setNativeRoute(id) {
+    const plugin = getNativeVoice();
+    if (!plugin || typeof plugin.setAudioRoute !== 'function') return;
+    try {
+        const result = await plugin.setAudioRoute({ id });
+        audioSession.native.active = result?.active ?? id;
+    } catch (error) {
+        console.warn('Ses çıkışı değiştirilemedi:', error);
+    }
+    await refreshNativeRoutes();
+    updateAudioControls();
+}
+
+// Hoparlör düğmesi: yerel modda hoparlör ↔ ahize; masaüstünde çıkış cihazı menüsünü açar.
+function onSpeakerButton() {
+    if (nativeSpeakerToggleAvailable()) {
+        const active = audioSession.native.routes.find((r) => r.id === audioSession.native.active);
+        const target = audioSession.native.routes.find((r) => r.type === (active && active.type === 'earpiece' ? 'speaker' : 'earpiece'));
+        if (target) setNativeRoute(target.id);
+        return;
+    }
+    openDeviceMenu('output', callSpeakerBtn);
+}
+
+if (callMicArrowBtn) callMicArrowBtn.addEventListener('click', (event) => { event.stopPropagation(); openDeviceMenu('input', callMicArrowBtn); });
+if (callSpeakerBtn) callSpeakerBtn.addEventListener('click', (event) => { event.stopPropagation(); onSpeakerButton(); });
+if (callOutArrowBtn) callOutArrowBtn.addEventListener('click', (event) => { event.stopPropagation(); openDeviceMenu('output', callOutArrowBtn); });
+if (callDeviceMenu) {
+    callDeviceMenu.addEventListener('click', (event) => {
+        const btn = event.target.closest('button[data-device-id]');
+        if (!btn) return;
+        event.stopPropagation();
+        if (callDeviceMenu.dataset.kind === 'input') chooseInputDevice(btn.dataset.deviceId);
+        else chooseOutputDevice(btn.dataset.deviceId);
+    });
+}
+document.addEventListener('click', (event) => {
+    if (callDeviceMenu && callDeviceMenu.style.display === 'flex' && !callDeviceMenu.contains(event.target)) closeDeviceMenu();
+});
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeDeviceMenu(); });
+
+function resetAudioSession() {
+    closeDeviceMenu();
+    audioSession.inputs = [];
+    audioSession.outputs = [];
+    audioSession.selectedInputId = null;
+    audioSession.selectedOutputId = null;
+    audioSession.native = { available: false, routes: [], active: null };
+    [callMicArrowBtn, callSpeakerBtn, callOutArrowBtn].forEach((el) => { if (el) el.style.display = 'none'; });
+}
 
 
 function leaveCall() {

@@ -2575,6 +2575,10 @@ function pushNotification(userId, type, data) {
 
 const voiceRoomParticipants = new Map();
 
+// Mobil uygulama arka plana alınınca socket kısa süre kopabilir (Daily/WebRTC bağlantısı açık kalır). Katılımcı hemen
+// listeden silinmesin diye kopmada kısa bir tolerans süresi tanınır; süre içinde aynı kullanıcı yeniden katılırsa kayıt korunur.
+const VOICE_DISCONNECT_GRACE_MS = 25 * 1000;
+
 function serializeVoiceParticipants(roomId) {
   return Array.from(voiceRoomParticipants.get(roomId)?.values() || []).map(p => ({
     user_id: p.user_id,
@@ -2616,6 +2620,7 @@ function removeVoiceParticipant(userId, roomId, socketId) {
   if (!entry) return false;
   if (socketId && entry.socketId !== socketId) return false;
 
+  if (entry.graceTimer) { clearTimeout(entry.graceTimer); entry.graceTimer = null; }
   members.delete(userId);
   if (members.size === 0) voiceRoomParticipants.delete(roomId);
 
@@ -3494,6 +3499,9 @@ io.on('connection', (socket) => {
 
       if (!voiceRoomParticipants.has(roomId)) voiceRoomParticipants.set(roomId, new Map());
 
+      const replacedEntry = voiceRoomParticipants.get(roomId).get(socket.userId);
+      if (replacedEntry && replacedEntry.graceTimer) clearTimeout(replacedEntry.graceTimer);
+
       voiceRoomParticipants.get(roomId).set(socket.userId, {
         user_id: socket.userId,
         username: socket.username,
@@ -3566,7 +3574,14 @@ io.on('connection', (socket) => {
     if (!socket.userId) return;
 
     if (socket.data.voiceRoomId) {
-      removeVoiceParticipant(socket.userId, socket.data.voiceRoomId, socket.id);
+      const roomId = socket.data.voiceRoomId;
+      const entry = voiceRoomParticipants.get(roomId)?.get(socket.userId);
+      if (entry && entry.socketId === socket.id) {
+        // Tolerans: süre dolmadan aynı kullanıcı yeniden katılırsa (voice_room_join) zamanlayıcı iptal edilir.
+        if (entry.graceTimer) clearTimeout(entry.graceTimer);
+        entry.graceTimer = setTimeout(() => removeVoiceParticipant(socket.userId, roomId, socket.id), VOICE_DISCONNECT_GRACE_MS);
+        if (entry.graceTimer.unref) entry.graceTimer.unref();
+      }
     }
 
     const userSockets = activeUsers.get(socket.userId);
