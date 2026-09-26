@@ -91,3 +91,21 @@ Sistemde 18 yaş altı hesap tanımı var. Öneri: **ödeme yalnızca 18 yaş ü
 2. Muhasebeci ve hukukçuyla 6. bölümü görüş.
 3. Betada "hangi özellik için ödemeye razısın" sorusunu kullanıcılara sor.
 4. Karar sonrası ayrı bir teknik tasarım belgesi hazırla (bu belge kod içermez).
+
+## 11. Verilen kararlar ve açık kalanlar (26 Eylül 2026 görüşmesi)
+
+| Konu | Karar / durum |
+|---|---|
+| Yasal yapı (şahıs / sermaye şirketi) | **Henüz yok, önce karar verilecek.** Ödeme sağlayıcısı seçimi ve ödeme kodu bu karara bağlı; **şimdilik ertelendi.** |
+| Play Store ödeme yolu | **Emin değil.** Play Faturalandırma zorunluluğu ve Türkiye komisyonu Play Console'dan doğrulanacak; Play başvurusu sırasında netleşir. |
+| Ücretli özellik tipleri | **Büyük dosya limiti, profil ve lobi özelleştirme, ek sticker paketleri.** Sesli oda kapasitesi ücretli katmana **alınmadı**; sesli iletişim ücretsiz kalır. |
+| 18 yaş altı | **Emin değil.** Karar hukukçuya danışılana kadar varsayılan: 18 yaş altı hesaplara ücretli özellik **satılmaz**. |
+| Fiyat | Betadan sonra. |
+
+**Bir sonraki adımlar (kod gerekmez):**
+1. Muhasebeci ile yasal yapıyı (şahıs mı şirket mi) ve e-fatura yükümlülüğünü görüş (6. bölüm listesi).
+2. Hukukçuya küçük yaş politikasını (varsayılan: satış yok) ve mesafeli satış/cayma metinlerini sor.
+3. Betada kullanıcılara "hangi ücretli özellik için ödemeye razısın" sorusunu sor (yalnızca üç özellik tipi üzerinden).
+4. Yasal yapı belli olunca ödeme sağlayıcısını seç, ardından ayrı bir teknik tasarım belgesi hazırla.
+
+> **Hukuki uyarı:** Bu tablo yalnızca ürün kararlarını kaydeder; hiçbir hukuki, vergi ya da platform politikası maddesi doğrulanmış değildir.
