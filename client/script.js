@@ -7578,7 +7578,7 @@ function syncLocalMuteState(muted) {
 }
 
 function toggleLocalMute() {
-    if (!callFrame || callMode !== 'hub-room') return;
+    if (!callFrame || (callMode !== 'hub-room' && callMode !== 'dm')) return;
     const nextMuted = !voiceLocalMuted;
     voiceUserMuted = nextMuted;
     callFrame.setLocalAudio(!nextMuted);
@@ -9396,8 +9396,16 @@ async function joinDmCall(userId, username) {
         }
 
         callMode = 'dm';
+        voiceLocalMuted = false;
+        voiceUserMuted = false;
         await joinCallFrame(data.room_url, data.token);
         dmCallBtn.classList.add('in-call');
+
+        // Özel aramada da mikrofonu kapatıp açma düğmesi (ses odasıyla aynı düğme ve mantık).
+        voiceLocalMuted = !callFrame.localAudio();
+        callMuteBtn.style.display = 'inline-block';
+        updateMuteButton();
+        updateAudioControls();
 
     } catch (error) {
         console.error('DM araması başarısız:', error);
@@ -9677,7 +9685,7 @@ function wireNativeVoiceActions(plugin) {
 
     plugin.addListener('action', (event) => {
         if (event?.type === 'leave') leaveCall();
-        if (event?.type === 'toggle_mic' && callMode === 'hub-room') toggleLocalMute();
+        if (event?.type === 'toggle_mic' && (callMode === 'hub-room' || callMode === 'dm')) toggleLocalMute();
     });
 }
 
@@ -9772,7 +9780,7 @@ function startCallBackgroundKeepAlive() {
         setHandler('play', () => { callKeepAliveEl?.play().catch(() => {}); });
         setHandler('pause', () => { callKeepAliveEl?.play().catch(() => {}); });
         setHandler('hangup', () => leaveCall());
-        setHandler('togglemicrophone', () => { if (callMode === 'hub-room') toggleLocalMute(); });
+        setHandler('togglemicrophone', () => { if (callMode === 'hub-room' || callMode === 'dm') toggleLocalMute(); });
     }
 
     requestCallWakeLock();
@@ -9927,7 +9935,7 @@ async function recoverCallMedia() {
 
         if (health.ok) {
             callRecoveryFailedShown = false;
-            if (callMode === 'hub-room' && voiceLocalMuted) syncLocalMuteState(false);
+            if ((callMode === 'hub-room' || callMode === 'dm') && voiceLocalMuted) syncLocalMuteState(false);
             watchLocalAudioTrack();
         }
 
