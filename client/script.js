@@ -733,8 +733,18 @@ function setAuthTitle(text) {
 
 }
 
+// Oturum kontrolü bitti: giriş ekranı gizleme ipucu kaldırılır. hasSession: yalnızca gerçekten oturum varsa ipucu saklanır.
+function finishAuthPending(hasSession) {
+    document.documentElement.classList.remove('auth-pending');
+    try {
+        if (hasSession) localStorage.setItem('sauran_session_hint', '1');
+        else localStorage.removeItem('sauran_session_hint');
+    } catch (_) { /* yoksay */ }
+}
+
 function showLoginForm() {
 
+    finishAuthPending(false);
     clearAuthError();
 
     setAuthTitle(
@@ -1700,6 +1710,8 @@ function setCurrentUser(user) {
 
     currentUser =
         user;
+
+    finishAuthPending(true);
 
     applyAdminLinkVisibility(user);
 
@@ -7571,9 +7583,6 @@ const VOICE_SPK_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="non
 // düğme, başkalarında yalnızca durum göstergesi. Konuşma ışığı mikrofon simgesinde.
 function voiceStatusIconsHtml(p, allowSelfAction) {
 
-    // Görüşme ekranında kendi satırında mikrofon/hoparlör düğmeleri gösterilmez (mikrofon alt çubukta).
-    if (allowSelfAction && p.user_id === currentUser?.id) return '';
-
     const interactive = Boolean(allowSelfAction) && p.user_id === currentUser?.id && callMode === 'hub-room';
     const tag = interactive ? 'button' : 'span';
     const attrs = (action) => interactive ? ` type="button" data-voice-action="${action}"` : '';
@@ -8134,7 +8143,7 @@ function renderHubRoomGrid(participants) {
             <span class="call-hub-room-avatar" style="--user-color:${getUserColor(p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}</span>
             <span class="call-hub-room-name">${escapeHtml(p.username)}</span>
             ${p.user_id === currentUser?.id ? `<span class="voice-self-tag">${t('voice-room-you')}</span>` : ''}
-            ${voiceStatusIconsHtml(p, true)}
+            ${p.user_id === currentUser?.id ? '' /* görüşme ekranında kendi kartında düğme yok (mikrofon alt çubukta); yan paneldeki liste düğmeleri korunur */ : voiceStatusIconsHtml(p, true)}
         </div>
     `).join('');
 

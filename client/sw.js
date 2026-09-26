@@ -1,7 +1,7 @@
 // Sauran service worker — Web Push bildirimleri + sunucu ulaşılamazken (502/503/504 ya da ağ hatası) sayfa yerine dost bir yeniden deneme ekranı.
 // Uygulama içeriği ÖNBELLEKLENMEZ; yalnızca /offline.html yedek sayfası saklanır.
 
-const FALLBACK_CACHE = 'sauran-fallback-v1';
+const FALLBACK_CACHE = 'sauran-fallback-v2';
 const FALLBACK_URL = '/offline.html';
 
 self.addEventListener('install', (event) => {

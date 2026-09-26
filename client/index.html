@@ -6,6 +6,9 @@
     <title>Sauran</title>
     <meta name="robots" content="noindex">
 
+    <!-- Önceden oturum açılmış cihazda sayfa yenilenince giriş ekranı bir an görünmesin: oturum kontrolü bitene kadar gizlenir (yalnızca yerel ipucu; gerçek kontrol sunucuda). -->
+    <script>try { if (localStorage.getItem('sauran_session_hint') === '1') { document.documentElement.classList.add('auth-pending'); setTimeout(function () { document.documentElement.classList.remove('auth-pending'); }, 12000); } } catch (e) { /* depolama yok */ }</script>
+
     <!-- PWA / iOS "Ana Ekrana Ekle" desteği (AŞAMA 2) -->
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
