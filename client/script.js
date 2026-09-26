@@ -3325,7 +3325,8 @@ const I18N = {
     'presence-offline': { tr: 'Çevrimdışı', en: 'Offline' },
     'about-me-label': { tr: 'Hakkımda', en: 'About me' },
     'about-me-empty': { tr: 'Henüz bir şey yazmamış.', en: 'Hasn\'t written anything yet.' },
-    'about-me-placeholder': { tr: 'Kendinden bahset... (sağlık, din gibi hassas bilgileri yazma)', en: 'Tell us about yourself... (do not write sensitive information such as health or religion)' },
+    'about-me-placeholder': { tr: 'Kendinden bahset...', en: 'Tell us about yourself...' },
+    'about-me-info': { tr: 'Güvenliğin için adres, telefon numarası, şifre veya başka kişisel bilgilerini paylaşmaktan kaçın.', en: 'For your safety, avoid sharing your address, phone number, password or other personal information.' },
     'about-me-saved': { tr: 'Hakkımda güncellendi.', en: 'About me updated.' },
     'label-change-password': { tr: 'Şifre Değiştir', en: 'Change Password' },
     'label-blocked-users': { tr: 'Engellenenler', en: 'Blocked Users' },
@@ -3631,6 +3632,17 @@ document.getElementById('about-me-save-btn')?.addEventListener('click', async ()
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify({ about_me: input.value })
+// Hakkımda bilgi balonu: masaüstünde hover/odak (CSS), dokunmatikte/tıklamada aç-kapa
+(function initAboutInfoTip() {
+    const btn = document.getElementById('about-info-btn');
+    const row = btn && btn.closest('.about-label-row');
+    if (!btn || !row) return;
+    const setOpen = (open) => { row.classList.toggle('open', open); btn.setAttribute('aria-expanded', open ? 'true' : 'false'); };
+    btn.addEventListener('click', (event) => { event.stopPropagation(); setOpen(!row.classList.contains('open')); });
+    document.addEventListener('click', (event) => { if (!row.contains(event.target)) setOpen(false); });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') setOpen(false); });
+})();
+
         });
 
         const data = await response.json();
