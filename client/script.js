@@ -3563,6 +3563,7 @@ const I18N = {
     'hubset-requests-empty': { tr: 'Bekleyen istek yok.', en: 'No pending requests.' },
     'hubset-approve': { tr: 'Onayla', en: 'Approve' },
     'hubset-reject': { tr: 'Reddet', en: 'Decline' },
+    'fav-title': { tr: 'Sık Tercihlerim', en: 'Favorites' },
     'hint-call-controls-room': { tr: 'Mikrofon, gürültü engelleme ve diğer ses ayarları için yeşil oda etiketine dokun.', en: 'For microphone, noise suppression and other audio controls, tap the green room label.' },
     'hint-call-controls-dm': { tr: 'Mikrofon ve gürültü engelleme için küçük görüşme çubuğundaki genişlet düğmesine dokun.', en: 'For microphone and noise suppression, tap the expand button on the small call bar.' },
     'nc-label': { tr: 'Gürültü engelleme (yalnızca konuşma)', en: 'Noise suppression (voice only)' },
@@ -5158,11 +5159,62 @@ async function loadFriendsSidebar() {
         } catch (_) { deletedDmThreads = []; }
 
         renderFriendsSidebar(data.friends);
+        loadFriendFavorites();
 
     } catch (error) {
         console.error('Arkadaş listesi alınamadı:', error);
     }
 
+}
+
+// ─── Sık Tercihlerim: DM'de en çok etkileşime girilen 3 arkadaş (üstte, yan yana) ───────────────
+// Sıralama sunucuda hesaplanır (yalnızca kendi sohbetlerin; sayılar istemciye/başkasına gösterilmez). Etkileşim yoksa bölüm gizlenir.
+let friendFavorites = [];
+
+async function loadFriendFavorites() {
+    try {
+        const response = await fetch('/api/friends/top?limit=3&all=1', { credentials: 'include' });
+        const data = await response.json();
+        friendFavorites = data.success ? data.friends.slice(0, 3) : [];
+    } catch (_) {
+        friendFavorites = [];
+    }
+    renderFriendFavorites();
+}
+
+function renderFriendFavorites() {
+    const box = document.getElementById('friends-favorites');
+    const row = document.getElementById('friends-favorites-row');
+    if (!box || !row) return;
+
+    if (!friendFavorites.length) { box.style.display = 'none'; row.innerHTML = ''; return; }
+
+    box.style.display = '';
+    row.innerHTML = friendFavorites.map((f) => {
+        if (f.avatar_data) knownAvatars.set(f.id, f.avatar_data);
+        const unread = unreadDmCounts.get(f.id) || 0;
+        const inner = f.avatar_data
+            ? `<img src="${escapeAttr(f.avatar_data)}" alt="">`
+            : escapeHtml((f.username || '?').charAt(0).toUpperCase());
+        return `
+            <button type="button" class="friends-fav" data-friend-id="${f.id}" data-friend-name="${escapeAttr(f.username)}" title="${escapeAttr(f.username)}">
+                <span class="friends-fav-avatar" style="--user-color:${getUserColor(f.username)};">
+                    ${inner}
+                    <span class="friends-fav-dot${f.online ? ' on' : ''}" aria-hidden="true"></span>
+                    ${unread > 0 ? `<span class="friends-fav-unread">${unread > 9 ? '9+' : unread}</span>` : ''}
+                </span>
+                <span class="friends-fav-name">${escapeHtml(f.username)}</span>
+            </button>`;
+    }).join('');
+
+    row.querySelectorAll('.friends-fav').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const userId = Number(btn.dataset.friendId);
+            unreadDmCounts.delete(userId);
+            updateFriendsToggleBadge();
+            openDm(userId, btn.dataset.friendName);
+        });
+    });
 }
 
 function refreshFriendsSidebar() {
@@ -5182,6 +5234,8 @@ function buildDeletedDmRowsHtml() {
 }
 
 function renderFriendsSidebar(friends) {
+
+    renderFriendFavorites();
 
     if ((!friends || friends.length === 0) && (!deletedDmThreads || deletedDmThreads.length === 0)) {
         friendsSidebarList.innerHTML = `<div class="friends-sidebar-empty">${t('friends-empty')}</div>`;

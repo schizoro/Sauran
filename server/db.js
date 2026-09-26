@@ -3829,12 +3829,18 @@ function listIncomingRequests(userId) {
   `).all(userId, userId, userId);
 }
 
-function getTopFriends(userId, limit = 5) {
+function getTopFriends(userId, limit = 5, { includeAll = false } = {}) {
   const friends = listFriends(userId);
+
+  // includeAll (Sık Tercihlerim): DM sohbetindeki tüm etkileşimler (yazı, sesli mesaj, dosya, çıkartma, arama satırı); silinmiş mesajlar sayılmaz.
+  // Varsayılan (davet penceresi): yalnızca yazı + sesli mesaj.
+  const countSql = includeAll
+    ? `SELECT COUNT(*) AS c FROM messages WHERE room = ? AND kind != 'deleted'`
+    : `SELECT COUNT(*) AS c FROM messages WHERE room = ? AND kind IN ('dm', 'dm_voice')`;
 
   const withCounts = friends.map((friend) => {
     const room = dmRoom(userId, friend.id);
-    const count = db.prepare(`SELECT COUNT(*) AS c FROM messages WHERE room = ? AND kind IN ('dm', 'dm_voice')`).get(room).c;
+    const count = db.prepare(countSql).get(room).c;
     return { ...friend, message_count: count };
   });
 

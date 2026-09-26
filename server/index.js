@@ -3017,7 +3017,8 @@ app.get('/api/friends/top', (req, res) => {
   if (!user) return;
 
   try {
-    const friends = getTopFriends(user.id, 5).map(f => ({ ...f, online: isVisiblyOnline(f.id, f.status) }));
+    const limit = Math.max(1, Math.min(Number(req.query.limit) || 5, 5));
+    const friends = getTopFriends(user.id, limit, { includeAll: req.query.all === '1' }).map(f => ({ ...f, online: isVisiblyOnline(f.id, f.status) }));
     return res.json({ success: true, friends });
   } catch (error) {
     console.error('Sık tercihler hatası:', error);
