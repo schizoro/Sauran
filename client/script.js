@@ -5042,6 +5042,9 @@ function renderFriendsSidebar(friends) {
         const initial = f.username.charAt(0).toUpperCase();
         const unread = unreadDmCounts.get(f.id) || 0;
 
+        // Arkadaş listesi (gizlilik ayarına göre süzülmüş) profil görselinin güncel kaynağıdır; DM başlığı da bundan yararlanır.
+        if (f.avatar_data) knownAvatars.set(f.id, f.avatar_data); else knownAvatars.delete(f.id);
+
         const avatarInner = f.avatar_data
             ? `<img src="${escapeAttr(f.avatar_data)}" alt="">`
             : escapeHtml(initial);
@@ -6176,6 +6179,11 @@ async function openDeletedDm(token) {
 }
 
 
+function renderDmTitle(userId, username) {
+    dmModalTitle.innerHTML = `${avatarButtonHtml(userId, null, username)}<span class="dm-title-name">${escapeHtml(username)}</span>`;
+    wireMsgAvatars(dmModalTitle);
+}
+
 async function openDm(userId, username) {
 
     // Bildirim bağlantısında ad taşınmaz: yoksa oturumlu API'den alınır.
@@ -6190,9 +6198,22 @@ async function openDm(userId, username) {
     setDmReadOnlyMode(false);
     activeDmUserId = userId;
     activeDmUsername = username;
-    dmModalTitle.innerHTML = `${avatarButtonHtml(userId, null, username)}<span class="dm-title-name">${escapeHtml(username)}</span>`;
-    wireMsgAvatars(dmModalTitle);
+    renderDmTitle(userId, username);
     dmFeed.innerHTML = '';
+
+    // Profil görseli henüz bilinmiyorsa (ör. bildirimden açıldı) profilden al: görsel varsa görünür, yoksa kullanıcı adının baş harfi kalır.
+    if (!knownAvatars.get(userId)) {
+        fetch(`/api/users/${userId}/profile`, { credentials: 'include' })
+            .then((r) => r.json())
+            .then((data) => {
+                const avatar = data && data.success && data.profile && data.profile.avatar_data;
+                if (avatar) {
+                    knownAvatars.set(userId, avatar);
+                    if (activeDmUserId === userId) renderDmTitle(userId, username);
+                }
+            })
+            .catch(() => { /* görsel alınamazsa baş harf kalır */ });
+    }
 
     unreadDmCounts.delete(userId);
     updateFriendsToggleBadge();
