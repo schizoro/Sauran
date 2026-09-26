@@ -771,3 +771,40 @@ html.auth-pending #login-screen { visibility: hidden; }
 .join-request-row button { min-height: 38px; padding: 0 14px; border: 0; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .join-request-approve { background: var(--accent-soft); color: var(--accent); }
 .join-request-reject { background: rgba(255, 90, 105, 0.16); color: #ffb3bb; }
+
+/* ══ Mobil sol ray: Ana Menü · Arkadaşlar · Keşfet · Arkadaş Ekle · (altta) Profil — liquid glass ═══════════ */
+:root { --rail-w: 76px; }
+.rail-btn-friends { display: none; }
+@media (max-width: 900px) {
+  #chat-screen[style*="flex"] { padding-left: calc(var(--rail-w) + env(safe-area-inset-left)); }
+  .app-rail {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    position: absolute; z-index: 55; left: calc(8px + env(safe-area-inset-left)); top: calc(8px + env(safe-area-inset-top)); bottom: calc(8px + env(safe-area-inset-bottom)); width: 60px;
+    padding: 14px 0; border-radius: 30px; background: var(--glass-2);
+    -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.35); backdrop-filter: blur(var(--blur-2)) saturate(1.35);
+    box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong), 0 16px 40px -14px rgba(0, 0, 0, 0.55);
+  }
+  .app-rail-logo { display: none; }
+  .app-rail .rail-btn { width: 46px; height: 46px; border-radius: 50%; flex: none; }
+  .app-rail .rail-btn:hover { background: var(--glass-1); }
+  .app-rail .rail-btn.on { background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-line); }
+  #rail-home { order: 1; }
+  .rail-btn-friends { display: grid; order: 2; }
+  #rail-discover { order: 3; }
+  #rail-friend { order: 4; }
+  #rail-notifications, #rail-settings { display: none; }
+  .rail-spacer { order: 8; flex: 1; }
+  .rail-avatar { order: 9; width: 46px; height: 46px; margin-top: 0; box-shadow: 0 0 0 1px var(--border-soft-strong); }
+  .topbar-profile-btn { display: none; }
+  .rail-dot { top: 8px; right: 8px; }
+
+  /* Çekmece rayın yanında açılır; ray hep görünür kalır */
+  .lobby-nav { left: calc(var(--rail-w) + env(safe-area-inset-left)); top: calc(8px + env(safe-area-inset-top)); bottom: calc(8px + env(safe-area-inset-bottom)); width: min(300px, calc(100vw - var(--rail-w) - 20px)); border-radius: 28px; padding: 18px 12px 12px; transform: translateX(calc(-100% - var(--rail-w) - 24px)); }
+  body.lobby-drawer-open .lobby-nav { transform: none; }
+  /* Lobiler ve Arkadaşlar ayrı modlarda: hamburger = Lobiler, ray düğmesi = Arkadaşlar */
+  body:not(.drawer-friends) .lobby-nav .friends-sidebar { display: none !important; }
+  body.drawer-friends .lobby-nav-head, body.drawer-friends #lobby-nav-list { display: none; }
+  body.drawer-friends .lobby-nav .friends-sidebar { max-height: none; flex: 1 1 auto; border-top: 0; margin-top: 0; padding-top: 4px; }
+  .hub-voice-rooms-toggle-btn { left: var(--rail-w); }
+  .hub-voice-rooms-side { left: var(--rail-w); }
+}

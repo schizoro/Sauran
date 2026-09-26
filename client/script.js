@@ -9102,6 +9102,11 @@ function switchToView(view) {
     hubDetailView.style.display = view === 'hub-detail' ? 'flex' : 'none';
     const discoverViewEl = document.getElementById('discover-view');
     if (discoverViewEl) discoverViewEl.style.display = view === 'discover' ? 'flex' : 'none';
+    // Ray: Keşfet ekranındayken Keşfet, ana listedeyken Ana Menü vurgulanır.
+    const railDiscoverEl = document.getElementById('rail-discover');
+    const railHomeEl = document.getElementById('rail-home');
+    if (railDiscoverEl) railDiscoverEl.classList.toggle('on', view === 'discover');
+    if (railHomeEl && (view === 'discover' || view === 'hubs')) railHomeEl.classList.toggle('on', view === 'hubs');
 
     // "Ana Menü" başlığı üst çubukta sadece Ana Menü (Lobi listesi) ekranındayken görünür.
     const topbarContextTitle = document.getElementById('topbar-context-title');

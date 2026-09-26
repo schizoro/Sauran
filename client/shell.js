@@ -21,6 +21,7 @@
         const map = {
             'rail-home': ['hubs-title', 'Ana Menü'],
             'rail-discover': ['menu-discover', 'Keşfet'],
+            'rail-friends': ['menu-friends', 'Arkadaşlar'],
             'rail-notifications': ['menu-notifications', 'Bildirimler'],
             'rail-friend': ['menu-add-friend', 'Arkadaş Ekle'],
             'rail-settings': ['menu-settings', 'Ayarlar'],
@@ -234,7 +235,8 @@
         chat.classList.toggle('in-hub', inHub);
         updateTopbarBadge();
         const home = $('rail-home');
-        if (home) home.classList.toggle('on', !inHub);
+        const disc = $('rail-discover');
+        if (home) home.classList.toggle('on', !inHub && !(disc && disc.classList.contains('on')));
     }
 
     // ── Ray düğmeleri: mevcut düğmelere devret ─────────────────────────
@@ -247,11 +249,20 @@
     document.querySelectorAll('[data-rail]').forEach((btn) => {
         btn.addEventListener('click', () => {
             const k = btn.dataset.rail;
+            if (k === 'friends') {
+                // Küçük ekran: Arkadaşlar çekmecesi (ray düğmesi). Açıksa kapatır.
+                const open = document.body.classList.contains('lobby-drawer-open') && document.body.classList.contains('drawer-friends');
+                closeDrawer();
+                if (!open) document.body.classList.add('lobby-drawer-open', 'drawer-friends');
+                return;
+            }
             if (k === 'discover') {
+                closeDrawer();
                 if (typeof openDiscover === 'function') openDiscover();
                 return;
             }
             if (k === 'home') {
+                closeDrawer();
                 if (typeof switchToView === 'function') { switchToView('hubs'); }
                 if (typeof loadHubList === 'function') loadHubList();
                 return;
@@ -268,17 +279,26 @@
 
     // ── Küçük ekran: lobi listesi çekmece ──────────────────────────────
     const toggle = $('lobby-nav-toggle');
-    function closeDrawer() { document.body.classList.remove('lobby-drawer-open'); if (toggle) toggle.setAttribute('aria-expanded', 'false'); }
+    function closeDrawer() { document.body.classList.remove('lobby-drawer-open', 'drawer-friends'); if (toggle) toggle.setAttribute('aria-expanded', 'false'); }
     if (toggle) {
         toggle.setAttribute('aria-expanded', 'false');
         toggle.addEventListener('click', () => {
+            // Arkadaşlar açıkken hamburger Lobiler listesine geçer; Lobiler açıkken kapatır.
+            if (document.body.classList.contains('drawer-friends')) {
+                document.body.classList.remove('drawer-friends');
+                document.body.classList.add('lobby-drawer-open');
+                toggle.setAttribute('aria-expanded', 'true');
+                return;
+            }
             const open = document.body.classList.toggle('lobby-drawer-open');
             toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
         });
     }
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
     document.addEventListener('click', (e) => {
-        if (document.body.classList.contains('lobby-drawer-open') && !e.target.closest('#lobby-nav, #lobby-nav-toggle')) closeDrawer();
+        if (document.body.classList.contains('lobby-drawer-open') && !e.target.closest('#lobby-nav, #lobby-nav-toggle, #app-rail')) closeDrawer();
+        // Arkadaş satırına dokununca sohbet açılır; çekmece kapanır (küçük ekran).
+        if (e.target.closest('#friends-sidebar-list .friends-sidebar-row') && window.innerWidth <= 900) closeDrawer();
     });
 
     // ── Arkadaşlar paneli: lobi listesinin altına taşı (sağ panel yok) ──
@@ -302,6 +322,8 @@
             const shown = badge.style.display !== 'none' && (badge.textContent || '').trim() !== '0';
             dot.style.display = shown ? 'block' : 'none';
         }
+        const fBadge = $('friends-sidebar-toggle-badge'), fDot = $('rail-friends-dot');
+        if (fDot && fBadge) fDot.style.display = fBadge.style.display !== 'none' && (fBadge.textContent || '').trim() !== '' ? 'block' : 'none';
         const av = $('profile-avatar'), img = $('profile-avatar-img'), ri = $('rail-avatar-initial'), rp = $('rail-profile');
         if (ri && av) {
             ri.textContent = (av.textContent || '').trim();
@@ -312,7 +334,7 @@
         }
     }
     const mo = new MutationObserver(mirror);
-    ['notifications-badge', 'topbar-menu-badge', 'profile-avatar', 'profile-avatar-img'].forEach((id) => {
+    ['notifications-badge', 'topbar-menu-badge', 'profile-avatar', 'profile-avatar-img', 'friends-sidebar-toggle-badge'].forEach((id) => {
         const el = $(id);
         if (el) mo.observe(el, { attributes: true, childList: true, characterData: true, subtree: true });
     });
