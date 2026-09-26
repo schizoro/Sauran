@@ -10025,6 +10025,7 @@ const audioSession = {
     selectedInputId: null,
     selectedOutputId: null,
     native: { available: false, routes: [], active: null },
+    iosRoute: 'speaker',   // 'speaker' | 'earpiece' (yalnızca iOS ipucu modu)
     devicechangeWired: false
 };
 
@@ -10096,6 +10097,12 @@ const NC_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><
 // Safari/iOS (WebKit) setSinkId'i sunar ama WebRTC uzak sesi için sessizce yok sayar (ses iOS'un kendi rotasında kalır; gerçek cihazda doğrulandı:
 // Bluetooth bağlıyken "Hoparlör" seçimi bir şey değiştirmedi). Çalışmayan seçenek gösterilmesin diye WebKit'te web çıkış seçimi kapalıdır;
 // çıkışı iOS'un kendi denetim merkezi/ses yönlendirme menüsünden değiştirir.
+// iOS'ta ses çıkışı seçilemez; ancak Audio Session API ile oturum türü ipucu verilebilir:
+//   'play-and-record' → ahize (kulak hoparlörü) tercih edilir; 'auto' → Safari'nin varsayılanı (çoğunlukla hoparlör).
+// Bu bir İPUCUDUR, garanti değildir (Bluetooth/kulaklık bağlıysa iOS onu tercih eder). Oturum sırasında kararsız olabildiği için
+// yalnızca kullanıcı düğmeye basınca değiştirilir ve görüşme bitince 'auto'ya döner.
+const isIosDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const supportsIosAudioSession = isIosDevice && Boolean(navigator.audioSession) && 'type' in navigator.audioSession;
 const isWebKitAudio = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || (/^((?!chrome|chromium|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent));
 const supportsSinkId = typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype && !isWebKitAudio;
 const callMicArrowBtn = document.getElementById('call-mic-arrow-btn');
@@ -10193,7 +10200,9 @@ function updateAudioControls() {
     const inCall = Boolean(callFrame);
     const showMicArrow = inCall && (audioSession.inputs.length > 1 || noiseCancel.supported === true);
     const nativeToggle = inCall && nativeSpeakerToggleAvailable();
-    const webOutMenu = inCall && !nativeToggle && audioSession.outputs.length > 1;
+    const iosToggle = inCall && !nativeToggle && supportsIosAudioSession;
+    const routeToggle = nativeToggle || iosToggle;
+    const webOutMenu = inCall && !routeToggle && audioSession.outputs.length > 1;
 
     // Mikrofon oku: hub odasında ana mikrofon düğmesinin yanında; DM aramasında (mute düğmesi yok) mikrofon simgesiyle.
     if (callMicArrowBtn) {
@@ -10206,14 +10215,14 @@ function updateAudioControls() {
 
     if (callSpeakerBtn) {
         const active = audioSession.native.routes.find((r) => r.id === audioSession.native.active);
-        const onEarpiece = nativeToggle && active && active.type === 'earpiece';
-        callSpeakerBtn.style.display = (nativeToggle || webOutMenu) ? 'inline-flex' : 'none';
+        const onEarpiece = nativeToggle ? Boolean(active && active.type === 'earpiece') : (iosToggle && audioSession.iosRoute === 'earpiece');
+        callSpeakerBtn.style.display = (routeToggle || webOutMenu) ? 'inline-flex' : 'none';
         callSpeakerBtn.innerHTML = onEarpiece ? AUDIO_ICONS.earpiece : AUDIO_ICONS.speaker;
         callSpeakerBtn.classList.toggle('on-earpiece', Boolean(onEarpiece));
-        const label = nativeToggle ? (onEarpiece ? t('audio-route-earpiece') : t('audio-route-speaker')) : t('audio-out-title');
+        const label = routeToggle ? (onEarpiece ? t('audio-route-earpiece') : t('audio-route-speaker')) : t('audio-out-title');
         callSpeakerBtn.setAttribute('aria-label', label);
         callSpeakerBtn.title = label;
-        callSpeakerBtn.setAttribute('aria-pressed', nativeToggle ? String(!onEarpiece) : 'false');
+        callSpeakerBtn.setAttribute('aria-pressed', routeToggle ? String(!onEarpiece) : 'false');
     }
 
     syncNoiseCancelUi();
@@ -10313,7 +10322,23 @@ async function setNativeRoute(id) {
 }
 
 // Hoparlör düğmesi: yerel modda hoparlör ↔ ahize; masaüstünde çıkış cihazı menüsünü açar.
+function toggleIosAudioRoute() {
+    const toEarpiece = audioSession.iosRoute !== 'earpiece';
+    try {
+        navigator.audioSession.type = toEarpiece ? 'play-and-record' : 'auto';
+        audioSession.iosRoute = toEarpiece ? 'earpiece' : 'speaker';
+    } catch (error) {
+        console.warn('iOS ses oturumu değiştirilemedi:', error);
+        return;
+    }
+    updateAudioControls();
+    // Kategori değişimi mikrofonu/çalmayı kesebilir: uzak sesi tekrar oynat, mikrofon sağlığını kısa süre sonra denetle.
+    tryPlayAllCallAudio();
+    scheduleCallRecovery();
+}
+
 function onSpeakerButton() {
+    if (!nativeSpeakerToggleAvailable() && supportsIosAudioSession) { toggleIosAudioRoute(); return; }
     if (nativeSpeakerToggleAvailable()) {
         const active = audioSession.native.routes.find((r) => r.id === audioSession.native.active);
         const target = audioSession.native.routes.find((r) => r.type === (active && active.type === 'earpiece' ? 'speaker' : 'earpiece'));
@@ -10349,6 +10374,8 @@ document.addEventListener('keydown', (event) => { if (event.key === 'Escape') cl
 
 function resetAudioSession() {
     closeDeviceMenu();
+    if (supportsIosAudioSession && audioSession.iosRoute === 'earpiece') { try { navigator.audioSession.type = 'auto'; } catch (_) { /* yoksay */ } }
+    audioSession.iosRoute = 'speaker';
     noiseCancel.failedShown = false;
     audioSession.inputs = [];
     audioSession.outputs = [];
