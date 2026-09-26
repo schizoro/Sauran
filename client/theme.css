@@ -672,3 +672,8 @@ body:has(.adm-header), body:has(.mod-header) { background: var(--bg-app); color:
 .call-device-menu button:hover, .call-device-menu button:focus-visible { background: var(--accent-soft); outline: none; }
 .call-device-menu button.selected { color: var(--accent); }
 .call-device-check { width: 16px; flex: none; text-align: center; }
+
+/* Gürültü engelleme: ayarlar açıklaması ve çağrı düğmesi */
+.settings-voice-hint { display: block; margin: 4px 0 0; font-size: 12px; line-height: 1.45; color: var(--text-tertiary); }
+.call-header .call-nc-btn { width: 48px; height: 48px; padding: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: var(--text-tertiary); }
+.call-header .call-nc-btn.on { background: var(--accent-soft); color: var(--accent); }

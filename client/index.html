@@ -1134,6 +1134,7 @@
             <div class="settings-tabs" id="settings-tabs">
                 <button class="settings-tab-btn" data-settings-tab="general" type="button" data-i18n="settings-tab-general">Genel</button>
                 <button class="settings-tab-btn" data-settings-tab="notifications" type="button" data-i18n="settings-tab-notifications">Bildirimler</button>
+                <button class="settings-tab-btn" data-settings-tab="voice" type="button" data-i18n="settings-tab-voice">Ses</button>
                 <button class="settings-tab-btn" data-settings-tab="security" type="button" data-i18n="settings-tab-security">Güvenlik</button>
                 <button class="settings-tab-btn" data-settings-tab="privacy" type="button" data-i18n="settings-tab-privacy">Gizlilik</button>
                 <button class="settings-tab-btn" data-settings-tab="legal" type="button" data-i18n="settings-tab-legal">Gizlilik ve Yasal</button>
@@ -1232,6 +1233,21 @@
 
                 </div>
 
+                <div class="settings-panel" data-settings-panel="voice" style="display:none;">
+
+                    <span class="profile-field-label" data-i18n="settings-tab-voice">Ses</span>
+
+                    <label class="notif-pref-row">
+                        <input type="checkbox" id="settings-nc-toggle">
+                        <span>
+                            <span data-i18n="nc-label">Gürültü engelleme (yalnızca konuşma)</span>
+                            <span class="settings-voice-hint" data-i18n="nc-desc">Klavye, fan ve arka plan gürültüsünü bastırır. Sesli oda ve özel aramada da açıp kapatabilirsin.</span>
+                        </span>
+                    </label>
+                    <p id="settings-nc-note" class="settings-voice-hint" style="display:none;" data-i18n="nc-unsupported">Bu cihazda gürültü engelleme desteklenmiyor.</p>
+
+                </div>
+
                 <div class="settings-panel" data-settings-panel="security" style="display:none;">
 
                     <span class="profile-field-label" data-i18n="label-change-password">Şifre Değiştir</span>
@@ -1299,6 +1315,7 @@
             <span id="call-header-duration" class="call-duration-text" style="display:none;"></span>
             <button id="call-mute-btn" type="button" style="display:none;" aria-label="Mikrofon" title="Mikrofon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
             <button id="call-mic-arrow-btn" class="call-audio-arrow" type="button" style="display:none;" aria-label="Mikrofon" title="Mikrofon"></button>
+            <button id="call-nc-btn" class="call-nc-btn" type="button" style="display:none;" aria-pressed="true" aria-label="Gürültü engelleme" title="Gürültü engelleme"></button>
             <button id="call-screenshare-btn" type="button" style="display:none;" aria-label="Ekran paylaş" title="Ekran paylaş"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></button>
             <button id="call-speaker-btn" class="call-audio-btn" type="button" style="display:none;" aria-label="Ses çıkışı" title="Ses çıkışı"></button>
             <button id="call-out-arrow-btn" class="call-audio-arrow" type="button" style="display:none;" aria-label="Ses çıkışı" title="Ses çıkışı"></button>

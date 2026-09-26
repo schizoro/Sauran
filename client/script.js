@@ -3411,6 +3411,11 @@ const I18N = {
     'voice-room-user-left': { tr: 'odadan ayrıldı', en: 'left the room' },
     'voice-room-removed': { tr: 'Sesli odadan çıkarıldın.', en: 'You were removed from the voice room.' },
     'session-check-unreachable': { tr: 'Sunucuya şu an ulaşılamıyor; oturumun kapanmış olmayabilir. Biraz sonra sayfayı yenile.', en: 'The server is unreachable right now; your session may still be valid. Refresh in a moment.' },
+    'settings-tab-voice': { tr: 'Ses', en: 'Voice' },
+    'nc-desc': { tr: 'Klavye, fan ve arka plan gürültüsünü bastırır. Sesli oda ve özel aramada da açıp kapatabilirsin.', en: 'Suppresses keyboard, fan and background noise. You can also toggle it in voice rooms and private calls.' },
+    'nc-unsupported': { tr: 'Bu cihazda gürültü engelleme desteklenmiyor.', en: 'Noise suppression is not supported on this device.' },
+    'nc-state-on': { tr: 'Gürültü engelleme: açık', en: 'Noise suppression: on' },
+    'nc-state-off': { tr: 'Gürültü engelleme: kapalı', en: 'Noise suppression: off' },
     'nc-label': { tr: 'Gürültü engelleme (yalnızca konuşma)', en: 'Noise suppression (voice only)' },
     'nc-failed': { tr: 'Gürültü engelleme bu cihazda çalışmadı; kapatıldı.', en: 'Noise suppression did not work on this device; turned off.' },
     'voice-recovering': { tr: 'Ses bağlantısı yeniden kuruluyor...', en: 'Restoring audio connection...' },
@@ -9988,8 +9993,41 @@ function noiseCancelFailed() {
 function setNoiseCancel(enabled) {
     noiseCancel.enabled = enabled;
     try { localStorage.setItem(NC_STORAGE_KEY, enabled ? 'on' : 'off'); } catch (_) { /* yoksay */ }
+    syncNoiseCancelUi();
     applyNoiseCancellation();
 }
+
+// Ayarlar sekmesi + çağrı düğmesi tek durumdan beslenir (noiseCancel).
+function syncNoiseCancelUi() {
+    const toggle = document.getElementById('settings-nc-toggle');
+    if (toggle) {
+        toggle.checked = noiseCancel.enabled;
+        toggle.disabled = noiseCancel.supported === false;
+    }
+    const note = document.getElementById('settings-nc-note');
+    if (note) note.style.display = noiseCancel.supported === false ? 'block' : 'none';
+
+    const btn = document.getElementById('call-nc-btn');
+    if (btn) {
+        btn.style.display = (callFrame && noiseCancel.supported === true) ? 'inline-flex' : 'none';
+        btn.classList.toggle('on', noiseCancel.enabled);
+        btn.setAttribute('aria-pressed', noiseCancel.enabled ? 'true' : 'false');
+        const label = t(noiseCancel.enabled ? 'nc-state-on' : 'nc-state-off');
+        btn.title = label;
+        btn.setAttribute('aria-label', label);
+        btn.innerHTML = NC_ICON;
+    }
+}
+
+const NC_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 12h2M7 8v8M11 5v14M15 8v8M19 10v4"/></svg>';
+
+(function wireNoiseCancelControls() {
+    const toggle = document.getElementById('settings-nc-toggle');
+    if (toggle) toggle.addEventListener('change', () => setNoiseCancel(toggle.checked));
+    const btn = document.getElementById('call-nc-btn');
+    if (btn) btn.addEventListener('click', (event) => { event.stopPropagation(); setNoiseCancel(!noiseCancel.enabled); });
+    syncNoiseCancelUi();
+})();
 
 const supportsSinkId = typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype;
 const callMicArrowBtn = document.getElementById('call-mic-arrow-btn');
@@ -10109,6 +10147,8 @@ function updateAudioControls() {
         callSpeakerBtn.title = label;
         callSpeakerBtn.setAttribute('aria-pressed', nativeToggle ? String(!onEarpiece) : 'false');
     }
+
+    syncNoiseCancelUi();
 
     if (callOutArrowBtn) {
         // Yerel modda ok yalnızca ikiden fazla rota (Bluetooth/kablolu/USB) varken anlamlıdır.
@@ -10247,7 +10287,7 @@ function resetAudioSession() {
     audioSession.selectedInputId = null;
     audioSession.selectedOutputId = null;
     audioSession.native = { available: false, routes: [], active: null };
-    [callMicArrowBtn, callSpeakerBtn, callOutArrowBtn].forEach((el) => { if (el) el.style.display = 'none'; });
+    [callMicArrowBtn, callSpeakerBtn, callOutArrowBtn, document.getElementById('call-nc-btn')].forEach((el) => { if (el) el.style.display = 'none'; });
 }
 
 
