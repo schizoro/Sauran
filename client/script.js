@@ -3564,6 +3564,15 @@ const I18N = {
     'hubset-approve': { tr: 'Onayla', en: 'Approve' },
     'hubset-reject': { tr: 'Reddet', en: 'Decline' },
     'fav-title': { tr: 'Sık Tercihlerim', en: 'Favorites' },
+    'discover-search-toggle': { tr: 'Ara ve filtrele', en: 'Search and filter' },
+    'discover-like': { tr: 'Beğen', en: 'Like' },
+    'discover-like-members-only': { tr: 'Beğenmek için Lobiye üye olmalısın.', en: 'Join the lobby to like it.' },
+    'discover-like-own': { tr: 'Kendi Lobini beğenemezsin.', en: 'You cannot like your own lobby.' },
+    'discover-pop-1': { tr: 'Popüler', en: 'Popular' },
+    'discover-pop-2': { tr: 'Çok popüler', en: 'Very popular' },
+    'discover-pop-3': { tr: 'Efsane', en: 'Legendary' },
+    'discover-superlike': { tr: 'Süper Beğeni', en: 'Super Like' },
+    'discover-superlike-soon': { tr: 'Süper Beğeni yakında...', en: 'Super Like coming soon...' },
     'hint-call-controls-room': { tr: 'Mikrofon, gürültü engelleme ve diğer ses ayarları için yeşil oda etiketine dokun.', en: 'For microphone, noise suppression and other audio controls, tap the green room label.' },
     'hint-call-controls-dm': { tr: 'Mikrofon ve gürültü engelleme için küçük görüşme çubuğundaki genişlet düğmesine dokun.', en: 'For microphone and noise suppression, tap the expand button on the small call bar.' },
     'nc-label': { tr: 'Gürültü engelleme (yalnızca konuşma)', en: 'Noise suppression (voice only)' },
@@ -8659,6 +8668,9 @@ function buildDiscoverCard(lobby) {
         lobby.topic ? `<span class="discover-tag muted">${escapeHtml(lobby.topic)}</span>` : ''
     ].join('');
     const voice = lobby.voice_active > 0 ? `<span class="voice-live">🎙 ${lobby.voice_active} ${escapeHtml(t('discover-in-voice'))}</span>` : '';
+    const pop = (lobby.like_count > 0 || lobby.popularity_level > 0)
+        ? `<span class="discover-pop level-${lobby.popularity_level || 0}">${lobby.popularity_level > 0 ? '🔥' : '♥'} ${lobby.like_count}${lobby.popularity_level > 0 ? ' · ' + escapeHtml(t('discover-pop-' + lobby.popularity_level)) : ''}</span>`
+        : '';
     const lang = lobby.language ? `<span>${escapeHtml(t('discover-lang-' + lobby.language))}</span>` : '';
 
     card.innerHTML = `
@@ -8671,7 +8683,7 @@ function buildDiscoverCard(lobby) {
         </div>
         <p class="discover-card-desc">${escapeHtml(lobby.description || '')}</p>
         <div class="discover-card-meta">
-            <span>👥 ${escapeHtml(cap)} ${escapeHtml(t('discover-members'))}</span>${lang}${voice}
+            <span>👥 ${escapeHtml(cap)} ${escapeHtml(t('discover-members'))}</span>${pop}${lang}${voice}
             <span>${escapeHtml(t('discover-owner'))}: ${escapeHtml(lobby.owner_username)}</span>
         </div>
         <button type="button" class="discover-card-cta">${escapeHtml(t('discover-view-lobby'))}</button>
@@ -8686,6 +8698,7 @@ function buildDiscoverCard(lobby) {
 async function loadDiscover(reset) {
 
     if (reset) { discoverState.page = 1; discoverResultsEl.innerHTML = ''; }
+    updateDiscoverFilterDot();
     discoverEmptyEl.style.display = 'none';
     discoverNoticeEl.style.display = 'none';
     const seq = ++discoverState.seq;
@@ -8727,8 +8740,27 @@ function openDiscover() {
     loadDiscover(true);
 }
 
+function discoverToolsActive() {
+    return Boolean(discoverState.q || discoverState.category || discoverState.language || discoverState.join_policy);
+}
+
+function updateDiscoverFilterDot() {
+    const dot = document.getElementById('discover-filter-dot');
+    if (dot) dot.style.display = discoverToolsActive() ? 'block' : 'none';
+}
+
 (function wireDiscover() {
     if (!discoverSearchEl) return;
+
+    // Arama/filtreler varsayılan olarak kapalı; büyüteç düğmesiyle açılır (ekranın yarısını kaplamasın).
+    const toggleBtn = document.getElementById('discover-search-toggle');
+    const tools = document.getElementById('discover-tools');
+    toggleBtn.addEventListener('click', () => {
+        const open = tools.style.display === 'none';
+        tools.style.display = open ? 'flex' : 'none';
+        toggleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (open) setTimeout(() => discoverSearchEl.focus(), 50);
+    });
     let timer = null;
     discoverSearchEl.addEventListener('input', () => {
         clearTimeout(timer);
@@ -8758,6 +8790,9 @@ function openDiscover() {
         if (discoverDetail) openReportModal('hub', discoverDetail.id, discoverDetail.name);
     });
     discoverDetailJoinBtn.addEventListener('click', joinDiscoverDetail);
+    document.getElementById('discover-detail-like').addEventListener('click', toggleDiscoverLike);
+    // Süper Beğeni: yeri ayrıldı, henüz işlevsiz (ücretli popülerlik ileride); yalnızca "yakında" bildirimi gösterir.
+    document.getElementById('discover-detail-superlike').addEventListener('click', () => showToast(t('discover-superlike-soon')));
 })();
 
 function discoverDetailButtonState(lobby) {
@@ -8766,6 +8801,37 @@ function discoverDetailButtonState(lobby) {
     if (lobby.my_request_status === 'pending') return { label: t('discover-requested'), disabled: true, mode: 'none' };
     if (full) return { label: t('discover-full'), disabled: true, mode: 'none' };
     return { label: t(lobby.join_policy === 'everyone' ? 'discover-join' : 'discover-join-request'), disabled: false, mode: 'join' };
+}
+
+function renderDiscoverLike(lobby) {
+    const btn = document.getElementById('discover-detail-like');
+    document.getElementById('discover-detail-like-count').textContent = String(lobby.like_count || 0);
+    btn.classList.toggle('liked', Boolean(lobby.liked_by_me));
+    btn.setAttribute('aria-pressed', lobby.liked_by_me ? 'true' : 'false');
+    btn.querySelector('.discover-like-heart').textContent = lobby.liked_by_me ? '♥' : '♡';
+    // Yalnızca üyeler (sahibi hariç) beğenebilir; diğerlerinde düğme nedenini söyler.
+    btn.disabled = !lobby.is_member || Boolean(lobby.is_owner);
+    btn.title = lobby.is_owner ? t('discover-like-own') : (lobby.is_member ? t('discover-like') : t('discover-like-members-only'));
+}
+
+async function toggleDiscoverLike() {
+    if (!discoverDetail || document.getElementById('discover-detail-like').disabled) return;
+    const next = !discoverDetail.liked_by_me;
+    try {
+        const response = await fetch(`/api/discover/lobbies/${discoverDetail.id}/like`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ liked: next })
+        });
+        const data = await response.json();
+        if (!data.success) { discoverDetailError.textContent = data.error || t('discover-error'); return; }
+        discoverDetail.liked_by_me = data.liked;
+        discoverDetail.like_count = data.like_count;
+        discoverDetail.popularity_level = data.popularity_level;
+        renderDiscoverLike(discoverDetail);
+        loadDiscover(true); // sıralama beğeniye göre değişir
+    } catch (error) {
+        console.error('Beğeni hatası:', error);
+        discoverDetailError.textContent = t('discover-error');
+    }
 }
 
 function renderDiscoverDetail(lobby) {
@@ -8799,6 +8865,8 @@ function renderDiscoverDetail(lobby) {
         ${lobby.description ? `<div class="discover-detail-section"><h4>${escapeHtml(t('discover-purpose'))}</h4><p>${escapeHtml(lobby.description)}</p></div>` : ''}
         ${rules.length ? `<div class="discover-detail-section"><h4>${escapeHtml(t('discover-rules'))}</h4><ul class="discover-rules">${rules.map((r) => `<li>${escapeHtml(r)}</li>`).join('')}</ul></div>` : ''}
     `;
+
+    renderDiscoverLike(lobby);
 
     const state = discoverDetailButtonState(lobby);
     discoverDetailJoinBtn.textContent = state.label;

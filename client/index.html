@@ -367,16 +367,23 @@
             <div id="discover-view" class="view-panel discover-view" style="display:none;">
 
                 <div class="discover-head">
-                    <h2 class="discover-title" data-i18n="discover-title">Keşfet</h2>
-                    <p class="discover-subtitle" data-i18n="discover-subtitle">İlgi alanına uygun bir Lobi bul.</p>
+                    <div class="discover-head-row">
+                        <button type="button" id="discover-search-toggle" class="discover-search-toggle" aria-expanded="false" aria-controls="discover-tools" aria-label="Ara ve filtrele" title="Ara ve filtrele"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="6.500"/><path d="M16 16l4.500 4.500"/></svg><span id="discover-filter-dot" class="discover-filter-dot" style="display:none;"></span></button>
+                        <div>
+                            <h2 class="discover-title" data-i18n="discover-title">Keşfet</h2>
+                            <p class="discover-subtitle" data-i18n="discover-subtitle">İlgi alanına uygun bir Lobi bul.</p>
+                        </div>
+                    </div>
 
-                    <input type="search" id="discover-search" class="discover-search" data-i18n-placeholder="discover-search-placeholder" placeholder="Lobi ara..." maxlength="60" autocomplete="off" enterkeyhint="search">
+                    <div id="discover-tools" class="discover-tools" style="display:none;">
+                        <input type="search" id="discover-search" class="discover-search" data-i18n-placeholder="discover-search-placeholder" placeholder="Lobi ara..." maxlength="60" autocomplete="off" enterkeyhint="search">
 
-                    <div id="discover-categories" class="discover-chips" role="group" aria-label="Kategori"></div>
+                        <div id="discover-categories" class="discover-chips" role="group" aria-label="Kategori"></div>
 
-                    <div class="discover-filters">
-                        <select id="discover-language" class="discover-select" aria-label="Dil"></select>
-                        <select id="discover-policy" class="discover-select" aria-label="Katılım türü"></select>
+                        <div class="discover-filters">
+                            <select id="discover-language" class="discover-select" aria-label="Dil"></select>
+                            <select id="discover-policy" class="discover-select" aria-label="Katılım türü"></select>
+                        </div>
                     </div>
                 </div>
 
@@ -631,6 +638,8 @@
             <div id="discover-detail-error" class="hub-create-error"></div>
 
             <div class="discover-detail-actions">
+                <button id="discover-detail-like" class="discover-like-btn" type="button" aria-pressed="false"><span class="discover-like-heart" aria-hidden="true">♡</span> <span id="discover-detail-like-count">0</span></button>
+                <button id="discover-detail-superlike" class="discover-superlike-btn" type="button" title="Süper Beğeni"><span aria-hidden="true">⚡</span> <span data-i18n="discover-superlike">Süper Beğeni</span></button>
                 <button id="discover-detail-join" class="hub-create-submit" type="button"></button>
                 <button id="discover-detail-report" class="discover-report-btn" type="button">🚩 <span data-i18n="discover-report">Lobiyi Bildir</span></button>
             </div>

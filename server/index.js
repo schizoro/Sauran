@@ -74,6 +74,7 @@ const {
   saveDmVoiceMessage,
   createDmFileMessage,
   saveDmSticker,
+  setHubLike,
   purgeExpiredJoinRequests,
   listDiscoverableHubs,
   getDiscoverableHubDetail,
@@ -1842,6 +1843,15 @@ app.post('/api/discover/lobbies/:id/join', discoverJoinLimiter, (req, res) => {
     console.error('Keşfet katılım hatası:', error);
     return res.status(500).json({ success: false, error: 'Katılınamadı.' });
   }
+});
+
+app.post('/api/discover/lobbies/:id/like', discoverLimiter, (req, res) => {
+  const user = requireDiscoverUser(req, res);
+  if (!user) return;
+
+  const result = setHubLike(Number(req.params.id), user.id, req.body && req.body.liked !== false);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+  return res.json(result);
 });
 
 app.get('/api/hubs/:id/join-requests', (req, res) => {

@@ -256,6 +256,18 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_hubs_discover ON hubs(visibility, category, language);
   CREATE INDEX IF NOT EXISTS idx_hub_join_requests_hub ON hub_join_requests(hub_id, status);
+
+  -- Lobi beğenileri (popülerlik): kullanıcı başına Lobi başına en fazla bir beğeni. İleride ücretli "süper beğeni" bu tabloya değil ayrı bir modele eklenecek.
+  CREATE TABLE IF NOT EXISTS hub_likes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hub_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(hub_id, user_id),
+    FOREIGN KEY (hub_id) REFERENCES hubs(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_hub_likes_hub ON hub_likes(hub_id);
 `);
 
 // =====================================================
@@ -2481,8 +2493,18 @@ const DISCOVER_SUMMARY_SELECT = `
   (SELECT COUNT(*) FROM hub_members WHERE hub_members.hub_id = hubs.id) AS member_count,
   (SELECT MAX(messages.created_at) FROM messages WHERE messages.hub_id = hubs.id) AS last_activity,
   EXISTS(SELECT 1 FROM hub_members WHERE hub_members.hub_id = hubs.id AND hub_members.user_id = @uid) AS is_member,
-  (SELECT status FROM hub_join_requests WHERE hub_join_requests.hub_id = hubs.id AND hub_join_requests.user_id = @uid) AS my_request_status
+  (SELECT status FROM hub_join_requests WHERE hub_join_requests.hub_id = hubs.id AND hub_join_requests.user_id = @uid) AS my_request_status,
+  (SELECT COUNT(*) FROM hub_likes WHERE hub_likes.hub_id = hubs.id) AS like_count,
+  EXISTS(SELECT 1 FROM hub_likes WHERE hub_likes.hub_id = hubs.id AND hub_likes.user_id = @uid) AS liked_by_me
 `;
+
+// Popülerlik seviyesi (açık ve açıklanabilir): yalnızca beğeni sayısından türetilir; gizli puan yok.
+function popularityLevel(likeCount) {
+  if (likeCount >= 100) return 3;
+  if (likeCount >= 25) return 2;
+  if (likeCount >= 5) return 1;
+  return 0;
+}
 
 function listDiscoverableHubs(userId, { q, category, language, join_policy, page, limit } = {}) {
   const pageNum = Math.max(1, Math.min(Number(page) || 1, 1000));
@@ -2507,7 +2529,7 @@ function listDiscoverableHubs(userId, { q, category, language, join_policy, page
     SELECT ${DISCOVER_SUMMARY_SELECT}
     FROM hubs INNER JOIN users ON users.id = hubs.created_by
     WHERE ${whereSql}
-    ORDER BY COALESCE(last_activity, hubs.created_at) DESC, hubs.id DESC
+    ORDER BY like_count DESC, COALESCE(last_activity, hubs.created_at) DESC, hubs.id DESC
     LIMIT @limit OFFSET @offset
   `).all({ ...params, limit: pageSize, offset: (pageNum - 1) * pageSize });
 
@@ -2515,7 +2537,9 @@ function listDiscoverableHubs(userId, { q, category, language, join_policy, page
     ...r,
     description: r.description && r.description.length > 140 ? r.description.slice(0, 140).trimEnd() + '…' : r.description,
     has_image: Boolean(r.has_image),
-    is_member: Boolean(r.is_member)
+    is_member: Boolean(r.is_member),
+    liked_by_me: Boolean(r.liked_by_me),
+    popularity_level: popularityLevel(r.like_count)
   }));
 
   return { lobbies, total, page: pageNum, limit: pageSize, has_more: pageNum * pageSize < total };
@@ -2530,7 +2554,7 @@ function getDiscoverableHubDetail(hubId, userId) {
       AND NOT EXISTS (SELECT 1 FROM hub_bans WHERE hub_bans.hub_id = hubs.id AND hub_bans.user_id = @uid)
   `).get({ hubId, uid: userId });
   if (!row) return null;
-  return { ...row, has_image: Boolean(row.has_image), is_member: Boolean(row.is_member), is_owner: row.created_by === userId };
+  return { ...row, has_image: Boolean(row.has_image), is_member: Boolean(row.is_member), is_owner: row.created_by === userId, liked_by_me: Boolean(row.liked_by_me), popularity_level: popularityLevel(row.like_count) };
 }
 
 // Keşfet görseli (yalnızca keşfedilebilir Lobi ya da üye).
@@ -2618,6 +2642,20 @@ function decideHubJoinRequest(hubId, requestId, actorId, approve) {
   db.prepare(`UPDATE hub_join_requests SET status = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP WHERE id = ?`)
     .run(approve ? 'approved' : 'rejected', actorId, requestId);
   return { success: true, user_id: request.user_id, approved: Boolean(approve) };
+}
+
+// Beğeni: yalnızca keşfedilebilir Lobinin ÜYELERİ beğenebilir; sahibi kendi Lobisini beğenemez (yapay şişirmeyi azaltır).
+function setHubLike(hubId, userId, liked) {
+  const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ? AND visibility = 'discoverable'`).get(hubId);
+  if (!hub) return { success: false, status: 404, error: 'Lobi bulunamadı.' };
+  if (hub.created_by === userId) return { success: false, status: 400, error: 'Kendi Lobini beğenemezsin.' };
+  if (!isHubMember(hubId, userId)) return { success: false, status: 403, error: 'Beğenmek için Lobiye üye olmalısın.' };
+
+  if (liked) db.prepare(`INSERT OR IGNORE INTO hub_likes (hub_id, user_id) VALUES (?, ?)`).run(hubId, userId);
+  else db.prepare(`DELETE FROM hub_likes WHERE hub_id = ? AND user_id = ?`).run(hubId, userId);
+
+  const like_count = db.prepare(`SELECT COUNT(*) AS c FROM hub_likes WHERE hub_id = ?`).get(hubId).c;
+  return { success: true, liked: Boolean(liked), like_count, popularity_level: popularityLevel(like_count) };
 }
 
 function countPendingHubJoinRequests(hubId) {
@@ -4398,6 +4436,7 @@ function getAccountExport(userId) {
     messages,
     hub_memberships: hubs,
     owned_hubs: ownedHubs,
+    hub_likes: db.prepare(`SELECT hubs.name AS hub_name, hub_likes.created_at FROM hub_likes INNER JOIN hubs ON hubs.id = hub_likes.hub_id WHERE hub_likes.user_id = ?`).all(userId),
     hub_join_requests: db.prepare(`SELECT hubs.name AS hub_name, hub_join_requests.status, hub_join_requests.created_at, hub_join_requests.decided_at FROM hub_join_requests INNER JOIN hubs ON hubs.id = hub_join_requests.hub_id WHERE hub_join_requests.user_id = ?`).all(userId),
     friendships,
     blocked_users: blocked,
@@ -5875,6 +5914,7 @@ module.exports = {
   saveDmVoiceMessage,
   createDmFileMessage,
   saveDmSticker,
+  setHubLike,
   purgeExpiredJoinRequests,
   listDiscoverableHubs,
   getDiscoverableHubDetail,
