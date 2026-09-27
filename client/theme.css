@@ -918,6 +918,9 @@ html.auth-pending #login-screen { visibility: hidden; }
 .topbar .topbar-lobby-actions [data-lbl] { height: 38px; }
 .topbar-right .discover-wallet[data-lbl] { display: inline-flex; flex-direction: row; height: 26px; padding: 0 10px; transform: none; }
 .topbar-right .discover-wallet[data-lbl]::after { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 0; }
+/* Yukarıdaki genel ".topbar [data-lbl]" kuralı masaüstünde "Lobiler" çentiğini de (display:none olması gerekirken)
+   görünür kılıyordu, çünkü öznitelik seçicisi masaüstü-gizleme kuralından daha özgüldü. Masaüstünde kesin kapatıyoruz. */
+@media (min-width: 901px) { .topbar .lobby-nav-toggle[data-lbl] { display: none !important; } }
 
 /* ── Lobi üst çubuğu: liquid glass hap + sürekli yıldız tozu ─────────── */
 .topbar-lobby-actions { align-items: center; gap: 2px; padding: 1px 6px; border-radius: 999px; background: var(--glass-2); box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong); -webkit-backdrop-filter: blur(var(--blur-1)) saturate(1.3); backdrop-filter: blur(var(--blur-1)) saturate(1.3); }
