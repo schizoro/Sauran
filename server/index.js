@@ -74,7 +74,8 @@ const {
   saveDmVoiceMessage,
   createDmFileMessage,
   saveDmSticker,
-  setHubLike,
+  likeHub,
+  compactLikeEvents,
   purgeExpiredJoinRequests,
   listDiscoverableHubs,
   getDiscoverableHubDetail,
@@ -1849,8 +1850,8 @@ app.post('/api/discover/lobbies/:id/like', discoverLimiter, (req, res) => {
   const user = requireDiscoverUser(req, res);
   if (!user) return;
 
-  const result = setHubLike(Number(req.params.id), user.id, req.body && req.body.liked !== false);
-  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+  const result = likeHub(Number(req.params.id), user.id, req.body && req.body.device_id);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error, reason: result.reason || null });
   return res.json(result);
 });
 
@@ -3862,6 +3863,16 @@ server.listen(PORT, () => {
   };
   runJoinRequestPurge();
   setInterval(runJoinRequestPurge, 24 * 60 * 60 * 1000).unref();
+
+  // Beğeni olayları: 30 günden eskiler Lobi toplamına eklenip silinir; gün geçmiş cihaz işaretleri silinir (açılışta ve günde bir).
+  const runLikeCompaction = () => {
+    try {
+      const done = compactLikeEvents();
+      if (done.events || done.marks) console.log(`Beğeni temizliği: ${done.events} olay arşivlendi, ${done.marks} cihaz işareti silindi.`);
+    } catch (error) { console.error('Beğeni temizleme hatası:', error); }
+  };
+  runLikeCompaction();
+  setInterval(runLikeCompaction, 24 * 60 * 60 * 1000).unref();
 
   // Admin audit log saklama temizliği (açılışta ve günde bir): eski serbest metin gerekçeler ve süresi dolan kayıtlar silinir.
   const runAuditPurge = () => {

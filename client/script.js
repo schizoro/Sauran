@@ -3566,11 +3566,18 @@ const I18N = {
     'fav-title': { tr: 'Sık Tercihlerim', en: 'Favorites' },
     'discover-search-toggle': { tr: 'Ara ve filtrele', en: 'Search and filter' },
     'discover-like': { tr: 'Beğen', en: 'Like' },
-    'discover-like-members-only': { tr: 'Beğenmek için Lobiye üye olmalısın.', en: 'Join the lobby to like it.' },
-    'discover-like-own': { tr: 'Kendi Lobini beğenemezsin.', en: 'You cannot like your own lobby.' },
-    'discover-pop-1': { tr: 'Popüler', en: 'Popular' },
-    'discover-pop-2': { tr: 'Çok popüler', en: 'Very popular' },
-    'discover-pop-3': { tr: 'Efsane', en: 'Legendary' },
+    'discover-liked-today': { tr: 'Bugün beğendin', en: 'Liked today' },
+    'discover-liked-tomorrow': { tr: 'Yarın yeniden beğenebilirsin.', en: 'You can like again tomorrow.' },
+    'discover-like-reason-owner': { tr: 'Kendi Lobini beğenemezsin.', en: 'You cannot like your own lobby.' },
+    'discover-like-reason-not_member': { tr: 'Beğenmek için Lobiye üye olmalısın.', en: 'Join the lobby to like it.' },
+    'discover-like-reason-member_new': { tr: 'Beğenmek için Lobiye en az 24 saattir üye olmalısın.', en: 'You must have been a member for at least 24 hours to like.' },
+    'discover-like-reason-account_new': { tr: 'Beğenmek için hesabının en az 3 günlük olması gerekiyor.', en: 'Your account must be at least 3 days old to like.' },
+    'discover-like-reason-already_today': { tr: 'Bugün bu Lobiyi zaten beğendin. Yarın tekrar beğenebilirsin.', en: 'You already liked this lobby today. You can like again tomorrow.' },
+    'discover-level': { tr: 'Seviye', en: 'Level' },
+    'discover-level-short': { tr: 'Sv.', en: 'Lv.' },
+    'discover-level-progress': { tr: 'puan', en: 'points' },
+    'discover-points-30d': { tr: 'Son 30 gün', en: 'Last 30 days' },
+    'discover-level-note': { tr: 'Seviye toplam puandan gelir. Keşfet sıralaması son 30 günün puanına göredir. Her beğeni 5 puandır.', en: 'Level comes from total points. Discover ranking uses the last 30 days. Each like is worth 5 points.' },
     'discover-superlike': { tr: 'Süper Beğeni', en: 'Super Like' },
     'discover-superlike-soon': { tr: 'Süper Beğeni yakında...', en: 'Super Like coming soon...' },
     'hint-call-controls-room': { tr: 'Mikrofon, gürültü engelleme ve diğer ses ayarları için yeşil oda etiketine dokun.', en: 'For microphone, noise suppression and other audio controls, tap the green room label.' },
@@ -8664,12 +8671,13 @@ function buildDiscoverCard(lobby) {
 
     const cap = lobby.capacity ? `${lobby.member_count}/${lobby.capacity}` : String(lobby.member_count);
     const tags = [
+        lobby.level > 0 ? `<span class="discover-lv">${escapeHtml(t('discover-level-short'))} ${lobby.level}</span>` : '',
         lobby.category ? `<span class="discover-tag">${escapeHtml(t('discover-cat-' + lobby.category))}</span>` : '',
         lobby.topic ? `<span class="discover-tag muted">${escapeHtml(lobby.topic)}</span>` : ''
     ].join('');
     const voice = lobby.voice_active > 0 ? `<span class="voice-live">🎙 ${lobby.voice_active} ${escapeHtml(t('discover-in-voice'))}</span>` : '';
-    const pop = (lobby.like_count > 0 || lobby.popularity_level > 0)
-        ? `<span class="discover-pop level-${lobby.popularity_level || 0}">${lobby.popularity_level > 0 ? '🔥' : '♥'} ${lobby.like_count}${lobby.popularity_level > 0 ? ' · ' + escapeHtml(t('discover-pop-' + lobby.popularity_level)) : ''}</span>`
+    const pop = (lobby.points_30d > 0)
+        ? `<span class="discover-pop level-${lobby.level > 0 ? 1 : 0}">${lobby.points_30d >= 50 ? '🔥' : '♥'} ${lobby.points_30d}</span>`
         : '';
     const lang = lobby.language ? `<span>${escapeHtml(t('discover-lang-' + lobby.language))}</span>` : '';
 
@@ -8803,31 +8811,63 @@ function discoverDetailButtonState(lobby) {
     return { label: t(lobby.join_policy === 'everyone' ? 'discover-join' : 'discover-join-request'), disabled: false, mode: 'join' };
 }
 
+// Rastgele cihaz kimliği: yalnızca bu tarayıcıda saklanır; sunucu yalnızca sırlı özetini ve yalnızca bir gün tutar
+// (aynı cihazdan aynı gün aynı Lobiye ikinci hesabın beğenisini saymamak için).
+function getDeviceId() {
+    const KEY = 'sauran_device_id';
+    try {
+        let id = localStorage.getItem(KEY);
+        if (!/^[0-9a-f]{32}$/.test(id || '')) {
+            const bytes = crypto.getRandomValues(new Uint8Array(16));
+            id = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+            localStorage.setItem(KEY, id);
+        }
+        return id;
+    } catch (_) {
+        return null; // depolama yok: sunucu cihaz kimliği olmadan beğeniyi kabul etmez
+    }
+}
+
 function renderDiscoverLike(lobby) {
     const btn = document.getElementById('discover-detail-like');
-    document.getElementById('discover-detail-like-count').textContent = String(lobby.like_count || 0);
-    btn.classList.toggle('liked', Boolean(lobby.liked_by_me));
-    btn.setAttribute('aria-pressed', lobby.liked_by_me ? 'true' : 'false');
-    btn.querySelector('.discover-like-heart').textContent = lobby.liked_by_me ? '♥' : '♡';
-    // Yalnızca üyeler (sahibi hariç) beğenebilir; diğerlerinde düğme nedenini söyler.
-    btn.disabled = !lobby.is_member || Boolean(lobby.is_owner);
-    btn.title = lobby.is_owner ? t('discover-like-own') : (lobby.is_member ? t('discover-like') : t('discover-like-members-only'));
+    const label = document.getElementById('discover-detail-like-label');
+    const reason = lobby.like_reason;
+    const liked = Boolean(lobby.liked_today);
+
+    btn.classList.toggle('liked', liked);
+    btn.classList.toggle('blocked', reason === 'account_new' || reason === 'member_new'); // kırmızı çerçeve: bekleme koşulu var
+    btn.setAttribute('aria-pressed', liked ? 'true' : 'false');
+    btn.querySelector('.discover-like-heart').textContent = liked ? '♥' : '♡';
+    label.textContent = t(liked ? 'discover-liked-today' : 'discover-like');
+
+    // Beğeni günde bir kez ve geri alınamaz. Bugün beğenmişse ya da sahip/üye değilse düğme kapalı;
+    // yeni hesap / yeni üye ise düğme açık kalır ve dokununca nedenini söyler.
+    btn.disabled = liked || reason === 'owner' || reason === 'not_member';
+    btn.title = liked ? t('discover-liked-tomorrow') : (reason ? t('discover-like-reason-' + reason) : t('discover-like'));
 }
 
 async function toggleDiscoverLike() {
-    if (!discoverDetail || document.getElementById('discover-detail-like').disabled) return;
-    const next = !discoverDetail.liked_by_me;
+    if (!discoverDetail) return;
+    const reason = discoverDetail.like_reason;
+    if (reason === 'account_new' || reason === 'member_new') { showToast(t('discover-like-reason-' + reason)); return; }
+    if (document.getElementById('discover-detail-like').disabled) return;
+
     try {
         const response = await fetch(`/api/discover/lobbies/${discoverDetail.id}/like`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ liked: next })
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ device_id: getDeviceId() })
         });
         const data = await response.json();
-        if (!data.success) { discoverDetailError.textContent = data.error || t('discover-error'); return; }
-        discoverDetail.liked_by_me = data.liked;
-        discoverDetail.like_count = data.like_count;
-        discoverDetail.popularity_level = data.popularity_level;
-        renderDiscoverLike(discoverDetail);
-        loadDiscover(true); // sıralama beğeniye göre değişir
+        if (!data.success) {
+            discoverDetailError.textContent = data.error || t('discover-error');
+            if (data.reason === 'already_today') { discoverDetail.liked_today = true; discoverDetail.like_reason = 'already_today'; renderDiscoverLike(discoverDetail); }
+            return;
+        }
+        discoverDetail.liked_today = true;
+        discoverDetail.like_reason = 'already_today';
+        Object.assign(discoverDetail, { points_30d: data.points_30d, points_total: data.points_total, level: data.level, level_progress: data.level_progress, level_needed: data.level_needed });
+        discoverDetailError.textContent = '';
+        renderDiscoverDetail(discoverDetail);
+        loadDiscover(true); // sıralama son 30 günlük puana göre değişir
     } catch (error) {
         console.error('Beğeni hatası:', error);
         discoverDetailError.textContent = t('discover-error');
@@ -8861,6 +8901,11 @@ function renderDiscoverDetail(lobby) {
             ${fact(t('discover-fact-join'), t('discover-policy-' + lobby.join_policy))}
             ${fact(t('discover-fact-mic'), t('discover-mic-' + lobby.mic_requirement))}
             ${lobby.voice_active > 0 ? fact('🎙', `${lobby.voice_active} ${t('discover-in-voice')}`) : ''}
+        </div>
+        <div class="discover-level">
+            <div class="discover-level-top"><b>${escapeHtml(t('discover-level'))} ${lobby.level || 0}</b><span>${lobby.level_progress || 0} / ${lobby.level_needed || 0} ${escapeHtml(t('discover-level-progress'))}</span></div>
+            <div class="discover-level-bar"><i style="width:${Math.min(100, Math.round(((lobby.level_progress || 0) / Math.max(1, lobby.level_needed || 1)) * 100))}%"></i></div>
+            <div class="discover-level-note">${escapeHtml(t('discover-points-30d'))}: ${lobby.points_30d || 0} ${escapeHtml(t('discover-level-progress'))} · ${escapeHtml(t('discover-level-note'))}</div>
         </div>
         ${lobby.description ? `<div class="discover-detail-section"><h4>${escapeHtml(t('discover-purpose'))}</h4><p>${escapeHtml(lobby.description)}</p></div>` : ''}
         ${rules.length ? `<div class="discover-detail-section"><h4>${escapeHtml(t('discover-rules'))}</h4><ul class="discover-rules">${rules.map((r) => `<li>${escapeHtml(r)}</li>`).join('')}</ul></div>` : ''}

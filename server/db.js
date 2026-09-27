@@ -235,7 +235,8 @@ const DISCOVER_HUB_COLUMNS = {
   language: `TEXT`,                                  // tr | en | other
   join_policy: `TEXT NOT NULL DEFAULT 'everyone'`,   // everyone | request | owner_approval
   mic_requirement: `TEXT NOT NULL DEFAULT 'none'`,   // required | preferred | none
-  capacity: `INTEGER`                                // NULL = sınırsız
+  capacity: `INTEGER`,                               // NULL = sınırsız
+  points_archived: `INTEGER NOT NULL DEFAULT 0`      // 30 günden eski beğeni puanlarının toplamı (kişisel bağlantı kalmaz)
 };
 for (const [column, definition] of Object.entries(DISCOVER_HUB_COLUMNS)) {
   if (!hubColumns.includes(column)) db.exec(`ALTER TABLE hubs ADD COLUMN ${column} ${definition}`);
@@ -257,18 +258,47 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_hubs_discover ON hubs(visibility, category, language);
   CREATE INDEX IF NOT EXISTS idx_hub_join_requests_hub ON hub_join_requests(hub_id, status);
 
-  -- Lobi beğenileri (popülerlik): kullanıcı başına Lobi başına en fazla bir beğeni. İleride ücretli "süper beğeni" bu tabloya değil ayrı bir modele eklenecek.
-  CREATE TABLE IF NOT EXISTS hub_likes (
+  -- Beğeni olayları: kim, hangi Lobi, hangi gün (Türkiye günü). Kullanıcı başına Lobi başına günde en fazla bir "like". Puan: like 5, (ileride) süper like 25.
+  -- 30 günden eski olaylar günlük temizlikte Lobinin points_archived toplamına eklenip silinir (kişisel bağlantı kalmaz).
+  CREATE TABLE IF NOT EXISTS hub_like_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     hub_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
+    day TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'like',
+    points INTEGER NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(hub_id, user_id),
     FOREIGN KEY (hub_id) REFERENCES hubs(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
-  CREATE INDEX IF NOT EXISTS idx_hub_likes_hub ON hub_likes(hub_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_hub_like_daily ON hub_like_events(hub_id, user_id, day) WHERE kind = 'like';
+  CREATE INDEX IF NOT EXISTS idx_hub_like_events_hub_day ON hub_like_events(hub_id, day);
+
+  -- Aynı cihazdan aynı gün aynı Lobiye ikinci hesabın beğenisini saymamak için: yalnızca rastgele cihaz kimliğinin (sunucu sırlı) özeti; kullanıcı kimliği YOK.
+  -- Gün bitince (24 saat içinde) silinir.
+  CREATE TABLE IF NOT EXISTS hub_like_device_marks (
+    hub_id INTEGER NOT NULL,
+    day TEXT NOT NULL,
+    device_hash TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (hub_id, day, device_hash),
+    FOREIGN KEY (hub_id) REFERENCES hubs(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS app_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
 `);
+
+// Eski (günlük olmayan) beğeni tablosu varsa olaylara taşınır ve kaldırılır (her beğeni 5 puan).
+if (db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'hub_likes'`).get()) {
+  db.exec(`
+    INSERT OR IGNORE INTO hub_like_events (hub_id, user_id, day, kind, points, created_at)
+      SELECT hub_id, user_id, date(created_at), 'like', 5, created_at FROM hub_likes;
+    DROP TABLE hub_likes;
+  `);
+}
 
 // =====================================================
 // v1.16 MIGRATION — SESLİ ODALAR (BİRDEN FAZLA)
@@ -2494,16 +2524,63 @@ const DISCOVER_SUMMARY_SELECT = `
   (SELECT MAX(messages.created_at) FROM messages WHERE messages.hub_id = hubs.id) AS last_activity,
   EXISTS(SELECT 1 FROM hub_members WHERE hub_members.hub_id = hubs.id AND hub_members.user_id = @uid) AS is_member,
   (SELECT status FROM hub_join_requests WHERE hub_join_requests.hub_id = hubs.id AND hub_join_requests.user_id = @uid) AS my_request_status,
-  (SELECT COUNT(*) FROM hub_likes WHERE hub_likes.hub_id = hubs.id) AS like_count,
-  EXISTS(SELECT 1 FROM hub_likes WHERE hub_likes.hub_id = hubs.id AND hub_likes.user_id = @uid) AS liked_by_me
+  hubs.points_archived + (SELECT COALESCE(SUM(points), 0) FROM hub_like_events WHERE hub_like_events.hub_id = hubs.id) AS points_total,
+  (SELECT COALESCE(SUM(points), 0) FROM hub_like_events WHERE hub_like_events.hub_id = hubs.id AND hub_like_events.day >= @since) AS points_30d,
+  EXISTS(SELECT 1 FROM hub_like_events WHERE hub_like_events.hub_id = hubs.id AND hub_like_events.user_id = @uid AND hub_like_events.day = @today AND hub_like_events.kind = 'like') AS liked_today
 `;
 
-// Popülerlik seviyesi (açık ve açıklanabilir): yalnızca beğeni sayısından türetilir; gizli puan yok.
-function popularityLevel(likeCount) {
-  if (likeCount >= 100) return 3;
-  if (likeCount >= 25) return 2;
-  if (likeCount >= 5) return 1;
-  return 0;
+function likeQueryParams(userId) {
+  const today = istanbulDay();
+  return { uid: userId, today, since: addDaysToDay(today, -(LIKE_WINDOW_DAYS - 1)) };
+}
+
+// ── Beğeni puanı, seviye ve Keşfet sıralaması ───────────────────────────────
+// Puan: like 5, süper like 25 (henüz açık değil). SEVİYE = kalıcı toplam puan; KEŞFET SIRALAMASI = son 30 günün puanı. Gizli puan yok, kurallar açık.
+// Seviye eşikleri (toplam puan): 200, 750, 1.500, 3.000, 6.000, 10.000, 20.000; 7. seviyeden sonra her seviye için 10.000 puan daha (sonsuz).
+const LIKE_POINTS = 5;
+const SUPER_LIKE_POINTS = 25; // yer ayrıldı, kullanılmıyor
+const LEVEL_THRESHOLDS = [200, 750, 1500, 3000, 6000, 10000, 20000];
+const LEVEL_STEP_AFTER_LAST = 10000;
+const LIKE_MIN_ACCOUNT_DAYS = 3;
+const LIKE_MIN_MEMBER_HOURS = 24;
+const LIKE_WINDOW_DAYS = 30;
+
+// Türkiye günü (YYYY-MM-DD): "günde bir" sıfırlaması gece yarısı (Europe/Istanbul).
+function istanbulDay(date = new Date()) {
+  return date.toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
+}
+function addDaysToDay(day, n) {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function levelInfo(points) {
+  const total = Math.max(0, Number(points) || 0);
+  let level = 0;
+  let floor = 0;
+  for (let i = 0; i < LEVEL_THRESHOLDS.length; i++) {
+    if (total >= LEVEL_THRESHOLDS[i]) { level = i + 1; floor = LEVEL_THRESHOLDS[i]; } else break;
+  }
+  let next;
+  if (level === LEVEL_THRESHOLDS.length) {
+    const extra = Math.floor((total - floor) / LEVEL_STEP_AFTER_LAST);
+    level += extra;
+    floor += extra * LEVEL_STEP_AFTER_LAST;
+    next = floor + LEVEL_STEP_AFTER_LAST;
+  } else {
+    next = LEVEL_THRESHOLDS[level];
+  }
+  return { level, level_progress: total - floor, level_needed: next - floor };
+}
+
+function likeDeviceSecret() {
+  let row = db.prepare(`SELECT value FROM app_meta WHERE key = 'like_device_secret'`).get();
+  if (!row) {
+    db.prepare(`INSERT OR IGNORE INTO app_meta (key, value) VALUES ('like_device_secret', ?)`).run(crypto.randomBytes(32).toString('hex'));
+    row = db.prepare(`SELECT value FROM app_meta WHERE key = 'like_device_secret'`).get();
+  }
+  return row.value;
 }
 
 function listDiscoverableHubs(userId, { q, category, language, join_policy, page, limit } = {}) {
@@ -2511,7 +2588,7 @@ function listDiscoverableHubs(userId, { q, category, language, join_policy, page
   const pageSize = Math.max(1, Math.min(Number(limit) || 12, 24));
 
   const where = [`hubs.visibility = 'discoverable'`, `NOT EXISTS (SELECT 1 FROM hub_bans WHERE hub_bans.hub_id = hubs.id AND hub_bans.user_id = @uid)`];
-  const params = { uid: userId };
+  const params = likeQueryParams(userId);
 
   const search = String(q || '').trim().toLowerCase().slice(0, 60);
   if (search) {
@@ -2529,7 +2606,7 @@ function listDiscoverableHubs(userId, { q, category, language, join_policy, page
     SELECT ${DISCOVER_SUMMARY_SELECT}
     FROM hubs INNER JOIN users ON users.id = hubs.created_by
     WHERE ${whereSql}
-    ORDER BY like_count DESC, COALESCE(last_activity, hubs.created_at) DESC, hubs.id DESC
+    ORDER BY points_30d DESC, COALESCE(last_activity, hubs.created_at) DESC, hubs.id DESC
     LIMIT @limit OFFSET @offset
   `).all({ ...params, limit: pageSize, offset: (pageNum - 1) * pageSize });
 
@@ -2538,8 +2615,8 @@ function listDiscoverableHubs(userId, { q, category, language, join_policy, page
     description: r.description && r.description.length > 140 ? r.description.slice(0, 140).trimEnd() + '…' : r.description,
     has_image: Boolean(r.has_image),
     is_member: Boolean(r.is_member),
-    liked_by_me: Boolean(r.liked_by_me),
-    popularity_level: popularityLevel(r.like_count)
+    liked_today: Boolean(r.liked_today),
+    ...levelInfo(r.points_total)
   }));
 
   return { lobbies, total, page: pageNum, limit: pageSize, has_more: pageNum * pageSize < total };
@@ -2552,9 +2629,9 @@ function getDiscoverableHubDetail(hubId, userId) {
     FROM hubs INNER JOIN users ON users.id = hubs.created_by
     WHERE hubs.id = @hubId AND hubs.visibility = 'discoverable'
       AND NOT EXISTS (SELECT 1 FROM hub_bans WHERE hub_bans.hub_id = hubs.id AND hub_bans.user_id = @uid)
-  `).get({ hubId, uid: userId });
+  `).get({ hubId, ...likeQueryParams(userId) });
   if (!row) return null;
-  return { ...row, has_image: Boolean(row.has_image), is_member: Boolean(row.is_member), is_owner: row.created_by === userId, liked_by_me: Boolean(row.liked_by_me), popularity_level: popularityLevel(row.like_count) };
+  return { ...row, has_image: Boolean(row.has_image), is_member: Boolean(row.is_member), is_owner: row.created_by === userId, liked_today: Boolean(row.liked_today), ...levelInfo(row.points_total), like_reason: likeBlockReason(hubId, userId, row) };
 }
 
 // Keşfet görseli (yalnızca keşfedilebilir Lobi ya da üye).
@@ -2644,18 +2721,75 @@ function decideHubJoinRequest(hubId, requestId, actorId, approve) {
   return { success: true, user_id: request.user_id, approved: Boolean(approve) };
 }
 
-// Beğeni: yalnızca keşfedilebilir Lobinin ÜYELERİ beğenebilir; sahibi kendi Lobisini beğenemez (yapay şişirmeyi azaltır).
-function setHubLike(hubId, userId, liked) {
+// Beğeni engeli nedeni (kullanıcıya gösterilir): 'owner' | 'not_member' | 'member_new' | 'account_new' | 'already_today' | null
+function likeBlockReason(hubId, userId, row) {
+  const hub = row || db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
+  if (hub.created_by === userId) return 'owner';
+  const member = db.prepare(`SELECT joined_at FROM hub_members WHERE hub_id = ? AND user_id = ?`).get(hubId, userId);
+  if (!member) return 'not_member';
+  if (db.prepare(`SELECT 1 FROM hub_like_events WHERE hub_id = ? AND user_id = ? AND day = ? AND kind = 'like'`).get(hubId, userId, istanbulDay())) return 'already_today';
+  const account = db.prepare(`SELECT created_at FROM users WHERE id = ?`).get(userId);
+  if (account && account.created_at > sqlTimeAgo(new Date(), LIKE_MIN_ACCOUNT_DAYS)) return 'account_new';
+  if (member.joined_at && member.joined_at > sqlTimeAgo(new Date(), LIKE_MIN_MEMBER_HOURS / 24)) return 'member_new';
+  return null;
+}
+
+const LIKE_BLOCK_MESSAGES = {
+  owner: 'Kendi Lobini beğenemezsin.',
+  not_member: 'Beğenmek için Lobiye üye olmalısın.',
+  member_new: 'Beğenmek için Lobiye en az 24 saattir üye olmalısın.',
+  account_new: 'Beğenmek için hesabının en az 3 günlük olması gerekiyor.',
+  already_today: 'Bugün bu Lobiyi zaten beğendin. Yarın tekrar beğenebilirsin.'
+};
+
+// Beğeni (günde bir, geri alma YOK): yalnızca keşfedilebilir Lobinin üyeleri (sahibi hariç), üyelik ≥ 24 saat, hesap ≥ 3 gün.
+// Aynı cihazdan aynı gün aynı Lobiye ikinci hesabın beğenisi SAYILMAZ (ceza yok, yalnızca puan yok).
+function likeHub(hubId, userId, deviceId) {
   const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ? AND visibility = 'discoverable'`).get(hubId);
   if (!hub) return { success: false, status: 404, error: 'Lobi bulunamadı.' };
-  if (hub.created_by === userId) return { success: false, status: 400, error: 'Kendi Lobini beğenemezsin.' };
-  if (!isHubMember(hubId, userId)) return { success: false, status: 403, error: 'Beğenmek için Lobiye üye olmalısın.' };
 
-  if (liked) db.prepare(`INSERT OR IGNORE INTO hub_likes (hub_id, user_id) VALUES (?, ?)`).run(hubId, userId);
-  else db.prepare(`DELETE FROM hub_likes WHERE hub_id = ? AND user_id = ?`).run(hubId, userId);
+  const reason = likeBlockReason(hubId, userId, hub);
+  if (reason) return { success: false, status: reason === 'not_member' ? 403 : 400, reason, error: LIKE_BLOCK_MESSAGES[reason] };
 
-  const like_count = db.prepare(`SELECT COUNT(*) AS c FROM hub_likes WHERE hub_id = ?`).get(hubId).c;
-  return { success: true, liked: Boolean(liked), like_count, popularity_level: popularityLevel(like_count) };
+  if (typeof deviceId !== 'string' || !/^[0-9a-f]{32,64}$/i.test(deviceId)) {
+    return { success: false, status: 400, reason: 'device_missing', error: 'Cihaz kimliği alınamadı. Sayfayı yenileyip tekrar dene.' };
+  }
+
+  const today = istanbulDay();
+  const deviceHash = crypto.createHash('sha256').update(likeDeviceSecret() + ':' + deviceId.toLowerCase()).digest('hex');
+  db.prepare(`DELETE FROM hub_like_device_marks WHERE day < ?`).run(today);
+
+  const run = db.transaction(() => {
+    const mark = db.prepare(`INSERT OR IGNORE INTO hub_like_device_marks (hub_id, day, device_hash) VALUES (?, ?, ?)`).run(hubId, today, deviceHash);
+    if (mark.changes === 0) return { success: false, status: 400, reason: 'device_used', error: 'Bu cihazdan bu Lobi için bugün zaten beğeni kullanıldı.' };
+    db.prepare(`INSERT INTO hub_like_events (hub_id, user_id, day, kind, points) VALUES (?, ?, ?, 'like', ?)`).run(hubId, userId, today, LIKE_POINTS);
+    return { success: true };
+  });
+  const result = run();
+  if (!result.success) return result;
+
+  const totals = db.prepare(`
+    SELECT hubs.points_archived + (SELECT COALESCE(SUM(points), 0) FROM hub_like_events WHERE hub_id = hubs.id) AS points_total,
+           (SELECT COALESCE(SUM(points), 0) FROM hub_like_events WHERE hub_id = hubs.id AND day >= ?) AS points_30d
+    FROM hubs WHERE id = ?
+  `).get(addDaysToDay(today, -(LIKE_WINDOW_DAYS - 1)), hubId);
+  return { success: true, liked_today: true, points_30d: totals.points_30d, points_total: totals.points_total, ...levelInfo(totals.points_total) };
+}
+
+// Günlük temizlik: 30 günden eski beğeni olayları Lobinin arşiv toplamına eklenip silinir; gün geçmiş cihaz işaretleri silinir.
+function compactLikeEvents() {
+  const today = istanbulDay();
+  const cutoff = addDaysToDay(today, -LIKE_WINDOW_DAYS);
+  const run = db.transaction(() => {
+    db.prepare(`
+      UPDATE hubs SET points_archived = points_archived + COALESCE((SELECT SUM(points) FROM hub_like_events WHERE hub_id = hubs.id AND day < ?), 0)
+      WHERE id IN (SELECT DISTINCT hub_id FROM hub_like_events WHERE day < ?)
+    `).run(cutoff, cutoff);
+    const removed = db.prepare(`DELETE FROM hub_like_events WHERE day < ?`).run(cutoff).changes;
+    const marks = db.prepare(`DELETE FROM hub_like_device_marks WHERE day < ?`).run(today).changes;
+    return { events: removed, marks };
+  });
+  return run();
 }
 
 function countPendingHubJoinRequests(hubId) {
@@ -4436,7 +4570,7 @@ function getAccountExport(userId) {
     messages,
     hub_memberships: hubs,
     owned_hubs: ownedHubs,
-    hub_likes: db.prepare(`SELECT hubs.name AS hub_name, hub_likes.created_at FROM hub_likes INNER JOIN hubs ON hubs.id = hub_likes.hub_id WHERE hub_likes.user_id = ?`).all(userId),
+    hub_likes: db.prepare(`SELECT hubs.name AS hub_name, hub_like_events.day, hub_like_events.points FROM hub_like_events INNER JOIN hubs ON hubs.id = hub_like_events.hub_id WHERE hub_like_events.user_id = ? ORDER BY hub_like_events.day`).all(userId),
     hub_join_requests: db.prepare(`SELECT hubs.name AS hub_name, hub_join_requests.status, hub_join_requests.created_at, hub_join_requests.decided_at FROM hub_join_requests INNER JOIN hubs ON hubs.id = hub_join_requests.hub_id WHERE hub_join_requests.user_id = ?`).all(userId),
     friendships,
     blocked_users: blocked,
@@ -5914,7 +6048,9 @@ module.exports = {
   saveDmVoiceMessage,
   createDmFileMessage,
   saveDmSticker,
-  setHubLike,
+  likeHub,
+  compactLikeEvents,
+  levelInfo,
   purgeExpiredJoinRequests,
   listDiscoverableHubs,
   getDiscoverableHubDetail,
