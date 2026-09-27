@@ -1022,10 +1022,10 @@ html.auth-pending #login-screen { visibility: hidden; }
   .topbar-lobby-actions .hub-members-toggle-btn.open { visibility: hidden; }
 }
 
-/* 7) Lobi üst sağ: butonlar daha dar; etiket ortalanır ve taşmaz */
+/* 7) Lobi üst sağ: butonlar daha dar (Lobi görseline yapışık durmasın diye), etiket ortalanır ve taşmaz */
 @media (max-width: 900px) {
-  .topbar-lobby-actions { gap: 5px; }
-  .topbar-lobby-actions .topbar-superlike-btn, .topbar-lobby-actions .hub-icon-btn, .topbar-lobby-actions .hub-members-toggle-btn { padding: 0 8px; font-size: 15px; }
+  .topbar-lobby-actions { gap: 4px; margin-left: 10px; }
+  .topbar-lobby-actions .topbar-superlike-btn, .topbar-lobby-actions .hub-icon-btn, .topbar-lobby-actions .hub-members-toggle-btn { padding: 0 5px; font-size: 13px; }
   .topbar-lobby-actions [data-lbl]::after { font-size: 8px; white-space: normal; width: max-content; max-width: 64px; text-align: center; }
 }
 
