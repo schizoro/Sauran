@@ -1745,6 +1745,11 @@ const AVATAR_FRAME_INFO = {
     neon: { title: '⚡ Neon', text: 'Parlayan kenarlı neon çerçeve.' },
     galaxy: { title: '🌌 Galaxy', text: 'Yıldızların hafif hareket ettiği uzay temalı çerçeve.' }
 };
+// Sauran Plus rozeti: kullanıcı adının hemen yanında küçük "✦ PLUS" etiketi (mor/mavi, Supporter'dan ayrı renk/anlam).
+function plusBadgeHtml(isPlus) {
+    return isPlus ? ' <span class="plus-badge" title="Sauran Plus">✦ PLUS</span>' : '';
+}
+
 function applyAvatarFrame(el, frameKey) {
     if (!el) return;
     AVATAR_FRAME_CLASSES.forEach((c) => el.classList.remove(c));
@@ -1845,8 +1850,8 @@ function renderProfile() {
             'block' :
             'none';
 
-    profileModalUsername.textContent =
-        currentUser.username;
+    profileModalUsername.innerHTML =
+        `${escapeHtml(currentUser.username)}${plusBadgeHtml(currentUser.plus_active)}`;
 
 
     // ------------------------------------------------
@@ -6225,7 +6230,7 @@ function renderOtherProfile() {
     otherProfileAvatarImg.src = hasAvatar ? profile.avatar_data : '';
     otherProfileAvatarImg.style.display = hasAvatar ? 'block' : 'none';
 
-    otherProfileUsername.textContent = profile.username;
+    otherProfileUsername.innerHTML = `${escapeHtml(profile.username)}${plusBadgeHtml(profile.plus_active)}`;
 
     // ÖNEMLİ: presence (gerçek bağlantı durumu) ile kullanıcının seçtiği
     // manuel durum birbirinden ayrı. Kullanıcı "Müsait" seçmiş olsa bile

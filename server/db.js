@@ -4512,6 +4512,7 @@ function getUserPublicProfile(viewerId, targetId) {
     avatar_data: visible ? user.avatar_data : null,
     banner_data: visible ? user.banner_data : null,
     avatar_frame: visible ? getEquippedCosmetics(targetId).avatar_frame : null,
+    plus_active: hasActivePlus(targetId),
     friendship_status: isSelf ? 'self' : friendship,
     blocked_by_me: blockedByMe
   };
