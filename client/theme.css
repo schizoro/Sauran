@@ -545,10 +545,10 @@ body:has(.adm-header), body:has(.mod-header) { background: var(--bg-app); color:
 .hub-voice-room-delete { order: 2; }
 .hub-voice-room-toggle { max-width: 100%; white-space: nowrap; }
 
-/* 3) Üyeler paneli: başlığı çubuğun hemen altında, boşluksuz */
+/* 3) Üyeler paneli: çubuğun hemen altında başlar, üstte boşluk yok */
 @media (max-width: 900px) {
-  .hub-detail-side { padding-top: calc(env(safe-area-inset-top) + 8px); }
-  .hub-side-title { line-height: 1.4; }
+  .hub-detail-side { top: calc(env(safe-area-inset-top) + 46px); padding-top: 10px; }
+  .hub-side-title { line-height: 1.4; margin-top: 0; }
 }
 
 /* 4) Açılır menüler opak ve üstte: arkadaki metin görünmez */
