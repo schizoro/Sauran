@@ -391,6 +391,10 @@ body .call-header #call-leave-btn:hover { background: rgba(255, 122, 134, 0.24);
 .call-hub-room-avatar { width: 92px; height: 92px; font-size: 30px; border: 0; background: linear-gradient(140deg, #25445a, #182a38);
   -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; transition: 0.25s var(--ease); }
 .call-hub-room-person:has(.voice-icon-btn.speaking) .call-hub-room-avatar { box-shadow: 0 0 0 3px var(--bg-app), 0 0 0 5px var(--accent-line), 0 0 30px rgba(92, 200, 255, 0.25); }
+/* Sauran Plus: konuşurken farklı, mor/altın bir parıltı (özel konuşma göstergesi) */
+.call-hub-room-person.plus-voice:has(.voice-icon-btn.speaking) .call-hub-room-avatar {
+  box-shadow: 0 0 0 3px var(--bg-app), 0 0 0 5px #6d5bd0, 0 0 30px rgba(109, 91, 208, .45), 0 0 14px rgba(255, 213, 74, .35);
+}
 .call-hub-room-person:has(.voice-icon-btn.off) .call-hub-room-avatar { opacity: 0.6; }
 .call-hub-room-person.is-self .call-hub-room-avatar { border: 0; }
 .call-hub-room-name { background: none; border: 0; padding: 0; font-size: 14px; font-weight: 500; color: inherit; }

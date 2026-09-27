@@ -7977,11 +7977,17 @@ const voiceAvatarCache = new Map(); // userId -> avatar_data (Lobi değişse de 
 const hubInRoomCount = document.getElementById('hub-in-room-count');
 const callMuteBtn = document.getElementById('call-mute-btn');
 
+const knownVoicePlus = new Map();
 function rememberVoiceAvatars() {
     (currentHub?.members || []).forEach((m) => {
         voiceAvatarCache.set(m.user_id, m.avatar_data || null);
         resolveFrame(m.user_id, m.avatar_frame);
+        knownVoicePlus.set(m.user_id, Boolean(m.plus_active));
     });
+}
+function isVoicePlus(userId) {
+    if (currentUser && userId === currentUser.id) return Boolean(currentUser.plus_active);
+    return knownVoicePlus.get(userId) || false;
 }
 
 function voiceAvatarInnerHtml(userId, username) {
@@ -8562,7 +8568,7 @@ function renderHubRoomGrid(participants) {
     const grid = document.getElementById('call-hub-room-grid');
 
     grid.innerHTML = (participants || []).map((p) => `
-        <div class="call-hub-room-person${p.user_id === currentUser?.id ? ' is-self' : ''}">
+        <div class="call-hub-room-person${p.user_id === currentUser?.id ? ' is-self' : ''}${isVoicePlus(p.user_id) ? ' plus-voice' : ''}">
             <span class="call-hub-room-avatar${voiceFrameParts(p.user_id).cls}" style="--user-color:${getUserColor(p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}${voiceFrameParts(p.user_id).overlay}</span>
             <span class="call-hub-room-name">${escapeHtml(p.username)}</span>
             ${p.user_id === currentUser?.id ? `<span class="voice-self-tag">${t('voice-room-you')}</span>` : ''}

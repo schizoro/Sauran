@@ -3128,7 +3128,8 @@ function getHubDetail(hubId, userId) {
 
   const members = db.prepare(`
     SELECT hub_members.user_id, hub_members.role_id, hub_members.permission_tier, users.username, users.status, users.avatar_data, users.avatar_visibility, users.minor_until,
-           (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) AS avatar_frame
+           (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) AS avatar_frame,
+           EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product = 'plus' AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) AS plus_active
     FROM hub_members
     INNER JOIN users ON users.id = hub_members.user_id
     WHERE hub_members.hub_id = ?
