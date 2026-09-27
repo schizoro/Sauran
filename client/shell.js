@@ -305,14 +305,9 @@
     const friends = $('friends-sidebar');
     if (friends) nav.appendChild(friends);
 
-    // ── Üye paneli düğmesi: kenar çentiği yerine başlıkta sade ikon ─────
-    const mb = $('hub-members-toggle-btn'), hdr = document.querySelector('.hub-detail-header'), setBtn = $('hub-settings-open-btn');
-    if (mb && hdr) {
-        mb.classList.add('hub-icon-btn', 'members-in-header');
-        mb.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="9" cy="8" r="3.5"/><path d="M2.500 20c1-3.500 3.500-5 6.500-5s5.500 1.500 6.500 5M16 4.500a3.500 3.500 0 0 1 0 7M18 15c2 .6 3.200 2.200 3.800 5"/></svg>';
-        mb.setAttribute('aria-label', tr('members', 'Üyeler'));
-        hdr.insertBefore(mb, setBtn || null);
-    }
+    // Not: Üyeler düğmesinin ikonu/etiketi ve mobilde üst çubuğa taşınması artık
+    // tamamen script.js'te (placeMobileTopbarItems) yönetiliyor; burada eskiden
+    // yapılan innerHTML değişimi onunla çakışıyordu, kaldırıldı.
 
     // ── Bildirim noktası / avatar: mevcut öğelerden yansıt ─────────────
     function mirror() {

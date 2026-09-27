@@ -6759,13 +6759,14 @@ function placeMobileTopbarItems(view) {
     const left = document.querySelector('.topbar-left');
     const actions = document.getElementById('topbar-lobby-actions');
     const sl = document.getElementById('lobby-superlike-btn');
+    const membersBtn = document.getElementById('hub-members-toggle-btn');
     const ctxTitle = document.getElementById('topbar-context-title');
     if (mobile && view === 'hub-detail') {
         moveNode(back, left, left.firstChild); moveNode(nameEl, left, ctxTitle);
-        if (actions) { moveNode(sl, actions); moveNode(gear, actions); actions.style.display = 'flex'; }
+        if (actions) { moveNode(sl, actions); moveNode(gear, actions); moveNode(membersBtn, actions); actions.style.display = 'flex'; }
     } else {
         restoreNode(back); restoreNode(nameEl);
-        if (actions) { restoreNode(sl); restoreNode(gear); actions.style.display = 'none'; }
+        if (actions) { restoreNode(sl); restoreNode(gear); restoreNode(membersBtn); actions.style.display = 'none'; }
     }
     const title = document.getElementById('topbar-context-title');
     if (title) {
@@ -8799,23 +8800,23 @@ hubSettingsModal.addEventListener('click', (event) => {
 
 hubSettingsImageBtn.addEventListener('click', () => hubSettingsImageInput.click());
 
-hubSettingsImageInput.addEventListener('change', () => {
+hubSettingsImageInput.addEventListener('change', async () => {
 
     const file = hubSettingsImageInput.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-        showToast("Görsel limiti 5 MB'dir.");
-        return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-        hubSettingsNewImageData = reader.result;
-        hubSettingsImagePreview.style.backgroundImage = `url(${reader.result})`;
+    try {
+        const dataUrl = await openImageCropper(file, { aspect: 1, outWidth: 256, title: 'Lobi Görselini Kırp' });
+        if (!dataUrl) return;
+        hubSettingsNewImageData = dataUrl;
+        hubSettingsImagePreview.style.backgroundImage = `url(${dataUrl})`;
         hubSettingsImagePreview.textContent = '';
-    };
-    reader.readAsDataURL(file);
+    } catch (error) {
+        console.error('Görsel işlenemedi:', error);
+        showToast('Görsel işlenemedi.');
+    } finally {
+        hubSettingsImageInput.value = '';
+    }
 
 });
 
@@ -9799,13 +9800,16 @@ hubCreateImageInput.addEventListener(
 
         try {
 
-            hubCreateImageData = await resizeImageToDataUrl(file, 128);
+            const dataUrl = await openImageCropper(file, { aspect: 1, outWidth: 256, title: 'Lobi Görselini Kırp' });
+            if (!dataUrl) return;
+            hubCreateImageData = dataUrl;
             hubCreateImagePreview.innerHTML = `<img src="${hubCreateImageData}" alt="">`;
             hubCreateImagePreview.style.display = '';
 
         } catch (error) {
 
             console.error('Görsel işlenemedi:', error);
+            showToast('Görsel işlenemedi.');
 
         } finally {
 
