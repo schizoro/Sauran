@@ -4301,7 +4301,8 @@ function connectToChat() {
                 friend_request_accepted: t('notif-friend-accepted'),
                 hub_invite: t('notif-hub-invite'),
                 platform_role_notice: t('notif-role-notice'),
-                platform_role_revoked: t('notif-role-revoked')
+                platform_role_revoked: t('notif-role-revoked'),
+                gift: '🎁 Bir hediye aldın!'
             };
             const label = labelByType[payload?.type] || t('notif-hub-invite');
             const channels = payload?.channels || {};
@@ -5951,6 +5952,25 @@ function renderNotifications(notifications) {
 
         }
 
+        if (n.type === 'gift') {
+
+            const collected = n.status !== 'pending';
+            return `
+                <div class="notification-card gift-notification-card${collected ? ' notification-seen' : ''}" data-notif-id="${n.id}" data-notif-type="gift">
+                    <div class="notification-official-tag">Sauran Moderasyon Ekibi</div>
+                    <div class="notification-text">
+                        🎁 Sana bir hediye gönderildi: <strong>${escapeHtml(n.data.label || 'Ödül')}</strong>${n.data.quantity > 1 ? ` × ${n.data.quantity}` : ''}
+                    </div>
+                    <div class="notification-actions">
+                        ${collected
+                            ? `<span class="gift-collected-tag">✓ Kitaplığına eklendi</span>`
+                            : `<button class="notification-accept" data-collect-gift type="button">🎁 Ödülü Topla</button>`}
+                    </div>
+                </div>
+            `;
+
+        }
+
         if (n.type === 'platform_role_notice') {
 
             const ui = ROLE_NOTICE_UI[roleNoticeLang()];
@@ -6023,6 +6043,15 @@ function renderNotifications(notifications) {
             const card = btn.closest('.notification-card');
             await fetch(`/api/notifications/${card.dataset.notifId}`, { method: 'DELETE', credentials: 'include' });
             reloadNotifications();
+        });
+    });
+
+    notificationsList.querySelectorAll('[data-collect-gift]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const card = btn.closest('.notification-card');
+            const notifId = card.dataset.notifId;
+            const notif = notifications.find((n) => String(n.id) === String(notifId));
+            if (notif) openGiftBoxModal(notif);
         });
     });
 
@@ -6109,6 +6138,81 @@ function renderNotifications(notifications) {
     });
 
 }
+
+// =====================================================
+// HEDİYE KUTUSU (bildirimden "Ödülü Topla")
+// =====================================================
+
+const GIFT_ICON_BY_KEY = {
+    coin: '🪙', plus: '✦', premium: '👑',
+    ocean: '🌊', neon: '⚡', galaxy: '🌌', supporter: '👑',
+    profile_theme: '🎨', profile_effect: '✨', name_effect: '🔤',
+    avatar_frame: '🖼️', lobby_theme: '🏠', lobby_image: '🖼️',
+    custom_emoji: '😊', sticker_pack: '🧩'
+};
+
+function openGiftBoxModal(notif) {
+    const modal = document.getElementById('gift-box-modal');
+    const visual = document.getElementById('gift-box-visual');
+    const stage = document.getElementById('gift-box-stage');
+    const reveal = document.getElementById('gift-box-reveal');
+    const revealIcon = document.getElementById('gift-box-reveal-icon');
+    const revealLabel = document.getElementById('gift-box-reveal-label');
+    const revealSub = document.getElementById('gift-box-reveal-sub');
+    const hint = document.getElementById('gift-box-hint');
+    const claimBtn = document.getElementById('gift-box-claim-btn');
+
+    // Sıfırla (aynı modal tekrar açılırsa önceki durumdan kalmasın).
+    visual.style.display = '';
+    visual.classList.remove('opening');
+    reveal.style.display = 'none';
+    stage.classList.remove('revealed');
+    hint.style.display = '';
+    hint.textContent = 'Kutuya dokun';
+    claimBtn.style.display = 'none';
+
+    const data = notif.data || {};
+    const key = data.item_key || data.product || '';
+    const icon = GIFT_ICON_BY_KEY[key] || '🎁';
+
+    const openBox = () => {
+        if (visual.classList.contains('opening')) return;
+        visual.classList.add('opening');
+        setTimeout(() => {
+            visual.style.display = 'none';
+            reveal.style.display = 'flex';
+            stage.classList.add('revealed');
+            revealIcon.textContent = icon;
+            revealLabel.textContent = data.label || 'Ödül';
+            revealSub.textContent = data.quantity > 1 ? `× ${data.quantity} ${data.unit || ''}`.trim() : (data.rarity ? data.rarity.toUpperCase() : '');
+            hint.style.display = 'none';
+            claimBtn.style.display = '';
+        }, 550);
+    };
+
+    visual.onclick = openBox;
+
+    claimBtn.onclick = async () => {
+        claimBtn.disabled = true;
+        try {
+            await fetch(`/api/notifications/${notif.id}/read`, { method: 'POST', credentials: 'include' });
+        } catch (_) { /* bildirim geçmişte kalır, hediyenin kendisi zaten hesapta */ }
+        modal.style.display = 'none';
+        refreshNotificationsBadge();
+        if (notificationsModal.style.display === 'flex') reloadNotifications();
+        showToast('📚 Kitaplığına eklendi.');
+        claimBtn.disabled = false;
+    };
+
+    modal.style.display = 'flex';
+}
+
+document.getElementById('gift-box-close-btn')?.addEventListener('click', () => {
+    document.getElementById('gift-box-modal').style.display = 'none';
+});
+document.getElementById('gift-box-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'gift-box-modal') e.currentTarget.style.display = 'none';
+});
 
 
 // =====================================================

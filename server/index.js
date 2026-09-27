@@ -2012,6 +2012,8 @@ app.post('/api/admin/gifts/cosmetics', (req, res) => {
   const r = grantCosmetic(target.id, itemKey, 'gift', null);
   if (!r.success) return res.status(r.status || 400).json({ success: false, error: r.error });
   io.to(`user:${target.id}`).emit('gift_received', { label: r.label, quantity: 1, unit: 'adet' });
+  const giftNotif = createNotification(target.id, 'gift', { kind: 'cosmetic', item_key: itemKey, label: item.label, rarity: item.rarity, quantity: 1, unit: 'adet' });
+  pushNotification(target.id, 'gift', giftNotif.data);
   res.json({ success: true, recipient: target.username || username, item_key: itemKey, label: item.label });
 });
 
@@ -2034,6 +2036,8 @@ app.post('/api/admin/gifts', (req, res) => {
   const r = giftProduct(actor.id, req.body?.username, String(req.body?.product || ''), req.body?.quantity, req.body?.note);
   if (!r.success) return res.status(r.status || 400).json({ success: false, error: r.error });
   io.to(`user:${r.recipient_id}`).emit('gift_received', { label: r.label, quantity: r.quantity, unit: r.unit });
+  const giftNotif = createNotification(r.recipient_id, 'gift', { kind: 'product', product: r.product, label: r.label, quantity: r.quantity, unit: r.unit });
+  pushNotification(r.recipient_id, 'gift', giftNotif.data);
   res.json({ success: true, gift_id: r.gift_id, recipient: r.recipient, label: r.label, quantity: r.quantity, unit: r.unit, balance: r.balance });
 });
 
@@ -2851,7 +2855,8 @@ function pushNotification(userId, type, data) {
     friend_request_accepted: `${data?.from_username || 'Biri'} arkadaşlık isteğini kabul etti.`,
     hub_invite: `${data?.from_username || 'Biri'} seni ${data?.hub_name || 'bir'} lobisine davet etti.`,
     platform_role_notice: 'Sauran Yönetim: Yeni bir görev bildirimin var.',
-    platform_role_revoked: 'Sauran Yönetim: Yönetim görevin hakkında bir bilgilendirme var.'
+    platform_role_revoked: 'Sauran Yönetim: Yönetim görevin hakkında bir bilgilendirme var.',
+    gift: `Sana bir hediye geldi: ${data?.label || 'ödül'}.`
   }[type];
 
   if (webPushLabel) {
