@@ -90,6 +90,10 @@ if (!userColumns.includes('chat_theme')) {
   // Sauran Plus: temel sohbet temaları (classic/soft/contrast). Plus bitince sunucu 'classic' döndürür.
   db.exec(`ALTER TABLE users ADD COLUMN chat_theme TEXT DEFAULT 'classic'`);
 }
+if (!userColumns.includes('profile_color')) {
+  // Sauran Plus: kullanıcı adından otomatik hesaplanan rengin yerine geçen özel renk (hex). Plus bitince yok sayılır.
+  db.exec(`ALTER TABLE users ADD COLUMN profile_color TEXT`);
+}
 
 const VALID_STATUSES = ['active', 'idle', 'busy', 'invisible'];
 const VALID_VISIBILITIES = ['public', 'friends', 'private'];
@@ -1340,7 +1344,7 @@ function getDeletedDmMessages(userId, token, limit = 50) {
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
-           users.chat_theme,
+           users.chat_theme, users.profile_color,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE messages.room = ? AND messages.hub_id IS NULL
@@ -2344,6 +2348,20 @@ function updateChatTheme(userId, theme) {
   return { success: true, chat_theme: value };
 }
 
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+
+function updateProfileColor(userId, color) {
+  if (color === null || color === '') {
+    db.prepare(`UPDATE users SET profile_color = NULL WHERE id = ?`).run(userId);
+    return { success: true, profile_color: null };
+  }
+  const value = String(color || '');
+  if (!HEX_COLOR_RE.test(value)) return { success: false, error: 'Geçersiz renk (ör. #5cc8ff).' };
+  if (!hasActivePlus(userId)) return { success: false, error: 'Özel profil rengi yalnızca Sauran Plus abonelerine açık.' };
+  db.prepare(`UPDATE users SET profile_color = ? WHERE id = ?`).run(value, userId);
+  return { success: true, profile_color: value };
+}
+
 const ABOUT_ME_MAX_FREE = 300;
 const ABOUT_ME_MAX_PLUS = 600;
 
@@ -3131,7 +3149,7 @@ function getHubDetail(hubId, userId) {
   `).all(hubId);
 
   const members = db.prepare(`
-    SELECT hub_members.user_id, hub_members.role_id, hub_members.permission_tier, users.username, users.status, users.avatar_data, users.avatar_visibility, users.minor_until,
+    SELECT hub_members.user_id, hub_members.role_id, hub_members.permission_tier, users.username, users.status, users.avatar_data, users.avatar_visibility, users.minor_until, users.profile_color,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) AS avatar_frame,
            EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product = 'plus' AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) AS plus_active
     FROM hub_members
@@ -3139,6 +3157,7 @@ function getHubDetail(hubId, userId) {
     WHERE hub_members.hub_id = ?
   `).all(hubId).map((m) => {
     const { avatar_visibility, minor_until, ...rest } = m;
+    if (!rest.plus_active) rest.profile_color = null;
     const masked = maskAvatarFor(userId, m.user_id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']);
     return presenceVisibleTo(userId, m.user_id, minor_until) ? masked : { ...masked, status: 'invisible' };
   });
@@ -3322,7 +3341,7 @@ function getHubMessages(hubId, limit = 50, viewerId = null) {
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.kind,
            messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
-           users.chat_theme,
+           users.chat_theme, users.profile_color,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE hub_id = ?
@@ -3337,7 +3356,7 @@ function getMessageById(id, viewerId = null) {
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
-           users.chat_theme,
+           users.chat_theme, users.profile_color,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE messages.id = ?
@@ -3368,7 +3387,9 @@ function hydrateMessage(row, viewerId = null) {
   // Sauran Plus: sohbet teması yalnızca gönderenin aboneliği hâlâ aktifse uygulanır
   // (üyelik biterse geçmiş mesajlar da otomatik 'classic' görünür).
   if ('chat_theme' in row) {
-    row.chat_theme = (row.user_id && hasActivePlus(row.user_id)) ? (row.chat_theme || 'classic') : 'classic';
+    const senderIsPlus = row.user_id && hasActivePlus(row.user_id);
+    row.chat_theme = senderIsPlus ? (row.chat_theme || 'classic') : 'classic';
+    if ('profile_color' in row) row.profile_color = senderIsPlus ? (row.profile_color || null) : null;
   }
 
   let result = row;
@@ -4293,13 +4314,14 @@ function getFriendshipStatus(a, b) {
 
 function listFriends(userId) {
   return db.prepare(`
-    SELECT users.id, users.username, users.status, users.avatar_data, users.avatar_visibility,
-           (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) AS avatar_frame
+    SELECT users.id, users.username, users.status, users.avatar_data, users.avatar_visibility, users.profile_color,
+           (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) AS avatar_frame,
+           EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product = 'plus' AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) AS plus_active
     FROM friendships
     INNER JOIN users ON users.id = CASE WHEN friendships.user_low = ? THEN friendships.user_high ELSE friendships.user_low END
     WHERE friendships.status = 'accepted' AND (friendships.user_low = ? OR friendships.user_high = ?)
     ORDER BY users.username COLLATE NOCASE
-  `).all(userId, userId, userId).map((f) => { const { avatar_visibility, ...rest } = f; return maskAvatarFor(userId, f.id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']); });
+  `).all(userId, userId, userId).map((f) => { const { avatar_visibility, ...rest } = f; if (!rest.plus_active) rest.profile_color = null; return maskAvatarFor(userId, f.id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']); });
 }
 
 function listIncomingRequests(userId) {
@@ -4527,7 +4549,7 @@ function confirmPasswordReset(email, code, newPassword) {
 
 function getUserPublicProfile(viewerId, targetId) {
   const user = db.prepare(`
-    SELECT id, username, status, about_me, avatar_data, banner_data, avatar_visibility, minor_until
+    SELECT id, username, status, about_me, avatar_data, banner_data, avatar_visibility, minor_until, profile_color
     FROM users WHERE id = ?
   `).get(targetId);
 
@@ -4548,6 +4570,7 @@ function getUserPublicProfile(viewerId, targetId) {
     avatar_data: visible ? user.avatar_data : null,
     banner_data: visible ? user.banner_data : null,
     avatar_frame: visible ? getEquippedCosmetics(targetId).avatar_frame : null,
+    profile_color: (visible && hasActivePlus(targetId)) ? user.profile_color : null,
     plus_active: hasActivePlus(targetId),
     friendship_status: isSelf ? 'self' : friendship,
     blocked_by_me: blockedByMe
@@ -5058,7 +5081,7 @@ function getDmMessages(userId, otherUserId, limit = 50) {
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
-           users.chat_theme,
+           users.chat_theme, users.profile_color,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE room = ?
@@ -6381,6 +6404,7 @@ module.exports = {
   grantMonthlyPlusCoins,
   CHAT_THEMES,
   updateChatTheme,
+  updateProfileColor,
   GIFT_PRODUCTS,
   listGiftProducts,
   giftProduct,

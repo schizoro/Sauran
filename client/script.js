@@ -1779,8 +1779,10 @@ function renderProfile() {
     applyAvatarFrame(document.getElementById('profile-modal-avatar-wrap'), currentUser.avatar_frame);
 
     const color =
-        getUserColor(
-            currentUser.username
+        resolveUserColor(
+            currentUser.id,
+            currentUser.username,
+            currentUser.profile_color
         );
 
     const initial =
@@ -3862,6 +3864,7 @@ profileBtn.addEventListener(
             if (aboutCount) aboutCount.textContent = `${aboutInput.value.length}/${max}`;
         }
         renderChatThemePicker();
+        renderProfileColorPicker();
 
     }
 );
@@ -3913,6 +3916,50 @@ document.getElementById('chat-theme-picker')?.addEventListener('click', async (e
         console.error('Sohbet teması güncellenemedi:', error);
         showToast('Güncellenemedi.');
     }
+});
+
+// Sauran Plus: özel profil rengi. Aynı kilit deseni — Plus olmayanlar seçiciyi görür ama uygulayamaz.
+function renderProfileColorPicker() {
+    const input = document.getElementById('profile-color-input');
+    const saveBtn = document.getElementById('profile-color-save-btn');
+    const resetBtn = document.getElementById('profile-color-reset-btn');
+    const hint = document.getElementById('profile-color-hint');
+    if (!input || !currentUser) return;
+    const isPlus = Boolean(currentUser.plus_active);
+    input.disabled = !isPlus;
+    saveBtn.disabled = !isPlus;
+    resetBtn.disabled = !isPlus || !currentUser.profile_color;
+    input.value = currentUser.profile_color || getUserColor(currentUser.username);
+    hint.textContent = isPlus ? '' : 'Özel profil rengi Sauran Plus abonelerine açıktır.';
+}
+
+async function saveProfileColor(color) {
+    try {
+        const response = await fetch('/api/profile/color', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ profile_color: color })
+        });
+        const data = await response.json();
+        if (!data.success) { showToast(data.error || 'Güncellenemedi.'); return; }
+        currentUser.profile_color = data.profile_color;
+        resolveUserColor(currentUser.id, currentUser.username, currentUser.profile_color);
+        renderProfileColorPicker();
+        renderProfile();
+    } catch (error) {
+        console.error('Profil rengi güncellenemedi:', error);
+        showToast('Güncellenemedi.');
+    }
+}
+
+document.getElementById('profile-color-save-btn')?.addEventListener('click', () => {
+    const input = document.getElementById('profile-color-input');
+    if (input && !input.disabled) saveProfileColor(input.value);
+});
+document.getElementById('profile-color-reset-btn')?.addEventListener('click', () => {
+    const btn = document.getElementById('profile-color-reset-btn');
+    if (!btn.disabled) saveProfileColor(null);
 });
 
 // Hakkımda bilgi balonu: masaüstünde hover/odak (CSS), dokunmatikte/tıklamada aç-kapa
@@ -5327,6 +5374,7 @@ function renderFriendFavorites() {
     row.innerHTML = friendFavorites.map((f) => {
         if (f.avatar_data) knownAvatars.set(f.id, f.avatar_data);
         const frameKey = resolveFrame(f.id, f.avatar_frame);
+        const favColor = resolveUserColor(f.id, f.username, f.profile_color);
         const unread = unreadDmCounts.get(f.id) || 0;
         const inner = f.avatar_data
             ? `<img src="${escapeAttr(f.avatar_data)}" alt="">`
@@ -5335,7 +5383,7 @@ function renderFriendFavorites() {
         const frameOverlay = frameKey === 'supporter' ? supporterFrameOverlayHtml() : '';
         return `
             <button type="button" class="friends-fav" data-friend-id="${f.id}" data-friend-name="${escapeAttr(f.username)}" title="${escapeAttr(f.username)}">
-                <span class="friends-fav-avatar${frameClass}" style="--user-color:${getUserColor(f.username)};">
+                <span class="friends-fav-avatar${frameClass}" style="--user-color:${favColor};">
                     ${inner}
                     <span class="friends-fav-dot${f.online ? ' on' : ''}" aria-hidden="true"></span>
                     ${unread > 0 ? `<span class="friends-fav-unread">${unread > 9 ? '9+' : unread}</span>` : ''}
@@ -5382,7 +5430,7 @@ function renderFriendsSidebar(friends) {
 
     friendsSidebarList.innerHTML = friends.map((f) => {
 
-        const color = getUserColor(f.username);
+        const color = resolveUserColor(f.id, f.username, f.profile_color);
         const initial = f.username.charAt(0).toUpperCase();
         const unread = unreadDmCounts.get(f.id) || 0;
 
@@ -6264,7 +6312,7 @@ async function openOtherProfile(userId, options = {}) {
 function renderOtherProfile() {
 
     const profile = otherProfileCache;
-    const color = getUserColor(profile.username);
+    const color = resolveUserColor(profile.id, profile.username, profile.profile_color);
     const initial = profile.username.charAt(0).toUpperCase();
     const hasAvatar = Boolean(profile.avatar_data);
 
@@ -6642,7 +6690,7 @@ function appendDmMessage(msg) {
     const isMine = msg.user_id === currentUser.id;
     row.className = `dm-msg-row ${isMine ? 'msg-mine' : ''}`;
 
-    row.innerHTML = avatarButtonHtml(msg.sender_deleted ? null : msg.user_id, msg.avatar_data, msg.sender_deleted ? t('deleted-account-label') : msg.username, msg.sender_deleted ? null : msg.avatar_frame);
+    row.innerHTML = avatarButtonHtml(msg.sender_deleted ? null : msg.user_id, msg.avatar_data, msg.sender_deleted ? t('deleted-account-label') : msg.username, msg.sender_deleted ? null : msg.avatar_frame, msg.sender_deleted ? null : msg.profile_color);
 
     const wrap = document.createElement('div');
     wrap.className = `dm-msg ${isMine ? 'dm-msg-mine' : 'dm-msg-theirs'}`;
@@ -6765,12 +6813,23 @@ function applyChatTheme(wrap, userId, theme) {
     if (resolved && resolved !== 'classic') wrap.classList.add('chat-theme-' + resolved);
 }
 
-function avatarButtonHtml(userId, avatarData, username, frameKey) {
+// Sauran Plus: özel profil rengi. getUserColor(username) yerine bu kullanılır — aynı önbellek deseni
+// (avatar_frame/chat_theme ile aynı yerlerden geçer); veri gelmeyen tekrar render'da son bilinen değeri döner.
+const knownUserColors = new Map();
+function resolveUserColor(userId, username, customColor) {
+    if (customColor !== undefined) { knownUserColors.set(userId, customColor || null); }
+    if (currentUser && userId === currentUser.id) return currentUser.profile_color || getUserColor(username);
+    const known = knownUserColors.get(userId);
+    return known || getUserColor(username);
+}
+
+function avatarButtonHtml(userId, avatarData, username, frameKey, profileColor) {
 
     avatarData = resolveAvatar(userId, avatarData);
+    if (profileColor !== undefined) resolveUserColor(userId, username, profileColor);
     frameKey = resolveFrame(userId, frameKey);
 
-    const color = getUserColor(username || '');
+    const color = resolveUserColor(userId, username || '');
     const initial = (username || '?').charAt(0).toUpperCase();
 
     const inner = avatarData
@@ -7994,6 +8053,7 @@ function rememberVoiceAvatars() {
     (currentHub?.members || []).forEach((m) => {
         voiceAvatarCache.set(m.user_id, m.avatar_data || null);
         resolveFrame(m.user_id, m.avatar_frame);
+        resolveUserColor(m.user_id, m.username, m.profile_color);
         knownVoicePlus.set(m.user_id, Boolean(m.plus_active));
     });
 }
@@ -8296,7 +8356,7 @@ function voiceRoomMembersHtml(room) {
         ? `<div class="hub-voice-room-members-empty">${t('voice-room-nobody-here')}</div>`
         : participants.map((p) => `
             <div class="hub-voice-room-member${p.user_id === currentUser?.id ? ' is-self' : ''}">
-                <span class="hub-voice-member-avatar${voiceFrameParts(p.user_id).cls}" style="--user-color:${getUserColor(p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}${voiceFrameParts(p.user_id).overlay}</span>
+                <span class="hub-voice-member-avatar${voiceFrameParts(p.user_id).cls}" style="--user-color:${resolveUserColor(p.user_id, p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}${voiceFrameParts(p.user_id).overlay}</span>
                 <span class="hub-voice-member-name">${escapeHtml(p.username)}${voiceSelfTagHtml(p.user_id)}</span>
                 ${voiceStatusIconsHtml(p, true)}
             </div>
@@ -8465,7 +8525,7 @@ function renderVoiceRoomPreviewList(room) {
 
     voiceRoomPreviewList.innerHTML = participants.map((p) => `
         <div class="voice-room-preview-person">
-            <span class="voice-room-preview-avatar${voiceFrameParts(p.user_id).cls}" style="--user-color:${getUserColor(p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}${voiceFrameParts(p.user_id).overlay}</span>
+            <span class="voice-room-preview-avatar${voiceFrameParts(p.user_id).cls}" style="--user-color:${resolveUserColor(p.user_id, p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}${voiceFrameParts(p.user_id).overlay}</span>
             <span class="voice-room-preview-name">${escapeHtml(p.username)}</span>
             ${voiceStatusIconsHtml(p, false)}
         </div>
@@ -8581,7 +8641,7 @@ function renderHubRoomGrid(participants) {
 
     grid.innerHTML = (participants || []).map((p) => `
         <div class="call-hub-room-person${p.user_id === currentUser?.id ? ' is-self' : ''}${isVoicePlus(p.user_id) ? ' plus-voice' : ''}">
-            <span class="call-hub-room-avatar${voiceFrameParts(p.user_id).cls}" style="--user-color:${getUserColor(p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}${voiceFrameParts(p.user_id).overlay}</span>
+            <span class="call-hub-room-avatar${voiceFrameParts(p.user_id).cls}" style="--user-color:${resolveUserColor(p.user_id, p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}${voiceFrameParts(p.user_id).overlay}</span>
             <span class="call-hub-room-name">${escapeHtml(p.username)}</span>
             ${p.user_id === currentUser?.id ? `<span class="voice-self-tag">${t('voice-room-you')}</span>` : ''}
             ${p.user_id === currentUser?.id ? '' /* görüşme ekranında kendi kartında düğme yok (mikrofon alt çubukta); yan paneldeki liste düğmeleri korunur */ : voiceStatusIconsHtml(p, true)}
@@ -10111,7 +10171,7 @@ hubInviteFriendBtn.addEventListener(
                 li.className = 'liquid-friend-row';
 
                 li.innerHTML = `
-                    ${avatarButtonHtml(friend.id, friend.avatar_data, friend.username, friend.avatar_frame)}
+                    ${avatarButtonHtml(friend.id, friend.avatar_data, friend.username, friend.avatar_frame, friend.profile_color)}
                     <span class="liquid-friend-name">${escapeHtml(friend.username)}</span>
                     <button class="liquid-friend-invite-btn" data-invite-user="${friend.id}" type="button">Davet Et</button>
                 `;
@@ -11734,7 +11794,7 @@ function renderHubMembers() {
 
     hubMemberList.innerHTML = orderedMembers.map((m, idx) => {
 
-        const avatar = avatarButtonHtml(m.user_id, m.avatar_data, m.username, m.avatar_frame);
+        const avatar = avatarButtonHtml(m.user_id, m.avatar_data, m.username, m.avatar_frame, m.profile_color);
         const isSelf = m.user_id === currentUser.id;
         const tierBadge = m.permission_tier === 'owner' ? ' 👑' : m.permission_tier === 'moderator' ? ' 🛡️' : '';
 
@@ -12192,7 +12252,7 @@ function renderHubMessageIntoWrap(wrap, msg) {
     const editedTag = msg.edited ? `<span class="edited-tag">(${t('edited-tag')})</span>` : '';
     const pinnedTag = msg.pinned_at ? `<span class="msg-pinned-tag">${t('message-pinned')}</span>` : '';
 
-    const avatar = avatarButtonHtml(msg.user_id, msg.avatar_data, msg.username, msg.avatar_frame);
+    const avatar = avatarButtonHtml(msg.user_id, msg.avatar_data, msg.username, msg.avatar_frame, msg.profile_color);
 
     const header = `
         <div class="header">
