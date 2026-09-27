@@ -1042,6 +1042,11 @@ html.auth-pending #login-screen { visibility: hidden; }
 @keyframes frameNeon { from { box-shadow: 0 0 0 2px #ff2fd0, 0 0 8px 1px rgba(255,47,208,.55); } to { box-shadow: 0 0 0 2px #ff7af0, 0 0 18px 4px rgba(255,47,208,.95); } }
 @keyframes frameGalaxy { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(360deg); } }
 
+/* ── Mesaj/üye/arkadaş avatarları: çerçeveyi göstermek için ince bir sarmalayıcı ─────────
+   (.msg-avatar-btn kendi overflow:hidden'ı yüzünden çerçeveyi keserdi, o yüzden çerçeve
+   bir kardeş öğe olarak bu sarmalayıcının içine ekleniyor, düğmenin kendisine değil). */
+.msg-avatar-frame-wrap { position: relative; display: inline-flex; flex-shrink: 0; }
+
 /* ── Sauran Supporter: kurucu döneminin özel, Market'te satılmayan Legendary çerçevesi ──
    Halka: özel üretilen görsel (client/assets/frame-supporter.png, şeffaf altın alev halkası).
    Üst çubuk/ray/profil hepsi farklı piksel boyutunda olduğu için görsel yüzde bazlı konumlanır (bkz. script.js
@@ -1072,7 +1077,10 @@ html.auth-pending #login-screen { visibility: hidden; }
   box-shadow: 0 0 0 1px rgba(255, 213, 74, .5), 0 1px 3px rgba(0,0,0,.45);
   animation: sfTagGlow 2.4s ease-in-out infinite;
 }
-.rail-avatar .frame-supporter-tag, .profile-avatar-wrap-sm .frame-supporter-tag { display: none; }
+/* Etiket sadece büyük profil görünümlerinde (profil penceresi, Market kartı) gösterilir — mesaj/üye/arkadaş/
+   sesli oda gibi küçük avatarlarda halka görünür ama "SUPPORTER" yazısı sığmayacağı için gizli kalır. */
+.frame-supporter-tag { display: none; }
+.profile-modal-avatar-wrap .frame-supporter-tag, #other-profile-avatar-wrap .frame-supporter-tag, .m-avatar-preview .frame-supporter-tag { display: block; }
 @keyframes sfSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @keyframes sfGlowPulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
 @keyframes sfTagGlow {

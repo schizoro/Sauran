@@ -1326,6 +1326,7 @@ function getDeletedDmMessages(userId, token, limit = 50) {
   const rows = db.prepare(`
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
+           (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE messages.room = ? AND messages.hub_id IS NULL
@@ -3094,13 +3095,14 @@ function getHubDetail(hubId, userId) {
   `).all(hubId);
 
   const members = db.prepare(`
-    SELECT hub_members.user_id, hub_members.role_id, hub_members.permission_tier, users.username, users.status, users.avatar_data, users.avatar_visibility, users.minor_until
+    SELECT hub_members.user_id, hub_members.role_id, hub_members.permission_tier, users.username, users.status, users.avatar_data, users.avatar_visibility, users.minor_until,
+           (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) AS avatar_frame
     FROM hub_members
     INNER JOIN users ON users.id = hub_members.user_id
     WHERE hub_members.hub_id = ?
   `).all(hubId).map((m) => {
     const { avatar_visibility, minor_until, ...rest } = m;
-    const masked = maskAvatarFor(userId, m.user_id, rest, avatar_visibility);
+    const masked = maskAvatarFor(userId, m.user_id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']);
     return presenceVisibleTo(userId, m.user_id, minor_until) ? masked : { ...masked, status: 'invisible' };
   });
 
@@ -3269,18 +3271,20 @@ function isHubBanned(hubId, userId) {
 
 function listHubBans(hubId, viewerId = null) {
   return db.prepare(`
-    SELECT users.id, users.username, users.avatar_data, users.avatar_visibility, hub_bans.created_at
+    SELECT users.id, users.username, users.avatar_data, users.avatar_visibility, hub_bans.created_at,
+           (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) AS avatar_frame
     FROM hub_bans
     INNER JOIN users ON users.id = hub_bans.user_id
     WHERE hub_bans.hub_id = ?
     ORDER BY hub_bans.created_at DESC
-  `).all(hubId).map((b) => { const { avatar_visibility, ...rest } = b; return maskAvatarFor(viewerId, b.id, rest, avatar_visibility); });
+  `).all(hubId).map((b) => { const { avatar_visibility, ...rest } = b; return maskAvatarFor(viewerId, b.id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']); });
 }
 
 function getHubMessages(hubId, limit = 50, viewerId = null) {
   const rows = db.prepare(`
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.kind,
            messages.payload, messages.edited, messages.created_at, users.avatar_data,
+           (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE hub_id = ?
@@ -3294,6 +3298,7 @@ function getMessageById(id, viewerId = null) {
   return hydrateMessage(db.prepare(`
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
+           (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE messages.id = ?
@@ -4215,12 +4220,13 @@ function getFriendshipStatus(a, b) {
 
 function listFriends(userId) {
   return db.prepare(`
-    SELECT users.id, users.username, users.status, users.avatar_data, users.avatar_visibility
+    SELECT users.id, users.username, users.status, users.avatar_data, users.avatar_visibility,
+           (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) AS avatar_frame
     FROM friendships
     INNER JOIN users ON users.id = CASE WHEN friendships.user_low = ? THEN friendships.user_high ELSE friendships.user_low END
     WHERE friendships.status = 'accepted' AND (friendships.user_low = ? OR friendships.user_high = ?)
     ORDER BY users.username COLLATE NOCASE
-  `).all(userId, userId, userId).map((f) => { const { avatar_visibility, ...rest } = f; return maskAvatarFor(userId, f.id, rest, avatar_visibility); });
+  `).all(userId, userId, userId).map((f) => { const { avatar_visibility, ...rest } = f; return maskAvatarFor(userId, f.id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']); });
 }
 
 function listIncomingRequests(userId) {
@@ -4977,6 +4983,7 @@ function getDmMessages(userId, otherUserId, limit = 50) {
   const rows = db.prepare(`
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
+           (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE room = ?

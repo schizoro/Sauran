@@ -5267,16 +5267,20 @@ function renderFriendFavorites() {
     box.style.display = '';
     row.innerHTML = friendFavorites.map((f) => {
         if (f.avatar_data) knownAvatars.set(f.id, f.avatar_data);
+        const frameKey = resolveFrame(f.id, f.avatar_frame);
         const unread = unreadDmCounts.get(f.id) || 0;
         const inner = f.avatar_data
             ? `<img src="${escapeAttr(f.avatar_data)}" alt="">`
             : escapeHtml((f.username || '?').charAt(0).toUpperCase());
+        const frameClass = frameKey && frameKey !== 'classic' ? ` frame-${escapeAttr(frameKey)}` : '';
+        const frameOverlay = frameKey === 'supporter' ? supporterFrameOverlayHtml() : '';
         return `
             <button type="button" class="friends-fav" data-friend-id="${f.id}" data-friend-name="${escapeAttr(f.username)}" title="${escapeAttr(f.username)}">
-                <span class="friends-fav-avatar" style="--user-color:${getUserColor(f.username)};">
+                <span class="friends-fav-avatar${frameClass}" style="--user-color:${getUserColor(f.username)};">
                     ${inner}
                     <span class="friends-fav-dot${f.online ? ' on' : ''}" aria-hidden="true"></span>
                     ${unread > 0 ? `<span class="friends-fav-unread">${unread > 9 ? '9+' : unread}</span>` : ''}
+                    ${frameOverlay}
                 </span>
                 <span class="friends-fav-name">${escapeHtml(f.username)}</span>
             </button>`;
@@ -5325,6 +5329,9 @@ function renderFriendsSidebar(friends) {
 
         // Arkadaş listesi (gizlilik ayarına göre süzülmüş) profil görselinin güncel kaynağıdır; DM başlığı da bundan yararlanır.
         if (f.avatar_data) knownAvatars.set(f.id, f.avatar_data); else knownAvatars.delete(f.id);
+        const frameKey = resolveFrame(f.id, f.avatar_frame);
+        const frameClass = frameKey && frameKey !== 'classic' ? ` frame-${escapeAttr(frameKey)}` : '';
+        const frameOverlay = frameKey === 'supporter' ? supporterFrameOverlayHtml() : '';
 
         const avatarInner = f.avatar_data
             ? `<img src="${escapeAttr(f.avatar_data)}" alt="">`
@@ -5339,8 +5346,9 @@ function renderFriendsSidebar(friends) {
         return `
             <div class="friends-sidebar-row ${f.online ? 'online' : ''}" data-friend-id="${f.id}" data-friend-name="${escapeAttr(f.username)}">
                 <span class="friends-sidebar-presence" aria-hidden="true"></span>
-                <span class="friends-sidebar-avatar-wrap">
+                <span class="friends-sidebar-avatar-wrap${frameClass}">
                     <span class="friends-sidebar-avatar" style="--user-color:${color};">${avatarInner}</span>
+                    ${frameOverlay}
                     <span class="status-hex status-hex-sm friends-sidebar-status ${statusClass}" title="${escapeAttr(statusTitle)}"></span>
                 </span>
                 <span class="friends-sidebar-name">${escapeHtml(f.username)}</span>
@@ -6575,7 +6583,7 @@ function appendDmMessage(msg) {
     const isMine = msg.user_id === currentUser.id;
     row.className = `dm-msg-row ${isMine ? 'msg-mine' : ''}`;
 
-    row.innerHTML = avatarButtonHtml(msg.sender_deleted ? null : msg.user_id, msg.avatar_data, msg.sender_deleted ? t('deleted-account-label') : msg.username);
+    row.innerHTML = avatarButtonHtml(msg.sender_deleted ? null : msg.user_id, msg.avatar_data, msg.sender_deleted ? t('deleted-account-label') : msg.username, msg.sender_deleted ? null : msg.avatar_frame);
 
     const wrap = document.createElement('div');
     wrap.className = `dm-msg ${isMine ? 'dm-msg-mine' : 'dm-msg-theirs'}`;
@@ -6666,6 +6674,7 @@ function removeDmMessage(messageId) {
 // Profil görseli gizlilik ayarına göre sunucu tarafından süzülür. Canlı (yayın) mesajlarda alıcıya özel içerik üretilemediğinden başkasının görseli gelmeyebilir;
 // bu durumda REST ile (kendi yetkimize göre) daha önce alınmış görsel önbellekten kullanılır. Kendi görselimiz her zaman currentUser'dan gelir.
 const knownAvatars = new Map();
+const knownFrames = new Map();
 
 function resolveAvatar(userId, avatarData) {
     if (avatarData) { knownAvatars.set(userId, avatarData); return avatarData; }
@@ -6673,9 +6682,18 @@ function resolveAvatar(userId, avatarData) {
     return knownAvatars.get(userId) || null;
 }
 
-function avatarButtonHtml(userId, avatarData, username) {
+// Kuşanılan avatar çerçevesi herkese görünür: mesaj/üye/arkadaş listelerinden geçen her yerde
+// aynı önbelleğe (knownFrames) yazılır, veri gelmeyen tekrar render'larda oradan okunur.
+function resolveFrame(userId, frameKey) {
+    if (frameKey !== undefined) { knownFrames.set(userId, frameKey || null); return frameKey || null; }
+    if (currentUser && userId === currentUser.id) return currentUser.avatar_frame || null;
+    return knownFrames.get(userId) || null;
+}
+
+function avatarButtonHtml(userId, avatarData, username, frameKey) {
 
     avatarData = resolveAvatar(userId, avatarData);
+    frameKey = resolveFrame(userId, frameKey);
 
     const color = getUserColor(username || '');
     const initial = (username || '?').charAt(0).toUpperCase();
@@ -6684,11 +6702,15 @@ function avatarButtonHtml(userId, avatarData, username) {
         ? `<img src="${escapeAttr(avatarData)}" alt="">`
         : escapeHtml(initial);
 
-    return `
+    const btn = `
         <button type="button" class="msg-avatar-btn" data-user-id="${userId}" style="--user-color:${color};color:${avatarData ? '' : color};" title="${escapeAttr(username || '')}">
             ${inner}
         </button>
     `;
+
+    if (!frameKey || frameKey === 'classic') return btn;
+    const overlay = frameKey === 'supporter' ? supporterFrameOverlayHtml() : '';
+    return `<span class="msg-avatar-frame-wrap frame-${escapeAttr(frameKey)}" data-frame-key="${escapeAttr(frameKey)}">${btn}${overlay}</span>`;
 
 }
 
@@ -7889,7 +7911,10 @@ const hubInRoomCount = document.getElementById('hub-in-room-count');
 const callMuteBtn = document.getElementById('call-mute-btn');
 
 function rememberVoiceAvatars() {
-    (currentHub?.members || []).forEach((m) => voiceAvatarCache.set(m.user_id, m.avatar_data || null));
+    (currentHub?.members || []).forEach((m) => {
+        voiceAvatarCache.set(m.user_id, m.avatar_data || null);
+        resolveFrame(m.user_id, m.avatar_frame);
+    });
 }
 
 function voiceAvatarInnerHtml(userId, username) {
@@ -7897,6 +7922,13 @@ function voiceAvatarInnerHtml(userId, username) {
     return avatar
         ? `<img src="${escapeAttr(avatar)}" alt="">`
         : escapeHtml((username || '?').charAt(0).toUpperCase());
+}
+
+// Sesli oda avatarları da kuşanılan çerçeveyi gösterir (aynı önbellek, resolveFrame üzerinden).
+function voiceFrameParts(userId) {
+    const frameKey = resolveFrame(userId);
+    if (!frameKey || frameKey === 'classic') return { cls: '', overlay: '' };
+    return { cls: ` frame-${frameKey}`, overlay: frameKey === 'supporter' ? supporterFrameOverlayHtml() : '' };
 }
 
 const VOICE_MIC_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>';
@@ -8179,7 +8211,7 @@ function voiceRoomMembersHtml(room) {
         ? `<div class="hub-voice-room-members-empty">${t('voice-room-nobody-here')}</div>`
         : participants.map((p) => `
             <div class="hub-voice-room-member${p.user_id === currentUser?.id ? ' is-self' : ''}">
-                <span class="hub-voice-member-avatar" style="--user-color:${getUserColor(p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}</span>
+                <span class="hub-voice-member-avatar${voiceFrameParts(p.user_id).cls}" style="--user-color:${getUserColor(p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}${voiceFrameParts(p.user_id).overlay}</span>
                 <span class="hub-voice-member-name">${escapeHtml(p.username)}${voiceSelfTagHtml(p.user_id)}</span>
                 ${voiceStatusIconsHtml(p, true)}
             </div>
@@ -8348,7 +8380,7 @@ function renderVoiceRoomPreviewList(room) {
 
     voiceRoomPreviewList.innerHTML = participants.map((p) => `
         <div class="voice-room-preview-person">
-            <span class="voice-room-preview-avatar" style="--user-color:${getUserColor(p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}</span>
+            <span class="voice-room-preview-avatar${voiceFrameParts(p.user_id).cls}" style="--user-color:${getUserColor(p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}${voiceFrameParts(p.user_id).overlay}</span>
             <span class="voice-room-preview-name">${escapeHtml(p.username)}</span>
             ${voiceStatusIconsHtml(p, false)}
         </div>
@@ -8464,7 +8496,7 @@ function renderHubRoomGrid(participants) {
 
     grid.innerHTML = (participants || []).map((p) => `
         <div class="call-hub-room-person${p.user_id === currentUser?.id ? ' is-self' : ''}">
-            <span class="call-hub-room-avatar" style="--user-color:${getUserColor(p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}</span>
+            <span class="call-hub-room-avatar${voiceFrameParts(p.user_id).cls}" style="--user-color:${getUserColor(p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}${voiceFrameParts(p.user_id).overlay}</span>
             <span class="call-hub-room-name">${escapeHtml(p.username)}</span>
             ${p.user_id === currentUser?.id ? `<span class="voice-self-tag">${t('voice-room-you')}</span>` : ''}
             ${p.user_id === currentUser?.id ? '' /* görüşme ekranında kendi kartında düğme yok (mikrofon alt çubukta); yan paneldeki liste düğmeleri korunur */ : voiceStatusIconsHtml(p, true)}
@@ -9991,7 +10023,7 @@ hubInviteFriendBtn.addEventListener(
                 li.className = 'liquid-friend-row';
 
                 li.innerHTML = `
-                    ${avatarButtonHtml(friend.id, friend.avatar_data, friend.username)}
+                    ${avatarButtonHtml(friend.id, friend.avatar_data, friend.username, friend.avatar_frame)}
                     <span class="liquid-friend-name">${escapeHtml(friend.username)}</span>
                     <button class="liquid-friend-invite-btn" data-invite-user="${friend.id}" type="button">Davet Et</button>
                 `;
@@ -11614,7 +11646,7 @@ function renderHubMembers() {
 
     hubMemberList.innerHTML = orderedMembers.map((m, idx) => {
 
-        const avatar = avatarButtonHtml(m.user_id, m.avatar_data, m.username);
+        const avatar = avatarButtonHtml(m.user_id, m.avatar_data, m.username, m.avatar_frame);
         const isSelf = m.user_id === currentUser.id;
         const tierBadge = m.permission_tier === 'owner' ? ' 👑' : m.permission_tier === 'moderator' ? ' 🛡️' : '';
 
@@ -12072,7 +12104,7 @@ function renderHubMessageIntoWrap(wrap, msg) {
     const editedTag = msg.edited ? `<span class="edited-tag">(${t('edited-tag')})</span>` : '';
     const pinnedTag = msg.pinned_at ? `<span class="msg-pinned-tag">${t('message-pinned')}</span>` : '';
 
-    const avatar = avatarButtonHtml(msg.user_id, msg.avatar_data, msg.username);
+    const avatar = avatarButtonHtml(msg.user_id, msg.avatar_data, msg.username, msg.avatar_frame);
 
     const header = `
         <div class="header">
