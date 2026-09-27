@@ -1704,6 +1704,8 @@ function applyAdminLinkVisibility(user) {
         adminLink.style.display = (role === 'moderator' || role === 'admin' || role === 'founder') ? 'flex' : 'none';
         adminLink.setAttribute('href', role === 'moderator' ? 'moderation.html' : 'admin.html');
     }
+    const giftLink = document.getElementById('gift-tool-link');
+    if (giftLink) giftLink.style.display = user.platform_role === 'founder' ? 'flex' : 'none';
 }
 
 function setCurrentUser(user) {
@@ -4244,6 +4246,7 @@ function connectToChat() {
         if (currentHub && hubSettingsModal.style.display === 'flex') openHub(currentHub.id);
     });
     socket.on('hub_super_like', () => showToast(t('discover-super-received')));
+    socket.on('gift_received', (g) => { showToast('🎁 Hediye aldın: ' + g.quantity + ' ' + g.unit + ' ' + g.label); if (typeof loadWallet === 'function') loadWallet(); });
     socket.on('hub_join_decision', (data) => {
         showToast(t(data && data.approved ? 'discover-decision-approved' : 'discover-decision-rejected'));
         loadHubList();

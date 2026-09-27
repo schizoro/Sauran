@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hediye Aracı — Sauran</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="theme.css">
+<style>
+body{display:block;height:auto;min-height:100vh;margin:0;padding:20px;background:#0a0d11;color:#c5c6c7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+.g-wrap{max-width:640px;margin:0 auto}
+.g-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.g-head h1{font-size:18px;color:#5cc8ff;margin:0}
+.g-head a{color:#c5c6c7;text-decoration:none;font-size:13px}
+.g-card{border-radius:18px;padding:18px;background:rgba(20,22,28,.55);backdrop-filter:blur(22px) saturate(180%);-webkit-backdrop-filter:blur(22px) saturate(180%);border:1px solid rgba(255,255,255,.08);margin-bottom:16px}
+.g-card label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin:12px 0 6px}
+.g-card input,.g-card select{width:100%;box-sizing:border-box;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);color:#e2f8f6;border-radius:10px;padding:10px 12px;font-size:14px;outline:none}
+.g-btn{margin-top:16px;width:100%;padding:12px;border-radius:999px;border:1px solid rgba(92,200,255,.45);background:rgba(92,200,255,.14);color:#5cc8ff;font-weight:bold;font-size:14px;cursor:pointer}
+.g-btn:disabled{opacity:.4;cursor:default}
+.g-msg{font-size:13px;margin-top:10px;min-height:18px}
+.g-ok{color:#7ee787}.g-err{color:#ff7b72}
+.g-row{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid rgba(255,255,255,.06);font-size:13px}
+.g-row small{color:#6b7280}
+</style>
+</head>
+<body>
+<div class="g-wrap">
+  <div class="g-head"><h1>🎁 Hediye Aracı</h1><a href="index.html">← Uygulamaya dön</a></div>
+  <div id="g-state" class="g-card" style="display:none"></div>
+  <div id="g-main" style="display:none">
+    <div class="g-card">
+      <label for="g-user">Alıcı kullanıcı adı</label>
+      <input id="g-user" autocomplete="off" autocapitalize="off">
+      <div id="g-lookup" class="g-msg"></div>
+      <label for="g-product">Ürün</label>
+      <select id="g-product"></select>
+      <label for="g-qty" id="g-qty-label">Miktar</label>
+      <input id="g-qty" type="number" min="1" step="1" value="100">
+      <label for="g-note">Not (isteğe bağlı, kayıt için)</label>
+      <input id="g-note" maxlength="200">
+      <button id="g-send" class="g-btn" type="button">Hediye gönder</button>
+      <div id="g-msg" class="g-msg"></div>
+    </div>
+    <div class="g-card"><strong>Son hediyeler</strong><div id="g-recent"></div></div>
+  </div>
+</div>
+<script>
+(function(){
+  const $=(i)=>document.getElementById(i);
+  let products=[], armed=false;
+  const esc=(s)=>String(s==null?'':s).replace(/[&<>"']/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const api=async(u,m,b)=>{const r=await fetch(u,{method:m||'GET',headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined,credentials:'same-origin'});let d={};try{d=await r.json();}catch(_){}return{status:r.status,body:d};};
+  const pname=(k)=>{const p=products.find(x=>x.key===k);return p?p.label:k;};
+  function renderRecent(list){
+    $('g-recent').innerHTML=list.length?list.map(g=>`<div class="g-row"><span>${esc(g.recipient)} ← ${esc(pname(g.product))} × ${g.quantity}${g.note?`<br><small>${esc(g.note)}</small>`:''}</span><small>${esc(g.created_at)}</small></div>`).join(''):'<div class="g-row"><small>Henüz yok</small></div>';
+  }
+  function syncProduct(){
+    const p=products.find(x=>x.key===$('g-product').value); if(!p) return;
+    $('g-qty-label').textContent='Miktar ('+p.unit+')';
+    $('g-qty').min=p.min;$('g-qty').max=p.max;$('g-qty').disabled=p.min===p.max;
+    if(p.min===p.max)$('g-qty').value=p.min;
+    $('g-send').disabled=!p.enabled;
+    $('g-send').textContent=p.enabled?'Hediye gönder':'Yakında — şimdilik gönderilemez';
+    armed=false;
+  }
+  async function init(){
+    const r=await api('/api/admin/gifts/products');
+    if(r.status!==200){$('g-state').style.display='block';$('g-state').textContent=r.status===401?'Giriş yapmalısın.':'Bu araç yalnızca kurucuya açıktır.';return;}
+    products=r.body.products;
+    $('g-product').innerHTML=products.map(p=>`<option value="${esc(p.key)}">${esc(p.label)}${p.enabled?'':' (yakında)'}</option>`).join('');
+    $('g-main').style.display='block';renderRecent(r.body.recent);syncProduct();
+  }
+  $('g-product').addEventListener('change',syncProduct);
+  let lt;$('g-user').addEventListener('input',()=>{clearTimeout(lt);const v=$('g-user').value.trim();if(!v){$('g-lookup').textContent='';return;}lt=setTimeout(async()=>{const r=await api('/api/admin/gifts/lookup?username='+encodeURIComponent(v));$('g-lookup').className='g-msg '+(r.status===200?'g-ok':'g-err');$('g-lookup').textContent=r.status===200?`✓ ${r.body.username} — Coin bakiyesi: ${r.body.balance}`:'Kullanıcı bulunamadı.';},300);armed=false;});
+  $('g-send').addEventListener('click',async()=>{
+    const p=products.find(x=>x.key===$('g-product').value);const qty=Number($('g-qty').value);
+    if(!armed){armed=true;$('g-send').textContent=`Onayla: ${$('g-user').value.trim()} ← ${qty} ${p.unit} ${p.label}`;return;}
+    armed=false;$('g-send').disabled=true;
+    const r=await api('/api/admin/gifts','POST',{username:$('g-user').value.trim(),product:p.key,quantity:qty,note:$('g-note').value});
+    $('g-msg').className='g-msg '+(r.body.success?'g-ok':'g-err');
+    $('g-msg').textContent=r.body.success?`Gönderildi: ${r.body.recipient} ← ${r.body.quantity} ${r.body.unit} ${r.body.label}`:(r.body.error||'Gönderilemedi.');
+    const l=await api('/api/admin/gifts/products');if(l.status===200)renderRecent(l.body.recent);
+    syncProduct();
+  });
+  init();
+})();
+</script>
+</body>
+</html>

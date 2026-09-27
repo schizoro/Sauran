@@ -301,6 +301,29 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
   CREATE INDEX IF NOT EXISTS idx_coin_ledger_user ON coin_ledger(user_id);
+
+  -- Hediye Aracı (yalnızca kurucu): gifts = denetim izi, entitlements = hediye edilen süreli/kalıcı ürün hakları.
+  CREATE TABLE IF NOT EXISTS gifts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recipient_id INTEGER NOT NULL,
+    product TEXT NOT NULL,
+    quantity INTEGER NOT NULL,
+    granted_by INTEGER,
+    note TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_gifts_recipient ON gifts(recipient_id);
+  CREATE TABLE IF NOT EXISTS entitlements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    product TEXT NOT NULL,
+    expires_at DATETIME,
+    gift_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_entitlements_user ON entitlements(user_id);
 `);
 
 // Eski (günlük olmayan) beğeni tablosu varsa olaylara taşınır ve kaldırılır (her beğeni 5 puan).
@@ -2807,6 +2830,59 @@ function grantCoins(userId, amount, reason, ref) {
   return { success: true, balance: getCoinBalance(userId) };
 }
 
+// ── Hediye Aracı: ürün kaydı. Yeni ürün = buraya bir satır (enabled:false → panelde "yakında").
+// type: 'balance' (miktar kurucu belirler) | 'timed' (gün) | 'item' (tek seferlik/kalıcı hak)
+const GIFT_PRODUCTS = {
+  coin:          { label: 'Sauran Coin',        type: 'balance', enabled: true,  min: 1, max: 100000, unit: 'Coin' },
+  plus:          { label: 'Sauran Plus',        type: 'timed',   enabled: false, min: 1, max: 3650,   unit: 'gün' },
+  premium:       { label: 'Sauran Premium',     type: 'timed',   enabled: false, min: 1, max: 3650,   unit: 'gün' },
+  profile_theme: { label: 'Profil teması',      type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
+  profile_effect:{ label: 'Profil efekti',      type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
+  name_effect:   { label: 'İsim efekti',        type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
+  avatar_frame:  { label: 'Avatar çerçevesi',   type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
+  lobby_theme:   { label: 'Lobi teması',        type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
+  lobby_image:   { label: 'Lobi görseli hakkı', type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
+  custom_emoji:  { label: 'Özel emoji',         type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
+  sticker_pack:  { label: 'Sticker paketi',     type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' }
+};
+
+function listGiftProducts() {
+  return Object.entries(GIFT_PRODUCTS).map(([key, p]) => ({ key, ...p }));
+}
+
+function giftProduct(actorId, username, productKey, quantity, note) {
+  const p = GIFT_PRODUCTS[productKey];
+  if (!p) return { success: false, status: 400, error: 'Bilinmeyen ürün.' };
+  if (!p.enabled) return { success: false, status: 400, error: `${p.label} henüz aktif değil (yakında).` };
+  const n = Number(quantity);
+  if (!Number.isInteger(n) || n < p.min || n > p.max) return { success: false, status: 400, error: `Geçersiz miktar (${p.min}-${p.max}).` };
+  const target = db.prepare(`SELECT id, username FROM users WHERE LOWER(username) = LOWER(?)`).get(String(username || '').trim());
+  if (!target) return { success: false, status: 404, error: 'Kullanıcı bulunamadı.' };
+  const cleanNote = String(note || '').trim().slice(0, 200) || null;
+
+  const run = db.transaction(() => {
+    const giftId = db.prepare(`INSERT INTO gifts (recipient_id, product, quantity, granted_by, note) VALUES (?, ?, ?, ?, ?)`).run(target.id, productKey, n, actorId, cleanNote).lastInsertRowid;
+    if (p.type === 'balance') {
+      db.prepare(`INSERT INTO coin_ledger (user_id, delta, reason, ref) VALUES (?, ?, 'gift', ?)`).run(target.id, n, String(giftId));
+    } else if (p.type === 'timed') {
+      const cur = db.prepare(`SELECT MAX(expires_at) AS e FROM entitlements WHERE user_id = ? AND product = ? AND expires_at > datetime('now')`).get(target.id, productKey).e;
+      db.prepare(`INSERT INTO entitlements (user_id, product, expires_at, gift_id) VALUES (?, ?, datetime(COALESCE(?, 'now'), '+' || ? || ' days'), ?)`).run(target.id, productKey, cur, n, giftId);
+    } else {
+      db.prepare(`INSERT INTO entitlements (user_id, product, expires_at, gift_id) VALUES (?, ?, NULL, ?)`).run(target.id, productKey, giftId);
+    }
+    return giftId;
+  });
+  const giftId = run();
+  return { success: true, gift_id: giftId, recipient_id: target.id, recipient: target.username, product: productKey, label: p.label, quantity: n, unit: p.unit, balance: getCoinBalance(target.id) };
+}
+
+function listRecentGifts(limit) {
+  return db.prepare(`
+    SELECT g.id, g.product, g.quantity, g.note, g.created_at, u.username AS recipient, a.username AS granted_by
+    FROM gifts g JOIN users u ON u.id = g.recipient_id LEFT JOIN users a ON a.id = g.granted_by
+    ORDER BY g.id DESC LIMIT ?`).all(Math.min(Math.max(Number(limit) || 30, 1), 100));
+}
+
 function superLikeState(hubId, userId, isOwner) {
   const today = istanbulDay();
   const mine = db.prepare(`SELECT COUNT(*) AS c FROM hub_like_events WHERE hub_id = ? AND user_id = ? AND day = ? AND kind = 'super'`).get(hubId, userId, today).c;
@@ -4650,6 +4726,8 @@ function getAccountExport(userId) {
     messages,
     hub_memberships: hubs,
     owned_hubs: ownedHubs,
+    gifts_received: db.prepare(`SELECT product, quantity, note, created_at FROM gifts WHERE recipient_id = ? ORDER BY id`).all(userId),
+    entitlements: db.prepare(`SELECT product, expires_at, created_at FROM entitlements WHERE user_id = ? ORDER BY id`).all(userId),
     coin_ledger: db.prepare(`SELECT delta, reason, ref, created_at FROM coin_ledger WHERE user_id = ? ORDER BY id`).all(userId),
     hub_likes: db.prepare(`SELECT hubs.name AS hub_name, hub_like_events.day, hub_like_events.points FROM hub_like_events INNER JOIN hubs ON hubs.id = hub_like_events.hub_id WHERE hub_like_events.user_id = ? ORDER BY hub_like_events.day`).all(userId),
     hub_join_requests: db.prepare(`SELECT hubs.name AS hub_name, hub_join_requests.status, hub_join_requests.created_at, hub_join_requests.decided_at FROM hub_join_requests INNER JOIN hubs ON hubs.id = hub_join_requests.hub_id WHERE hub_join_requests.user_id = ?`).all(userId),
@@ -6130,6 +6208,10 @@ module.exports = {
   createDmFileMessage,
   saveDmSticker,
   likeHub,
+  GIFT_PRODUCTS,
+  listGiftProducts,
+  giftProduct,
+  listRecentGifts,
   superLikeHub,
   superLikeState,
   getCoinBalance,

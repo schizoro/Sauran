@@ -75,6 +75,9 @@ const {
   createDmFileMessage,
   saveDmSticker,
   likeHub,
+  listGiftProducts,
+  giftProduct,
+  listRecentGifts,
   superLikeHub,
   getCoinBalance,
   grantCoins,
@@ -1896,6 +1899,28 @@ app.post('/api/admin/coins/grant', (req, res) => {
   const result = grantCoins(target.id, req.body?.amount, 'admin_grant', actor.id);
   if (!result.success) return res.status(400).json(result);
   return res.json({ success: true, balance: result.balance });
+});
+
+// ── Hediye Aracı (yalnızca kurucu) ──
+app.get('/api/admin/gifts/products', (req, res) => {
+  if (!requirePlatformRole(req, res, 'founder')) return;
+  res.json({ success: true, products: listGiftProducts(), recent: listRecentGifts(30) });
+});
+
+app.get('/api/admin/gifts/lookup', (req, res) => {
+  if (!requirePlatformRole(req, res, 'founder')) return;
+  const u = db.prepare(`SELECT id, username FROM users WHERE LOWER(username) = LOWER(?)`).get(String(req.query.username || '').trim());
+  if (!u) return res.status(404).json({ success: false, error: 'Kullanıcı bulunamadı.' });
+  res.json({ success: true, username: u.username, balance: getCoinBalance(u.id) });
+});
+
+app.post('/api/admin/gifts', (req, res) => {
+  const actor = requirePlatformRole(req, res, 'founder');
+  if (!actor) return;
+  const r = giftProduct(actor.id, req.body?.username, String(req.body?.product || ''), req.body?.quantity, req.body?.note);
+  if (!r.success) return res.status(r.status || 400).json({ success: false, error: r.error });
+  io.to(`user:${r.recipient_id}`).emit('gift_received', { label: r.label, quantity: r.quantity, unit: r.unit });
+  res.json({ success: true, gift_id: r.gift_id, recipient: r.recipient, label: r.label, quantity: r.quantity, unit: r.unit, balance: r.balance });
 });
 
 app.get('/api/hubs/:id/join-requests', (req, res) => {
