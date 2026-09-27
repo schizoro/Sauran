@@ -1112,3 +1112,4 @@ html.auth-pending #login-screen { visibility: hidden; }
   50% { box-shadow: 0 0 0 1px rgba(180, 195, 255, .8), 0 0 12px rgba(79, 124, 255, .8); }
 }
 @media (prefers-reduced-motion: reduce) { .plus-badge { animation: none; } }
+.plus-badge-sm { font-size: 9px; padding: 1px 5px 1px 4px; margin-left: 3px; }

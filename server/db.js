@@ -2583,6 +2583,7 @@ function updateHub(hubId, userId, { name, image_data, ...discovery }) {
 const DISCOVER_SUMMARY_SELECT = `
   hubs.id, hubs.name, hubs.category, hubs.topic, hubs.description, hubs.language, hubs.join_policy, hubs.mic_requirement,
   hubs.capacity, hubs.created_at, hubs.created_by, users.username AS owner_username,
+  EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = hubs.created_by AND entitlements.product = 'plus' AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) AS owner_plus,
   CASE WHEN hubs.image_data IS NOT NULL AND hubs.image_data != '' THEN 1 ELSE 0 END AS has_image,
   (SELECT COUNT(*) FROM hub_members WHERE hub_members.hub_id = hubs.id) AS member_count,
   (SELECT MAX(messages.created_at) FROM messages WHERE messages.hub_id = hubs.id) AS last_activity,

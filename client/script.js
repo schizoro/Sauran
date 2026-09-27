@@ -8908,7 +8908,7 @@ function buildDiscoverCard(lobby, rank) {
         <p class="discover-card-desc">${escapeHtml(lobby.description || '')}</p>
         <div class="discover-card-meta">
             <span>👥 ${escapeHtml(cap)} ${escapeHtml(t('discover-members'))}</span>${pop}${voice}
-            <span>${escapeHtml(t('discover-owner'))}: ${escapeHtml(lobby.owner_username)}</span>
+            <span>${escapeHtml(t('discover-owner'))}: ${escapeHtml(lobby.owner_username)}${lobby.owner_plus ? ' <span class="plus-badge plus-badge-sm" title="Sauran Plus">✦ PLUS</span>' : ''}</span>
         </div>
         <button type="button" class="discover-card-cta">${escapeHtml(t('discover-view-lobby'))}</button>
     `;
@@ -9210,7 +9210,7 @@ function renderDiscoverDetail(lobby) {
             <span class="discover-card-avatar">${discoverAvatarHtml(lobby)}</span>
             <div style="min-width:0;">
                 <div class="discover-card-name" style="white-space:normal;">${escapeHtml(lobby.name)}</div>
-                <div class="discover-detail-owner">${escapeHtml(t('discover-owner'))}: ${escapeHtml(lobby.owner_username)}</div>
+                <div class="discover-detail-owner">${escapeHtml(t('discover-owner'))}: ${escapeHtml(lobby.owner_username)}${lobby.owner_plus ? ' <span class="plus-badge plus-badge-sm" title="Sauran Plus">✦ PLUS</span>' : ''}</div>
             </div>
         </div>
         <div class="discover-facts">
