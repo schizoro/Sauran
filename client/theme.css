@@ -545,9 +545,9 @@ body:has(.adm-header), body:has(.mod-header) { background: var(--bg-app); color:
 .hub-voice-room-delete { order: 2; }
 .hub-voice-room-toggle { max-width: 100%; white-space: nowrap; }
 
-/* 3) Üyeler paneli: başlıktaki üye düğmesi panelin başlığına binmez */
+/* 3) Üyeler paneli: başlığı çubuğun hemen altında, boşluksuz */
 @media (max-width: 900px) {
-  .hub-detail-side { padding-top: 76px; }
+  .hub-detail-side { padding-top: calc(env(safe-area-inset-top) + 8px); }
   .hub-side-title { line-height: 1.4; }
 }
 
@@ -1008,3 +1008,15 @@ html.auth-pending #login-screen { visibility: hidden; }
   body[data-view="hub-detail"] .hub-members-toggle-btn.members-in-header { width: 36px; min-width: 36px; height: 36px; min-height: 36px; border-radius: 12px; background: var(--glass-2); box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong); -webkit-backdrop-filter: blur(var(--blur-1)); backdrop-filter: blur(var(--blur-1)); }
 }
 .call-header .call-audio-btn.deafened { color: var(--danger, #ff6b6b); background: rgba(255, 107, 107, 0.14); }
+
+/* 6) Üyeler paneli açıkken üstteki üye düğmesi (☰ Üyeler) gizlenir */
+@media (max-width: 900px) {
+  body[data-view="hub-detail"] .hub-members-toggle-btn.members-in-header.open { visibility: hidden; }
+}
+
+/* 7) Lobi üst sağ: butonlar daha dar; etiket ortalanır ve taşmaz */
+@media (max-width: 900px) {
+  .topbar-lobby-actions { gap: 5px; }
+  .topbar-lobby-actions .topbar-superlike-btn, .topbar-lobby-actions .hub-icon-btn { padding: 0 8px; font-size: 15px; }
+  .topbar-lobby-actions [data-lbl]::after { font-size: 8px; white-space: normal; width: max-content; max-width: 64px; text-align: center; }
+}
