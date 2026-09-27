@@ -1044,7 +1044,7 @@ html.auth-pending #login-screen { visibility: hidden; }
    Üst çubuk/ray/profil hepsi farklı piksel boyutunda olduğu için görsel yüzde bazlı konumlanır (bkz. script.js
    supporterFrameOverlayHtml()). Etiket: alt kısımda kırmızı dolgu + altın "SUPPORTER" yazısı, hafif nefes alır. */
 .frame-supporter { cursor: pointer; }
-.sf-overlay { position: absolute; inset: -20%; pointer-events: none; z-index: 1; }
+.sf-overlay { position: absolute; inset: -9%; pointer-events: none; z-index: 1; }
 /* Görsel (512px PNG) sabit kalır — üzerinde filter/brightness animasyonu koşturmak her karede yeniden
    çizim (repaint) gerektirip performansı düşürüyordu. "Nefes alma" hissi artık ayrı, ucuz bir opacity
    katmanıyla (yalnızca compositor, repaint yok) veriliyor. */
