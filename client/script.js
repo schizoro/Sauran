@@ -6691,7 +6691,19 @@ function placeMobileTopbarItems(view) {
     const menuBtn = document.getElementById('topbar-menu-btn');
     const mobile = window.innerWidth <= 900;
     if (mobile && view === 'discover') moveNode(wallet, right, menuBtn); else restoreNode(wallet);
-    if (mobile && view === 'hub-detail') moveNode(gear, right, menuBtn); else restoreNode(gear);
+    const back = document.getElementById('hub-back-btn');
+    const nameEl = document.getElementById('hub-detail-name');
+    const left = document.querySelector('.topbar-left');
+    const actions = document.getElementById('topbar-lobby-actions');
+    const sl = document.getElementById('lobby-superlike-btn');
+    const ctxTitle = document.getElementById('topbar-context-title');
+    if (mobile && view === 'hub-detail') {
+        moveNode(back, left, left.firstChild); moveNode(nameEl, left, ctxTitle);
+        if (actions) { moveNode(sl, actions); moveNode(gear, actions); actions.style.display = 'flex'; }
+    } else {
+        restoreNode(back); restoreNode(nameEl);
+        if (actions) { restoreNode(sl); restoreNode(gear); actions.style.display = 'none'; }
+    }
     const title = document.getElementById('topbar-context-title');
     if (title) {
         if (mobile && view === 'discover') { title.textContent = '← Keşfet'; }
@@ -6737,7 +6749,7 @@ document.addEventListener('click', async (e) => {
 // Buton açıklamaları: ikonların altında kısa (2 kelime) etiket.
 (function labelButtons() {
     const map = { 'rail-home': 'Ana Menü', 'rail-friends': 'Arkadaşlar', 'rail-discover': 'Keşfet', 'rail-notifications': 'Bildirim', 'rail-friend': 'Arkadaş Ekle', 'rail-settings': 'Ayarlar', 'rail-profile': 'Profil',
-        'discover-search-toggle': 'Ara', 'discover-wallet': 'Coin', 'profile-btn': 'Profil', 'topbar-menu-btn': 'Menü', 'lobby-nav-toggle': 'Lobiler', 'hub-back-btn': '' };
+        'discover-search-toggle': 'Ara', 'discover-wallet': 'Coin', 'topbar-menu-btn': 'Menü', 'lobby-nav-toggle': 'Lobiler', 'hub-back-btn': '' };
     Object.entries(map).forEach(([id, label]) => { const el = document.getElementById(id); if (el && label) el.dataset.lbl = label; });
 })();
 
@@ -8777,9 +8789,16 @@ function discoverAvatarHtml(lobby) {
         : hubInitialHtml(lobby.name);
 }
 
-function buildDiscoverCard(lobby) {
+function buildDiscoverCard(lobby, rank) {
     const card = document.createElement('div');
-    card.className = 'discover-card';
+    card.className = 'discover-card' + (rank ? ` rank-${rank}` : '');
+    if (rank) {
+        const badge = document.createElement('span');
+        badge.className = `rank-badge rank-badge-${rank}`;
+        badge.innerHTML = rank === 1 ? '<b>👑</b>1' : String(rank);
+        badge.title = `${rank}. Popüler Lobi`;
+        card._rankBadge = badge;
+    }
     card.tabIndex = 0;
     card.setAttribute('role', 'article');
 
@@ -8810,6 +8829,7 @@ function buildDiscoverCard(lobby) {
         </div>
         <button type="button" class="discover-card-cta">${escapeHtml(t('discover-view-lobby'))}</button>
     `;
+    if (card._rankBadge) card.prepend(card._rankBadge);
 
     const open = () => openDiscoverDetail(lobby.id);
     card.addEventListener('click', open);
@@ -8825,6 +8845,27 @@ async function loadDiscover(reset) {
     discoverNoticeEl.style.display = 'none';
     const seq = ++discoverState.seq;
 
+    // Popüler Lobiler: filtre/arama yokken en yüksek 30 günlük puanlı ilk 3 (puanı 0 olan yok).
+    const popularBox = document.getElementById('discover-popular');
+    const popularGrid = document.getElementById('discover-popular-grid');
+    if (reset) {
+        discoverState.popularIds = [];
+        if (!discoverToolsActive()) {
+            try {
+                const pr = await fetch('/api/discover/lobbies?page=1&limit=3', { credentials: 'include' });
+                const pd = await pr.json();
+                if (seq !== discoverState.seq) return;
+                const top = (pd.success ? pd.lobbies : []).filter((l) => l.points_30d > 0).slice(0, 3);
+                popularGrid.innerHTML = '';
+                top.forEach((l, i) => popularGrid.appendChild(buildDiscoverCard(l, i + 1)));
+                discoverState.popularIds = top.map((l) => l.id);
+                popularBox.style.display = top.length ? '' : 'none';
+            } catch (_) { popularBox.style.display = 'none'; }
+        } else {
+            popularBox.style.display = 'none';
+        }
+    }
+
     const params = new URLSearchParams({ page: String(discoverState.page), limit: '12' });
     if (discoverState.q) params.set('q', discoverState.q);
     if (discoverState.category) params.set('category', discoverState.category);
@@ -8838,11 +8879,11 @@ async function loadDiscover(reset) {
 
         if (!data.success) throw new Error(data.error || 'hata');
 
-        data.lobbies.forEach((lobby) => discoverResultsEl.appendChild(buildDiscoverCard(lobby)));
+        data.lobbies.filter((l) => !(discoverState.popularIds || []).includes(l.id)).forEach((lobby) => discoverResultsEl.appendChild(buildDiscoverCard(lobby)));
         discoverState.hasMore = Boolean(data.has_more);
         discoverMoreBtn.style.display = discoverState.hasMore ? 'block' : 'none';
 
-        if (data.total === 0) {
+        if (data.total === 0 && !(discoverState.popularIds || []).length) {
             const filtered = discoverState.q || discoverState.category || discoverState.language || discoverState.join_policy;
             discoverEmptyEl.textContent = t(filtered ? 'discover-empty' : 'discover-empty-none');
             discoverEmptyEl.style.display = 'block';
@@ -9595,11 +9636,69 @@ async function loadHubList() {
 // HUB OLUŞTURMA
 // =====================================================
 
+function hubNewSelect(id, values, labelFor, first) {
+    return `<select id="${id}" class="discover-select">${first ? `<option value="">${escapeHtml(first)}</option>` : ''}${values.map((v) => `<option value="${escapeAttr(v)}">${escapeHtml(labelFor(v))}</option>`).join('')}</select>`;
+}
+
+function renderHubCreateDiscover() {
+    const box = document.getElementById('hub-create-discover');
+    box.innerHTML = `
+        <span class="profile-field-label">${escapeHtml(t('hubset-visibility'))}</span>
+        ${hubNewSelect('hubnew-visibility', ['private', 'invite_only', 'discoverable'], (v) => t('hubset-vis-' + v))}
+        <p id="hubnew-visibility-hint" class="hubset-hint"></p>
+        <div id="hubnew-fields" style="display:none; flex-direction:column; gap:8px;">
+            <span class="profile-field-label">${escapeHtml(t('hubset-category'))}</span>
+            ${hubNewSelect('hubnew-category', DISCOVER_CATEGORIES, (v) => t('discover-cat-' + v), t('hubset-category-pick'))}
+            <span class="profile-field-label">${escapeHtml(t('hubset-topic'))}</span>
+            <input type="text" id="hubnew-topic" class="hub-name-input" maxlength="40" placeholder="${escapeAttr(t('hubset-topic-placeholder'))}">
+            <span class="profile-field-label">${escapeHtml(t('hubset-description'))}</span>
+            <textarea id="hubnew-description" class="about-me-input" maxlength="300" placeholder="${escapeAttr(t('hubset-description-placeholder'))}"></textarea>
+            <span class="profile-field-label">${escapeHtml(t('hubset-rules'))}</span>
+            <textarea id="hubnew-rules" class="about-me-input" maxlength="800" placeholder="${escapeAttr(t('hubset-rules-placeholder'))}"></textarea>
+            <span class="profile-field-label">${escapeHtml(t('hubset-language'))}</span>
+            ${hubNewSelect('hubnew-language', DISCOVER_LANGUAGES, (v) => t('discover-lang-' + v), '—')}
+            <span class="profile-field-label">${escapeHtml(t('hubset-join-policy'))}</span>
+            ${hubNewSelect('hubnew-join-policy', DISCOVER_POLICIES, (v) => t('discover-policy-' + v))}
+            <span class="profile-field-label">${escapeHtml(t('hubset-mic'))}</span>
+            ${hubNewSelect('hubnew-mic', DISCOVER_MICS, (v) => t('discover-mic-' + v))}
+            <span class="profile-field-label">${escapeHtml(t('hubset-capacity'))}</span>
+            <input type="number" id="hubnew-capacity" class="hub-name-input" min="2" max="500" inputmode="numeric" placeholder="2 - 500">
+        </div>`;
+    const vis = document.getElementById('hubnew-visibility');
+    const sync = () => {
+        document.getElementById('hubnew-fields').style.display = vis.value === 'discoverable' ? 'flex' : 'none';
+        document.getElementById('hubnew-visibility-hint').textContent = t('hubset-vis-hint-' + vis.value);
+    };
+    vis.addEventListener('change', sync);
+    sync();
+}
+
+function collectHubCreateDiscover() {
+    const visibility = document.getElementById('hubnew-visibility').value || 'private';
+    const body = { visibility };
+    if (visibility === 'discoverable') {
+        const capacity = document.getElementById('hubnew-capacity').value.trim();
+        Object.assign(body, {
+            category: document.getElementById('hubnew-category').value || null,
+            topic: document.getElementById('hubnew-topic').value,
+            description: document.getElementById('hubnew-description').value,
+            rules: document.getElementById('hubnew-rules').value,
+            language: document.getElementById('hubnew-language').value || null,
+            join_policy: document.getElementById('hubnew-join-policy').value || 'everyone',
+            mic_requirement: document.getElementById('hubnew-mic').value || 'none',
+            capacity: capacity ? Number(capacity) : null
+        });
+    }
+    return body;
+}
+
 function openHubCreateModal() {
 
     hubCreateNameInput.value = '';
     hubCreateImageData = null;
-    hubCreateImagePreview.innerHTML = '🧩';
+    hubCreateImagePreview.innerHTML = '';
+    hubCreateImagePreview.style.display = 'none';
+    renderHubCreateDiscover();
     hubCreateError.textContent = '';
     hubCreateModal.style.display = 'flex';
     hubCreateNameInput.focus();
@@ -9628,6 +9727,7 @@ hubCreateImageInput.addEventListener(
 
             hubCreateImageData = await resizeImageToDataUrl(file, 128);
             hubCreateImagePreview.innerHTML = `<img src="${hubCreateImageData}" alt="">`;
+            hubCreateImagePreview.style.display = '';
 
         } catch (error) {
 
@@ -9664,7 +9764,7 @@ hubCreateSubmitBtn.addEventListener(
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify({ name, image_data: hubCreateImageData })
+                body: JSON.stringify({ name, image_data: hubCreateImageData, ...collectHubCreateDiscover() })
             });
 
             const data = await response.json();

@@ -910,3 +910,84 @@ html.auth-pending #login-screen { visibility: hidden; }
 #topbar-context-title { cursor: pointer; padding: 10px 6px; } body:not([data-view="discover"]) #topbar-context-title { cursor: default; }
 @media (max-width: 900px) { body[data-view="discover"] .discover-head { margin-bottom: 4px; } }
 @media (max-width: 900px) { .topbar-lobby-badge { width: 36px; height: 36px; padding: 2px; } .topbar-lobby-badge .lobby-avatar-lg { font-size: 14px; } .topbar { min-height: 46px; } }
+
+/* ── Üst çubuk etiketleri çubuğun içinde kalsın ─────────────────────── */
+.topbar [data-lbl] { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 40px; min-height: 0; gap: 1px; }
+.topbar [data-lbl]::after { position: static; transform: none; margin-top: 0; }
+.topbar .topbar-lobby-actions [data-lbl] { height: 38px; }
+.topbar-right .discover-wallet[data-lbl] { display: inline-flex; flex-direction: row; height: 26px; padding: 0 10px; transform: none; }
+.topbar-right .discover-wallet[data-lbl]::after { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 0; }
+
+/* ── Lobi üst çubuğu: liquid glass hap + sürekli yıldız tozu ─────────── */
+.topbar-lobby-actions { align-items: center; gap: 2px; padding: 1px 6px; border-radius: 999px; background: var(--glass-2); box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong); -webkit-backdrop-filter: blur(var(--blur-1)) saturate(1.3); backdrop-filter: blur(var(--blur-1)) saturate(1.3); }
+.topbar-lobby-actions .topbar-superlike-btn, .topbar-lobby-actions .hub-icon-btn { min-width: 40px; }
+.topbar-lobby-actions .topbar-superlike-btn { background: none; }
+.sl-star { position: relative; display: inline-block; line-height: 1; }
+.sl-star i { position: absolute; left: 50%; bottom: 55%; width: 3px; height: 3px; margin-left: -1.5px; border-radius: 50%; background: #fff3c4; box-shadow: 0 0 5px 1px rgba(255,209,102,.9); opacity: 0; animation: slDust 2.4s ease-out infinite; }
+.sl-star i:nth-child(1) { margin-left: -9px; animation-delay: 0s; }
+.sl-star i:nth-child(2) { margin-left: 4px; animation-delay: .5s; }
+.sl-star i:nth-child(3) { margin-left: -3px; animation-delay: 1s; width: 2px; height: 2px; }
+.sl-star i:nth-child(4) { margin-left: 8px; animation-delay: 1.5s; }
+.sl-star i:nth-child(5) { margin-left: -6px; animation-delay: 1.9s; width: 2px; height: 2px; }
+@keyframes slDust { 0% { transform: translateY(0) scale(.6); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(-20px) scale(1.1); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .sl-star i { animation: none; } }
+
+@media (max-width: 900px) {
+  /* Lobi: geri + ad üst çubukta; sayaç/üyeler başlığın hemen altında, biraz sağda */
+  body[data-view="hub-detail"] .topbar-left { gap: 4px; }
+  body[data-view="hub-detail"] .topbar-left .hub-back-btn { min-width: 36px; min-height: 36px; width: 36px; height: 36px; }
+  body[data-view="hub-detail"] .topbar-left #hub-detail-name { font-size: 16px; max-width: calc(50vw - 62px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; }
+  body[data-view="hub-detail"] .hub-detail-header { padding-top: 2px; padding-bottom: 4px; padding-right: 28px; justify-content: flex-end; gap: 4px; }
+  body[data-view="hub-detail"] .hub-voice-rooms-toggle-btn, body[data-view="hub-detail"] .hub-voice-rooms-side { left: 0; }
+  #discover-open-btn, #friend-add-open-btn { display: none !important; }
+}
+/* Sesli odalar sekmesi en sola (Lobi ekranında ray yok) */
+
+/* ── Popüler Lobiler + 1./2./3. rozetleri ────────────────────────────── */
+.discover-popular { max-width: 980px; width: 100%; margin: 0 auto 14px; padding: 12px 12px 14px; border-radius: 22px; background: var(--glass-1); box-shadow: var(--hi), 0 0 0 1px var(--border-soft); }
+.discover-popular-title { margin: 0 0 10px; font-size: 14px; font-weight: 650; color: #ffd166; letter-spacing: .02em; }
+.discover-grid-popular { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.discover-card { position: relative; }
+.rank-badge { position: absolute; top: -7px; left: -5px; z-index: 2; min-width: 26px; height: 26px; padding: 0 7px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 2px; font-size: 13px; font-weight: 800; color: #3a2a00; }
+.rank-badge-1 { color: #4a3000; background: linear-gradient(140deg, #fff3b0, #ffd23f 45%, #e89b0c); box-shadow: 0 0 0 1.5px #fff0a0, 0 0 14px 2px rgba(255,200,40,.8); animation: rankGlow 2.2s ease-in-out infinite alternate; }
+.rank-badge-1 b { font-size: 12px; margin-right: 1px; }
+.rank-badge-2 { background: linear-gradient(140deg, #ffffff, #cfd6de 50%, #8d98a6); box-shadow: 0 0 0 1.5px #e6ebf1; }
+.rank-badge-3 { color: #3a1d08; background: linear-gradient(140deg, #f3c9a0, #cd7f32 55%, #8b4e1c); box-shadow: 0 0 0 1.5px #e0a56b; }
+.discover-card.rank-1 { box-shadow: var(--hi), 0 0 0 2px #f5c542, 0 0 22px rgba(245,197,66,.4); }
+.discover-card.rank-2 { box-shadow: var(--hi), 0 0 0 2px #c4ccd6; }
+.discover-card.rank-3 { box-shadow: var(--hi), 0 0 0 2px #cd7f32; }
+.discover-card.rank-1::after { content: ''; position: absolute; inset: -8px; border-radius: 26px; pointer-events: none;
+  background:
+    radial-gradient(circle, #fff8d0 0 1.6px, transparent 2.4px) 8% 6% / 22px 22px no-repeat,
+    radial-gradient(circle, #ffe27a 0 1.4px, transparent 2.2px) 92% 12% / 20px 20px no-repeat,
+    radial-gradient(circle, #fff8d0 0 1.6px, transparent 2.4px) 96% 70% / 22px 22px no-repeat,
+    radial-gradient(circle, #ffe27a 0 1.4px, transparent 2.2px) 12% 94% / 20px 20px no-repeat,
+    radial-gradient(circle, #fff8d0 0 1.4px, transparent 2.2px) 55% 100% / 20px 20px no-repeat,
+    radial-gradient(circle, #ffe27a 0 1.4px, transparent 2.2px) 50% 0% / 20px 20px no-repeat;
+  animation: rankTwinkle 1.8s ease-in-out infinite alternate; }
+@keyframes rankGlow { from { box-shadow: 0 0 0 1.5px #fff0a0, 0 0 8px 1px rgba(255,200,40,.6); } to { box-shadow: 0 0 0 1.5px #fff0a0, 0 0 18px 4px rgba(255,200,40,.95); } }
+@keyframes rankTwinkle { from { opacity: .25; transform: scale(.98); } to { opacity: 1; transform: scale(1.02); } }
+@media (prefers-reduced-motion: reduce) { .rank-badge-1, .discover-card.rank-1::after { animation: none; } }
+@media (max-width: 900px) {
+  body[data-view="discover"] .discover-grid-popular .discover-card { padding: 16px 8px 12px; gap: 8px; }
+  body[data-view="discover"] .discover-grid-popular .discover-card-avatar { width: 52px; height: 52px; }
+  body[data-view="discover"] .discover-grid-popular .discover-card-name { font-size: 13.5px; }
+  body[data-view="discover"] .discover-grid-popular .discover-card-cta { min-height: 34px; font-size: 12.5px; }
+}
+
+/* ── Lobi oluşturma: Görsel Ekle düz buton + Keşfet ayarları ────────── */
+#hub-create-modal .hub-create-image-btn { padding: 10px 18px; border-radius: 999px; background: var(--glass-2); box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong); color: var(--text-primary); font-size: 13.5px; }
+#hub-create-modal .hub-create-image-preview { width: 44px; height: 44px; overflow: hidden; }
+.hub-create-discover { display: flex; flex-direction: column; gap: 8px; order: 5; }
+#hub-create-modal .hub-create-body { max-height: 78vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+@media (max-width: 900px) { body[data-view="hub-detail"] .hub-detail-header .hub-title-pill { margin-left: auto; } }
+@media (max-width: 900px) {
+  body[data-view="hub-detail"] .hub-detail-header .hub-title-pill { flex: 0 1 auto; margin-left: 0; }
+  .topbar-lobby-actions [data-lbl]::after { font-size: 9px; }
+  .topbar-lobby-actions .topbar-superlike-btn, .topbar-lobby-actions .hub-icon-btn { min-width: 0; padding: 0 7px; }
+}
+@media (max-width: 900px) {
+  .topbar-lobby-actions .topbar-superlike-btn, .topbar-lobby-actions .hub-icon-btn { width: auto !important; }
+  body[data-view="hub-detail"] .hub-detail-header .hub-title-pill { flex: 0 0 auto; width: auto; min-width: 0; gap: 0; }
+  body[data-view="hub-detail"] .hub-detail-header #hub-detail-icon { display: none; }
+}

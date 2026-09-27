@@ -279,7 +279,9 @@
 
             <div class="topbar-right">
 
-                <button id="lobby-superlike-btn" class="topbar-superlike-btn" type="button" title="Lobiye Süper Beğeni at" data-lbl="Süper Beğeni" style="display:none;">⭐</button>
+                <div id="topbar-lobby-actions" class="topbar-lobby-actions" style="display:none;"></div>
+
+                <button id="lobby-superlike-btn" class="topbar-superlike-btn" type="button" title="Lobiye Süper Beğeni at" data-lbl="Süper Beğeni" style="display:none;"><span class="sl-star">⭐<i></i><i></i><i></i><i></i><i></i></span></button>
 
                 <button id="profile-btn" class="topbar-profile-btn" title="Profilim">
 
@@ -392,6 +394,11 @@
                 </div>
 
                 <div id="discover-notice" class="discover-empty" style="display:none;"></div>
+                <div id="discover-popular" class="discover-popular" style="display:none;">
+                    <h3 class="discover-popular-title">🏆 Popüler Lobiler</h3>
+                    <div id="discover-popular-grid" class="discover-grid discover-grid-popular"></div>
+                </div>
+
                 <div id="discover-results" class="discover-grid"></div>
                 <div id="discover-empty" class="discover-empty" style="display:none;"></div>
                 <button id="discover-more" class="discover-more" type="button" style="display:none;" data-i18n="discover-more">Daha fazla göster</button>
@@ -444,7 +451,7 @@
                             <span id="hub-in-room-count" class="hub-in-room-count"></span>
                         </button>
 
-                        <button id="hub-settings-open-btn" class="hub-icon-btn" type="button" title="Lobi Ayarları" data-lbl="Ayarlar">⚙️</button>
+                        <button id="hub-settings-open-btn" class="hub-icon-btn" type="button" title="Lobi Ayarları" data-lbl="Lobi Ayarları">⚙️</button>
 
                         <div class="hub-member-options-wrap" id="hub-member-options-wrap" style="display:none;">
                             <button id="hub-member-options-btn" class="hub-icon-btn" type="button" title="Lobi Seçenekleri" aria-label="Lobi Seçenekleri">⋯</button>
@@ -604,12 +611,14 @@
                 <p class="hub-create-desc" data-i18n="hub-create-desc">Yeni bir sosyal alan aç. Sonra arkadaşlarını davet edebilirsin.</p>
 
                 <div class="hub-create-image-wrap">
-                    <span id="hub-create-image-preview" class="hub-create-image-preview">🧩</span>
+                    <span id="hub-create-image-preview" class="hub-create-image-preview" style="display:none;"></span>
                     <button id="hub-create-image-btn" class="hub-create-image-btn" type="button">Görsel Ekle</button>
                     <input type="file" id="hub-create-image-input" accept="image/png,image/jpeg,image/webp" hidden>
                 </div>
 
                 <input type="text" id="hub-create-name-input" class="hub-name-input" placeholder="Lobi adı" maxlength="40">
+
+                <div id="hub-create-discover" class="hub-create-discover"></div>
 
                 <div id="hub-create-error" class="hub-create-error"></div>
 
