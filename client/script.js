@@ -3849,6 +3849,7 @@ profileBtn.addEventListener(
             aboutInput.value = currentUser?.about_me || '';
             if (aboutCount) aboutCount.textContent = `${aboutInput.value.length}/${max}`;
         }
+        renderChatThemePicker();
 
     }
 );
@@ -3861,6 +3862,45 @@ profileBtn.addEventListener(
 document.getElementById('about-me-input')?.addEventListener('input', (event) => {
     const count = document.getElementById('about-me-count');
     if (count) count.textContent = `${event.target.value.length}/${event.target.maxLength}`;
+});
+
+// Sauran Plus: Sohbet Teması seçici — Plus olmayanlar seçenekleri görür ama seçemez, "yakında" değil
+// "Plus gerekli" ipucu görürler (özellik gerçekten var, sadece abonelik şartlı).
+function renderChatThemePicker() {
+    const picker = document.getElementById('chat-theme-picker');
+    const hint = document.getElementById('chat-theme-hint');
+    if (!picker || !currentUser) return;
+    const isPlus = Boolean(currentUser.plus_active);
+    const active = currentUser.chat_theme || 'classic';
+    picker.querySelectorAll('.chat-theme-option').forEach((btn) => {
+        const theme = btn.dataset.theme;
+        const locked = theme !== 'classic' && !isPlus;
+        btn.disabled = locked;
+        btn.classList.toggle('selected', theme === active);
+        btn.title = locked ? 'Sauran Plus gerekli' : '';
+    });
+    hint.textContent = isPlus ? '' : 'Yumuşak ve Kontrast temaları Sauran Plus abonelerine açıktır.';
+}
+
+document.getElementById('chat-theme-picker')?.addEventListener('click', async (event) => {
+    const btn = event.target.closest('.chat-theme-option');
+    if (!btn || btn.disabled) return;
+    const theme = btn.dataset.theme;
+    try {
+        const response = await fetch('/api/profile/chat-theme', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ chat_theme: theme })
+        });
+        const data = await response.json();
+        if (!data.success) { showToast(data.error || 'Güncellenemedi.'); return; }
+        currentUser.chat_theme = data.chat_theme;
+        renderChatThemePicker();
+    } catch (error) {
+        console.error('Sohbet teması güncellenemedi:', error);
+        showToast('Güncellenemedi.');
+    }
 });
 
 // Hakkımda bilgi balonu: masaüstünde hover/odak (CSS), dokunmatikte/tıklamada aç-kapa
@@ -6609,6 +6649,8 @@ function appendDmMessage(msg) {
 
 function renderDmMessageIntoWrap(wrap, msg, isMine) {
 
+    applyChatTheme(wrap, msg.user_id, msg.chat_theme);
+
     const time = msg.created_at
         ? new Date(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
         : '';
@@ -6695,6 +6737,20 @@ function resolveFrame(userId, frameKey) {
     if (frameKey !== undefined) { knownFrames.set(userId, frameKey || null); return frameKey || null; }
     if (currentUser && userId === currentUser.id) return currentUser.avatar_frame || null;
     return knownFrames.get(userId) || null;
+}
+
+// Sauran Plus sohbet temaları: aynı önbellek deseni (mesaj satırı başına, gönderenin son bilinen teması).
+const knownChatThemes = new Map();
+function resolveChatTheme(userId, theme) {
+    if (theme !== undefined) { knownChatThemes.set(userId, theme || 'classic'); return theme || 'classic'; }
+    if (currentUser && userId === currentUser.id) return currentUser.chat_theme || 'classic';
+    return knownChatThemes.get(userId) || 'classic';
+}
+const CHAT_THEME_CLASSES = ['chat-theme-soft', 'chat-theme-contrast'];
+function applyChatTheme(wrap, userId, theme) {
+    const resolved = resolveChatTheme(userId, theme);
+    CHAT_THEME_CLASSES.forEach((c) => wrap.classList.remove(c));
+    if (resolved && resolved !== 'classic') wrap.classList.add('chat-theme-' + resolved);
 }
 
 function avatarButtonHtml(userId, avatarData, username, frameKey) {
@@ -12130,6 +12186,7 @@ function renderHubMessageIntoWrap(wrap, msg) {
 
     const isMine = currentUser && msg.user_id === currentUser.id;
     wrap.classList.toggle('msg-mine', Boolean(isMine));
+    applyChatTheme(wrap, msg.user_id, msg.chat_theme);
     const opts = { context: 'hub' };
     const actions = buildMsgActionsBarHtml(msg, opts);
     const replyQuote = buildMsgReplyQuoteHtml(msg);

@@ -1113,3 +1113,35 @@ html.auth-pending #login-screen { visibility: hidden; }
 }
 @media (prefers-reduced-motion: reduce) { .plus-badge { animation: none; } }
 .plus-badge-sm { font-size: 9px; padding: 1px 5px 1px 4px; margin-left: 3px; }
+
+/* ── Sauran Plus: temel sohbet temaları (yalnızca aboneyken sunucu bu değeri döndürür) ──── */
+.hub-msg.chat-theme-soft, .dm-msg.chat-theme-soft {
+  background: linear-gradient(135deg, rgba(109, 91, 208, .10), rgba(79, 124, 255, .06));
+  border-radius: 14px;
+}
+.hub-msg.chat-theme-contrast, .dm-msg.chat-theme-contrast {
+  background: rgba(79, 124, 255, .05);
+  border-left: 2.5px solid #6d5bd0;
+  border-radius: 4px;
+}
+.hub-msg.chat-theme-soft.msg-mine, .dm-msg.chat-theme-soft.dm-msg-mine {
+  background: linear-gradient(135deg, rgba(109, 91, 208, .16), rgba(79, 124, 255, .10));
+}
+.hub-msg.chat-theme-contrast.msg-mine, .dm-msg.chat-theme-contrast.dm-msg-mine {
+  border-left-color: #4f7cff;
+  background: rgba(109, 91, 208, .08);
+}
+
+/* ── Sohbet Teması seçici (profil, yalnızca Plus için aktif) ─────────── */
+.profile-field-block { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border-soft); }
+.chat-theme-picker { display: flex; gap: 8px; margin-top: 8px; }
+.chat-theme-option {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 6px;
+  border-radius: 12px; border: 1px solid var(--border-soft-strong); background: var(--glass-1); color: var(--text-secondary);
+  font-size: 11.5px; cursor: pointer;
+}
+.chat-theme-option.selected { border-color: #6d5bd0; background: rgba(109, 91, 208, .14); color: var(--text-primary); }
+.chat-theme-option:disabled { opacity: .4; cursor: not-allowed; }
+.chat-theme-swatch { width: 28px; height: 18px; border-radius: 6px; background: var(--glass-2); box-shadow: 0 0 0 1px var(--border-soft); }
+.chat-theme-swatch-soft { background: linear-gradient(135deg, rgba(109, 91, 208, .4), rgba(79, 124, 255, .3)); }
+.chat-theme-swatch-contrast { background: rgba(79, 124, 255, .15); box-shadow: inset 2px 0 0 #6d5bd0, 0 0 0 1px var(--border-soft); }

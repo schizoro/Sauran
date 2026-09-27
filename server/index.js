@@ -77,6 +77,8 @@ const {
   likeHub,
   hasActivePlus,
   grantMonthlyPlusCoins,
+  CHAT_THEMES,
+  updateChatTheme,
   listGiftProducts,
   giftProduct,
   listRecentGifts,
@@ -405,7 +407,7 @@ function getUserFromSessionToken(token) {
 
   const user = db.prepare(`
     SELECT users.id, users.username, users.email, users.about_me,
-           users.status, users.avatar_visibility, users.avatar_data, users.banner_data,
+           users.status, users.avatar_visibility, users.avatar_data, users.banner_data, users.chat_theme,
            users.minor_until, users.platform_role, users.dev_notice_seen, users.dev_notice_new, users.account_status,
            users.role_acceptance_pending, users.role_accepted_role, users.role_notice_kind, users.role_notice_at,
            sessions.expires_at
@@ -629,7 +631,8 @@ app.get('/api/me', (req, res) => {
       return res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
     }
 
-    return res.json({ success: true, user: { ...user, avatar_frame: getEquippedCosmetics(user.id).avatar_frame, plus_active: hasActivePlus(user.id) } });
+    const plusActive = hasActivePlus(user.id);
+    return res.json({ success: true, user: { ...user, avatar_frame: getEquippedCosmetics(user.id).avatar_frame, plus_active: plusActive, chat_theme: plusActive ? (user.chat_theme || 'classic') : 'classic' } });
 
   } catch (error) {
     console.error('Session kontrol hatası:', error);
@@ -860,6 +863,21 @@ app.patch('/api/profile/about', (req, res) => {
 
   } catch (error) {
     console.error('Hakkında güncelleme API hatası:', error);
+    return res.status(500).json({ success: false, error: 'Güncellenemedi.' });
+  }
+});
+
+// Sauran Plus: temel sohbet temaları (classic/soft/contrast). 'classic' herkese açık, diğerleri Plus şartına tabi (updateChatTheme içinde kontrol edilir).
+app.patch('/api/profile/chat-theme', (req, res) => {
+  try {
+    const user = getUserFromRequest(req);
+    if (!user) return res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
+
+    const result = updateChatTheme(user.id, req.body.chat_theme);
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (error) {
+    console.error('Sohbet teması güncelleme hatası:', error);
     return res.status(500).json({ success: false, error: 'Güncellenemedi.' });
   }
 });

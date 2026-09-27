@@ -86,6 +86,10 @@ if (!userColumns.includes('avatar_data')) {
 if (!userColumns.includes('banner_data')) {
   db.exec(`ALTER TABLE users ADD COLUMN banner_data TEXT`);
 }
+if (!userColumns.includes('chat_theme')) {
+  // Sauran Plus: temel sohbet temaları (classic/soft/contrast). Plus bitince sunucu 'classic' döndürür.
+  db.exec(`ALTER TABLE users ADD COLUMN chat_theme TEXT DEFAULT 'classic'`);
+}
 
 const VALID_STATUSES = ['active', 'idle', 'busy', 'invisible'];
 const VALID_VISIBILITIES = ['public', 'friends', 'private'];
@@ -1336,6 +1340,7 @@ function getDeletedDmMessages(userId, token, limit = 50) {
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
+           users.chat_theme,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE messages.room = ? AND messages.hub_id IS NULL
@@ -2326,6 +2331,19 @@ function loginUser(username, password) {
 // PROFİL GÜNCELLEME
 // =====================================================
 
+// Sauran Plus: temel sohbet temaları. Herkes 'classic' kullanır; diğerleri yalnızca aktif Plus abonesine açık.
+const CHAT_THEMES = ['classic', 'soft', 'contrast'];
+
+function updateChatTheme(userId, theme) {
+  const value = String(theme || 'classic');
+  if (!CHAT_THEMES.includes(value)) return { success: false, error: 'Geçersiz sohbet teması.' };
+  if (value !== 'classic' && !hasActivePlus(userId)) {
+    return { success: false, error: 'Bu sohbet teması yalnızca Sauran Plus abonelerine açık.' };
+  }
+  db.prepare(`UPDATE users SET chat_theme = ? WHERE id = ?`).run(value, userId);
+  return { success: true, chat_theme: value };
+}
+
 const ABOUT_ME_MAX_FREE = 300;
 const ABOUT_ME_MAX_PLUS = 600;
 
@@ -3299,6 +3317,7 @@ function getHubMessages(hubId, limit = 50, viewerId = null) {
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.kind,
            messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
+           users.chat_theme,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE hub_id = ?
@@ -3313,6 +3332,7 @@ function getMessageById(id, viewerId = null) {
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
+           users.chat_theme,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE messages.id = ?
@@ -3339,6 +3359,12 @@ function getReplyPreview(messageId) {
 
 function hydrateMessage(row, viewerId = null) {
   if (!row) return row;
+
+  // Sauran Plus: sohbet teması yalnızca gönderenin aboneliği hâlâ aktifse uygulanır
+  // (üyelik biterse geçmiş mesajlar da otomatik 'classic' görünür).
+  if ('chat_theme' in row) {
+    row.chat_theme = (row.user_id && hasActivePlus(row.user_id)) ? (row.chat_theme || 'classic') : 'classic';
+  }
 
   let result = row;
 
@@ -5027,6 +5053,7 @@ function getDmMessages(userId, otherUserId, limit = 50) {
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
+           users.chat_theme,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE room = ?
@@ -6347,6 +6374,8 @@ module.exports = {
   equipCosmetic,
   hasActivePlus,
   grantMonthlyPlusCoins,
+  CHAT_THEMES,
+  updateChatTheme,
   GIFT_PRODUCTS,
   listGiftProducts,
   giftProduct,
