@@ -2815,7 +2815,7 @@ function likeHub(hubId, userId, deviceId) {
 const SUPER_LIKE_COST = 10;
 const SUPER_LIKE_USER_DAILY_MAX = 3;
 const SUPER_LIKE_OWNER_DAILY_MAX = 1;
-const SUPER_LIKE_LOBBY_DAILY_POINT_CAP = 150;
+const SUPER_LIKE_LOBBY_DAILY_POINT_CAP = 1000;
 
 function getCoinBalance(userId) {
   return db.prepare(`SELECT COALESCE(SUM(delta), 0) AS b FROM coin_ledger WHERE user_id = ?`).get(userId).b;
