@@ -1040,14 +1040,18 @@ html.auth-pending #login-screen { visibility: hidden; }
 @keyframes frameGalaxy { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(360deg); } }
 
 /* ── Sauran Supporter: kurucu döneminin özel, Market'te satılmayan Legendary çerçevesi ──
-   Gerçek bir avatar boyutunda ölçeklenmesi gerektiği (üst çubuk/ray/profil hepsi farklı piksel boyutunda) için
-   saf CSS yerine viewBox'lı bir <svg> katmanı (jagged/thorn halka + ayrı dönen ışık) kullanılır — bkz. script.js
-   supporterFrameOverlayHtml(). Etiket: alt kısımda kırmızı dolgu + altın "SUPPORTER" yazısı, hafif nefes alır. */
+   Halka: özel üretilen görsel (client/assets/frame-supporter.png, şeffaf altın alev halkası).
+   Üst çubuk/ray/profil hepsi farklı piksel boyutunda olduğu için görsel yüzde bazlı konumlanır (bkz. script.js
+   supporterFrameOverlayHtml()). Etiket: alt kısımda kırmızı dolgu + altın "SUPPORTER" yazısı, hafif nefes alır. */
 .frame-supporter { cursor: pointer; }
-.sf-overlay { position: absolute; inset: -22%; pointer-events: none; z-index: 1; filter: drop-shadow(0 0 4px rgba(255, 140, 0, .35)); }
-.sf-overlay .sf-ring, .sf-overlay .sf-highlight { position: absolute; inset: 0; width: 100%; height: 100%; }
-.sf-overlay .sf-ring { animation: sfBreathe 2.8s ease-in-out infinite; transform-origin: 50% 50%; }
-.sf-highlight { animation: sfSpin 4.5s linear infinite; transform-origin: 50% 50%; }
+.sf-overlay { position: absolute; inset: -26%; pointer-events: none; z-index: 1; }
+.sf-overlay .sf-ring-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; animation: sfBreathe 2.8s ease-in-out infinite; }
+.sf-highlight { position: absolute; inset: 0; animation: sfSpin 5s linear infinite; transform-origin: 50% 50%; }
+.sf-highlight::before {
+  content: ''; position: absolute; top: 6%; left: 50%; width: 12%; height: 12%; margin-left: -6%;
+  border-radius: 50%; background: radial-gradient(circle, #fff8dc 0%, rgba(255, 233, 170, .65) 45%, transparent 72%);
+  filter: blur(1.5px);
+}
 .frame-supporter-tag {
   position: absolute; left: 50%; top: 100%; transform: translate(-50%, 2px); z-index: 2; pointer-events: none;
   font-size: 6.5px; font-weight: 800; letter-spacing: .1em; white-space: nowrap;
@@ -1065,7 +1069,7 @@ html.auth-pending #login-screen { visibility: hidden; }
 }
 @media (prefers-reduced-motion: reduce) {
   .frame-ocean::after, .frame-neon::after, .frame-galaxy::after,
-  .sf-overlay .sf-ring, .sf-highlight, .frame-supporter-tag { animation: none; }
+  .sf-overlay .sf-ring-img, .sf-highlight, .frame-supporter-tag { animation: none; }
 }
 
 /* ── Market ürün kartları (gift.html'e benzer sade sayfa stiline eklenir) */
