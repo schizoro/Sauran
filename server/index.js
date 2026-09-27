@@ -1930,9 +1930,13 @@ app.get('/api/hubs/:id/supporters', (req, res) => {
 app.get('/api/market/frames', (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
-  const owned = new Set(listUserCosmetics(user.id).map((c) => c.item_key));
+  const ownedItems = listUserCosmetics(user.id);
+  const owned = new Set(ownedItems.map((c) => c.item_key));
   const equipped = getEquippedCosmetics(user.id).avatar_frame;
-  const items = listCosmeticItems().map((item) => ({ ...item, owned: owned.has(item.key), equipped: equipped === item.key }));
+  // Market'te satılmayan (market_visible: false) ürünler -- Supporter gibi -- yalnızca zaten SAHİP olan kişinin
+  // listesinde "Sahip Olduklarım" altında görünür; sahip olmayan biri için hiç görünmez.
+  const visible = listCosmeticItems({ includeHidden: true }).filter((item) => item.market_visible || owned.has(item.key));
+  const items = visible.map((item) => ({ ...item, owned: owned.has(item.key), equipped: equipped === item.key }));
   res.json({ success: true, items, equipped });
 });
 

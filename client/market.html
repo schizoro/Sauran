@@ -30,6 +30,8 @@ body{display:block;height:auto;min-height:100vh;margin:0;padding:20px;background
 .m-btn:disabled{opacity:.45;cursor:default;border-color:rgba(255,255,255,.15);background:rgba(255,255,255,.04);color:#8e9297}
 .m-btn.owned{border-color:rgba(126,231,135,.5);background:rgba(126,231,135,.12);color:#7ee787}
 .m-state{color:#6b7280;font-size:13px;text-align:center;padding:40px 0}
+.m-avatar-preview{overflow:visible}
+.m-supporter-img{position:absolute;inset:-26%;width:152%;height:152%;object-fit:contain;pointer-events:none}
 </style>
 </head>
 <body>
@@ -39,8 +41,10 @@ body{display:block;height:auto;min-height:100vh;margin:0;padding:20px;background
   <div id="m-state" class="m-state" style="display:none"></div>
   <div id="m-main" style="display:none">
     <div id="m-wallet" class="m-wallet">🪙 0 Coin</div>
-    <div class="m-section-title">🖼️ Avatar Çerçeveleri</div>
-    <div id="m-grid" class="m-grid"></div>
+    <div class="m-section-title">🖼️ Sahip Olduklarım</div>
+    <div id="m-grid-owned" class="m-grid"></div>
+    <div class="m-section-title">🔒 Henüz Alınmadı</div>
+    <div id="m-grid-locked" class="m-grid"></div>
   </div>
 </div>
 <script>
@@ -50,16 +54,22 @@ body{display:block;height:auto;min-height:100vh;margin:0;padding:20px;background
   const api=async(u,m,b)=>{const r=await fetch(u,{method:m||'GET',headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined,credentials:'same-origin'});let d={};try{d=await r.json();}catch(_){}return{status:r.status,body:d};};
   const rarityLabel={free:'Ücretsiz',rare:'Rare',epic:'Epic',legendary:'Legendary',special:'Özel'};
 
+  function previewHtml(item){
+    if (item.key === 'supporter') {
+      return `<img src="assets/frame-supporter.png" class="m-supporter-img" alt="">${esc(item.label.charAt(0))}`;
+    }
+    return esc(item.label.charAt(0));
+  }
+
   function card(item){
-    const frameClass = item.key === 'classic' || !item.owned && !item.equipped ? '' : ('frame-'+item.key);
-    const previewClass = item.key !== 'classic' ? ('frame-'+item.key) : '';
+    const previewClass = (item.key !== 'classic' && item.key !== 'supporter') ? ('frame-'+item.key) : '';
     const priceText = item.price === 0 ? 'Ücretsiz' : (item.price == null ? '—' : `${item.price} 🪙`);
     let btn;
     if (item.equipped) btn = `<button class="m-btn owned" disabled>✓ Kuşanılı</button>`;
     else if (item.owned) btn = `<button class="m-btn" data-equip="${esc(item.key)}">Kuşan</button>`;
     else btn = `<button class="m-btn" disabled>${item.purchasable ? 'Satın Al' : 'Satın Al — Yakında'}</button>`;
     return `<div class="m-card">
-      <div class="m-avatar-preview profile-avatar-wrap ${previewClass}">${esc(item.label.charAt(0))}</div>
+      <div class="m-avatar-preview profile-avatar-wrap ${previewClass}">${previewHtml(item)}</div>
       <div class="m-name">${esc(item.label)}</div>
       <span class="m-rarity m-rarity-${item.rarity}">${esc(rarityLabel[item.rarity] || item.rarity)}</span>
       <div class="m-price">${priceText}</div>
@@ -74,7 +84,11 @@ body{display:block;height:auto;min-height:100vh;margin:0;padding:20px;background
     if (w.status===200) $('m-wallet').textContent = `🪙 ${w.body.balance} Coin`;
     const classic = { key:'classic', label:'Klasik', rarity:'free', price:0, purchasable:false, owned:true, equipped: r.body.equipped==='classic' };
     const items = [classic, ...r.body.items];
-    $('m-grid').innerHTML = items.map(card).join('');
+    const owned = items.filter((i) => i.owned);
+    const locked = items.filter((i) => !i.owned);
+    $('m-grid-owned').innerHTML = owned.map(card).join('') || '<p class="m-state" style="padding:12px 0;">Henüz hiçbir şeye sahip değilsin.</p>';
+    $('m-grid-locked').innerHTML = locked.length ? locked.map(card).join('') : '';
+    document.querySelectorAll('.m-section-title')[1].style.display = locked.length ? '' : 'none';
     $('m-main').style.display = '';
   }
 
