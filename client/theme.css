@@ -1087,6 +1087,36 @@ html.auth-pending #login-screen { visibility: hidden; }
 
 /* ── Market ürün kartları (gift.html'e benzer sade sayfa stiline eklenir) */
 
+/* ── Sauran Market / Kitaplığım: artık ayrı sayfa değil, uygulama içi panel (geçiş takılması yok) ── */
+.market-modal-box { width: 560px; max-width: 92vw; max-height: 82vh; }
+.market-modal-body { padding: 4px 18px 20px; max-height: calc(82vh - 50px); overflow-y: auto; }
+.mk-sub { color: #6b7280; font-size: 12.5px; margin: 6px 0 14px; }
+.mk-wallet { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; background: rgba(255, 209, 102, .12); border: 1px solid rgba(255, 209, 102, .4); color: #ffd166; font-weight: bold; font-size: 13px; margin-bottom: 14px; }
+.mk-section-title { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; margin: 16px 0 8px; }
+.mk-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.mk-card { border-radius: 14px; padding: 8px 6px; background: rgba(20, 22, 28, .55); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border: 1px solid rgba(255, 255, 255, .08); display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center; }
+.mk-avatar-preview { width: 40px; height: 40px; border-radius: 50%; background: rgba(255, 255, 255, .06); display: flex; align-items: center; justify-content: center; font-size: 15px; color: #8e9297; position: relative; overflow: visible; }
+.mk-name { font-size: 11px; font-weight: 650; color: #e2f8f6; line-height: 1.2; }
+.mk-rarity { font-size: 8.5px; text-transform: uppercase; letter-spacing: .04em; padding: 1.5px 6px; border-radius: 999px; }
+.mk-rarity-free { background: rgba(148, 163, 184, .15); color: #94a3b8; }
+.mk-rarity-rare { background: rgba(79, 195, 232, .15); color: #4fc3e8; }
+.mk-rarity-epic { background: rgba(255, 47, 208, .15); color: #ff2fd0; }
+.mk-rarity-legendary { background: rgba(185, 139, 255, .15); color: #b98bff; }
+.mk-rarity-special { background: rgba(255, 213, 74, .15); color: #ffd54a; }
+.mk-price { font-size: 10px; color: #8e9297; }
+.mk-btn { width: 100%; padding: 6px 2px; border-radius: 999px; border: 1px solid rgba(92, 200, 255, .45); background: rgba(92, 200, 255, .14); color: #5cc8ff; font-weight: bold; font-size: 10px; cursor: pointer; }
+.mk-btn:disabled { opacity: .45; cursor: default; border-color: rgba(255, 255, 255, .15); background: rgba(255, 255, 255, .04); color: #8e9297; }
+.mk-btn.owned { border-color: rgba(126, 231, 135, .5); background: rgba(126, 231, 135, .12); color: #7ee787; }
+.mk-state { color: #6b7280; font-size: 13px; text-align: center; padding: 30px 0; }
+@media (max-width: 900px) {
+  .market-modal-box { width: 92vw; }
+  .mk-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* Bildirim zili artık tüm platformlarda üst çubukta tek bir yerde (bkz. #notifications-btn) —
+   sol raydaki eski zil ikonu her yerde gizli, çifte giriş noktası olmasın. */
+#rail-notifications { display: none !important; }
+
 /* ── Sauran Plus rozeti: kullanıcı adının yanında, mor/mavi, Supporter'dan ayrı ────────── */
 .plus-badge {
   display: inline-flex; align-items: center; gap: 2px; vertical-align: middle;

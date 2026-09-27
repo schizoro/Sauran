@@ -6214,6 +6214,105 @@ document.getElementById('gift-box-modal')?.addEventListener('click', (e) => {
 
 
 // =====================================================
+// SAURAN MARKET / KİTAPLIĞIM (uygulama içi panel)
+// =====================================================
+
+const RARITY_LABEL = { free: 'Ücretsiz', rare: 'Rare', epic: 'Epic', legendary: 'Legendary', special: 'Özel' };
+
+function mkPreviewHtml(item) {
+    if (item.key === 'supporter') {
+        return `<span class="sf-overlay" aria-hidden="true"><img src="assets/frame-supporter.png" class="sf-ring-img" alt="${escapeHtml(item.label)}"><span class="sf-highlight"></span></span>`;
+    }
+    return escapeHtml(item.label.charAt(0));
+}
+
+function mkCardHtml(item, { showPrice }) {
+    const previewClass = item.key !== 'classic' ? ('frame-' + item.key) : '';
+    let btn;
+    if (item.equipped) btn = `<button class="mk-btn owned" disabled>✓ Kuşanılı</button>`;
+    else if (item.owned) btn = `<button class="mk-btn" data-mk-equip="${escapeHtml(item.key)}">Kuşan</button>`;
+    else btn = `<button class="mk-btn" disabled>${item.purchasable ? 'Satın Al' : 'Satın Al — Yakında'}</button>`;
+    const priceText = item.price === 0 ? 'Ücretsiz' : (item.price == null ? '—' : `${item.price} 🪙`);
+    return `<div class="mk-card">
+        <div class="mk-avatar-preview profile-avatar-wrap ${previewClass}">${mkPreviewHtml(item)}</div>
+        <div class="mk-name">${escapeHtml(item.label)}</div>
+        <span class="mk-rarity mk-rarity-${item.rarity}">${escapeHtml(RARITY_LABEL[item.rarity] || item.rarity)}</span>
+        ${showPrice ? `<div class="mk-price">${priceText}</div>` : ''}
+        ${btn}
+    </div>`;
+}
+
+async function mkFetchFrames() {
+    const r = await fetch('/api/market/frames', { credentials: 'include' });
+    let body = {}; try { body = await r.json(); } catch (_) {}
+    return { status: r.status, body };
+}
+
+async function loadMarketModal() {
+    const state = document.getElementById('market-state');
+    const main = document.getElementById('market-main');
+    state.style.display = 'none'; main.style.display = 'none';
+    const r = await mkFetchFrames();
+    if (r.status !== 200) { state.style.display = 'block'; state.textContent = r.status === 401 ? 'Giriş yapmalısın.' : 'Market yüklenemedi.'; return; }
+    try {
+        const w = await fetch('/api/wallet', { credentials: 'include' });
+        if (w.status === 200) { const wb = await w.json(); document.getElementById('market-wallet').textContent = `🪙 ${wb.balance} Coin`; }
+    } catch (_) {}
+    const classic = { key: 'classic', label: 'Klasik', rarity: 'free', price: 0, purchasable: false, owned: true, equipped: r.body.equipped === 'classic' };
+    const items = [classic, ...r.body.items];
+    const owned = items.filter((i) => i.owned);
+    const locked = items.filter((i) => !i.owned);
+    document.getElementById('market-grid-owned').innerHTML = owned.map((i) => mkCardHtml(i, { showPrice: false })).join('') || '<p class="mk-state" style="padding:12px 0;">Henüz hiçbir şeye sahip değilsin.</p>';
+    document.getElementById('market-grid-locked').innerHTML = locked.map((i) => mkCardHtml(i, { showPrice: true })).join('');
+    document.getElementById('market-locked-title').style.display = locked.length ? '' : 'none';
+    main.style.display = '';
+}
+
+async function loadInventoryModal() {
+    const state = document.getElementById('inventory-state');
+    const main = document.getElementById('inventory-main');
+    state.style.display = 'none'; main.style.display = 'none';
+    const r = await mkFetchFrames();
+    if (r.status !== 200) { state.style.display = 'block'; state.textContent = r.status === 401 ? 'Giriş yapmalısın.' : 'Kitaplık yüklenemedi.'; return; }
+    const classic = { key: 'classic', label: 'Klasik', rarity: 'free', price: 0, owned: true, equipped: r.body.equipped === 'classic' };
+    const owned = [classic, ...r.body.items.filter((i) => i.owned)];
+    document.getElementById('inventory-grid').innerHTML = owned.map((i) => mkCardHtml(i, { showPrice: false })).join('') || '<p class="mk-state" style="padding:12px 0;">Henüz hiçbir şeye sahip değilsin. Market\'ten göz atabilirsin.</p>';
+    main.style.display = '';
+}
+
+function closeTopbarDropdown() {
+    const dropdown = document.getElementById('topbar-menu-dropdown');
+    if (dropdown) dropdown.style.display = 'none';
+}
+
+document.getElementById('market-open-btn')?.addEventListener('click', () => {
+    closeTopbarDropdown();
+    document.getElementById('market-modal').style.display = 'flex';
+    loadMarketModal();
+});
+document.getElementById('inventory-open-btn')?.addEventListener('click', () => {
+    closeTopbarDropdown();
+    document.getElementById('inventory-modal').style.display = 'flex';
+    loadInventoryModal();
+});
+document.getElementById('market-close-btn')?.addEventListener('click', () => { document.getElementById('market-modal').style.display = 'none'; });
+document.getElementById('inventory-close-btn')?.addEventListener('click', () => { document.getElementById('inventory-modal').style.display = 'none'; });
+document.getElementById('market-modal')?.addEventListener('click', (e) => { if (e.target.id === 'market-modal') e.currentTarget.style.display = 'none'; });
+document.getElementById('inventory-modal')?.addEventListener('click', (e) => { if (e.target.id === 'inventory-modal') e.currentTarget.style.display = 'none'; });
+
+document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-mk-equip]');
+    if (!btn) return;
+    const grid = btn.closest('#market-grid-owned, #market-grid-locked, #inventory-grid');
+    if (!grid) return;
+    btn.disabled = true; btn.textContent = 'Kuşanılıyor...';
+    await fetch('/api/me/cosmetics/equip', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ item_key: btn.dataset.mkEquip }) });
+    if (document.getElementById('market-modal').style.display === 'flex') loadMarketModal();
+    if (document.getElementById('inventory-modal').style.display === 'flex') loadInventoryModal();
+});
+
+
+// =====================================================
 // ÖNERİ & GÖRÜŞ
 // =====================================================
 

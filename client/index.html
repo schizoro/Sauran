@@ -309,18 +309,19 @@
 
             <div id="topbar-menu-dropdown" class="topbar-menu-dropdown liquid-glass" style="display:none;">
 
-                <button id="discover-open-btn" class="topbar-menu-item" type="button">🧭 <span data-i18n="menu-discover">Keşfet</span></button>
+                <!-- Keşfet ve Arkadaş Ekle ray düğmelerinde (sol menü) her platformda zaten mevcut —
+                     burada tekrarlanmıyor. Düğmeler rail-friend gezinme devri için DOM'da (gizli) kalıyor. -->
+                <button id="discover-open-btn" class="topbar-menu-item" type="button" style="display:none;">🧭 <span data-i18n="menu-discover">Keşfet</span></button>
+                <button id="friend-add-open-btn" class="topbar-menu-item" title="Arkadaş Ekle" type="button" style="display:none;">👤＋ <span data-i18n="menu-add-friend">Arkadaş Ekle</span></button>
 
                 <button id="hub-join-open-btn" class="topbar-menu-item" title="Davet koduyla katıl" type="button">🔑 <span data-i18n="menu-join-code">Davet Koduyla Katıl</span></button>
-
-                <button id="friend-add-open-btn" class="topbar-menu-item" title="Arkadaş Ekle" type="button">👤＋ <span data-i18n="menu-add-friend">Arkadaş Ekle</span></button>
 
                 <button id="feedback-open-btn" class="topbar-menu-item" title="Öneri & Görüş" type="button">💡 <span data-i18n="menu-feedback">Öneri & Görüş</span></button>
 
                 <a id="admin-panel-link" class="topbar-menu-item" href="admin.html" style="display:none; text-decoration:none;">🛡️ <span data-i18n="menu-admin">Yönetim</span></a>
                 <a id="gift-tool-link" class="topbar-menu-item" href="gift.html" style="display:none; text-decoration:none;">🎁 <span>Hediye Aracı</span></a>
-                <a id="market-link" class="topbar-menu-item" href="market.html" style="text-decoration:none;">🛍️ <span>Sauran Market</span></a>
-                <a id="inventory-link" class="topbar-menu-item" href="kitaplik.html" style="text-decoration:none;">🎒 <span>Kitaplığım</span></a>
+                <button id="market-open-btn" class="topbar-menu-item" type="button">🛍️ <span>Sauran Market</span></button>
+                <button id="inventory-open-btn" class="topbar-menu-item" type="button">🎒 <span>Kitaplığım</span></button>
 
                 <button id="settings-btn" class="topbar-menu-item" title="Ayarlar" type="button">⚙️ <span data-i18n="menu-settings">Ayarlar</span></button>
 
@@ -813,6 +814,46 @@
 
     </div>
 
+    <!-- ================================================= -->
+    <!-- SAURAN MARKET / KİTAPLIĞIM (uygulama içi panel) -->
+    <!-- ================================================= -->
+
+    <div id="market-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-box market-modal-box">
+            <div class="modal-header">
+                <span>🛍️ Sauran Market</span>
+                <button id="market-close-btn">✕</button>
+            </div>
+            <div class="market-modal-body">
+                <p class="mk-sub">Profilini kişiselleştiren kozmetik ürünler.</p>
+                <div id="market-state" class="mk-state" style="display:none;"></div>
+                <div id="market-main" style="display:none;">
+                    <div id="market-wallet" class="mk-wallet">🪙 0 Coin</div>
+                    <div class="mk-section-title">🖼️ Sahip Olduklarım</div>
+                    <div id="market-grid-owned" class="mk-grid"></div>
+                    <div id="market-locked-title" class="mk-section-title">🔒 Henüz Alınmadı</div>
+                    <div id="market-grid-locked" class="mk-grid"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="inventory-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-box market-modal-box">
+            <div class="modal-header">
+                <span>🎒 Kitaplığım</span>
+                <button id="inventory-close-btn">✕</button>
+            </div>
+            <div class="market-modal-body">
+                <p class="mk-sub">Satın aldığın veya hediye olarak aldığın tüm ürünler burada. İstediğini kuşanabilirsin.</p>
+                <div id="inventory-state" class="mk-state" style="display:none;"></div>
+                <div id="inventory-main" style="display:none;">
+                    <div class="mk-section-title">🖼️ Avatar Çerçeveleri</div>
+                    <div id="inventory-grid" class="mk-grid"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- ================================================= -->
     <!-- ÖNERİ & GÖRÜŞ -->
