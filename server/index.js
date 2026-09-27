@@ -75,6 +75,9 @@ const {
   createDmFileMessage,
   saveDmSticker,
   likeHub,
+  superLikeHub,
+  getCoinBalance,
+  grantCoins,
   compactLikeEvents,
   purgeExpiredJoinRequests,
   listDiscoverableHubs,
@@ -1853,6 +1856,46 @@ app.post('/api/discover/lobbies/:id/like', discoverLimiter, (req, res) => {
   const result = likeHub(Number(req.params.id), user.id, req.body && req.body.device_id);
   if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error, reason: result.reason || null });
   return res.json(result);
+});
+
+// Sauran Coin bakiyesi (yalnızca kendi bakiyen)
+app.get('/api/wallet', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  return res.json({ success: true, balance: getCoinBalance(user.id), super_like_cost: 10 });
+});
+
+// Süper Beğeni: Coin harcar; Keşfet'in 30 günlük puanına +25 (kalıcı seviyeye değil). Lobi sahibi de atabilir (günlük sınırı daha sıkı).
+app.post('/api/discover/lobbies/:id/super-like', discoverLimiter, (req, res) => {
+  const user = requireDiscoverUser(req, res);
+  if (!user) return;
+
+  try {
+    const hubId = Number(req.params.id);
+    const result = superLikeHub(hubId, user.id);
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error, reason: result.reason || null });
+
+    // Lobi sahibi çevrimiçiyse bildirim (destekçi kimliği paylaşılmaz).
+    if (!result.by_owner) io.to(`user:${result.owner_id}`).emit('hub_super_like', { hub_id: hubId });
+    return res.json({ success: true, ...result, owner_id: undefined });
+  } catch (error) {
+    console.error('Süper Beğeni hatası:', error);
+    return res.status(500).json({ success: false, error: 'İşlem tamamlanamadı.' });
+  }
+});
+
+// Kurucu: Sauran Coin verme (satın alma sistemi gelene kadar test/hediye). Defter kaydı = denetim izi.
+app.post('/api/admin/coins/grant', (req, res) => {
+  const actor = requirePlatformRole(req, res, 'founder');
+  if (!actor) return;
+
+  const username = String(req.body?.username || '').trim();
+  const target = db.prepare(`SELECT id FROM users WHERE LOWER(username) = LOWER(?)`).get(username);
+  if (!target) return res.status(404).json({ success: false, error: 'Kullanıcı bulunamadı.' });
+
+  const result = grantCoins(target.id, req.body?.amount, 'admin_grant', actor.id);
+  if (!result.success) return res.status(400).json(result);
+  return res.json({ success: true, balance: result.balance });
 });
 
 app.get('/api/hubs/:id/join-requests', (req, res) => {

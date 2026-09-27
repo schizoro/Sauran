@@ -3568,18 +3568,27 @@ const I18N = {
     'discover-like': { tr: 'Beğen', en: 'Like' },
     'discover-liked-today': { tr: 'Bugün beğendin', en: 'Liked today' },
     'discover-liked-tomorrow': { tr: 'Yarın yeniden beğenebilirsin.', en: 'You can like again tomorrow.' },
-    'discover-like-reason-owner': { tr: 'Kendi Lobini beğenemezsin.', en: 'You cannot like your own lobby.' },
     'discover-like-reason-not_member': { tr: 'Beğenmek için Lobiye üye olmalısın.', en: 'Join the lobby to like it.' },
-    'discover-like-reason-member_new': { tr: 'Beğenmek için Lobiye en az 24 saattir üye olmalısın.', en: 'You must have been a member for at least 24 hours to like.' },
-    'discover-like-reason-account_new': { tr: 'Beğenmek için hesabının en az 3 günlük olması gerekiyor.', en: 'Your account must be at least 3 days old to like.' },
     'discover-like-reason-already_today': { tr: 'Bugün bu Lobiyi zaten beğendin. Yarın tekrar beğenebilirsin.', en: 'You already liked this lobby today. You can like again tomorrow.' },
     'discover-level': { tr: 'Seviye', en: 'Level' },
     'discover-level-short': { tr: 'Sv.', en: 'Lv.' },
     'discover-level-progress': { tr: 'puan', en: 'points' },
     'discover-points-30d': { tr: 'Son 30 gün', en: 'Last 30 days' },
-    'discover-level-note': { tr: 'Seviye toplam puandan gelir. Keşfet sıralaması son 30 günün puanına göredir. Her beğeni 5 puandır.', en: 'Level comes from total points. Discover ranking uses the last 30 days. Each like is worth 5 points.' },
     'discover-superlike': { tr: 'Süper Beğeni', en: 'Super Like' },
-    'discover-superlike-soon': { tr: 'Süper Beğeni yakında...', en: 'Super Like coming soon...' },
+    'coin-buy-soon': { tr: 'Sauran Coin satın alma yakında...', en: 'Sauran Coin purchases coming soon...' },
+    'coin-not-enough': { tr: 'Yeterli Sauran Coin\'in yok. Coin satın alma yakında.', en: 'Not enough Sauran Coin. Purchases coming soon.' },
+    'discover-superlike-confirm': { tr: 'Onayla', en: 'Confirm' },
+    'discover-superlike-sent': { tr: 'Süper Beğeni gönderildi ⚡ (+25 puan)', en: 'Super Like sent ⚡ (+25 points)' },
+    'discover-superlike-limit-user': { tr: 'Bu Lobiye bugünkü Süper Beğeni hakkın doldu.', en: 'You reached today\'s Super Like limit for this lobby.' },
+    'discover-superlike-limit-lobby': { tr: 'Bu Lobi bugün alabileceği Süper Beğeni sınırına ulaştı.', en: 'This lobby reached today\'s Super Like limit.' },
+    'discover-super-received': { tr: 'Lobinize Süper Beğeni atıldı ⚡', en: 'Your lobby received a Super Like ⚡' },
+    'discover-superlike-info': { tr: 'Süper Beğeni: {cost} Coin, +{points} Keşfet puanı (yalnızca son 30 gün; seviyeyi etkilemez).', en: 'Super Like: {cost} Coin, +{points} Discover points (last 30 days only; does not affect level).' },
+    'discover-like-reason-account_new': { tr: 'Lobileri beğenebilmek için hesabının en az 3 günlük olması gerekiyor.', en: 'Your account must be at least 3 days old to like lobbies.' },
+    'discover-like-reason-member_new': { tr: 'Bu Lobiyi beğenebilmek için en az 24 saat üye olmalısın.', en: 'You must be a member for at least 24 hours to like this lobby.' },
+    'discover-like-hint-account_new': { tr: 'Hesabın 3 günlük olduğunda kullanılabilir.', en: 'Available once your account is 3 days old.' },
+    'discover-like-hint-member_new': { tr: 'Bu Lobide 24 saat üye olduktan sonra kullanılabilir.', en: 'Available after 24 hours of membership.' },
+    'discover-like-hint-not_member': { tr: 'Beğenmek için Lobiye üye ol.', en: 'Join the lobby to like it.' },
+    'discover-level-note': { tr: 'Seviye toplam puandan gelir; Keşfet sıralaması son 30 günün puanına göredir. Her beğeni 5 puandır. Süper Beğeni seviyeyi etkilemez.', en: 'Level comes from total points; Discover ranking uses the last 30 days. Each like is worth 5 points. Super Likes do not affect level.' },
     'hint-call-controls-room': { tr: 'Mikrofon, gürültü engelleme ve diğer ses ayarları için yeşil oda etiketine dokun.', en: 'For microphone, noise suppression and other audio controls, tap the green room label.' },
     'hint-call-controls-dm': { tr: 'Mikrofon ve gürültü engelleme için küçük görüşme çubuğundaki genişlet düğmesine dokun.', en: 'For microphone and noise suppression, tap the expand button on the small call bar.' },
     'nc-label': { tr: 'Gürültü engelleme (yalnızca konuşma)', en: 'Noise suppression (voice only)' },
@@ -4234,6 +4243,7 @@ function connectToChat() {
         showToast(t('discover-new-request'));
         if (currentHub && hubSettingsModal.style.display === 'flex') openHub(currentHub.id);
     });
+    socket.on('hub_super_like', () => showToast(t('discover-super-received')));
     socket.on('hub_join_decision', (data) => {
         showToast(t(data && data.approved ? 'discover-decision-approved' : 'discover-decision-rejected'));
         loadHubList();
@@ -8744,6 +8754,7 @@ async function loadDiscover(reset) {
 
 function openDiscover() {
     switchToView('discover');
+    loadWallet();
     renderDiscoverFilters();
     loadDiscover(true);
 }
@@ -8799,8 +8810,9 @@ function updateDiscoverFilterDot() {
     });
     discoverDetailJoinBtn.addEventListener('click', joinDiscoverDetail);
     document.getElementById('discover-detail-like').addEventListener('click', toggleDiscoverLike);
-    // Süper Beğeni: yeri ayrıldı, henüz işlevsiz (ücretli popülerlik ileride); yalnızca "yakında" bildirimi gösterir.
-    document.getElementById('discover-detail-superlike').addEventListener('click', () => showToast(t('discover-superlike-soon')));
+    document.getElementById('discover-detail-superlike').addEventListener('click', superLikeDiscoverDetail);
+    // Coin satın alma henüz yok: rozet yalnızca bakiyeyi gösterir, dokununca "yakında" der.
+    document.getElementById('discover-wallet').addEventListener('click', () => showToast(t('coin-buy-soon')));
 })();
 
 function discoverDetailButtonState(lobby) {
@@ -8833,17 +8845,98 @@ function renderDiscoverLike(lobby) {
     const label = document.getElementById('discover-detail-like-label');
     const reason = lobby.like_reason;
     const liked = Boolean(lobby.liked_today);
+    const locked = reason === 'account_new' || reason === 'member_new';
 
     btn.classList.toggle('liked', liked);
-    btn.classList.toggle('blocked', reason === 'account_new' || reason === 'member_new'); // kırmızı çerçeve: bekleme koşulu var
+    btn.classList.toggle('locked', locked);
     btn.setAttribute('aria-pressed', liked ? 'true' : 'false');
-    btn.querySelector('.discover-like-heart').textContent = liked ? '♥' : '♡';
+    btn.querySelector('.discover-like-heart').textContent = liked ? '♥' : (locked ? '🔒' : '♡');
     label.textContent = t(liked ? 'discover-liked-today' : 'discover-like');
 
-    // Beğeni günde bir kez ve geri alınamaz. Bugün beğenmişse ya da sahip/üye değilse düğme kapalı;
-    // yeni hesap / yeni üye ise düğme açık kalır ve dokununca nedenini söyler.
-    btn.disabled = liked || reason === 'owner' || reason === 'not_member';
+    // Beğeni günde bir kez ve geri alınamaz. Kilitli durumlar (yeni hesap / yeni üye) düğmeyi gizlemez: açık kalır, nedenini söyler.
+    btn.disabled = liked || reason === 'not_member';
     btn.title = liked ? t('discover-liked-tomorrow') : (reason ? t('discover-like-reason-' + reason) : t('discover-like'));
+
+    // Açıklayıcı ipucu satırı (dokunmadan da görünür)
+    const lines = [];
+    if (liked) lines.push(t('discover-liked-tomorrow'));
+    else if (reason) lines.push(t('discover-like-hint-' + reason));
+    const sl = lobby.super_like;
+    if (sl) {
+        lines.push(t('discover-superlike-info').replace('{cost}', sl.cost).replace('{points}', sl.points));
+        if (sl.user_today >= sl.user_max) lines.push(t('discover-superlike-limit-user'));
+        else if (sl.lobby_today_points + sl.points > sl.lobby_cap) lines.push(t('discover-superlike-limit-lobby'));
+    }
+    document.getElementById('discover-detail-hint').textContent = lines.join(' ');
+
+    renderSuperLikeButton(lobby);
+}
+
+let superLikeConfirmTimer = null;
+
+function renderSuperLikeButton(lobby) {
+    const btn = document.getElementById('discover-detail-superlike');
+    const label = document.getElementById('discover-superlike-label');
+    const sl = lobby.super_like;
+    clearTimeout(superLikeConfirmTimer);
+    btn.classList.remove('confirming');
+    btn.dataset.confirm = '';
+    label.textContent = t('discover-superlike') + (sl ? ` · ${sl.cost} 🪙` : '');
+    const limited = sl && (sl.user_today >= sl.user_max || sl.lobby_today_points + sl.points > sl.lobby_cap);
+    btn.disabled = Boolean(limited);
+}
+
+// Süper Beğeni: Coin harcar → yanlışlıkla harcamayı önlemek için iki dokunuş (ilki "Onayla" gösterir).
+async function superLikeDiscoverDetail() {
+    if (!discoverDetail || !discoverDetail.super_like) return;
+    const btn = document.getElementById('discover-detail-superlike');
+    const label = document.getElementById('discover-superlike-label');
+    const sl = discoverDetail.super_like;
+
+    if (sl.balance < sl.cost) { showToast(t('coin-not-enough')); return; }
+
+    if (btn.dataset.confirm !== '1') {
+        btn.dataset.confirm = '1';
+        btn.classList.add('confirming');
+        label.textContent = `${t('discover-superlike-confirm')} · ${sl.cost} 🪙`;
+        clearTimeout(superLikeConfirmTimer);
+        superLikeConfirmTimer = setTimeout(() => renderSuperLikeButton(discoverDetail), 4000);
+        return;
+    }
+
+    btn.disabled = true;
+    try {
+        const response = await fetch(`/api/discover/lobbies/${discoverDetail.id}/super-like`, { method: 'POST', credentials: 'include' });
+        const data = await response.json();
+        if (!data.success) {
+            discoverDetailError.textContent = data.error || t('discover-error');
+            renderSuperLikeButton(discoverDetail);
+            return;
+        }
+        discoverDetailError.textContent = '';
+        Object.assign(discoverDetail, { points_30d: data.points_30d, points_total: data.points_total, level: data.level, level_progress: data.level_progress, level_needed: data.level_needed, super_like: data.super_like });
+        setWalletBalance(data.super_like.balance);
+        showToast(t('discover-superlike-sent'));
+        renderDiscoverDetail(discoverDetail);
+        loadDiscover(true);
+    } catch (error) {
+        console.error('Süper Beğeni hatası:', error);
+        discoverDetailError.textContent = t('discover-error');
+        renderSuperLikeButton(discoverDetail);
+    }
+}
+
+function setWalletBalance(balance) {
+    const el = document.getElementById('discover-wallet-balance');
+    if (el) el.textContent = String(balance);
+}
+
+async function loadWallet() {
+    try {
+        const response = await fetch('/api/wallet', { credentials: 'include' });
+        const data = await response.json();
+        if (data.success) setWalletBalance(data.balance);
+    } catch (_) { /* bakiye alınamazsa 0 kalır */ }
 }
 
 async function toggleDiscoverLike() {

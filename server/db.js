@@ -289,6 +289,18 @@ db.exec(`
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
   );
+
+  -- Sauran Coin defteri: bakiye = delta toplamı. Şimdilik yalnızca yönetici (kurucu) tarafından verilir ve Süper Beğeni'de harcanır; satın alma ileride.
+  CREATE TABLE IF NOT EXISTS coin_ledger (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    delta INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    ref TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_coin_ledger_user ON coin_ledger(user_id);
 `);
 
 // Eski (günlük olmayan) beğeni tablosu varsa olaylara taşınır ve kaldırılır (her beğeni 5 puan).
@@ -2524,7 +2536,7 @@ const DISCOVER_SUMMARY_SELECT = `
   (SELECT MAX(messages.created_at) FROM messages WHERE messages.hub_id = hubs.id) AS last_activity,
   EXISTS(SELECT 1 FROM hub_members WHERE hub_members.hub_id = hubs.id AND hub_members.user_id = @uid) AS is_member,
   (SELECT status FROM hub_join_requests WHERE hub_join_requests.hub_id = hubs.id AND hub_join_requests.user_id = @uid) AS my_request_status,
-  hubs.points_archived + (SELECT COALESCE(SUM(points), 0) FROM hub_like_events WHERE hub_like_events.hub_id = hubs.id) AS points_total,
+  hubs.points_archived + (SELECT COALESCE(SUM(points), 0) FROM hub_like_events WHERE hub_like_events.hub_id = hubs.id AND hub_like_events.kind = 'like') AS points_total,
   (SELECT COALESCE(SUM(points), 0) FROM hub_like_events WHERE hub_like_events.hub_id = hubs.id AND hub_like_events.day >= @since) AS points_30d,
   EXISTS(SELECT 1 FROM hub_like_events WHERE hub_like_events.hub_id = hubs.id AND hub_like_events.user_id = @uid AND hub_like_events.day = @today AND hub_like_events.kind = 'like') AS liked_today
 `;
@@ -2631,7 +2643,7 @@ function getDiscoverableHubDetail(hubId, userId) {
       AND NOT EXISTS (SELECT 1 FROM hub_bans WHERE hub_bans.hub_id = hubs.id AND hub_bans.user_id = @uid)
   `).get({ hubId, ...likeQueryParams(userId) });
   if (!row) return null;
-  return { ...row, has_image: Boolean(row.has_image), is_member: Boolean(row.is_member), is_owner: row.created_by === userId, liked_today: Boolean(row.liked_today), ...levelInfo(row.points_total), like_reason: likeBlockReason(hubId, userId, row) };
+  return { ...row, has_image: Boolean(row.has_image), is_member: Boolean(row.is_member), is_owner: row.created_by === userId, liked_today: Boolean(row.liked_today), ...levelInfo(row.points_total), like_reason: likeBlockReason(hubId, userId, row), super_like: superLikeState(hubId, userId, row.created_by === userId) };
 }
 
 // Keşfet görseli (yalnızca keşfedilebilir Lobi ya da üye).
@@ -2724,7 +2736,6 @@ function decideHubJoinRequest(hubId, requestId, actorId, approve) {
 // Beğeni engeli nedeni (kullanıcıya gösterilir): 'owner' | 'not_member' | 'member_new' | 'account_new' | 'already_today' | null
 function likeBlockReason(hubId, userId, row) {
   const hub = row || db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
-  if (hub.created_by === userId) return 'owner';
   const member = db.prepare(`SELECT joined_at FROM hub_members WHERE hub_id = ? AND user_id = ?`).get(hubId, userId);
   if (!member) return 'not_member';
   if (db.prepare(`SELECT 1 FROM hub_like_events WHERE hub_id = ? AND user_id = ? AND day = ? AND kind = 'like'`).get(hubId, userId, istanbulDay())) return 'already_today';
@@ -2735,7 +2746,6 @@ function likeBlockReason(hubId, userId, row) {
 }
 
 const LIKE_BLOCK_MESSAGES = {
-  owner: 'Kendi Lobini beğenemezsin.',
   not_member: 'Beğenmek için Lobiye üye olmalısın.',
   member_new: 'Beğenmek için Lobiye en az 24 saattir üye olmalısın.',
   account_new: 'Beğenmek için hesabının en az 3 günlük olması gerekiyor.',
@@ -2769,11 +2779,81 @@ function likeHub(hubId, userId, deviceId) {
   if (!result.success) return result;
 
   const totals = db.prepare(`
-    SELECT hubs.points_archived + (SELECT COALESCE(SUM(points), 0) FROM hub_like_events WHERE hub_id = hubs.id) AS points_total,
+    SELECT hubs.points_archived + (SELECT COALESCE(SUM(points), 0) FROM hub_like_events WHERE hub_id = hubs.id AND kind = 'like') AS points_total,
            (SELECT COALESCE(SUM(points), 0) FROM hub_like_events WHERE hub_id = hubs.id AND day >= ?) AS points_30d
     FROM hubs WHERE id = ?
   `).get(addDaysToDay(today, -(LIKE_WINDOW_DAYS - 1)), hubId);
   return { success: true, liked_today: true, points_30d: totals.points_30d, points_total: totals.points_total, ...levelInfo(totals.points_total) };
+}
+
+// ── Sauran Coin ve Süper Beğeni ────────────────────────────────────────────
+// Süper Beğeni: Coin harcar; +25 puan yalnızca Keşfet'in SON 30 GÜNLÜK puanına yazılır, KALICI SEVİYEYE yazılmaz (para ile seviye atlanmaz).
+// Kontrollü: kullanıcı başına Lobi başına günlük sınır (Lobi sahibi için daha sıkı) + Lobi başına günlük Süper Beğeni puan tavanı.
+const SUPER_LIKE_COST = 10;
+const SUPER_LIKE_USER_DAILY_MAX = 3;
+const SUPER_LIKE_OWNER_DAILY_MAX = 1;
+const SUPER_LIKE_LOBBY_DAILY_POINT_CAP = 150;
+
+function getCoinBalance(userId) {
+  return db.prepare(`SELECT COALESCE(SUM(delta), 0) AS b FROM coin_ledger WHERE user_id = ?`).get(userId).b;
+}
+
+// Yönetici verme (satın alma ileride): ledger'a yazılır; ref = veren kullanıcının numarası (denetim izi).
+function grantCoins(userId, amount, reason, ref) {
+  const n = Number(amount);
+  if (!Number.isInteger(n) || n < 1 || n > 100000) return { success: false, error: 'Geçersiz miktar (1-100000).' };
+  if (!db.prepare(`SELECT 1 FROM users WHERE id = ?`).get(userId)) return { success: false, error: 'Kullanıcı bulunamadı.' };
+  db.prepare(`INSERT INTO coin_ledger (user_id, delta, reason, ref) VALUES (?, ?, ?, ?)`).run(userId, n, String(reason || 'grant'), ref == null ? null : String(ref));
+  return { success: true, balance: getCoinBalance(userId) };
+}
+
+function superLikeState(hubId, userId, isOwner) {
+  const today = istanbulDay();
+  const mine = db.prepare(`SELECT COUNT(*) AS c FROM hub_like_events WHERE hub_id = ? AND user_id = ? AND day = ? AND kind = 'super'`).get(hubId, userId, today).c;
+  const lobbyPoints = db.prepare(`SELECT COALESCE(SUM(points), 0) AS p FROM hub_like_events WHERE hub_id = ? AND day = ? AND kind = 'super'`).get(hubId, today).p;
+  return {
+    cost: SUPER_LIKE_COST, points: SUPER_LIKE_POINTS,
+    user_today: mine, user_max: isOwner ? SUPER_LIKE_OWNER_DAILY_MAX : SUPER_LIKE_USER_DAILY_MAX,
+    lobby_today_points: lobbyPoints, lobby_cap: SUPER_LIKE_LOBBY_DAILY_POINT_CAP,
+    balance: getCoinBalance(userId)
+  };
+}
+
+function superLikeHub(hubId, userId) {
+  const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ? AND visibility = 'discoverable'`).get(hubId);
+  if (!hub || isHubBanned(hubId, userId)) return { success: false, status: 404, error: 'Lobi bulunamadı.' };
+
+  const account = db.prepare(`SELECT created_at FROM users WHERE id = ?`).get(userId);
+  if (account && account.created_at > sqlTimeAgo(new Date(), LIKE_MIN_ACCOUNT_DAYS)) {
+    return { success: false, status: 400, reason: 'account_new', error: LIKE_BLOCK_MESSAGES.account_new };
+  }
+
+  const isOwner = hub.created_by === userId;
+  const run = db.transaction(() => {
+    const st = superLikeState(hubId, userId, isOwner);
+    if (st.user_today >= st.user_max) {
+      return { success: false, status: 400, reason: 'user_limit', error: isOwner ? 'Kendi Lobine günde en fazla 1 Süper Beğeni atabilirsin.' : `Bir Lobiye günde en fazla ${st.user_max} Süper Beğeni atabilirsin.` };
+    }
+    if (st.lobby_today_points + SUPER_LIKE_POINTS > st.lobby_cap) {
+      return { success: false, status: 400, reason: 'lobby_cap', error: 'Bu Lobi bugün alabileceği Süper Beğeni sınırına ulaştı. Yarın tekrar deneyebilirsin.' };
+    }
+    if (st.balance < SUPER_LIKE_COST) {
+      return { success: false, status: 400, reason: 'insufficient_coins', error: 'Yeterli Sauran Coin\'in yok. Coin satın alma yakında.' };
+    }
+    const today = istanbulDay();
+    db.prepare(`INSERT INTO hub_like_events (hub_id, user_id, day, kind, points) VALUES (?, ?, ?, 'super', ?)`).run(hubId, userId, today, SUPER_LIKE_POINTS);
+    db.prepare(`INSERT INTO coin_ledger (user_id, delta, reason, ref) VALUES (?, ?, 'super_like', ?)`).run(userId, -SUPER_LIKE_COST, String(hubId));
+    return { success: true };
+  });
+  const result = run();
+  if (!result.success) return result;
+
+  const totals = db.prepare(`
+    SELECT hubs.points_archived + (SELECT COALESCE(SUM(points), 0) FROM hub_like_events WHERE hub_id = hubs.id AND kind = 'like') AS points_total,
+           (SELECT COALESCE(SUM(points), 0) FROM hub_like_events WHERE hub_id = hubs.id AND day >= ?) AS points_30d
+    FROM hubs WHERE id = ?
+  `).get(addDaysToDay(istanbulDay(), -(LIKE_WINDOW_DAYS - 1)), hubId);
+  return { success: true, owner_id: hub.created_by, by_owner: isOwner, points_30d: totals.points_30d, points_total: totals.points_total, ...levelInfo(totals.points_total), super_like: superLikeState(hubId, userId, isOwner) };
 }
 
 // Günlük temizlik: 30 günden eski beğeni olayları Lobinin arşiv toplamına eklenip silinir; gün geçmiş cihaz işaretleri silinir.
@@ -2782,7 +2862,7 @@ function compactLikeEvents() {
   const cutoff = addDaysToDay(today, -LIKE_WINDOW_DAYS);
   const run = db.transaction(() => {
     db.prepare(`
-      UPDATE hubs SET points_archived = points_archived + COALESCE((SELECT SUM(points) FROM hub_like_events WHERE hub_id = hubs.id AND day < ?), 0)
+      UPDATE hubs SET points_archived = points_archived + COALESCE((SELECT SUM(points) FROM hub_like_events WHERE hub_id = hubs.id AND day < ? AND kind = 'like'), 0)
       WHERE id IN (SELECT DISTINCT hub_id FROM hub_like_events WHERE day < ?)
     `).run(cutoff, cutoff);
     const removed = db.prepare(`DELETE FROM hub_like_events WHERE day < ?`).run(cutoff).changes;
@@ -4570,6 +4650,7 @@ function getAccountExport(userId) {
     messages,
     hub_memberships: hubs,
     owned_hubs: ownedHubs,
+    coin_ledger: db.prepare(`SELECT delta, reason, ref, created_at FROM coin_ledger WHERE user_id = ? ORDER BY id`).all(userId),
     hub_likes: db.prepare(`SELECT hubs.name AS hub_name, hub_like_events.day, hub_like_events.points FROM hub_like_events INNER JOIN hubs ON hubs.id = hub_like_events.hub_id WHERE hub_like_events.user_id = ? ORDER BY hub_like_events.day`).all(userId),
     hub_join_requests: db.prepare(`SELECT hubs.name AS hub_name, hub_join_requests.status, hub_join_requests.created_at, hub_join_requests.decided_at FROM hub_join_requests INNER JOIN hubs ON hubs.id = hub_join_requests.hub_id WHERE hub_join_requests.user_id = ?`).all(userId),
     friendships,
@@ -6049,6 +6130,10 @@ module.exports = {
   createDmFileMessage,
   saveDmSticker,
   likeHub,
+  superLikeHub,
+  superLikeState,
+  getCoinBalance,
+  grantCoins,
   compactLikeEvents,
   levelInfo,
   purgeExpiredJoinRequests,
