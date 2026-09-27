@@ -3844,8 +3844,10 @@ profileBtn.addEventListener(
         const aboutInput = document.getElementById('about-me-input');
         const aboutCount = document.getElementById('about-me-count');
         if (aboutInput) {
+            const max = currentUser?.plus_active ? 600 : 300;
+            aboutInput.maxLength = max;
             aboutInput.value = currentUser?.about_me || '';
-            if (aboutCount) aboutCount.textContent = `${aboutInput.value.length}/300`;
+            if (aboutCount) aboutCount.textContent = `${aboutInput.value.length}/${max}`;
         }
 
     }
@@ -3858,7 +3860,7 @@ profileBtn.addEventListener(
 
 document.getElementById('about-me-input')?.addEventListener('input', (event) => {
     const count = document.getElementById('about-me-count');
-    if (count) count.textContent = `${event.target.value.length}/300`;
+    if (count) count.textContent = `${event.target.value.length}/${event.target.maxLength}`;
 });
 
 // Hakkımda bilgi balonu: masaüstünde hover/odak (CSS), dokunmatikte/tıklamada aç-kapa

@@ -2326,9 +2326,13 @@ function loginUser(username, password) {
 // PROFİL GÜNCELLEME
 // =====================================================
 
+const ABOUT_ME_MAX_FREE = 300;
+const ABOUT_ME_MAX_PLUS = 600;
+
 function updateAboutMe(userId, aboutMe) {
   try {
-    const text = String(aboutMe || '').trim().slice(0, 300);
+    const max = hasActivePlus(userId) ? ABOUT_ME_MAX_PLUS : ABOUT_ME_MAX_FREE;
+    const text = String(aboutMe || '').trim().slice(0, max);
 
     db.prepare(`UPDATE users SET about_me = ? WHERE id = ?`).run(text, userId);
 
