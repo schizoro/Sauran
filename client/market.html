@@ -37,7 +37,7 @@ body{display:block;height:auto;min-height:100vh;margin:0;padding:20px;background
 <body>
 <div class="m-wrap">
   <div class="m-head"><h1>🛍️ Sauran Market</h1><a href="index.html">← Uygulamaya dön</a></div>
-  <p class="m-sub">Profilini kişiselleştiren kozmetik ürünler. Satın alma yakında — şimdilik yalnızca hediye ile kazanılabilir.</p>
+  <p class="m-sub">Profilini kişiselleştiren kozmetik ürünler.</p>
   <div id="m-state" class="m-state" style="display:none"></div>
   <div id="m-main" style="display:none">
     <div id="m-wallet" class="m-wallet">🪙 0 Coin</div>
@@ -56,7 +56,7 @@ body{display:block;height:auto;min-height:100vh;margin:0;padding:20px;background
 
   function previewHtml(item){
     if (item.key === 'supporter') {
-      return `<img src="assets/frame-supporter.png" class="m-supporter-img" alt="">${esc(item.label.charAt(0))}`;
+      return `<img src="assets/frame-supporter.png" class="m-supporter-img" alt="${esc(item.label)}">`;
     }
     return esc(item.label.charAt(0));
   }
