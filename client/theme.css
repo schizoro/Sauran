@@ -1023,7 +1023,8 @@ html.auth-pending #login-screen { visibility: hidden; }
 
 /* ── Sauran Market: avatar çerçeveleri (profil, üst çubuk, sol ray) ─── */
 .profile-avatar-wrap[class*="frame-"], .rail-avatar[class*="frame-"] { overflow: visible; }
-.frame-ocean::after, .frame-neon::after, .frame-galaxy::after, .frame-supporter::after {
+.frame-ocean, .frame-neon, .frame-galaxy, .frame-supporter { position: relative; }
+.frame-ocean::after, .frame-neon::after, .frame-galaxy::after {
   content: ''; position: absolute; inset: -4px; border-radius: 50%; pointer-events: none; z-index: 1;
 }
 .frame-ocean::after { box-shadow: 0 0 0 2px #4fc3e8, 0 0 10px 1px rgba(79,195,232,.6); animation: frameWave 3s ease-in-out infinite; }
@@ -1034,18 +1035,44 @@ html.auth-pending #login-screen { visibility: hidden; }
               radial-gradient(circle, #fff 0 1.2px, transparent 2px) 70% 85% / 14px 14px no-repeat,
               radial-gradient(circle, #fff 0 1px, transparent 1.8px) 20% 80% / 12px 12px no-repeat;
   animation: frameGalaxy 4s linear infinite; }
-.frame-supporter::after { box-shadow: 0 0 0 2px #ffd54a, 0 0 16px 3px rgba(255,213,74,.85);
-  background: radial-gradient(circle, #fff8d0 0 1.4px, transparent 2.2px) 10% 8% / 16px 16px no-repeat,
-              radial-gradient(circle, #ffe27a 0 1.2px, transparent 2px) 88% 14% / 15px 15px no-repeat,
-              radial-gradient(circle, #fff8d0 0 1.4px, transparent 2.2px) 92% 78% / 16px 16px no-repeat,
-              radial-gradient(circle, #ffe27a 0 1.2px, transparent 2px) 12% 88% / 15px 15px no-repeat,
-              radial-gradient(circle, #fff8d0 0 1.2px, transparent 2px) 50% 100% / 14px 14px no-repeat;
-  animation: frameSupporter 2.4s ease-in-out infinite alternate; }
-.frame-supporter-label { display: none; }
 @keyframes frameWave { 0%, 100% { box-shadow: 0 0 0 2px #4fc3e8, 0 0 8px 1px rgba(79,195,232,.5); } 50% { box-shadow: 0 0 0 2px #6fd8fa, 0 0 14px 2px rgba(79,195,232,.85); } }
 @keyframes frameNeon { from { box-shadow: 0 0 0 2px #ff2fd0, 0 0 8px 1px rgba(255,47,208,.55); } to { box-shadow: 0 0 0 2px #ff7af0, 0 0 18px 4px rgba(255,47,208,.95); } }
 @keyframes frameGalaxy { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(360deg); } }
-@keyframes frameSupporter { from { box-shadow: 0 0 0 2px #ffd54a, 0 0 10px 2px rgba(255,213,74,.7); opacity: .92; } to { box-shadow: 0 0 0 2.5px #fff3b0, 0 0 22px 5px rgba(255,213,74,1); opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .frame-ocean::after, .frame-neon::after, .frame-galaxy::after, .frame-supporter::after { animation: none; } }
+
+/* ── Sauran Supporter: kurucu döneminin özel, Market'te satılmayan Legendary çerçevesi ──
+   Katmanlar: 1) dış ince altın halka + nefes alan glow (elementin kendi box-shadow'u)
+              2) ::before — ikinci halkada dönen ışık + yıldız/kristal parçacıkları (tek pseudo, tek dönüş animasyonu)
+              3) ::after — küçük "SUPPORTER" etiketi (yakından fark edilen detay, büyük yazı değil) */
+.frame-supporter { box-shadow: 0 0 0 2px #ffd54a, 0 0 16px 3px rgba(255,213,74,.8); animation: supporterBreathe 2.6s ease-in-out infinite; cursor: pointer; }
+.frame-supporter::before {
+  content: ''; position: absolute; inset: -7px; border-radius: 50%; pointer-events: none; z-index: 1;
+  background:
+    conic-gradient(from 0deg, transparent 0deg, rgba(255,255,255,.95) 12deg, transparent 34deg,
+                    transparent 150deg, rgba(255,224,140,.9) 168deg, transparent 196deg,
+                    transparent 260deg, rgba(255,255,255,.7) 274deg, transparent 300deg, transparent 360deg),
+    radial-gradient(circle, #fff9de 0 1.6px, transparent 2.6px) 8% 22% / 18px 18px no-repeat,
+    radial-gradient(circle, #ffe27a 0 1.3px, transparent 2.2px) 90% 12% / 15px 15px no-repeat,
+    radial-gradient(circle, #fff9de 0 1.6px, transparent 2.6px) 88% 82% / 18px 18px no-repeat,
+    radial-gradient(circle, #ffe27a 0 1.3px, transparent 2.2px) 14% 86% / 15px 15px no-repeat,
+    radial-gradient(circle, #cdefff 0 1.2px, transparent 2px) 50% 4% / 13px 13px no-repeat;
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 4px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 4px));
+  animation: supporterSpin 5s linear infinite;
+}
+.frame-supporter::after {
+  content: 'SUPPORTER'; position: absolute; left: 50%; top: 100%; transform: translate(-50%, 1px);
+  font-size: 6.5px; font-weight: 800; letter-spacing: .12em; color: #2a1c00; white-space: nowrap; z-index: 2;
+  padding: 1.5px 5px 1px; border-radius: 999px; pointer-events: none;
+  background: linear-gradient(180deg, #fff3c4, #ffd54a); box-shadow: 0 1px 3px rgba(0,0,0,.35);
+}
+.rail-avatar.frame-supporter::after, .profile-avatar-wrap-sm.frame-supporter::after { display: none; }
+@keyframes supporterSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes supporterBreathe {
+  0%, 100% { box-shadow: 0 0 0 2px #ffd54a, 0 0 12px 2px rgba(255,213,74,.65); }
+  50% { box-shadow: 0 0 0 2.5px #fff3b0, 0 0 24px 6px rgba(255,213,74,1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .frame-ocean::after, .frame-neon::after, .frame-galaxy::after, .frame-supporter, .frame-supporter::before { animation: none; }
+}
 
 /* ── Market ürün kartları (gift.html'e benzer sade sayfa stiline eklenir) */

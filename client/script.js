@@ -1730,11 +1730,25 @@ function setCurrentUser(user) {
 // =====================================================
 
 const AVATAR_FRAME_CLASSES = ['frame-ocean', 'frame-neon', 'frame-galaxy', 'frame-supporter'];
+const AVATAR_FRAME_INFO = {
+    supporter: { title: '👑 Sauran Supporter', text: "Sauran'ın geliştirme döneminde projeye destek veren özel topluluk üyelerine ait. Market'te satılmaz." },
+    ocean: { title: '🌊 Ocean', text: 'Hafif dalga hissi veren mavi tonlu çerçeve.' },
+    neon: { title: '⚡ Neon', text: 'Parlayan kenarlı neon çerçeve.' },
+    galaxy: { title: '🌌 Galaxy', text: 'Yıldızların hafif hareket ettiği uzay temalı çerçeve.' }
+};
 function applyAvatarFrame(el, frameKey) {
     if (!el) return;
     AVATAR_FRAME_CLASSES.forEach((c) => el.classList.remove(c));
     if (frameKey && frameKey !== 'classic') el.classList.add('frame-' + frameKey);
+    el.dataset.frameKey = frameKey && frameKey !== 'classic' ? frameKey : '';
 }
+// Yalnızca başkasının profilinde: kendi profilinde aynı avatar tıklaması zaten "avatarı değiştir" anlamına geliyor.
+document.addEventListener('click', (event) => {
+    const wrap = event.target.closest && event.target.closest('#other-profile-avatar-wrap[data-frame-key]');
+    if (!wrap || !wrap.dataset.frameKey) return;
+    const info = AVATAR_FRAME_INFO[wrap.dataset.frameKey];
+    if (info) showToast(`${info.title} — ${info.text}`);
+});
 
 function renderProfile() {
 
