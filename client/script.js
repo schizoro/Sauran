@@ -10921,7 +10921,10 @@ callScreenshareBtn.addEventListener('click', async () => {
             await callFrame.stopScreenShare();
             callScreenshareBtn.classList.remove('active');
         } else {
-            await callFrame.startScreenShare();
+            // Sauran Plus: daha yüksek ekran paylaşımı kalitesi (Daily'nin desteklediği maxQuality kademesi:
+            // low/medium/high). Herkes 'medium' alır, Plus 'high' — temel kalite kısıtlanmıyor, yalnızca yükseltiliyor.
+            const quality = currentUser?.plus_active ? 'high' : 'medium';
+            await callFrame.startScreenShare({ screenVideoSendSettings: { maxQuality: quality } });
             callScreenshareBtn.classList.add('active');
         }
 
