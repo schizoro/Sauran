@@ -1088,8 +1088,11 @@ html.auth-pending #login-screen { visibility: hidden; }
 }
 /* Etiket sadece büyük profil görünümlerinde (profil penceresi, Market kartı) gösterilir — mesaj/üye/arkadaş/
    sesli oda gibi küçük avatarlarda halka görünür ama "SUPPORTER" yazısı sığmayacağı için gizli kalır. */
-.frame-supporter-tag { display: none; }
-#profile-modal-avatar-wrap .frame-supporter-tag, #other-profile-avatar-wrap .frame-supporter-tag, .m-avatar-preview .frame-supporter-tag { display: block; }
+/* Küçük avatarlarda (ray, üst çubuk, mesaj/üye/arkadaş listeleri) da görünür — profile tıklamak gerekmiyor. */
+.rail-avatar .frame-supporter-tag, .profile-avatar-wrap-sm .frame-supporter-tag, .msg-avatar-frame-wrap .frame-supporter-tag,
+.friends-fav-avatar .frame-supporter-tag, .friends-sidebar-avatar-wrap .frame-supporter-tag {
+  font-size: 4.2px; padding: 1px 3px 0.5px; letter-spacing: .04em;
+}
 @keyframes sfSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @keyframes sfGlowPulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
 @keyframes sfTagGlow {
