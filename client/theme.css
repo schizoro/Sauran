@@ -1044,7 +1044,7 @@ html.auth-pending #login-screen { visibility: hidden; }
    Üst çubuk/ray/profil hepsi farklı piksel boyutunda olduğu için görsel yüzde bazlı konumlanır (bkz. script.js
    supporterFrameOverlayHtml()). Etiket: alt kısımda kırmızı dolgu + altın "SUPPORTER" yazısı, hafif nefes alır. */
 .frame-supporter { cursor: pointer; }
-.sf-overlay { position: absolute; inset: -26%; pointer-events: none; z-index: 1; }
+.sf-overlay { position: absolute; inset: -20%; pointer-events: none; z-index: 1; }
 .sf-overlay .sf-ring-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; animation: sfBreathe 2.8s ease-in-out infinite; }
 .sf-highlight { position: absolute; inset: 0; animation: sfSpin 5s linear infinite; transform-origin: 50% 50%; }
 .sf-highlight::before {
