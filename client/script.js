@@ -1735,7 +1735,7 @@ function supporterFrameOverlayHtml() {
     return `<span class="sf-overlay" aria-hidden="true">
         <img src="assets/frame-supporter.png" class="sf-ring-img" alt="">
         <span class="sf-highlight"></span>
-    </span><span class="frame-supporter-tag">SUPPORTER</span>`;
+    </span>`;
 }
 
 const AVATAR_FRAME_CLASSES = ['frame-ocean', 'frame-neon', 'frame-galaxy', 'frame-supporter'];
@@ -1753,9 +1753,7 @@ function plusBadgeHtml(isPlus) {
 function applyAvatarFrame(el, frameKey) {
     if (!el) return;
     AVATAR_FRAME_CLASSES.forEach((c) => el.classList.remove(c));
-    const old = el.querySelector(':scope > .sf-overlay, :scope > .frame-supporter-tag');
-    if (old) old.remove();
-    el.querySelectorAll(':scope > .sf-overlay, :scope > .frame-supporter-tag').forEach((n) => n.remove());
+    el.querySelectorAll(':scope > .sf-overlay').forEach((n) => n.remove());
     if (frameKey && frameKey !== 'classic') {
         el.classList.add('frame-' + frameKey);
         if (frameKey === 'supporter') el.insertAdjacentHTML('beforeend', supporterFrameOverlayHtml());
