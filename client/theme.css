@@ -1045,8 +1045,17 @@ html.auth-pending #login-screen { visibility: hidden; }
    supporterFrameOverlayHtml()). Etiket: alt kısımda kırmızı dolgu + altın "SUPPORTER" yazısı, hafif nefes alır. */
 .frame-supporter { cursor: pointer; }
 .sf-overlay { position: absolute; inset: -20%; pointer-events: none; z-index: 1; }
-.sf-overlay .sf-ring-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; animation: sfBreathe 2.8s ease-in-out infinite; }
-.sf-highlight { position: absolute; inset: 0; animation: sfSpin 5s linear infinite; transform-origin: 50% 50%; }
+/* Görsel (512px PNG) sabit kalır — üzerinde filter/brightness animasyonu koşturmak her karede yeniden
+   çizim (repaint) gerektirip performansı düşürüyordu. "Nefes alma" hissi artık ayrı, ucuz bir opacity
+   katmanıyla (yalnızca compositor, repaint yok) veriliyor. */
+.sf-overlay .sf-ring-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.sf-overlay::before {
+  content: ''; position: absolute; inset: 8%; border-radius: 50%; z-index: -1;
+  background: radial-gradient(circle, rgba(255, 180, 60, .55) 0%, rgba(255, 140, 20, .25) 55%, transparent 75%);
+  animation: sfGlowPulse 2.8s ease-in-out infinite;
+  will-change: opacity;
+}
+.sf-highlight { position: absolute; inset: 0; animation: sfSpin 5s linear infinite; transform-origin: 50% 50%; will-change: transform; }
 .sf-highlight::before {
   content: ''; position: absolute; top: 6%; left: 50%; width: 12%; height: 12%; margin-left: -6%;
   border-radius: 50%; background: radial-gradient(circle, #fff8dc 0%, rgba(255, 233, 170, .65) 45%, transparent 72%);
@@ -1062,14 +1071,13 @@ html.auth-pending #login-screen { visibility: hidden; }
 }
 .rail-avatar .frame-supporter-tag, .profile-avatar-wrap-sm .frame-supporter-tag { display: none; }
 @keyframes sfSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-@keyframes sfBreathe { 0%, 100% { filter: brightness(1) saturate(1); } 50% { filter: brightness(1.18) saturate(1.25); } }
+@keyframes sfGlowPulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
 @keyframes sfTagGlow {
-  0%, 100% { text-shadow: 0 0 2px rgba(255, 213, 74, .5); box-shadow: 0 0 0 1px rgba(255, 213, 74, .5), 0 1px 3px rgba(0,0,0,.45); }
-  50% { text-shadow: 0 0 5px rgba(255, 234, 150, .9); box-shadow: 0 0 0 1px rgba(255, 234, 150, .85), 0 1px 4px rgba(0,0,0,.5); }
+  0%, 100% { opacity: .85; } 50% { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
   .frame-ocean::after, .frame-neon::after, .frame-galaxy::after,
-  .sf-overlay .sf-ring-img, .sf-highlight, .frame-supporter-tag { animation: none; }
+  .sf-overlay::before, .sf-highlight, .frame-supporter-tag { animation: none; }
 }
 
 /* ── Market ürün kartları (gift.html'e benzer sade sayfa stiline eklenir) */
