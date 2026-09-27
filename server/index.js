@@ -76,6 +76,7 @@ const {
   saveDmSticker,
   likeHub,
   hasActivePlus,
+  grantMonthlyPlusCoins,
   listGiftProducts,
   giftProduct,
   listRecentGifts,
@@ -4018,6 +4019,16 @@ server.listen(PORT, () => {
   };
   runLikeCompaction();
   setInterval(runLikeCompaction, 24 * 60 * 60 * 1000).unref();
+
+  // Sauran Plus: aktif abonelere ay başına 100 Coin (açılışta ve günde bir; her kullanıcı-ay için tek seferlik).
+  const runPlusMonthlyCoins = () => {
+    try {
+      const { granted, month } = grantMonthlyPlusCoins();
+      if (granted) console.log(`Sauran Plus aylık Coin: ${granted} kullanıcıya ${month} için verildi.`);
+    } catch (error) { console.error('Sauran Plus aylık Coin hatası:', error); }
+  };
+  runPlusMonthlyCoins();
+  setInterval(runPlusMonthlyCoins, 24 * 60 * 60 * 1000).unref();
 
   // Admin audit log saklama temizliği (açılışta ve günde bir): eski serbest metin gerekçeler ve süresi dolan kayıtlar silinir.
   const runAuditPurge = () => {

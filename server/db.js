@@ -325,6 +325,15 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_entitlements_user ON entitlements(user_id);
 
+  -- Sauran Plus: her ay (İstanbul takvimi) bir kez 100 Coin verilir; bu tablo hangi ayın verildiğini tutar.
+  CREATE TABLE IF NOT EXISTS plus_coin_grants (
+    user_id INTEGER NOT NULL,
+    month TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, month),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
   -- Kozmetik envanter: bir kullanıcının SAHİP OLDUĞU ürünler (Market'ten alınan veya hediye edilen).
   CREATE TABLE IF NOT EXISTS user_cosmetics (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3744,6 +3753,25 @@ function hasActivePlus(userId) {
   return Boolean(db.prepare(`SELECT 1 FROM entitlements WHERE user_id = ? AND product = 'plus' AND (expires_at IS NULL OR expires_at > datetime('now')) LIMIT 1`).get(userId));
 }
 
+const PLUS_MONTHLY_COINS = 100;
+
+// Şu anki aktif tüm Plus aboneleri için, bu ay (İstanbul takvimi) henüz verilmediyse 100 Coin yükler.
+// Açılışta ve günde bir çağrılır; her kullanıcı-ay için en fazla bir kez çalışır (plus_coin_grants UNIQUE).
+function grantMonthlyPlusCoins() {
+  const month = istanbulDay().slice(0, 7); // 'YYYY-MM'
+  const activePlusUsers = db.prepare(`SELECT DISTINCT user_id FROM entitlements WHERE product = 'plus' AND (expires_at IS NULL OR expires_at > datetime('now'))`).all();
+  let granted = 0;
+  const insertGrant = db.prepare(`INSERT OR IGNORE INTO plus_coin_grants (user_id, month) VALUES (?, ?)`);
+  for (const { user_id } of activePlusUsers) {
+    const info = insertGrant.run(user_id, month);
+    if (info.changes > 0) {
+      grantCoins(user_id, PLUS_MONTHLY_COINS, 'plus_monthly', month);
+      granted += 1;
+    }
+  }
+  return { granted, month };
+}
+
 function validateFilePayload(fileData, mime, size, userId) {
   if (typeof fileData !== 'string' || !fileData.startsWith('data:')) {
     return { success: false, error: 'Geçersiz dosya formatı.' };
@@ -6312,6 +6340,7 @@ module.exports = {
   grantCosmetic,
   equipCosmetic,
   hasActivePlus,
+  grantMonthlyPlusCoins,
   GIFT_PRODUCTS,
   listGiftProducts,
   giftProduct,
