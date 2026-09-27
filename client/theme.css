@@ -1033,6 +1033,16 @@ html.auth-pending #login-screen { visibility: hidden; }
   .topbar-lobby-actions [data-lbl]::after { font-size: 8px; white-space: normal; width: max-content; max-width: 64px; text-align: center; }
 }
 
+/* 8) Lobi içi üst çubuk sıkışması: Süper Beğeni/Lobi Ayarları ikon-only (etiket yazısı yer kaplamasın),
+   üye sayısı ("N kişi") gereksiz — Üyeler'e basınca zaten panelde görünüyor, bildirim zili de burada
+   fazladan çift giriş noktası oluşturuyor (bkz. #notifications-btn üst çubukta zaten var). */
+@media (max-width: 900px) {
+  body[data-view="hub-detail"] #hub-detail-count { display: none; }
+  body[data-view="hub-detail"] #notifications-btn { display: none; }
+  .topbar-lobby-actions .topbar-superlike-btn, .topbar-lobby-actions .hub-icon-btn { padding: 0 4px; min-width: 30px; height: 30px; }
+  .topbar-lobby-actions [data-lbl]::after { display: none; }
+}
+
 /* ── Sauran Market: avatar çerçeveleri (profil, üst çubuk, sol ray) ─── */
 .profile-avatar-wrap[class*="frame-"], .rail-avatar[class*="frame-"] { overflow: visible; }
 .frame-ocean, .frame-neon, .frame-galaxy, .frame-supporter { position: relative; }
