@@ -6673,6 +6673,74 @@ function wireMsgAvatars(container) {
 // BİLDİRİM (TOAST)
 // =====================================================
 
+// Mobilde üst çubuk: Keşfet'te Coin rozeti, Lobi'de ⭐ Süper Beğeni + ⚙️ Ayarlar sağ üstte durur (düğümler taşınır, işlevleri aynı).
+const topbarHomes = new Map();
+function moveNode(el, target, before) {
+    if (!el || !target) return;
+    if (!topbarHomes.has(el)) topbarHomes.set(el, { parent: el.parentNode, next: el.nextSibling });
+    if (before) target.insertBefore(el, before); else target.appendChild(el);
+}
+function restoreNode(el) {
+    const home = topbarHomes.get(el);
+    if (home && el.parentNode !== home.parent) home.parent.insertBefore(el, home.next && home.next.parentNode === home.parent ? home.next : null);
+}
+function placeMobileTopbarItems(view) {
+    const right = document.querySelector('.topbar-right');
+    const wallet = document.getElementById('discover-wallet');
+    const gear = document.getElementById('hub-settings-open-btn');
+    const menuBtn = document.getElementById('topbar-menu-btn');
+    const mobile = window.innerWidth <= 900;
+    if (mobile && view === 'discover') moveNode(wallet, right, menuBtn); else restoreNode(wallet);
+    if (mobile && view === 'hub-detail') moveNode(gear, right, menuBtn); else restoreNode(gear);
+    const title = document.getElementById('topbar-context-title');
+    if (title) {
+        if (mobile && view === 'discover') { title.textContent = '← Keşfet'; }
+        else if (view === 'hubs') { title.textContent = t('hubs-title'); }
+    }
+    updateLobbySuperLikeButton(view);
+}
+
+document.addEventListener('click', (e) => {
+    if (e.target.id === 'topbar-context-title' && document.body.dataset.view === 'discover' && window.innerWidth <= 900) document.getElementById('rail-home')?.click();
+});
+
+let lobbySuperLikeTimer = null;
+function updateLobbySuperLikeButton(view) {
+    const btn = document.getElementById('lobby-superlike-btn');
+    if (!btn) return;
+    const show = view === 'hub-detail' && currentHub && currentHub.visibility === 'discoverable';
+    btn.style.display = show ? '' : 'none';
+    btn.classList.remove('confirming');
+    btn.dataset.confirm = '';
+}
+document.addEventListener('click', async (e) => {
+    const btn = e.target.closest && e.target.closest('#lobby-superlike-btn');
+    if (!btn || !currentHub) return;
+    if (btn.dataset.confirm !== '1') {
+        btn.dataset.confirm = '1';
+        btn.classList.add('confirming');
+        showToast('Süper Beğeni: 10 🪙 — onaylamak için tekrar dokun');
+        clearTimeout(lobbySuperLikeTimer);
+        lobbySuperLikeTimer = setTimeout(() => { btn.dataset.confirm = ''; btn.classList.remove('confirming'); }, 4000);
+        return;
+    }
+    btn.dataset.confirm = ''; btn.classList.remove('confirming'); btn.disabled = true;
+    try {
+        const r = await fetch(`/api/discover/lobbies/${currentHub.id}/super-like`, { method: 'POST', credentials: 'include' });
+        const data = await r.json();
+        if (!data.success) showToast(data.error || 'Süper Beğeni gönderilemedi.');
+        else if (typeof setWalletBalance === 'function') setWalletBalance(data.super_like.balance);
+    } catch (_) { showToast('Süper Beğeni gönderilemedi.'); }
+    btn.disabled = false;
+});
+
+// Buton açıklamaları: ikonların altında kısa (2 kelime) etiket.
+(function labelButtons() {
+    const map = { 'rail-home': 'Ana Menü', 'rail-friends': 'Arkadaşlar', 'rail-discover': 'Keşfet', 'rail-notifications': 'Bildirim', 'rail-friend': 'Arkadaş Ekle', 'rail-settings': 'Ayarlar', 'rail-profile': 'Profil',
+        'discover-search-toggle': 'Ara', 'discover-wallet': 'Coin', 'profile-btn': 'Profil', 'topbar-menu-btn': 'Menü', 'lobby-nav-toggle': 'Lobiler', 'hub-back-btn': '' };
+    Object.entries(map).forEach(([id, label]) => { const el = document.getElementById(id); if (el && label) el.dataset.lbl = label; });
+})();
+
 // Lobi içi Süper Beğeni animasyonu + son 24 saat "Destekçiler" şeridi (yalnızca profil resimleri).
 function playSuperLikeAnimation(d) {
     const el = document.createElement('div');
@@ -9394,6 +9462,9 @@ let hubCreateImageData = null;
 
 function switchToView(view) {
 
+    document.body.dataset.view = view;
+    placeMobileTopbarItems(view);
+
     hubListView.style.display = view === 'hubs' ? 'flex' : 'none';
     hubDetailView.style.display = view === 'hub-detail' ? 'flex' : 'none';
     const discoverViewEl = document.getElementById('discover-view');
@@ -9406,7 +9477,7 @@ function switchToView(view) {
 
     // "Ana Menü" başlığı üst çubukta sadece Ana Menü (Lobi listesi) ekranındayken görünür.
     const topbarContextTitle = document.getElementById('topbar-context-title');
-    if (topbarContextTitle) topbarContextTitle.style.display = view === 'hubs' ? 'block' : 'none';
+    if (topbarContextTitle) topbarContextTitle.style.display = (view === 'hubs' || (view === 'discover' && window.innerWidth <= 900)) ? 'block' : 'none';
 
     const friendsSidebar = document.getElementById('friends-sidebar');
     const friendsSidebarToggleBtn = document.getElementById('friends-sidebar-toggle-btn');
