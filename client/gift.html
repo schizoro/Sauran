@@ -42,6 +42,16 @@ body{display:block;height:auto;min-height:100vh;margin:0;padding:20px;background
       <div id="g-msg" class="g-msg"></div>
     </div>
     <div class="g-card"><strong>Son hediyeler</strong><div id="g-recent"></div></div>
+
+    <div class="g-card">
+      <strong>🖼️ Kozmetik hediye et</strong> <span style="color:#6b7280;font-size:12px;">(Market'te satılmayanlar dahil — ör. Supporter)</span>
+      <label for="g-cos-user">Alıcı kullanıcı adı</label>
+      <input id="g-cos-user" autocomplete="off" autocapitalize="off">
+      <label for="g-cos-item">Ürün</label>
+      <select id="g-cos-item"></select>
+      <button id="g-cos-send" class="g-btn" type="button">Kozmetik gönder</button>
+      <div id="g-cos-msg" class="g-msg"></div>
+    </div>
   </div>
 </div>
 <script>
@@ -69,7 +79,19 @@ body{display:block;height:auto;min-height:100vh;margin:0;padding:20px;background
     products=r.body.products;
     $('g-product').innerHTML=products.map(p=>`<option value="${esc(p.key)}">${esc(p.label)}${p.enabled?'':' (yakında)'}</option>`).join('');
     $('g-main').style.display='block';renderRecent(r.body.recent);syncProduct();
+    const c=await api('/api/admin/gifts/cosmetics/list');
+    if(c.status===200) $('g-cos-item').innerHTML=c.body.items.map(i=>`<option value="${esc(i.key)}">${esc(i.label)} (${esc(i.rarity)})</option>`).join('');
   }
+  let cosArmed=false;
+  $('g-cos-send').addEventListener('click',async()=>{
+    const username=$('g-cos-user').value.trim();
+    if(!cosArmed){cosArmed=true;$('g-cos-send').textContent=`Onayla: ${username} ← ${$('g-cos-item').selectedOptions[0]?.textContent||''}`;return;}
+    cosArmed=false;$('g-cos-send').textContent='Kozmetik gönder';$('g-cos-send').disabled=true;
+    const r=await api('/api/admin/gifts/cosmetics','POST',{username,item_key:$('g-cos-item').value});
+    $('g-cos-msg').className='g-msg '+(r.body.success?'g-ok':'g-err');
+    $('g-cos-msg').textContent=r.body.success?`Gönderildi: ${r.body.recipient} ← ${r.body.label}`:(r.body.error||'Gönderilemedi.');
+    $('g-cos-send').disabled=false;
+  });
   $('g-product').addEventListener('change',syncProduct);
   let lt;$('g-user').addEventListener('input',()=>{clearTimeout(lt);const v=$('g-user').value.trim();if(!v){$('g-lookup').textContent='';return;}lt=setTimeout(async()=>{const r=await api('/api/admin/gifts/lookup?username='+encodeURIComponent(v));$('g-lookup').className='g-msg '+(r.status===200?'g-ok':'g-err');$('g-lookup').textContent=r.status===200?`✓ ${r.body.username} — Coin bakiyesi: ${r.body.balance}`:'Kullanıcı bulunamadı.';},300);armed=false;});
   $('g-send').addEventListener('click',async()=>{

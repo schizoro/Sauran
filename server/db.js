@@ -324,6 +324,24 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
   CREATE INDEX IF NOT EXISTS idx_entitlements_user ON entitlements(user_id);
+
+  -- Kozmetik envanter: bir kullanıcının SAHİP OLDUĞU ürünler (Market'ten alınan veya hediye edilen).
+  CREATE TABLE IF NOT EXISTS user_cosmetics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    item_key TEXT NOT NULL,
+    acquired_via TEXT NOT NULL,
+    gift_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, item_key),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  -- Takılı ürün: her slotta (şimdilik yalnızca avatar_frame) en fazla bir ürün.
+  CREATE TABLE IF NOT EXISTS user_equipped (
+    user_id INTEGER PRIMARY KEY,
+    avatar_frame TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
 `);
 
 // Eski (günlük olmayan) beğeni tablosu varsa olaylara taşınır ve kaldırılır (her beğeni 5 puan).
@@ -2210,6 +2228,7 @@ function verifyAndCreateUser(email, code) {
     `).run(pending.username, pending.email, pending.password_hash, pending.password_salt, minor ? pending.minor_until : null, minor ? 'friends' : 'public');
 
     db.prepare(`DELETE FROM pending_verifications WHERE id = ?`).run(pending.id);
+    ensureClassicFrame(result.lastInsertRowid);
 
     return {
       success: true,
@@ -2828,6 +2847,64 @@ function grantCoins(userId, amount, reason, ref) {
   if (!db.prepare(`SELECT 1 FROM users WHERE id = ?`).get(userId)) return { success: false, error: 'Kullanıcı bulunamadı.' };
   db.prepare(`INSERT INTO coin_ledger (user_id, delta, reason, ref) VALUES (?, ?, ?, ?)`).run(userId, n, String(reason || 'grant'), ref == null ? null : String(ref));
   return { success: true, balance: getCoinBalance(userId) };
+}
+
+// ── Sauran Market: kozmetik ürün kaydı. Yeni ürün = buraya bir satır.
+// slot: şimdilik yalnızca 'avatar_frame'. rarity: free | rare | epic | legendary | special.
+// purchasable: Coin ile Market'ten satın alınabilir mi (henüz hiçbiri satın alınamıyor — "yakında").
+// market_visible: Market listesinde görünsün mü (Supporter gibi özel ürünler görünmez).
+// giftable: Hediye Aracı'ndan (yalnızca kurucu) verilebilir mi.
+const COSMETIC_ITEMS = {
+  classic:   { slot: 'avatar_frame', label: 'Klasik',           rarity: 'free',      price: 0,   purchasable: false, market_visible: true,  giftable: false, description: 'Varsayılan çerçeve. Herkeste otomatik bulunur.' },
+  ocean:     { slot: 'avatar_frame', label: 'Ocean',            rarity: 'rare',      price: 150, purchasable: false, market_visible: true,  giftable: true,  description: 'Hafif dalga hissi veren mavi tonlu çerçeve.' },
+  neon:      { slot: 'avatar_frame', label: 'Neon',             rarity: 'epic',      price: 300, purchasable: false, market_visible: true,  giftable: true,  description: 'Parlayan kenarlı neon çerçeve.' },
+  galaxy:    { slot: 'avatar_frame', label: 'Galaxy',           rarity: 'legendary', price: 500, purchasable: false, market_visible: true,  giftable: true,  description: 'Yıldızların hafif hareket ettiği uzay temalı çerçeve.' },
+  supporter: { slot: 'avatar_frame', label: 'Sauran Supporter', rarity: 'special',   price: null, purchasable: false, market_visible: false, giftable: true,  description: 'Sauran\'ın geliştirme döneminde projeye destek veren özel topluluk üyelerine ait. Market\'te satılmaz.' }
+};
+
+function listCosmeticItems({ includeHidden } = {}) {
+  return Object.entries(COSMETIC_ITEMS)
+    .filter(([key, item]) => includeHidden || item.market_visible)
+    .filter(([key]) => key !== 'classic')
+    .map(([key, item]) => ({ key, ...item }));
+}
+
+function ensureClassicFrame(userId) {
+  db.prepare(`INSERT OR IGNORE INTO user_cosmetics (user_id, item_key, acquired_via) VALUES (?, 'classic', 'default')`).run(userId);
+  db.prepare(`INSERT OR IGNORE INTO user_equipped (user_id, avatar_frame) VALUES (?, 'classic')`).run(userId);
+}
+
+function listUserCosmetics(userId) {
+  const rows = db.prepare(`SELECT item_key, acquired_via, created_at FROM user_cosmetics WHERE user_id = ? ORDER BY id`).all(userId);
+  return rows.map((r) => ({ ...r, ...(COSMETIC_ITEMS[r.item_key] || {}) }));
+}
+
+function getEquippedCosmetics(userId) {
+  const row = db.prepare(`SELECT avatar_frame FROM user_equipped WHERE user_id = ?`).get(userId);
+  return { avatar_frame: (row && row.avatar_frame) || 'classic' };
+}
+
+// Yönetici verme (Market henüz kapalı): envantere ekler; kuşanmaz (kullanıcı kendi seçer).
+function grantCosmetic(userId, itemKey, via, giftId) {
+  const item = COSMETIC_ITEMS[itemKey];
+  if (!item) return { success: false, status: 400, error: 'Bilinmeyen ürün.' };
+  if (!db.prepare(`SELECT 1 FROM users WHERE id = ?`).get(userId)) return { success: false, status: 404, error: 'Kullanıcı bulunamadı.' };
+  db.prepare(`INSERT OR IGNORE INTO user_cosmetics (user_id, item_key, acquired_via, gift_id) VALUES (?, ?, ?, ?)`).run(userId, itemKey, String(via || 'gift'), giftId == null ? null : String(giftId));
+  return { success: true, item_key: itemKey, label: item.label };
+}
+
+// Kullanıcı kendi sahip olduğu bir ürünü kuşanır; null = "Yok" (çerçeve kullanılmaz, Klasik dahil kaldırılır).
+function equipCosmetic(userId, slot, itemKey) {
+  if (slot !== 'avatar_frame') return { success: false, error: 'Geçersiz kategori.' };
+  if (itemKey !== null) {
+    const item = COSMETIC_ITEMS[itemKey];
+    if (!item || item.slot !== slot) return { success: false, error: 'Geçersiz ürün.' };
+    const owned = db.prepare(`SELECT 1 FROM user_cosmetics WHERE user_id = ? AND item_key = ?`).get(userId, itemKey);
+    if (!owned) return { success: false, error: 'Bu ürüne sahip değilsin.' };
+  }
+  db.prepare(`INSERT INTO user_equipped (user_id, avatar_frame) VALUES (?, ?)
+              ON CONFLICT(user_id) DO UPDATE SET avatar_frame = excluded.avatar_frame`).run(userId, itemKey);
+  return { success: true, avatar_frame: itemKey };
 }
 
 // ── Hediye Aracı: ürün kaydı. Yeni ürün = buraya bir satır (enabled:false → panelde "yakında").
@@ -4391,6 +4468,7 @@ function getUserPublicProfile(viewerId, targetId) {
     about_me: aboutVisible ? user.about_me : null,
     avatar_data: visible ? user.avatar_data : null,
     banner_data: visible ? user.banner_data : null,
+    avatar_frame: visible ? getEquippedCosmetics(targetId).avatar_frame : null,
     friendship_status: isSelf ? 'self' : friendship,
     blocked_by_me: blockedByMe
   };
@@ -4726,6 +4804,8 @@ function getAccountExport(userId) {
     messages,
     hub_memberships: hubs,
     owned_hubs: ownedHubs,
+    cosmetics: listUserCosmetics(userId),
+    equipped: getEquippedCosmetics(userId),
     gifts_received: db.prepare(`SELECT product, quantity, note, created_at FROM gifts WHERE recipient_id = ? ORDER BY id`).all(userId),
     entitlements: db.prepare(`SELECT product, expires_at, created_at FROM entitlements WHERE user_id = ? ORDER BY id`).all(userId),
     coin_ledger: db.prepare(`SELECT delta, reason, ref, created_at FROM coin_ledger WHERE user_id = ? ORDER BY id`).all(userId),
@@ -6208,6 +6288,13 @@ module.exports = {
   createDmFileMessage,
   saveDmSticker,
   likeHub,
+  COSMETIC_ITEMS,
+  listCosmeticItems,
+  ensureClassicFrame,
+  listUserCosmetics,
+  getEquippedCosmetics,
+  grantCosmetic,
+  equipCosmetic,
   GIFT_PRODUCTS,
   listGiftProducts,
   giftProduct,

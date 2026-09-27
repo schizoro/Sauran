@@ -1729,9 +1729,20 @@ function setCurrentUser(user) {
 // PROFİL GÖRÜNÜMÜ
 // =====================================================
 
+const AVATAR_FRAME_CLASSES = ['frame-ocean', 'frame-neon', 'frame-galaxy', 'frame-supporter'];
+function applyAvatarFrame(el, frameKey) {
+    if (!el) return;
+    AVATAR_FRAME_CLASSES.forEach((c) => el.classList.remove(c));
+    if (frameKey && frameKey !== 'classic') el.classList.add('frame-' + frameKey);
+}
+
 function renderProfile() {
 
     if (!currentUser) return;
+
+    applyAvatarFrame(document.getElementById('topbar-profile-avatar-wrap'), currentUser.avatar_frame);
+    applyAvatarFrame(document.getElementById('rail-profile'), currentUser.avatar_frame);
+    applyAvatarFrame(document.getElementById('profile-modal-avatar-wrap'), currentUser.avatar_frame);
 
     const color =
         getUserColor(
@@ -6173,6 +6184,7 @@ function renderOtherProfile() {
     otherProfileAvatar.style.setProperty('--user-color', color);
     otherProfileAvatar.style.display = hasAvatar ? 'none' : 'flex';
 
+    applyAvatarFrame(document.getElementById('other-profile-avatar-wrap'), profile.avatar_frame);
     otherProfileAvatarImg.src = hasAvatar ? profile.avatar_data : '';
     otherProfileAvatarImg.style.display = hasAvatar ? 'block' : 'none';
 

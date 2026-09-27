@@ -78,6 +78,12 @@ const {
   listGiftProducts,
   giftProduct,
   listRecentGifts,
+  listCosmeticItems,
+  listUserCosmetics,
+  getEquippedCosmetics,
+  grantCosmetic,
+  equipCosmetic,
+  COSMETIC_ITEMS,
   superLikeHub,
   getCoinBalance,
   grantCoins,
@@ -620,7 +626,7 @@ app.get('/api/me', (req, res) => {
       return res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
     }
 
-    return res.json({ success: true, user });
+    return res.json({ success: true, user: { ...user, avatar_frame: getEquippedCosmetics(user.id).avatar_frame } });
 
   } catch (error) {
     console.error('Session kontrol hatası:', error);
@@ -1918,6 +1924,52 @@ app.get('/api/hubs/:id/supporters', (req, res) => {
     return { user_id: r.id, username: r.username, avatar_data: masked.avatar_data || null };
   });
   res.json({ success: true, supporters });
+});
+
+// ── Sauran Market (kozmetik): görüntüleme + kendi çerçeveni kuşanma ──
+app.get('/api/market/frames', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const owned = new Set(listUserCosmetics(user.id).map((c) => c.item_key));
+  const equipped = getEquippedCosmetics(user.id).avatar_frame;
+  const items = listCosmeticItems().map((item) => ({ ...item, owned: owned.has(item.key), equipped: equipped === item.key }));
+  res.json({ success: true, items, equipped });
+});
+
+app.get('/api/me/cosmetics', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  res.json({ success: true, items: listUserCosmetics(user.id), equipped: getEquippedCosmetics(user.id) });
+});
+
+app.post('/api/me/cosmetics/equip', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const itemKey = req.body?.item_key === null ? null : String(req.body?.item_key || '');
+  const r = equipCosmetic(user.id, 'avatar_frame', itemKey || null);
+  if (!r.success) return res.status(400).json({ success: false, error: r.error });
+  res.json({ success: true, avatar_frame: r.avatar_frame });
+});
+
+// Kurucu: kozmetik ürün hediye et (Market'te satılmayanlar dahil — Supporter gibi).
+app.get('/api/admin/gifts/cosmetics/list', (req, res) => {
+  if (!requirePlatformRole(req, res, 'founder')) return;
+  res.json({ success: true, items: listCosmeticItems({ includeHidden: true }).filter((i) => i.giftable) });
+});
+
+app.post('/api/admin/gifts/cosmetics', (req, res) => {
+  const actor = requirePlatformRole(req, res, 'founder');
+  if (!actor) return;
+  const username = String(req.body?.username || '').trim();
+  const target = db.prepare(`SELECT id FROM users WHERE LOWER(username) = LOWER(?)`).get(username);
+  if (!target) return res.status(404).json({ success: false, error: 'Kullanıcı bulunamadı.' });
+  const itemKey = String(req.body?.item_key || '');
+  const item = COSMETIC_ITEMS[itemKey];
+  if (!item || !item.giftable) return res.status(400).json({ success: false, error: 'Bu ürün hediye edilemez.' });
+  const r = grantCosmetic(target.id, itemKey, 'gift', null);
+  if (!r.success) return res.status(r.status || 400).json({ success: false, error: r.error });
+  io.to(`user:${target.id}`).emit('gift_received', { label: r.label, quantity: 1, unit: 'adet' });
+  res.json({ success: true, recipient: target.username || username, item_key: itemKey, label: item.label });
 });
 
 // ── Hediye Aracı (yalnızca kurucu) ──
