@@ -75,6 +75,7 @@ const {
   createDmFileMessage,
   saveDmSticker,
   likeHub,
+  hasActivePlus,
   listGiftProducts,
   giftProduct,
   listRecentGifts,
@@ -225,11 +226,12 @@ const io = new Server(server, {
   cors: { origin: true, credentials: true, methods: ['GET', 'POST'] },
   // Bağlantı (el sıkışma) yalnızca izinli origin'den kabul edilir; izinsiz origin'e CORS başlığı olsa bile bağlantı REDDEDİLİR.
   allowRequest: (req, callback) => callback(null, isRequestOriginAllowed(req.headers.origin, req.headers.host)),
-  maxHttpBufferSize: 15_000_000
+  // Sauran Plus dosya limiti 100 MB'a çıkabildiği için (~1.4 kat base64 payı ile ~140 MB) tampon buna göre büyütüldü.
+  maxHttpBufferSize: 140_000_000
 });
 
 app.use(cors(corsOptionsDelegate));
-app.use(express.json({ limit: '15mb' }));
+app.use(express.json({ limit: '140mb' }));
 
 // =====================================================
 // RATE LIMITING (bellek içi, basit sabit pencere)
@@ -626,7 +628,7 @@ app.get('/api/me', (req, res) => {
       return res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
     }
 
-    return res.json({ success: true, user: { ...user, avatar_frame: getEquippedCosmetics(user.id).avatar_frame } });
+    return res.json({ success: true, user: { ...user, avatar_frame: getEquippedCosmetics(user.id).avatar_frame, plus_active: hasActivePlus(user.id) } });
 
   } catch (error) {
     console.error('Session kontrol hatası:', error);

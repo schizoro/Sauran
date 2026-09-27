@@ -7391,7 +7391,10 @@ document.getElementById('forward-modal-close-btn').addEventListener('click', () 
 // DOSYA / FOTOĞRAF / VİDEO MESAJLARI
 // =====================================================
 
-const FILE_MAX_BYTES = 10 * 1024 * 1024;
+const FILE_MAX_BYTES_FREE = 25 * 1024 * 1024;
+const FILE_MAX_BYTES_PLUS = 100 * 1024 * 1024;
+function currentFileMaxBytes() { return (currentUser && currentUser.plus_active) ? FILE_MAX_BYTES_PLUS : FILE_MAX_BYTES_FREE; }
+function fileMaxLabel() { return `${Math.round(currentFileMaxBytes() / (1024 * 1024))} MB`; }
 
 function formatFileSize(bytes) {
     bytes = Number(bytes) || 0;
@@ -7488,8 +7491,8 @@ async function handleAttachedFile(file) {
 
     const isVideo = file.type.startsWith('video/');
 
-    if (file.size > FILE_MAX_BYTES) {
-        showToast(isVideo ? t('video-limit-toast') : t('file-limit-toast'));
+    if (file.size > currentFileMaxBytes()) {
+        showToast((isVideo ? 'Video limiti ' : 'Dosya limiti ') + fileMaxLabel() + "'dir.");
         return null;
     }
 

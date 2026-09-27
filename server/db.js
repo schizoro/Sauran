@@ -2912,7 +2912,7 @@ function equipCosmetic(userId, slot, itemKey) {
 // type: 'balance' (miktar kurucu belirler) | 'timed' (gün) | 'item' (tek seferlik/kalıcı hak)
 const GIFT_PRODUCTS = {
   coin:          { label: 'Sauran Coin',        type: 'balance', enabled: true,  min: 1, max: 100000, unit: 'Coin' },
-  plus:          { label: 'Sauran Plus',        type: 'timed',   enabled: false, min: 1, max: 3650,   unit: 'gün' },
+  plus:          { label: 'Sauran Plus',        type: 'timed',   enabled: true,  min: 1, max: 3650,   unit: 'gün' },
   premium:       { label: 'Sauran Premium',     type: 'timed',   enabled: false, min: 1, max: 3650,   unit: 'gün' },
   profile_theme: { label: 'Profil teması',      type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
   profile_effect:{ label: 'Profil efekti',      type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
@@ -3735,23 +3735,32 @@ function createHubVoiceMessage(hubId, userId, username, audioData, duration) {
   return { success: true, message: getMessageById(info.lastInsertRowid) };
 }
 
-const FILE_MAX_BYTES = 10 * 1024 * 1024;
+const FILE_MAX_BYTES_FREE = 25 * 1024 * 1024;
+const FILE_MAX_BYTES_PLUS = 100 * 1024 * 1024;
 
-function validateFilePayload(fileData, mime, size) {
+// Sauran Plus: aktif abonelik var mı (entitlements'ta süresi geçmemiş 'plus' kaydı).
+function hasActivePlus(userId) {
+  if (!userId) return false;
+  return Boolean(db.prepare(`SELECT 1 FROM entitlements WHERE user_id = ? AND product = 'plus' AND (expires_at IS NULL OR expires_at > datetime('now')) LIMIT 1`).get(userId));
+}
+
+function validateFilePayload(fileData, mime, size, userId) {
   if (typeof fileData !== 'string' || !fileData.startsWith('data:')) {
     return { success: false, error: 'Geçersiz dosya formatı.' };
   }
 
+  const maxBytes = hasActivePlus(userId) ? FILE_MAX_BYTES_PLUS : FILE_MAX_BYTES_FREE;
+  const maxLabel = `${Math.round(maxBytes / (1024 * 1024))} MB`;
   const declaredSize = Number(size) || 0;
-  if (declaredSize > FILE_MAX_BYTES) {
+  if (declaredSize > maxBytes) {
     const isVideo = String(mime || '').startsWith('video/');
-    return { success: false, error: isVideo ? 'Video limiti 10 MB\'dir.' : 'Dosya limiti 10 MB\'dir.' };
+    return { success: false, error: isVideo ? `Video limiti ${maxLabel}'dir.` : `Dosya limiti ${maxLabel}'dir.` };
   }
 
   // base64 payload gerçek boyutu ~4/3 katı büyür; ekstra pay bırakarak sunucu tarafında da doğrula.
-  if (fileData.length > FILE_MAX_BYTES * 1.4) {
+  if (fileData.length > maxBytes * 1.4) {
     const isVideo = String(mime || '').startsWith('video/');
-    return { success: false, error: isVideo ? 'Video limiti 10 MB\'dir.' : 'Dosya limiti 10 MB\'dir.' };
+    return { success: false, error: isVideo ? `Video limiti ${maxLabel}'dir.` : `Dosya limiti ${maxLabel}'dir.` };
   }
 
   return { success: true };
@@ -3760,7 +3769,7 @@ function validateFilePayload(fileData, mime, size) {
 function createHubFileMessage(hubId, userId, username, file) {
   const { data, name, mime, size } = file || {};
 
-  const check = validateFilePayload(data, mime, size);
+  const check = validateFilePayload(data, mime, size, userId);
   if (!check.success) return check;
 
   const kind = String(mime || '').startsWith('image/') ? 'image'
@@ -4957,7 +4966,7 @@ function createDmFileMessage(fromId, fromUsername, toId, file) {
 
   const { data, name, mime, size } = file || {};
 
-  const check = validateFilePayload(data, mime, size);
+  const check = validateFilePayload(data, mime, size, fromId);
   if (!check.success) return check;
 
   const kind = String(mime || '').startsWith('image/') ? 'dm_image'
@@ -6302,6 +6311,7 @@ module.exports = {
   getEquippedCosmetics,
   grantCosmetic,
   equipCosmetic,
+  hasActivePlus,
   GIFT_PRODUCTS,
   listGiftProducts,
   giftProduct,
