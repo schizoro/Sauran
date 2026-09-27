@@ -368,7 +368,7 @@ if (!hubMembersColumns.includes('muted')) {
 if (!hubMembersColumns.includes('permission_tier')) {
   db.exec(`ALTER TABLE hub_members ADD COLUMN permission_tier TEXT NOT NULL DEFAULT 'member'`);
 
-  // Mevcut Hub sahiplerini geriye dönük olarak 'owner' yap.
+  // Mevcut Lobi sahiplerini geriye dönük olarak 'owner' yap.
   db.exec(`
     UPDATE hub_members SET permission_tier = 'owner'
     WHERE user_id = (SELECT created_by FROM hubs WHERE hubs.id = hub_members.hub_id)
@@ -674,7 +674,7 @@ function updateNotificationPreferences(userId, patch) {
   return { success: true, preferences: getNotificationPreferences(userId) };
 }
 
-// Tek merkezi bildirim yazma noktası — tüm özellikler (arkadaşlık, Hub
+// Tek merkezi bildirim yazma noktası — tüm özellikler (arkadaşlık, Lobi
 // daveti, aramalar, vb.) bildirim oluşturmak için bunu kullanmalı, kendi
 // INSERT'ini yazmamalı.
 function createNotification(userId, type, data) {
@@ -1376,12 +1376,12 @@ function listModerationHistory(reportId) {
 }
 
 // =====================================================
-// v1.25 MIGRATION — PLATFORM YETKİ SİSTEMİ (Hub rollerinden AYRI)
+// v1.25 MIGRATION — PLATFORM YETKİ SİSTEMİ (Lobi rollerinden AYRI)
 // =====================================================
 // users.platform_role, Sauran platformu genelindeki yetkiyi tutar
 // (user/moderator/admin/founder). Bu, hub_members.permission_tier
 // (owner/moderator/member) ile KARIŞTIRILMAMALI — bir kullanıcı aynı anda
-// platform_role='user' VE bir Hub'da permission_tier='owner' olabilir; bu
+// platform_role='user' VE bir Lobi'da permission_tier='owner' olabilir; bu
 // ona platform moderasyon yetkisi VERMEZ. Web arayüzünden hiç kimse kendi
 // platform_role'ünü değiştiremez — bu kolon sadece CLI'den (admin.js
 // set-role) yazılabilir.
@@ -2477,7 +2477,7 @@ function createHub(userId, { name, image_data, ...discovery }) {
     name = String(name || '').trim();
 
     if (!name || name.length < 3 || name.length > 40) {
-      return { success: false, error: 'Hub adı 3-40 karakter olmalıdır.' };
+      return { success: false, error: 'Lobi adı 3-40 karakter olmalıdır.' };
     }
 
     if (image_data && !/^data:image\/(png|jpe?g|webp|gif);base64,/.test(image_data)) {
@@ -2507,15 +2507,15 @@ function createHub(userId, { name, image_data, ...discovery }) {
     return { success: true, id: hubId };
 
   } catch (error) {
-    console.error('Hub oluşturma hatası:', error);
-    return { success: false, error: 'Hub oluşturulamadı.' };
+    console.error('Lobi oluşturma hatası:', error);
+    return { success: false, error: 'Lobi oluşturulamadı.' };
   }
 }
 
 function updateHub(hubId, userId, { name, image_data, ...discovery }) {
   const hub = db.prepare(`SELECT * FROM hubs WHERE id = ?`).get(hubId);
-  if (!hub) return { success: false, error: 'Hub bulunamadı.' };
-  if (hub.created_by !== userId) return { success: false, error: 'Sadece Hub sahibi düzenleyebilir.' };
+  if (!hub) return { success: false, error: 'Lobi bulunamadı.' };
+  if (hub.created_by !== userId) return { success: false, error: 'Sadece Lobi sahibi düzenleyebilir.' };
 
   // Keşfet alanları: hepsi doğrulanmadan hiçbir alan (ad/görsel dahil) değiştirilmez.
   const discoveryInput = {};
@@ -2526,7 +2526,7 @@ function updateHub(hubId, userId, { name, image_data, ...discovery }) {
   if (name !== undefined) {
     name = String(name || '').trim();
     if (!name || name.length < 3 || name.length > 40) {
-      return { success: false, error: 'Hub adı 3-40 karakter olmalıdır.' };
+      return { success: false, error: 'Lobi adı 3-40 karakter olmalıdır.' };
     }
     db.prepare(`UPDATE hubs SET name = ? WHERE id = ?`).run(name, hubId);
   }
@@ -2969,7 +2969,7 @@ function generateInviteCode() {
 
 function createHubInvite(hubId, userId) {
   if (!isHubMember(hubId, userId)) {
-    return { success: false, error: 'Bu Hub\'a üye değilsin.' };
+    return { success: false, error: 'Bu Lobi\'a üye değilsin.' };
   }
 
   const code = generateInviteCode();
@@ -2994,11 +2994,11 @@ function joinHubByCode(code, userId) {
   }
 
   if (isHubMember(invite.hub_id, userId)) {
-    return { success: false, error: 'Bu Hub\'a zaten üyesin.' };
+    return { success: false, error: 'Bu Lobi\'a zaten üyesin.' };
   }
 
   if (db.prepare(`SELECT 1 FROM hub_bans WHERE hub_id = ? AND user_id = ?`).get(invite.hub_id, userId)) {
-    return { success: false, error: 'Bu Hub\'dan banlandın.' };
+    return { success: false, error: 'Bu Lobi\'dan banlandın.' };
   }
 
   db.prepare(`INSERT INTO hub_members (hub_id, user_id) VALUES (?, ?)`).run(invite.hub_id, userId);
@@ -3046,7 +3046,7 @@ function getHubDetail(hubId, userId) {
 function setHubRole(hubId, userId, roleId) {
   try {
     if (!isHubMember(hubId, userId)) {
-      return { success: false, error: 'Bu Hub\'a üye değilsin. Önce bir davet koduyla katılmalısın.' };
+      return { success: false, error: 'Bu Lobi\'a üye değilsin. Önce bir davet koduyla katılmalısın.' };
     }
 
     if (roleId) {
@@ -3072,7 +3072,7 @@ function setHubRole(hubId, userId, roleId) {
     return { success: true };
 
   } catch (error) {
-    console.error('Hub katılım hatası:', error);
+    console.error('Lobi katılım hatası:', error);
     return { success: false, error: 'Katılınamadı.' };
   }
 }
@@ -3092,8 +3092,8 @@ function setHubMuted(hubId, userId, muted) {
 
 function addHubRole(hubId, userId, { name, icon, slot_limit }) {
   const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
-  if (!hub) return { success: false, error: 'Hub bulunamadı.' };
-  if (hub.created_by !== userId) return { success: false, error: 'Yalnızca Hub sahibi rol ekleyebilir.' };
+  if (!hub) return { success: false, error: 'Lobi bulunamadı.' };
+  if (hub.created_by !== userId) return { success: false, error: 'Yalnızca Lobi sahibi rol ekleyebilir.' };
 
   const roleName = String(name || '').trim().slice(0, 24);
   if (!roleName) return { success: false, error: 'Rol adı gerekli.' };
@@ -3132,12 +3132,12 @@ function hasAtLeastTier(hubId, userId, minTier) {
 
 function setModerator(hubId, actorId, targetId, isModerator) {
   if (!hasAtLeastTier(hubId, actorId, 'owner')) {
-    return { success: false, error: 'Yalnızca Hub sahibi moderatör atayabilir.' };
+    return { success: false, error: 'Yalnızca Lobi sahibi moderatör atayabilir.' };
   }
 
   const targetTier = getMemberTier(hubId, targetId);
-  if (!targetTier) return { success: false, error: 'Kullanıcı bu Hub\'ın üyesi değil.' };
-  if (targetTier === 'owner') return { success: false, error: 'Hub sahibinin yetkisi değiştirilemez.' };
+  if (!targetTier) return { success: false, error: 'Kullanıcı bu Lobi\'ın üyesi değil.' };
+  if (targetTier === 'owner') return { success: false, error: 'Lobi sahibinin yetkisi değiştirilemez.' };
 
   db.prepare(`UPDATE hub_members SET permission_tier = ? WHERE hub_id = ? AND user_id = ?`)
     .run(isModerator ? 'moderator' : 'member', hubId, targetId);
@@ -3153,10 +3153,10 @@ function kickMember(hubId, actorId, targetId) {
 
   const actorTier = getMemberTier(hubId, actorId);
   const targetTier = getMemberTier(hubId, targetId);
-  if (!targetTier) return { success: false, error: 'Kullanıcı bu Hub\'ın üyesi değil.' };
-  if (targetTier === 'owner') return { success: false, error: 'Hub sahibi atılamaz.' };
+  if (!targetTier) return { success: false, error: 'Kullanıcı bu Lobi\'ın üyesi değil.' };
+  if (targetTier === 'owner') return { success: false, error: 'Lobi sahibi atılamaz.' };
   if (targetTier === 'moderator' && actorTier !== 'owner') {
-    return { success: false, error: 'Yalnızca Hub sahibi bir moderatörü atabilir.' };
+    return { success: false, error: 'Yalnızca Lobi sahibi bir moderatörü atabilir.' };
   }
 
   db.prepare(`DELETE FROM hub_members WHERE hub_id = ? AND user_id = ?`).run(hubId, targetId);
@@ -3561,7 +3561,7 @@ function editMessage(messageId, userId, newContent) {
 }
 
 function saveHubMessage(hubId, userId, username, content, replyToMessageId = null) {
-  // Yanıtlanan mesaj aynı Hub'a ait değilse (ör. silinmiş/başka Hub) sessizce
+  // Yanıtlanan mesaj aynı Lobi'a ait değilse (ör. silinmiş/başka Lobi) sessizce
   // yok sayılır — mesaj yine de gönderilir, sadece yanıt bağlantısı kurulmaz.
   let validReplyId = null;
   if (replyToMessageId) {
@@ -3781,7 +3781,7 @@ function setHubDailyRoomName(hubId, roomName) {
 }
 
 // =====================================================
-// SESLİ ODALAR (Hub içinde birden fazla oda)
+// SESLİ ODALAR (Lobi içinde birden fazla oda)
 // =====================================================
 
 function listVoiceRooms(hubId) {
@@ -3794,8 +3794,8 @@ const MAX_VOICE_ROOMS_PER_HUB = 5;
 
 function createVoiceRoom(hubId, userId, name) {
   const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
-  if (!hub) return { success: false, error: 'Hub bulunamadı.' };
-  if (hub.created_by !== userId) return { success: false, error: 'Yalnızca Hub sahibi sesli oda açabilir.' };
+  if (!hub) return { success: false, error: 'Lobi bulunamadı.' };
+  if (hub.created_by !== userId) return { success: false, error: 'Yalnızca Lobi sahibi sesli oda açabilir.' };
 
   name = String(name || '').trim().slice(0, 40);
   if (!name) return { success: false, error: 'Oda adı gerekli.' };
@@ -3812,8 +3812,8 @@ function createVoiceRoom(hubId, userId, name) {
 
 function deleteVoiceRoom(hubId, userId, roomId) {
   const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
-  if (!hub) return { success: false, error: 'Hub bulunamadı.' };
-  if (hub.created_by !== userId) return { success: false, error: 'Yalnızca Hub sahibi sesli odayı silebilir.' };
+  if (!hub) return { success: false, error: 'Lobi bulunamadı.' };
+  if (hub.created_by !== userId) return { success: false, error: 'Yalnızca Lobi sahibi sesli odayı silebilir.' };
 
   // Oda kaydı silinirken ilgili Daily odasının adı AYNI transaction'da kalıcı silme kuyruğuna (daily_room_cleanup) yazılır; Daily çağrısı transaction'a
   // katılmaz, DB işlemi başarılı olduktan sonra çağıran tarafından denenir (başarısızsa kuyruk yeniden dener). Adı olmayan oda hiç açılmamıştır.
@@ -3845,7 +3845,7 @@ function getVoiceRoom(roomId) {
   return db.prepare(`SELECT id, hub_id, name, created_by FROM hub_voice_rooms WHERE id = ?`).get(roomId);
 }
 
-// Lobi sohbetini tamamen temizler. Yalnızca Hub sahibi ve lobi moderatörleri.
+// Lobi sohbetini tamamen temizler. Yalnızca Lobi sahibi ve lobi moderatörleri.
 // Tepkiler ve anket oyları messages'a bağlı ON DELETE CASCADE ile birlikte silinir.
 function clearHubMessages(hubId, userId) {
   if (!hasAtLeastTier(hubId, userId, 'moderator')) {
@@ -3922,8 +3922,8 @@ function purgeHubData(hubId) {
 
 function deleteHub(hubId, userId) {
   const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
-  if (!hub) return { success: false, error: 'Hub bulunamadı.' };
-  if (hub.created_by !== userId) return { success: false, error: 'Yalnızca Hub sahibi silebilir.' };
+  if (!hub) return { success: false, error: 'Lobi bulunamadı.' };
+  if (hub.created_by !== userId) return { success: false, error: 'Yalnızca Lobi sahibi silebilir.' };
 
   const purged = db.transaction(() => purgeHubData(hubId))();
 
@@ -4188,15 +4188,15 @@ function sendHubInviteNotification(hubId, fromUserId, fromUsername, toUserId) {
   }
 
   if (!isHubMember(hubId, fromUserId)) {
-    return { success: false, error: 'Bu Hub\'a üye değilsin.' };
+    return { success: false, error: 'Bu Lobi\'a üye değilsin.' };
   }
 
   if (isHubMember(hubId, toUserId)) {
-    return { success: false, error: 'Bu kişi zaten Hub\'a üye.' };
+    return { success: false, error: 'Bu kişi zaten Lobi\'a üye.' };
   }
 
   const hub = db.prepare(`SELECT id, name, icon, image_data FROM hubs WHERE id = ?`).get(hubId);
-  if (!hub) return { success: false, error: 'Hub bulunamadı.' };
+  if (!hub) return { success: false, error: 'Lobi bulunamadı.' };
 
   const existing = db.prepare(`
     SELECT id FROM notifications
@@ -4447,7 +4447,7 @@ function createReport(reporterId, { target_type, target_id, reason, description 
   const targetId = Number(target_id);
   if (!targetId) return { success: false, error: 'Geçersiz hedef.' };
 
-  // Kendi hesabını veya kendi sahibi olduğun Hub'ı bildiremezsin — sadece
+  // Kendi hesabını veya kendi sahibi olduğun Lobi'ı bildiremezsin — sadece
   // istemci tarafında buton gizlemekle yetinmiyoruz, API'ye doğrudan istek
   // atılsa bile burada reddediliyor.
   if (target_type === 'user' && targetId === reporterId) {
@@ -4456,7 +4456,7 @@ function createReport(reporterId, { target_type, target_id, reason, description 
   if (target_type === 'hub') {
     const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(targetId);
     if (hub && hub.created_by === reporterId) {
-      return { success: false, error: 'Kendi Hub\'ını bildiremezsin.' };
+      return { success: false, error: 'Kendi Lobi\'ını bildiremezsin.' };
     }
   }
 
@@ -4550,7 +4550,7 @@ function describeReportTarget(targetType, targetId) {
     }
     if (targetType === 'hub') {
       const h = db.prepare(`SELECT name FROM hubs WHERE id = ?`).get(targetId);
-      return h ? `Hub: ${h.name}` : 'Hub (silinmiş)';
+      return h ? `Lobi: ${h.name}` : 'Lobi (silinmiş)';
     }
     if (targetType === 'message') {
       const m = db.prepare(`SELECT username, content, kind, payload FROM messages WHERE id = ?`).get(targetId);
@@ -4959,7 +4959,7 @@ function getMessageReactions(messageId, viewerId) {
   return rows.map(r => ({ emoji: r.emoji, count: r.count, reactedByMe: r.mine > 0 }));
 }
 
-// Bir mesaja erişimi olup olmadığını doğrular — Hub üyesi mi, ya da DM'in
+// Bir mesaja erişimi olup olmadığını doğrular — Lobi üyesi mi, ya da DM'in
 // göndereni/alıcısı mı. Reaction/pin/forward hepsi bunu kullanıyor; başka bir
 // kullanıcının hiç erişemediği bir message ID'sine işlem yapılamaz.
 function getMessageAccessInfo(messageId, actorId) {
@@ -5001,14 +5001,14 @@ function removeReaction(messageId, userId, emoji) {
   return { success: true, hub_id: msg.hub_id, to_user_id: msg.to_user_id, reactions: getMessageReactions(messageId, userId) };
 }
 
-// Sabitleme SADECE Hub yetkisi (hasAtLeastTier) üzerinden çalışır — platform_role
-// (moderator/admin/founder) burada hiç kontrol edilmiyor, bilerek. Bir Hub'ın
+// Sabitleme SADECE Lobi yetkisi (hasAtLeastTier) üzerinden çalışır — platform_role
+// (moderator/admin/founder) burada hiç kontrol edilmiyor, bilerek. Bir Lobi'ın
 // sahibi/moderatörü olmayan platform admini bile normal bir üye gibi davranır.
 function pinMessage(messageId, userId) {
   const msg = db.prepare(`SELECT id, hub_id, kind FROM messages WHERE id = ?`).get(messageId);
   if (!msg) return { success: false, error: 'Mesaj bulunamadı.' };
-  if (!msg.hub_id) return { success: false, error: 'Sadece Hub mesajları sabitlenebilir.' };
-  if (!hasAtLeastTier(msg.hub_id, userId, 'moderator')) return { success: false, error: 'Bu işlem için Hub yetkin yok.' };
+  if (!msg.hub_id) return { success: false, error: 'Sadece Lobi mesajları sabitlenebilir.' };
+  if (!hasAtLeastTier(msg.hub_id, userId, 'moderator')) return { success: false, error: 'Bu işlem için Lobi yetkin yok.' };
   if (msg.kind === 'deleted') return { success: false, error: 'Silinmiş mesaj sabitlenemez.' };
 
   db.prepare(`UPDATE messages SET pinned_at = CURRENT_TIMESTAMP, pinned_by = ? WHERE id = ?`).run(userId, messageId);
@@ -5019,15 +5019,15 @@ function pinMessage(messageId, userId) {
 function unpinMessage(messageId, userId) {
   const msg = db.prepare(`SELECT id, hub_id FROM messages WHERE id = ?`).get(messageId);
   if (!msg) return { success: false, error: 'Mesaj bulunamadı.' };
-  if (!msg.hub_id) return { success: false, error: 'Sadece Hub mesajları sabitlenebilir.' };
-  if (!hasAtLeastTier(msg.hub_id, userId, 'moderator')) return { success: false, error: 'Bu işlem için Hub yetkin yok.' };
+  if (!msg.hub_id) return { success: false, error: 'Sadece Lobi mesajları sabitlenebilir.' };
+  if (!hasAtLeastTier(msg.hub_id, userId, 'moderator')) return { success: false, error: 'Bu işlem için Lobi yetkin yok.' };
 
   db.prepare(`UPDATE messages SET pinned_at = NULL, pinned_by = NULL WHERE id = ?`).run(messageId);
 
   return { success: true, hub_id: msg.hub_id, message: getMessageById(messageId, userId) };
 }
 
-// Forward v1: yalnızca arkadaşlar arasındaki DM'lere. Hub->Hub veya Hub->DM
+// Forward v1: yalnızca arkadaşlar arasındaki DM'lere. Lobi->Lobi veya Lobi->DM
 // forwarding bilerek desteklenmiyor (bkz. AŞAMA D analiz notu) — ayrı bir
 // sonraki aşamaya bırakıldı.
 const FORWARD_KIND_MAP = {

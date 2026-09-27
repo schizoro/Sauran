@@ -3328,7 +3328,7 @@ const I18N = {
     'change-image': { tr: 'Görseli Değiştir', en: 'Change Image' },
     'modal-hub-settings': { tr: '⚙️ Lobi Ayarları', en: '⚙️ Lobby Settings' },
     'modal-invite-friend': { tr: 'Arkadaşını Davet Et', en: 'Invite a Friend' },
-    'modal-invite-friend-subtitle': { tr: 'Lobiye katılmasını istediğin arkadaşını seç.', en: 'Pick the friend you want to invite to the Hub.' },
+    'modal-invite-friend-subtitle': { tr: 'Lobiye katılmasını istediğin arkadaşını seç.', en: 'Pick the friend you want to invite to the lobby.' },
     'modal-notifications': { tr: '🔔 Bildirimler', en: '🔔 Notifications' },
     'modal-join-code': { tr: '🔑 Davet Koduyla Katıl', en: '🔑 Join with Invite Code' },
     'modal-invite-code': { tr: '🔑 Davet Kodu', en: '🔑 Invite Code' },
@@ -4008,7 +4008,7 @@ function connectToChat() {
 
 
     // -------------------------------------------------
-    // Hub mesajları
+    // Lobi mesajları
     // -------------------------------------------------
 
     socket.on(
@@ -4245,7 +4245,13 @@ function connectToChat() {
         showToast(t('discover-new-request'));
         if (currentHub && hubSettingsModal.style.display === 'flex') openHub(currentHub.id);
     });
-    socket.on('hub_super_like', () => showToast(t('discover-super-received')));
+    socket.on('lobby_super_like_owner', () => showToast(t('discover-super-received')));
+    socket.on('lobby_super_like', (d) => {
+        if (currentHub && currentHub.id === d.lobby_id) {
+            loadLobbySupporters(d.lobby_id);
+            if (document.visibilityState === 'visible') playSuperLikeAnimation(d);
+        }
+    });
     socket.on('gift_received', (g) => { showToast('🎁 Hediye aldın: ' + g.quantity + ' ' + g.unit + ' ' + g.label); if (typeof loadWallet === 'function') loadWallet(); });
     socket.on('hub_join_decision', (data) => {
         showToast(t(data && data.approved ? 'discover-decision-approved' : 'discover-decision-rejected'));
@@ -5457,7 +5463,7 @@ function renderUsersList(list, isHubMembers) {
 
     if (list.length === 0) {
 
-        usersList.innerHTML = `<div class="users-list-empty">${isHubMembers ? 'Bu Hub\'da kimse yok.' : 'Henüz arkadaşın yok. Yukarıdan ekleyebilirsin.'}</div>`;
+        usersList.innerHTML = `<div class="users-list-empty">${isHubMembers ? 'Bu Lobi\'da kimse yok.' : 'Henüz arkadaşın yok. Yukarıdan ekleyebilirsin.'}</div>`;
         return;
 
     }
@@ -6613,7 +6619,7 @@ function removeDmMessage(messageId) {
 
 
 // =====================================================
-// MESAJ AVATARI (Hub + DM ortak)
+// MESAJ AVATARI (Lobi + DM ortak)
 // =====================================================
 
 // Profil görseli gizlilik ayarına göre sunucu tarafından süzülür. Canlı (yayın) mesajlarda alıcıya özel içerik üretilemediğinden başkasının görseli gelmeyebilir;
@@ -6667,6 +6673,33 @@ function wireMsgAvatars(container) {
 // BİLDİRİM (TOAST)
 // =====================================================
 
+// Lobi içi Süper Beğeni animasyonu + son 24 saat "Destekçiler" şeridi (yalnızca profil resimleri).
+function playSuperLikeAnimation(d) {
+    const el = document.createElement('div');
+    el.className = 'super-like-burst';
+    const who = d.by_owner ? 'Lobi sahibi' : d.username;
+    el.innerHTML = `<div class="slb-star">⭐</div><div class="slb-text">${escapeHtml(who)} Lobiye Süper Beğeni attı!</div>`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 3200);
+}
+
+async function loadLobbySupporters(lobbyId) {
+    const box = document.getElementById('lobby-supporters');
+    if (!box) return;
+    try {
+        const res = await fetch(`/api/hubs/${lobbyId}/supporters`, { credentials: 'same-origin' });
+        const data = await res.json();
+        if (!currentHub || currentHub.id !== lobbyId) return;
+        const list = (data && data.success && data.supporters) || [];
+        if (!list.length) { box.hidden = true; box.innerHTML = ''; return; }
+        box.innerHTML = '<span class="ls-label">⭐ Destekçiler (24 sa)</span>' + list.map((s) => {
+            const inner = s.avatar_data ? `<img src="${escapeAttr(s.avatar_data)}" alt="">` : escapeHtml(s.username.charAt(0).toUpperCase());
+            return `<span class="ls-avatar" title="${escapeAttr(s.username)}">${inner}</span>`;
+        }).join('');
+        box.hidden = false;
+    } catch (_) { /* şerit ikincil; sessizce geç */ }
+}
+
 function showToast(message) {
 
     const container = document.getElementById('toast-container');
@@ -6707,7 +6740,7 @@ function showCenterToast(message) {
 // Reply / Reaction / Copy / CopyLink / Forward / Pin — Edit/Delete/Report
 // zaten vardı (yukarıda), burada yeniden yazılmadı, sadece aynı modül
 // üzerinden çağrılıyor. Hem renderHubMessageIntoWrap hem renderDmMessageIntoWrap
-// TEK bu modülü kullanıyor — Hub/DM için ayrı ayrı tekrar eden kod yok.
+// TEK bu modülü kullanıyor — Lobi/DM için ayrı ayrı tekrar eden kod yok.
 
 const QUICK_REACTION_EMOJIS = ['❤️', '😂', '👍', '🔥', '😮'];
 const ALL_REACTION_EMOJIS = ['❤️', '😂', '👍', '👎', '😮', '😢', '🔥'];
@@ -6723,7 +6756,7 @@ function getMessagePermissions(msg, opts) {
     const isDeleted = msg.kind === 'deleted';
     const isPinned = Boolean(msg.pinned_at);
 
-    // ÖNEMLİ: Pin yetkisi SADECE Hub izin sistemi (hasAtLeastTier) üzerinden —
+    // ÖNEMLİ: Pin yetkisi SADECE Lobi izin sistemi (hasAtLeastTier) üzerinden —
     // platform_role (moderator/admin/founder) burada hiç kontrol edilmiyor.
     // Bu görsel kontrol sadece UX içindir; asıl güvenlik server'da (bkz. pinMessage).
     const canPin = opts.context === 'hub' && !isDeleted && currentHub &&
@@ -7633,7 +7666,7 @@ wireAttachMenu('hub', async (file) => {
         if (!data.success) showToast(data.error || 'Gönderilemedi.');
 
     } catch (error) {
-        console.error('Hub dosyası gönderilemedi:', error);
+        console.error('Lobi dosyası gönderilemedi:', error);
         showToast('Gönderilemedi.');
     }
 
@@ -7655,7 +7688,7 @@ wireStickerPicker('hub', async (stickerId) => {
         if (!data.success) showToast(data.error || 'Gönderilemedi.');
 
     } catch (error) {
-        console.error('Hub çıkartması gönderilemedi:', error);
+        console.error('Lobi çıkartması gönderilemedi:', error);
         showToast('Gönderilemedi.');
     }
 
@@ -7712,7 +7745,7 @@ let voiceRoomsCache = [];
 let currentVoiceRoomId = null;
 let currentVoiceRoomName = '';
 
-// Sesli oda oturumu (13A): Hub ekranından çıkılsa bile korunur; üyelik
+// Sesli oda oturumu (13A): Lobi ekranından çıkılsa bile korunur; üyelik
 // durumunun tek doğru kaynağı sunucudur (socket ile gelen anlık görüntü).
 let currentVoiceRoomHubId = null;
 let currentVoiceParticipants = []; // [{ user_id, username, muted }]
@@ -7729,7 +7762,7 @@ let voiceLocalSpeaking = false;
 let voiceRemoteSpeaking = new Set();
 let voiceSpeakingIds = new Set();
 const voiceRoomsExpanded = new Set(); // "Odadakiler" listesi açık olan oda id'leri
-const voiceAvatarCache = new Map(); // userId -> avatar_data (Hub değişse de kalır)
+const voiceAvatarCache = new Map(); // userId -> avatar_data (Lobi değişse de kalır)
 
 const hubInRoomCount = document.getElementById('hub-in-room-count');
 const callMuteBtn = document.getElementById('call-mute-btn');
@@ -9223,7 +9256,7 @@ hubSettingsSaveBtn.addEventListener('click', async () => {
         openHub(currentHub.id);
 
     } catch (error) {
-        console.error('Hub ayarları kaydedilemedi:', error);
+        console.error('Lobi ayarları kaydedilemedi:', error);
         hubSettingsError.textContent = 'Kaydedilemedi.';
     }
 
@@ -9382,7 +9415,7 @@ function switchToView(view) {
     friendsSidebarToggleBtn.style.display = showFriendsSidebar ? 'flex' : 'none';
 
     // Masaüstünde panel varsayılan olarak açık kalsın (yeterli yer var),
-    // ama mobilde (≤768px) sayfa açılır açılmaz Hub listesinin üzerine
+    // ama mobilde (≤768px) sayfa açılır açılmaz Lobi listesinin üzerine
     // binmesin diye varsayılan olarak kapalı gelsin — kullanıcı istediğinde
     // çentikten açabilir. Kullanıcının panel açıkken elle kapatması/açması
     // bu mantığı ezmesin diye bu sadece görünüme geçişte bir kez uygulanır.
@@ -9480,7 +9513,7 @@ async function loadHubList() {
 
     } catch (error) {
 
-        console.error('Hub listesi alınamadı:', error);
+        console.error('Lobi listesi alınamadı:', error);
 
     }
 
@@ -9576,7 +9609,7 @@ hubCreateSubmitBtn.addEventListener(
 
         } catch (error) {
 
-            console.error('Hub oluşturulamadı:', error);
+            console.error('Lobi oluşturulamadı:', error);
             hubCreateError.textContent = 'Sunucuya bağlanılamadı.';
 
         } finally {
@@ -9840,6 +9873,7 @@ async function openHub(hubId) {
 
         switchToView('hub-detail');
         renderHubDetail();
+        loadLobbySupporters(currentHub.id);
 
         if (socket) {
             socket.emit('join_hub', hubId);
@@ -9850,7 +9884,7 @@ async function openHub(hubId) {
 
     } catch (error) {
 
-        console.error('Hub açılamadı:', error);
+        console.error('Lobi açılamadı:', error);
 
     }
 
@@ -9885,7 +9919,7 @@ function renderHubDetail() {
         hubSettingsOpenBtn.style.display = canOpenSettings ? 'block' : 'none';
     }
 
-    // Hub sahibi kendi Hub'ını bildiremez (anlamsız) — backend de aynı
+    // Lobi sahibi kendi Lobi'ını bildiremez (anlamsız) — backend de aynı
     // kontrolü ayrıca uyguluyor (bkz. server/db.js createReport).
     const hubReportBtnEl = document.getElementById('hub-report-btn');
     if (hubReportBtnEl) hubReportBtnEl.style.display = currentHub.is_owner ? 'none' : 'block';
@@ -10079,7 +10113,7 @@ reportSubmitBtn?.addEventListener('click', async () => {
 // SESLİ SOHBET (DAILY.CO)
 // =====================================================
 
-// Hub sesli sohbeti artık odalar üzerinden yönetiliyor (bkz. joinVoiceRoom,
+// Lobi sesli sohbeti artık odalar üzerinden yönetiliyor (bkz. joinVoiceRoom,
 // hub-voice-rooms-side paneli). Eski tekil "Sesli Sohbet" butonu kaldırıldı.
 
 
@@ -10315,7 +10349,7 @@ async function joinCallFrame(roomUrl, token) {
 
     // NOT: Bilerek createFrame (Daily'nin kendi arayüzünü gösteren iframe modu)
     // DEĞİL, createCallObject (arayüzsüz/"headless" mod) kullanıyoruz. Tamamen
-    // kendi özel arayüzümüzü (DM profil kartı, Hub oda grid'i) gösterdiğimiz
+    // kendi özel arayüzümüzü (DM profil kartı, Lobi oda grid'i) gösterdiğimiz
     // için Daily'nin iframe'i zaten hep gizli kalıyordu (display:none) — bu da
     // iOS Safari otomatik oynatmayı (autoplay) engellediğinde Daily'nin kendi
     // "sesi etkinleştir" kurtarma arayüzünün görünmez/dokunulmaz kalmasına ve
@@ -11775,7 +11809,7 @@ async function loadHubMessages(hubId) {
 
     } catch (error) {
 
-        console.error('Hub mesajları alınamadı:', error);
+        console.error('Lobi mesajları alınamadı:', error);
 
     }
 

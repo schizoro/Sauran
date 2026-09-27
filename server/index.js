@@ -273,7 +273,7 @@ const passwordResetLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyFn
 const friendRequestLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla arkadaşlık isteği gönderildi. Biraz sonra tekrar dene.' });
 const discoverLimiter = rateLimit({ windowMs: 60 * 1000, max: 90, keyFn: byIp, message: 'Çok fazla istek gönderdin. Biraz sonra tekrar dene.' });
 const discoverJoinLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 20, keyFn: byIp, message: 'Çok fazla katılma denemesi. Biraz sonra tekrar dene.' });
-const hubCreateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, keyFn: byIp, message: 'Çok fazla Hub oluşturuldu. Biraz sonra tekrar dene.' });
+const hubCreateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, keyFn: byIp, message: 'Çok fazla Lobi oluşturuldu. Biraz sonra tekrar dene.' });
 const inviteCreateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla davet oluşturuldu. Biraz sonra tekrar dene.' });
 const reportLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, keyFn: byIp, message: 'Çok fazla bildirim gönderildi. Biraz sonra tekrar dene.' });
 const feedbackLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, keyFn: byIp, message: 'Çok fazla öneri gönderildi. Biraz sonra tekrar dene.' });
@@ -1141,7 +1141,7 @@ app.post('/api/feedback/:id/vote', (req, res) => {
 // MODERASYON PANELİ (yalnızca platform_role >= moderator)
 // =====================================================
 // Bu bölümdeki HER route requirePlatformRole ile başlar — normal bir
-// kullanıcı (Hub sahibi olsa bile) buraya asla erişemez. Frontend'de bir
+// kullanıcı (Lobi sahibi olsa bile) buraya asla erişemez. Frontend'de bir
 // buton gizlenmesi güvenlik değildir; asıl kontrol burada, server-side.
 
 app.get('/api/moderation/meta', (req, res) => {
@@ -1608,10 +1608,10 @@ function requireAuth(req, res) {
 }
 
 // =====================================================
-// PLATFORM YETKİ KONTROLÜ (Hub rollerinden tamamen ayrı)
+// PLATFORM YETKİ KONTROLÜ (Lobi rollerinden tamamen ayrı)
 // =====================================================
 // ÖNEMLİ: Bu, hub_members.permission_tier (owner/moderator/member) ile
-// KARIŞTIRILMAMALI. Bir kullanıcı bir Hub'ın owner'ı olsa bile bu ona
+// KARIŞTIRILMAMALI. Bir kullanıcı bir Lobi'ın owner'ı olsa bile bu ona
 // platform moderasyon yetkisi vermez — sadece users.platform_role
 // (user/moderator/admin/founder) buradaki kararı belirler. Bu kolon
 // web üzerinden hiçbir endpoint'ten yazılamaz, sadece CLI'den
@@ -1639,7 +1639,7 @@ app.get('/api/hubs', (req, res) => {
   try {
     res.json({ success: true, hubs: listHubs(user.id) });
   } catch (error) {
-    console.error('Hub listeleme hatası:', error);
+    console.error('Lobi listeleme hatası:', error);
     res.status(500).json({ success: false, error: 'Hublar alınamadı.' });
   }
 });
@@ -1658,8 +1658,8 @@ app.post('/api/hubs', hubCreateLimiter, (req, res) => {
     return res.json(result);
 
   } catch (error) {
-    console.error('Hub oluşturma API hatası:', error);
-    res.status(500).json({ success: false, error: 'Hub oluşturulamadı.' });
+    console.error('Lobi oluşturma API hatası:', error);
+    res.status(500).json({ success: false, error: 'Lobi oluşturulamadı.' });
   }
 });
 
@@ -1678,8 +1678,8 @@ app.patch('/api/hubs/:id', (req, res) => {
     return res.json(result);
 
   } catch (error) {
-    console.error('Hub güncelleme hatası:', error);
-    res.status(500).json({ success: false, error: 'Hub güncellenemedi.' });
+    console.error('Lobi güncelleme hatası:', error);
+    res.status(500).json({ success: false, error: 'Lobi güncellenemedi.' });
   }
 });
 
@@ -1691,13 +1691,13 @@ app.get('/api/hubs/:id', (req, res) => {
     const hubId = Number(req.params.id);
 
     if (!isHubMember(hubId, user.id)) {
-      return res.status(403).json({ success: false, error: 'Bu Hub\'a üye değilsin.' });
+      return res.status(403).json({ success: false, error: 'Bu Lobi\'a üye değilsin.' });
     }
 
     const hub = getHubDetail(hubId, user.id);
 
     if (!hub) {
-      return res.status(404).json({ success: false, error: 'Hub bulunamadı.' });
+      return res.status(404).json({ success: false, error: 'Lobi bulunamadı.' });
     }
 
     hub.members = hub.members.map(m => ({ ...m, online: isVisiblyOnline(m.user_id, m.status) }));
@@ -1706,8 +1706,8 @@ app.get('/api/hubs/:id', (req, res) => {
     return res.json({ success: true, hub });
 
   } catch (error) {
-    console.error('Hub detay hatası:', error);
-    res.status(500).json({ success: false, error: 'Hub alınamadı.' });
+    console.error('Lobi detay hatası:', error);
+    res.status(500).json({ success: false, error: 'Lobi alınamadı.' });
   }
 });
 
@@ -1765,7 +1765,7 @@ app.post('/api/hubs/:id/invite-friend', (req, res) => {
     return res.json(result);
 
   } catch (error) {
-    console.error('Hub daveti gönderme hatası:', error);
+    console.error('Lobi daveti gönderme hatası:', error);
     res.status(500).json({ success: false, error: 'Davet gönderilemedi.' });
   }
 });
@@ -1878,8 +1878,9 @@ app.post('/api/discover/lobbies/:id/super-like', discoverLimiter, (req, res) => 
     const result = superLikeHub(hubId, user.id);
     if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error, reason: result.reason || null });
 
-    // Lobi sahibi çevrimiçiyse bildirim (destekçi kimliği paylaşılmaz).
-    if (!result.by_owner) io.to(`user:${result.owner_id}`).emit('hub_super_like', { hub_id: hubId });
+    // Lobiyi açık tutan herkese (sahibin attığı dahil) animasyonlu bildirim; sonradan gelenler "Destekçiler" şeridinden görür.
+    io.to(`hub:${hubId}`).emit('lobby_super_like', { lobby_id: hubId, user_id: user.id, username: user.username, by_owner: result.by_owner });
+    if (!result.by_owner) io.to(`user:${result.owner_id}`).emit('lobby_super_like_owner', { lobby_id: hubId });
     return res.json({ success: true, ...result, owner_id: undefined });
   } catch (error) {
     console.error('Süper Beğeni hatası:', error);
@@ -1899,6 +1900,24 @@ app.post('/api/admin/coins/grant', (req, res) => {
   const result = grantCoins(target.id, req.body?.amount, 'admin_grant', actor.id);
   if (!result.success) return res.status(400).json(result);
   return res.json({ success: true, balance: result.balance });
+});
+
+// Lobi içi "Destekçiler": son 24 saatte Süper Beğeni atanlar (yalnızca üyeler görür; yalnızca profil resmi + ad).
+app.get('/api/hubs/:id/supporters', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const hubId = Number(req.params.id);
+  if (!isHubMember(hubId, user.id)) return res.status(403).json({ success: false, error: 'Bu Lobiye üye değilsin.' });
+  const rows = db.prepare(`
+    SELECT users.id, users.username, users.avatar_data, users.avatar_visibility, MAX(e.created_at) AS last_at
+    FROM hub_like_events e JOIN users ON users.id = e.user_id
+    WHERE e.hub_id = ? AND e.kind = 'super' AND e.created_at > datetime('now', '-24 hours')
+    GROUP BY users.id ORDER BY last_at DESC LIMIT 30`).all(hubId);
+  const supporters = rows.map((r) => {
+    const masked = maskAvatarFor(user.id, r.id, { avatar_data: r.avatar_data }, r.avatar_visibility);
+    return { user_id: r.id, username: r.username, avatar_data: masked.avatar_data || null };
+  });
+  res.json({ success: true, supporters });
 });
 
 // ── Hediye Aracı (yalnızca kurucu) ──
@@ -1976,7 +1995,7 @@ app.post('/api/hubs/:id/leave', (req, res) => {
     if (result.success) removeUserFromHubVoiceRooms(Number(req.params.id), user.id);
     return res.json(result);
   } catch (error) {
-    console.error('Hub ayrılma API hatası:', error);
+    console.error('Lobi ayrılma API hatası:', error);
     res.status(500).json({ success: false, error: 'Ayrılınamadı.' });
   }
 });
@@ -2021,13 +2040,13 @@ app.get('/api/hubs/:id/messages', (req, res) => {
   const hubId = Number(req.params.id);
 
   if (!isHubMember(hubId, user.id)) {
-    return res.status(403).json({ success: false, error: 'Bu Hub\'a üye değilsin.' });
+    return res.status(403).json({ success: false, error: 'Bu Lobi\'a üye değilsin.' });
   }
 
   try {
     res.json({ success: true, messages: getHubMessages(hubId, 50, user.id) });
   } catch (error) {
-    console.error('Hub mesaj hatası:', error);
+    console.error('Lobi mesaj hatası:', error);
     res.status(500).json({ success: false, error: 'Mesajlar alınamadı.' });
   }
 });
@@ -2039,7 +2058,7 @@ app.post('/api/hubs/:id/poll', (req, res) => {
   const hubId = Number(req.params.id);
 
   if (!isHubMember(hubId, user.id)) {
-    return res.status(403).json({ success: false, error: 'Bu Hub\'a üye değilsin.' });
+    return res.status(403).json({ success: false, error: 'Bu Lobi\'a üye değilsin.' });
   }
 
   try {
@@ -2066,7 +2085,7 @@ app.post('/api/hubs/:id/poll/:messageId/vote', (req, res) => {
   const hubId = Number(req.params.id);
 
   if (!isHubMember(hubId, user.id)) {
-    return res.status(403).json({ success: false, error: 'Bu Hub\'a üye değilsin.' });
+    return res.status(403).json({ success: false, error: 'Bu Lobi\'a üye değilsin.' });
   }
 
   try {
@@ -2093,7 +2112,7 @@ app.post('/api/hubs/:id/share', fileUploadLimiter, (req, res) => {
   const hubId = Number(req.params.id);
 
   if (!isHubMember(hubId, user.id)) {
-    return res.status(403).json({ success: false, error: 'Bu Hub\'a üye değilsin.' });
+    return res.status(403).json({ success: false, error: 'Bu Lobi\'a üye değilsin.' });
   }
 
   try {
@@ -2120,7 +2139,7 @@ app.post('/api/hubs/:id/voice', fileUploadLimiter, (req, res) => {
   const hubId = Number(req.params.id);
 
   if (!isHubMember(hubId, user.id)) {
-    return res.status(403).json({ success: false, error: 'Bu Hub\'a üye değilsin.' });
+    return res.status(403).json({ success: false, error: 'Bu Lobi\'a üye değilsin.' });
   }
 
   try {
@@ -2147,7 +2166,7 @@ app.post('/api/hubs/:id/file', fileUploadLimiter, (req, res) => {
   const hubId = Number(req.params.id);
 
   if (!isHubMember(hubId, user.id)) {
-    return res.status(403).json({ success: false, error: 'Bu Hub\'a üye değilsin.' });
+    return res.status(403).json({ success: false, error: 'Bu Lobi\'a üye değilsin.' });
   }
 
   try {
@@ -2174,7 +2193,7 @@ app.post('/api/hubs/:id/sticker', (req, res) => {
   const hubId = Number(req.params.id);
 
   if (!isHubMember(hubId, user.id)) {
-    return res.status(403).json({ success: false, error: 'Bu Hub\'a üye değilsin.' });
+    return res.status(403).json({ success: false, error: 'Bu Lobi\'a üye değilsin.' });
   }
 
   try {
@@ -2205,7 +2224,7 @@ app.post('/api/hubs/:id/call/join', async (req, res) => {
   const hubId = Number(req.params.id);
 
   if (!isHubMember(hubId, user.id)) {
-    return res.status(403).json({ success: false, error: 'Bu Hub\'a üye değilsin.' });
+    return res.status(403).json({ success: false, error: 'Bu Lobi\'a üye değilsin.' });
   }
 
   if (!daily.isConfigured()) {
@@ -2231,7 +2250,7 @@ app.post('/api/hubs/:id/call/join', async (req, res) => {
 });
 
 // =====================================================
-// SESLİ ODALAR (Hub içinde birden fazla oda)
+// SESLİ ODALAR (Lobi içinde birden fazla oda)
 // =====================================================
 
 app.get('/api/hubs/:id/voice-rooms', (req, res) => {
@@ -2241,7 +2260,7 @@ app.get('/api/hubs/:id/voice-rooms', (req, res) => {
   const hubId = Number(req.params.id);
 
   if (!isHubMember(hubId, user.id)) {
-    return res.status(403).json({ success: false, error: 'Bu Hub\'a üye değilsin.' });
+    return res.status(403).json({ success: false, error: 'Bu Lobi\'a üye değilsin.' });
   }
 
   const rooms = listVoiceRooms(hubId).map(room => ({
@@ -2297,7 +2316,7 @@ app.post('/api/hubs/:id/voice-rooms/:roomId/join', async (req, res) => {
   const roomId = Number(req.params.roomId);
 
   if (!isHubMember(hubId, user.id)) {
-    return res.status(403).json({ success: false, error: 'Bu Hub\'a üye değilsin.' });
+    return res.status(403).json({ success: false, error: 'Bu Lobi\'a üye değilsin.' });
   }
 
   const room = getVoiceRoom(roomId);
@@ -2693,7 +2712,7 @@ function emitHubMessage(hubId, message) {
 // =====================================================
 // MERKEZİ BİLDİRİM SERVİSİ
 // =====================================================
-// Tüm özellikler (arkadaşlık, Hub daveti, aramalar, vb.) kullanıcıya bildirim
+// Tüm özellikler (arkadaşlık, Lobi daveti, aramalar, vb.) kullanıcıya bildirim
 // göndermek için BUNU kullanmalı — kendi socket.emit + tercih kontrolünü
 // yazmamalı. AŞAMA 3/4'te buraya tarayıcı bildirimi ve ses dağıtımı eklenecek.
 
@@ -2815,7 +2834,7 @@ function finishAnsweredDmCall(userA, userB) {
 // sunucu tarafından değiştirilir: istemci sadece istekte bulunur, tüm
 // istemciler sunucunun yayınladığı anlık görüntüyü (snapshot) gösterir.
 // Odadaki socket'ler ayrıca `voiceroom:<id>` odasındadır — kullanıcı
-// Hub ekranından çıksa (`hub:<id>` odasından ayrılsa) bile güncellemeleri
+// Lobi ekranından çıksa (`hub:<id>` odasından ayrılsa) bile güncellemeleri
 // almaya devam eder.
 
 const voiceRoomParticipants = new Map();
@@ -2964,8 +2983,8 @@ app.delete('/api/hubs/:id', (req, res) => {
     return res.json({ success: true });
 
   } catch (error) {
-    console.error('Hub silme API hatası:', error);
-    res.status(500).json({ success: false, error: 'Hub silinemedi.' });
+    console.error('Lobi silme API hatası:', error);
+    res.status(500).json({ success: false, error: 'Lobi silinemedi.' });
   }
 });
 
@@ -3050,10 +3069,10 @@ app.post('/api/hubs/:id/members/:userId/mute', (req, res) => {
   // Hedef bu lobinin üyesi olmalı; kurucu susturulamaz; moderatör yalnızca üyeleri susturabilir (moderatörü yalnızca kurucu).
   const targetTier = getMemberTier(hubId, targetId);
   if (targetId === user.id) return res.status(400).json({ success: false, error: 'Kendini susturamazsın.' });
-  if (!targetTier) return res.status(400).json({ success: false, error: 'Kullanıcı bu Hub üyesi değil.' });
-  if (targetTier === 'owner') return res.status(403).json({ success: false, error: 'Hub sahibi susturulamaz.' });
+  if (!targetTier) return res.status(400).json({ success: false, error: 'Kullanıcı bu Lobi üyesi değil.' });
+  if (targetTier === 'owner') return res.status(403).json({ success: false, error: 'Lobi sahibi susturulamaz.' });
   if (targetTier === 'moderator' && actorTier !== 'owner') {
-    return res.status(403).json({ success: false, error: 'Yalnızca Hub sahibi bir moderatörü susturabilir.' });
+    return res.status(403).json({ success: false, error: 'Yalnızca Lobi sahibi bir moderatörü susturabilir.' });
   }
 
   const sockets = activeUsers.get(targetId);
@@ -3686,14 +3705,14 @@ io.on('connection', (socket) => {
       hubId = Number(hubId);
 
       if (!isHubMember(hubId, socket.userId)) {
-        socket.emit('message_error', 'Bu Hub\'a üye değilsin.');
+        socket.emit('message_error', 'Bu Lobi\'a üye değilsin.');
         return;
       }
 
       socket.join(`hub:${hubId}`);
 
     } catch (error) {
-      console.error('Hub odasına katılım hatası:', error);
+      console.error('Lobi odasına katılım hatası:', error);
     }
   });
 
@@ -3724,7 +3743,7 @@ io.on('connection', (socket) => {
       }
 
       if (!isHubMember(hubId, socket.userId)) {
-        socket.emit('message_error', 'Bu Hub\'a üye değilsin.');
+        socket.emit('message_error', 'Bu Lobi\'a üye değilsin.');
         return;
       }
 
@@ -3734,7 +3753,7 @@ io.on('connection', (socket) => {
       emitHubMessage(hubId, message);
 
     } catch (error) {
-      console.error('Hub mesajı kaydedilirken hata:', error);
+      console.error('Lobi mesajı kaydedilirken hata:', error);
       socket.emit('message_error', 'Mesaj gönderilemedi.');
     }
   });
@@ -3750,7 +3769,7 @@ io.on('connection', (socket) => {
       if (!roomId || !hubId) return reply({ success: false, error: 'Geçersiz oda.' });
 
       if (!isHubMember(hubId, socket.userId)) {
-        return reply({ success: false, error: "Bu Hub'a üye değilsin." });
+        return reply({ success: false, error: "Bu Lobiye üye değilsin." });
       }
 
       const room = getVoiceRoom(roomId);
