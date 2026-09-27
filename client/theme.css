@@ -1040,39 +1040,32 @@ html.auth-pending #login-screen { visibility: hidden; }
 @keyframes frameGalaxy { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(360deg); } }
 
 /* ── Sauran Supporter: kurucu döneminin özel, Market'te satılmayan Legendary çerçevesi ──
-   Katmanlar: 1) dış ince altın halka + nefes alan glow (elementin kendi box-shadow'u)
-              2) ::before — ikinci halkada dönen ışık + yıldız/kristal parçacıkları (tek pseudo, tek dönüş animasyonu)
-              3) ::after — küçük "SUPPORTER" etiketi (yakından fark edilen detay, büyük yazı değil) */
-.frame-supporter { box-shadow: 0 0 0 2px #ffd54a, 0 0 16px 3px rgba(255,213,74,.8); animation: supporterBreathe 2.6s ease-in-out infinite; cursor: pointer; }
-.frame-supporter::before {
-  content: ''; position: absolute; inset: -7px; border-radius: 50%; pointer-events: none; z-index: 1;
-  background:
-    conic-gradient(from 0deg, transparent 0deg, rgba(255,255,255,.95) 12deg, transparent 34deg,
-                    transparent 150deg, rgba(255,224,140,.9) 168deg, transparent 196deg,
-                    transparent 260deg, rgba(255,255,255,.7) 274deg, transparent 300deg, transparent 360deg),
-    radial-gradient(circle, #fff9de 0 1.6px, transparent 2.6px) 8% 22% / 18px 18px no-repeat,
-    radial-gradient(circle, #ffe27a 0 1.3px, transparent 2.2px) 90% 12% / 15px 15px no-repeat,
-    radial-gradient(circle, #fff9de 0 1.6px, transparent 2.6px) 88% 82% / 18px 18px no-repeat,
-    radial-gradient(circle, #ffe27a 0 1.3px, transparent 2.2px) 14% 86% / 15px 15px no-repeat,
-    radial-gradient(circle, #cdefff 0 1.2px, transparent 2px) 50% 4% / 13px 13px no-repeat;
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 4px));
-          mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 4px));
-  animation: supporterSpin 5s linear infinite;
+   Gerçek bir avatar boyutunda ölçeklenmesi gerektiği (üst çubuk/ray/profil hepsi farklı piksel boyutunda) için
+   saf CSS yerine viewBox'lı bir <svg> katmanı (jagged/thorn halka + ayrı dönen ışık) kullanılır — bkz. script.js
+   supporterFrameOverlayHtml(). Etiket: alt kısımda kırmızı dolgu + altın "SUPPORTER" yazısı, hafif nefes alır. */
+.frame-supporter { cursor: pointer; }
+.sf-overlay { position: absolute; inset: -22%; pointer-events: none; z-index: 1; filter: drop-shadow(0 0 4px rgba(255, 140, 0, .35)); }
+.sf-overlay .sf-ring, .sf-overlay .sf-highlight { position: absolute; inset: 0; width: 100%; height: 100%; }
+.sf-overlay .sf-ring { animation: sfBreathe 2.8s ease-in-out infinite; transform-origin: 50% 50%; }
+.sf-highlight { animation: sfSpin 4.5s linear infinite; transform-origin: 50% 50%; }
+.frame-supporter-tag {
+  position: absolute; left: 50%; top: 100%; transform: translate(-50%, 2px); z-index: 2; pointer-events: none;
+  font-size: 6.5px; font-weight: 800; letter-spacing: .1em; white-space: nowrap;
+  padding: 1.5px 6px 1px; border-radius: 999px;
+  color: #ffd54a; background: linear-gradient(180deg, #b3271b, #7a1811);
+  box-shadow: 0 0 0 1px rgba(255, 213, 74, .5), 0 1px 3px rgba(0,0,0,.45);
+  animation: sfTagGlow 2.4s ease-in-out infinite;
 }
-.frame-supporter::after {
-  content: 'SUPPORTER'; position: absolute; left: 50%; top: 100%; transform: translate(-50%, 1px);
-  font-size: 6.5px; font-weight: 800; letter-spacing: .12em; color: #2a1c00; white-space: nowrap; z-index: 2;
-  padding: 1.5px 5px 1px; border-radius: 999px; pointer-events: none;
-  background: linear-gradient(180deg, #fff3c4, #ffd54a); box-shadow: 0 1px 3px rgba(0,0,0,.35);
-}
-.rail-avatar.frame-supporter::after, .profile-avatar-wrap-sm.frame-supporter::after { display: none; }
-@keyframes supporterSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-@keyframes supporterBreathe {
-  0%, 100% { box-shadow: 0 0 0 2px #ffd54a, 0 0 12px 2px rgba(255,213,74,.65); }
-  50% { box-shadow: 0 0 0 2.5px #fff3b0, 0 0 24px 6px rgba(255,213,74,1); }
+.rail-avatar .frame-supporter-tag, .profile-avatar-wrap-sm .frame-supporter-tag { display: none; }
+@keyframes sfSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes sfBreathe { 0%, 100% { filter: brightness(1) saturate(1); } 50% { filter: brightness(1.18) saturate(1.25); } }
+@keyframes sfTagGlow {
+  0%, 100% { text-shadow: 0 0 2px rgba(255, 213, 74, .5); box-shadow: 0 0 0 1px rgba(255, 213, 74, .5), 0 1px 3px rgba(0,0,0,.45); }
+  50% { text-shadow: 0 0 5px rgba(255, 234, 150, .9); box-shadow: 0 0 0 1px rgba(255, 234, 150, .85), 0 1px 4px rgba(0,0,0,.5); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .frame-ocean::after, .frame-neon::after, .frame-galaxy::after, .frame-supporter, .frame-supporter::before { animation: none; }
+  .frame-ocean::after, .frame-neon::after, .frame-galaxy::after,
+  .sf-overlay .sf-ring, .sf-highlight, .frame-supporter-tag { animation: none; }
 }
 
 /* ── Market ürün kartları (gift.html'e benzer sade sayfa stiline eklenir) */
