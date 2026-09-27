@@ -7966,6 +7966,7 @@ function setLocalDeafened(deafened) {
 
     voiceDeafened = deafened;
     applyDeafenToAudio();
+    if (typeof updateAudioControls === 'function') updateAudioControls();
 
     if (voiceSessionConfirmed) socket?.emit('voice_room_deafen', { deafened });
 
@@ -8824,7 +8825,7 @@ function buildDiscoverCard(lobby, rank) {
         </div>
         <p class="discover-card-desc">${escapeHtml(lobby.description || '')}</p>
         <div class="discover-card-meta">
-            <span>👥 ${escapeHtml(cap)} ${escapeHtml(t('discover-members'))}</span>${pop}${lang}${voice}
+            <span>👥 ${escapeHtml(cap)} ${escapeHtml(t('discover-members'))}</span>${pop}${voice}
             <span>${escapeHtml(t('discover-owner'))}: ${escapeHtml(lobby.owner_username)}</span>
         </div>
         <button type="button" class="discover-card-cta">${escapeHtml(t('discover-view-lobby'))}</button>
@@ -11194,6 +11195,7 @@ const callDeviceMenu = document.getElementById('call-device-menu');
 const AUDIO_ICONS = {
     speaker: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 0 1 0 6M18.500 6.500a8 8 0 0 1 0 11"/></svg>',
     earpiece: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.500 3.500h3l1.500 4-2 1.500a11 11 0 0 0 6 6l1.500-2 4 1.500v3a2 2 0 0 1-2 2A16 16 0 0 1 4.500 5.500a2 2 0 0 1 2-2z"/></svg>',
+    speakerOff: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M3 3l18 18"/></svg>',
     chevron: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 10l5 5 5-5"/></svg>'
 };
 
@@ -11297,21 +11299,27 @@ function updateAudioControls() {
     if (callSpeakerBtn) {
         const active = audioSession.native.routes.find((r) => r.id === audioSession.native.active);
         const onEarpiece = nativeToggle ? Boolean(active && active.type === 'earpiece') : (iosToggle && audioSession.iosRoute === 'earpiece');
-        callSpeakerBtn.style.display = (routeToggle || webOutMenu) ? 'inline-flex' : 'none';
-        callSpeakerBtn.innerHTML = onEarpiece ? AUDIO_ICONS.earpiece : AUDIO_ICONS.speaker;
-        callSpeakerBtn.classList.toggle('on-earpiece', Boolean(onEarpiece));
-        const label = routeToggle ? (onEarpiece ? t('audio-route-earpiece') : t('audio-route-speaker')) : t('audio-out-title');
+        const hubRoom = inCall && callMode === 'hub-room';
+        callSpeakerBtn.style.display = (hubRoom || routeToggle || webOutMenu) ? 'inline-flex' : 'none';
+        // Sesli odada hoparlör düğmesi dinlemeyi açar/kapatır; ahize/hoparlör/cihaz seçimi yanındaki okta.
+        callSpeakerBtn.innerHTML = hubRoom ? (voiceDeafened ? AUDIO_ICONS.speakerOff : AUDIO_ICONS.speaker) : (onEarpiece ? AUDIO_ICONS.earpiece : AUDIO_ICONS.speaker);
+        callSpeakerBtn.classList.toggle('on-earpiece', !hubRoom && Boolean(onEarpiece));
+        callSpeakerBtn.classList.toggle('deafened', hubRoom && voiceDeafened);
+        const label = hubRoom ? t('voice-speaker-title') : (routeToggle ? (onEarpiece ? t('audio-route-earpiece') : t('audio-route-speaker')) : t('audio-out-title'));
         callSpeakerBtn.setAttribute('aria-label', label);
         callSpeakerBtn.title = label;
-        callSpeakerBtn.setAttribute('aria-pressed', routeToggle ? String(!onEarpiece) : 'false');
+        callSpeakerBtn.setAttribute('aria-pressed', hubRoom ? String(voiceDeafened) : (routeToggle ? String(!onEarpiece) : 'false'));
     }
 
     syncNoiseCancelUi();
 
     if (callOutArrowBtn) {
         // Yerel modda ok yalnızca ikiden fazla rota (Bluetooth/kablolu/USB) varken anlamlıdır.
-        callOutArrowBtn.style.display = (nativeToggle && audioSession.native.routes.length > 2) ? 'inline-flex' : 'none';
-        callOutArrowBtn.innerHTML = AUDIO_ICONS.chevron;
+        const hubRoomArrow = inCall && callMode === 'hub-room' && (routeToggle || webOutMenu);
+        callOutArrowBtn.style.display = (hubRoomArrow || (nativeToggle && audioSession.native.routes.length > 2)) ? 'inline-flex' : 'none';
+        callOutArrowBtn.classList.toggle('has-mic-icon', hubRoomArrow);
+        const arrowIcon = hubRoomArrow ? (routeToggle && audioSession.native.routes.find((r) => r.id === audioSession.native.active)?.type === 'earpiece' || audioSession.iosRoute === 'earpiece' ? AUDIO_ICONS.earpiece : AUDIO_ICONS.speaker) : '';
+        callOutArrowBtn.innerHTML = arrowIcon + AUDIO_ICONS.chevron;
         callOutArrowBtn.setAttribute('aria-label', t('audio-out-title'));
         callOutArrowBtn.title = t('audio-out-title');
     }
@@ -11419,6 +11427,11 @@ function toggleIosAudioRoute() {
 }
 
 function onSpeakerButton() {
+    if (callMode === 'hub-room') { setLocalDeafened(!voiceDeafened); updateAudioControls(); return; }
+    onSpeakerRouteAction();
+}
+
+function onSpeakerRouteAction() {
     if (!nativeSpeakerToggleAvailable() && supportsIosAudioSession) { toggleIosAudioRoute(); return; }
     if (nativeSpeakerToggleAvailable()) {
         const active = audioSession.native.routes.find((r) => r.id === audioSession.native.active);
@@ -11431,7 +11444,12 @@ function onSpeakerButton() {
 
 if (callMicArrowBtn) callMicArrowBtn.addEventListener('click', (event) => { event.stopPropagation(); openDeviceMenu('input', callMicArrowBtn); });
 if (callSpeakerBtn) callSpeakerBtn.addEventListener('click', (event) => { event.stopPropagation(); onSpeakerButton(); });
-if (callOutArrowBtn) callOutArrowBtn.addEventListener('click', (event) => { event.stopPropagation(); openDeviceMenu('output', callOutArrowBtn); });
+if (callOutArrowBtn) callOutArrowBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    // Sesli odada ok: ahize ↔ hoparlör geçişi (iOS/yerel); yoksa çıkış cihazı menüsü.
+    if (callMode === 'hub-room' && (nativeSpeakerToggleAvailable() || supportsIosAudioSession) && !(nativeSpeakerToggleAvailable() && audioSession.native.routes.length > 2)) { onSpeakerRouteAction(); return; }
+    openDeviceMenu('output', callOutArrowBtn);
+});
 if (callDeviceMenu) {
     callDeviceMenu.addEventListener('click', (event) => {
         const ncBtn = event.target.closest('button[data-nc-toggle]');
