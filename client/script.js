@@ -2272,8 +2272,20 @@ avatarFileInput.addEventListener(
 
         try {
 
-            const dataUrl =
-                await openImageCropper(file, { aspect: 1, outWidth: 256, title: 'Profil Fotoğrafını Kırp', round: true });
+            // Sauran Plus: animasyonlu (GIF) profil fotoğrafı — kırpma aracı her kareyi tek kareye
+            // düzleştirdiği için Plus abonesinde GIF'i kırpmadan, olduğu gibi (animasyonlu) yüklüyoruz.
+            const isAnimatedGif = file.type === 'image/gif' && currentUser?.plus_active;
+            let dataUrl;
+            if (isAnimatedGif) {
+                const GIF_MAX_BYTES = 5 * 1024 * 1024;
+                if (file.size > GIF_MAX_BYTES) {
+                    showToast("Animasyonlu profil fotoğrafı limiti 5 MB'dir.");
+                    return;
+                }
+                dataUrl = await readFileAsDataUrl(file);
+            } else {
+                dataUrl = await openImageCropper(file, { aspect: 1, outWidth: 256, title: 'Profil Fotoğrafını Kırp', round: true });
+            }
 
             if (!dataUrl) return;
 

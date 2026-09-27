@@ -2401,7 +2401,11 @@ function updateAvatar(userId, dataUrl) {
         return { success: false, error: 'Geçersiz görsel formatı.' };
       }
 
-      if (dataUrl.length > 2_000_000) {
+      // Kırpılmış statik fotoğraflar ~2MB'ı geçmez. Sauran Plus'ın animasyonlu (GIF) avatarı kırpılmadan,
+      // olduğu gibi yüklendiği için daha büyük olabilir (istemci 5MB ham dosya sınırı uyguluyor, base64 ~6.7MB).
+      const isGif = dataUrl.startsWith('data:image/gif;base64,');
+      const maxLen = (isGif && hasActivePlus(userId)) ? 7_000_000 : 2_000_000;
+      if (dataUrl.length > maxLen) {
         return { success: false, error: 'Görsel çok büyük.' };
       }
     }
