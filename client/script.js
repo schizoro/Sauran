@@ -21,35 +21,43 @@ const STICKERS = [
 
 // Sauran Plus: hareketli çıkartmalar (emoji + CSS animasyonu). Sunucu tarafı yalnızca aktif Plus'a izin verir.
 const PLUS_STICKERS = [
-    { id: 'plus-cat', emoji: '🐱', anim: 'wiggle' },
-    { id: 'plus-dog', emoji: '🐶', anim: 'bounce' },
-    { id: 'plus-bunny', emoji: '🐰', anim: 'hop' },
-    { id: 'plus-bear', emoji: '🐻', anim: 'sway' },
-    { id: 'plus-panda', emoji: '🐼', anim: 'roll' },
-    { id: 'plus-fox', emoji: '🦊', anim: 'wiggle' },
-    { id: 'plus-chick', emoji: '🐥', anim: 'hop' },
-    { id: 'plus-penguin', emoji: '🐧', anim: 'sway' },
-    { id: 'plus-frog', emoji: '🐸', anim: 'bounce' },
-    { id: 'plus-unicorn', emoji: '🦄', anim: 'float' },
-    { id: 'plus-octopus', emoji: '🐙', anim: 'sway' },
-    { id: 'plus-whale', emoji: '🐳', anim: 'float' },
-    { id: 'plus-donut', emoji: '🍩', anim: 'roll' },
-    { id: 'plus-strawberry', emoji: '🍓', anim: 'bounce' },
-    { id: 'plus-teddy', emoji: '🧸', anim: 'wiggle' },
-    { id: 'plus-star', emoji: '⭐', anim: 'twinkle' },
-    { id: 'plus-rainbow', emoji: '🌈', anim: 'float' },
-    { id: 'plus-clover', emoji: '🍀', anim: 'roll' },
-    { id: 'plus-sparkle-heart', emoji: '💖', anim: 'pulse' },
-    { id: 'plus-balloon', emoji: '🎈', anim: 'float' }
+    { id: 'plus-cat', emoji: '🐱' },
+    { id: 'plus-dog', emoji: '🐶' },
+    { id: 'plus-bunny', emoji: '🐰' },
+    { id: 'plus-bear', emoji: '🐻' },
+    { id: 'plus-panda', emoji: '🐼' },
+    { id: 'plus-fox', emoji: '🦊' },
+    { id: 'plus-chick', emoji: '🐥' },
+    { id: 'plus-penguin', emoji: '🐧' },
+    { id: 'plus-frog', emoji: '🐸' },
+    { id: 'plus-unicorn', emoji: '🦄' },
+    { id: 'plus-octopus', emoji: '🐙' },
+    { id: 'plus-whale', emoji: '🐳' },
+    { id: 'plus-donut', emoji: '🍩' },
+    { id: 'plus-strawberry', emoji: '🍓' },
+    { id: 'plus-teddy', emoji: '🧸' },
+    { id: 'plus-star', emoji: '⭐' },
+    { id: 'plus-rainbow', emoji: '🌈' },
+    { id: 'plus-clover', emoji: '🍀' },
+    { id: 'plus-sparkle-heart', emoji: '💖' },
+    { id: 'plus-balloon', emoji: '🎈' }
 ];
 
 function stickerEmoji(id) {
     return STICKERS.find((s) => s.id === id)?.emoji || PLUS_STICKERS.find((s) => s.id === id)?.emoji || '❔';
 }
 
-function stickerAnimClass(id) {
-    const anim = PLUS_STICKERS.find((s) => s.id === id)?.anim;
-    return anim ? ` sticker-anim sticker-anim-${anim}` : '';
+// Sauran Plus çıkartmaları SVG karakter (stickers.js); klasik çıkartmalar emoji olarak kalır.
+function stickerInnerHtml(id) {
+    if (typeof plusStickerSvg === 'function' && id && id.startsWith('plus-')) {
+        const svg = plusStickerSvg(id);
+        if (svg) return svg;
+    }
+    return stickerEmoji(id);
+}
+
+function stickerIsPlus(id) {
+    return Boolean(id && id.startsWith('plus-'));
 }
 
 // =====================================================
@@ -7036,7 +7044,7 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
 
     } else if (msg.kind === 'dm_sticker' && msg.payload) {
 
-        body = `<span class="dm-msg-sticker${stickerAnimClass(msg.payload.id)}">${stickerEmoji(msg.payload.id)}</span>`;
+        body = `<span class="dm-msg-sticker${stickerIsPlus(msg.payload.id) ? ' stk-msg' : ''}">${stickerInnerHtml(msg.payload.id)}</span>`;
 
     } else {
 
@@ -7870,8 +7878,8 @@ function wireStickerPicker(prefix, onPick) {
     PLUS_STICKERS.forEach((sticker) => {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = `sticker-plus-btn sticker-anim-${sticker.anim}`;
-        btn.textContent = sticker.emoji;
+        btn.className = 'sticker-plus-btn';
+        btn.innerHTML = stickerInnerHtml(sticker.id);
         btn.title = 'Sauran Plus';
         btn.addEventListener('click', () => {
             if (!currentUser?.plus_active) {
@@ -12653,7 +12661,7 @@ function renderHubMessageIntoWrap(wrap, msg) {
 
     } else if (msg.kind === 'sticker' && msg.payload) {
 
-        body = `<div class="hub-msg-sticker${stickerAnimClass(msg.payload.id)}">${stickerEmoji(msg.payload.id)}</div>`;
+        body = `<div class="hub-msg-sticker${stickerIsPlus(msg.payload.id) ? ' stk-msg' : ''}">${stickerInnerHtml(msg.payload.id)}</div>`;
 
     } else {
 
