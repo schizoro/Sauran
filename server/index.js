@@ -2033,6 +2033,20 @@ app.get('/api/market/frames', (req, res) => {
   res.json({ success: true, items, equipped });
 });
 
+// Abonelikler paneli: Plus/Premium durumu ve bitiş tarihi (bitiş yoksa kalıcı/hediye).
+app.get('/api/me/subscription', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const state = (product) => {
+    const row = db.prepare(`
+      SELECT expires_at FROM entitlements
+      WHERE user_id = ? AND product = ? AND (expires_at IS NULL OR expires_at > datetime('now'))
+      ORDER BY (expires_at IS NULL) DESC, expires_at DESC LIMIT 1`).get(user.id, product);
+    return { active: Boolean(row), expires_at: row ? row.expires_at : null };
+  };
+  res.json({ success: true, plus: state('plus'), premium: state('premium') });
+});
+
 app.get('/api/me/cosmetics', (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;

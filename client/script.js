@@ -6494,6 +6494,55 @@ document.getElementById('inventory-open-btn')?.addEventListener('click', () => {
     document.getElementById('inventory-modal').style.display = 'flex';
     loadInventoryModal();
 });
+const SUBS_PLUS_ITEMS = `<li><span class="subs-ic">✦</span><span>Mor <b>PLUS</b> rozeti ve parıltılı isim kartı</span></li><li><span class="subs-ic">🪙</span><span>Her ay <b>100 Sauran Coin</b></span></li><li><span class="subs-ic">📎</span><span><b>100 MB</b> dosya/video yükleme <small>(ücretsiz: 25 MB)</small></span></li><li><span class="subs-ic">📝</span><span>Hakkımda alanı <b>600 karakter</b> <small>(ücretsiz: 300)</small></span></li><li><span class="subs-ic">🎨</span><span>Sohbet teması, profil rengi, <b>profil teması</b> ve <b>profil efekti</b></span></li><li><span class="subs-ic">🔤</span><span><b>İsim efektleri</b> (gradyan, parıltı, gökkuşağı, ışıltı)</span></li><li><span class="subs-ic">🖼️</span><span><b>Animasyonlu (GIF)</b> profil fotoğrafı</span></li><li><span class="subs-ic">🎙️</span><span>Sesli odada özel konuşma göstergesi</span></li><li><span class="subs-ic">🖥️</span><span>Yüksek kalite ekran paylaşımı</span></li><li><span class="subs-ic">🏠</span><span>Lobi için <b>tema</b> ve <b>özel arka plan görseli</b></span></li><li><span class="subs-ic">🧸</span><span><b>26 hareketli çıkartma</b></span></li><li><span class="subs-ic">😍</span><span><b>12 ek tepki emojisi</b></span></li><li><span class="subs-ic">👑</span><span>Lobi sahibi olarak Keşfet'te Plus rozeti</span></li>`;
+
+function subsStatusHtml(state, otherActive) {
+    if (state.active) {
+        const until = state.expires_at ? `${new Date(state.expires_at.replace(' ', 'T') + 'Z').toLocaleDateString('tr-TR')} tarihine kadar` : 'Süresiz';
+        return `<div class="subs-status subs-status-on">✓ Aktif — ${until}</div>`;
+    }
+    if (otherActive) return '<div class="subs-status subs-status-on">✓ Premium ile dahil</div>';
+    return '<button type="button" class="subs-buy-btn" disabled>Satın alma yakında</button>';
+}
+
+async function loadSubscriptions() {
+    const box = document.getElementById('subs-cards');
+    box.innerHTML = '<div class="mk-state">Yükleniyor...</div>';
+    let plus = { active: false }, premium = { active: false };
+    try {
+        const r = await fetch('/api/me/subscription', { credentials: 'include' });
+        const d = await r.json();
+        if (d.success) { plus = d.plus; premium = d.premium; }
+    } catch (_) {}
+    box.innerHTML = `
+        <div class="subs-card subs-card-plus${plus.active ? ' subs-card-active' : ''}">
+            <div class="subs-card-head"><span class="plus-badge" style="margin-left:0;">✦ PLUS</span><span class="subs-card-name">Sauran Plus</span></div>
+            <p class="subs-card-tag">Kendini ifade et, daha rahat paylaş.</p>
+            <ul class="subs-list">${SUBS_PLUS_ITEMS}</ul>
+            ${subsStatusHtml(plus, premium.active)}
+        </div>
+        <div class="subs-card subs-card-premium${premium.active ? ' subs-card-active' : ''}">
+            <div class="subs-card-ribbon">EN KAPSAMLI</div>
+            <div class="subs-card-head"><span class="subs-premium-badge">♛ PREMIUM</span><span class="subs-card-name">Sauran Premium</span></div>
+            <p class="subs-card-tag">Plus'taki her şey <b>+</b> daha fazlası.</p>
+            <ul class="subs-list">
+                <li class="subs-plus-all"><span class="subs-ic">✓</span><span><b>Sauran Plus'taki her şey:</b></span></li>
+                ${SUBS_PLUS_ITEMS.replace(/Her ay <b>100 Sauran Coin<\/b>/, 'Her ay <b>250 Sauran Coin</b> <small>(Plus: 100)</small>')}
+                <li class="subs-extra-head"><span class="subs-ic">＋</span><span><b>Ek olarak Premium'da:</b></span></li>
+                <li class="subs-soon"><span class="subs-ic">🚀</span><span>Yeni Premium'a özel ayrıcalıklar <small>(yakında)</small></span></li>
+            </ul>
+            ${subsStatusHtml(premium, false)}
+        </div>`;
+}
+
+document.getElementById('subs-open-btn')?.addEventListener('click', () => {
+    closeTopbarDropdown();
+    document.getElementById('subs-modal').style.display = 'flex';
+    loadSubscriptions();
+});
+document.getElementById('subs-close-btn')?.addEventListener('click', () => { document.getElementById('subs-modal').style.display = 'none'; });
+document.getElementById('subs-modal')?.addEventListener('click', (e) => { if (e.target.id === 'subs-modal') e.currentTarget.style.display = 'none'; });
+
 document.getElementById('market-close-btn')?.addEventListener('click', () => { document.getElementById('market-modal').style.display = 'none'; });
 document.getElementById('inventory-close-btn')?.addEventListener('click', () => { document.getElementById('inventory-modal').style.display = 'none'; });
 document.getElementById('market-modal')?.addEventListener('click', (e) => { if (e.target.id === 'market-modal') e.currentTarget.style.display = 'none'; });
