@@ -86,6 +86,7 @@ const {
   updateProfileEffect,
   updateProfileTheme,
   updateNameEffect,
+  updateBubbleStyle,
   updateActivity,
   listGiftProducts,
   giftProduct,
@@ -415,7 +416,7 @@ function getUserFromSessionToken(token) {
 
   const user = db.prepare(`
     SELECT users.id, users.username, users.email, users.about_me,
-           users.status, users.avatar_visibility, users.avatar_data, users.banner_data, users.chat_theme, users.profile_color, users.profile_effect, users.profile_theme, users.name_effect, users.activity_text, users.show_activity,
+           users.status, users.avatar_visibility, users.avatar_data, users.banner_data, users.chat_theme, users.profile_color, users.bubble_style, users.profile_effect, users.profile_theme, users.name_effect, users.activity_text, users.show_activity,
            users.minor_until, users.platform_role, users.dev_notice_seen, users.dev_notice_new, users.account_status,
            users.role_acceptance_pending, users.role_accepted_role, users.role_notice_kind, users.role_notice_at,
            sessions.expires_at
@@ -447,6 +448,7 @@ function getUserFromSessionToken(token) {
     banner_data: user.banner_data,
     chat_theme: user.chat_theme,
     profile_color: user.profile_color,
+    bubble_style: user.bubble_style,
     profile_effect: user.profile_effect,
     profile_theme: user.profile_theme,
     name_effect: user.name_effect,
@@ -647,7 +649,7 @@ app.get('/api/me', (req, res) => {
     }
 
     const plusActive = hasActivePlus(user.id);
-    return res.json({ success: true, user: { ...user, avatar_frame: getEquippedCosmetics(user.id).avatar_frame, plus_active: plusActive, chat_theme: plusActive ? (user.chat_theme || 'classic') : 'classic', profile_color: plusActive ? (user.profile_color || null) : null, profile_effect: hasFeature(user.id, 'profile_effect') ? (user.profile_effect || 'none') : 'none', profile_theme: hasFeature(user.id, 'profile_theme') ? (user.profile_theme || 'default') : 'default', name_effect: hasFeature(user.id, 'name_effect') ? (user.name_effect || 'none') : 'none', features: listFeatures(user.id), premium_active: hasActivePremium(user.id) } });
+    return res.json({ success: true, user: { ...user, avatar_frame: getEquippedCosmetics(user.id).avatar_frame, plus_active: plusActive, chat_theme: plusActive ? (user.chat_theme || 'classic') : 'classic', profile_color: plusActive ? (user.profile_color || null) : null, bubble_style: plusActive ? (user.bubble_style || 'default') : 'default', profile_effect: hasFeature(user.id, 'profile_effect') ? (user.profile_effect || 'none') : 'none', profile_theme: hasFeature(user.id, 'profile_theme') ? (user.profile_theme || 'default') : 'default', name_effect: hasFeature(user.id, 'name_effect') ? (user.name_effect || 'none') : 'none', features: listFeatures(user.id), premium_active: hasActivePremium(user.id) } });
 
   } catch (error) {
     console.error('Session kontrol hatası:', error);
@@ -969,6 +971,21 @@ app.patch('/api/profile/activity', (req, res) => {
     return res.json(result);
   } catch (error) {
     console.error('Etkinlik güncelleme hatası:', error);
+    return res.status(500).json({ success: false, error: 'Güncellenemedi.' });
+  }
+});
+
+// Sauran Plus: mesaj balonu stili; Plus şartı updateBubbleStyle içinde.
+app.patch('/api/profile/bubble-style', (req, res) => {
+  try {
+    const user = getUserFromRequest(req);
+    if (!user) return res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
+
+    const result = updateBubbleStyle(user.id, req.body.bubble_style);
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (error) {
+    console.error('Balon stili güncelleme hatası:', error);
     return res.status(500).json({ success: false, error: 'Güncellenemedi.' });
   }
 });

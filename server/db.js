@@ -94,6 +94,10 @@ if (!userColumns.includes('profile_color')) {
   // Sauran Plus: kullanıcı adından otomatik hesaplanan rengin yerine geçen özel renk (hex). Plus bitince yok sayılır.
   db.exec(`ALTER TABLE users ADD COLUMN profile_color TEXT`);
 }
+if (!userColumns.includes('bubble_style')) {
+  // Sauran Plus: mesaj balonu stili (default/round/glass/outline/shadow). Plus bitince 'default' görünür.
+  db.exec(`ALTER TABLE users ADD COLUMN bubble_style TEXT DEFAULT 'default'`);
+}
 if (!userColumns.includes('activity_text')) {
   // "Şu an ne oynuyorum": kullanıcının elle yazdığı kısa etkinlik; yalnızca arkadaşlar görür, 12 saat sonra bayatlar.
   db.exec(`ALTER TABLE users ADD COLUMN activity_text TEXT`);
@@ -1370,7 +1374,7 @@ function getDeletedDmMessages(userId, token, limit = 50) {
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
-           users.chat_theme, users.profile_color, users.name_effect,
+           users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE messages.room = ? AND messages.hub_id IS NULL
@@ -2386,6 +2390,19 @@ function updateProfileColor(userId, color) {
   if (!hasActivePlus(userId)) return { success: false, error: 'Özel profil rengi yalnızca Sauran Plus abonelerine açık.' };
   db.prepare(`UPDATE users SET profile_color = ? WHERE id = ?`).run(value, userId);
   return { success: true, profile_color: value };
+}
+
+// Sauran Plus: mesaj balonu stili (sohbet temasından bağımsız köşe/gölge/çerçeve seçenekleri).
+const BUBBLE_STYLES = ['default', 'round', 'glass', 'outline', 'shadow'];
+
+function updateBubbleStyle(userId, style) {
+  const value = String(style || 'default');
+  if (!BUBBLE_STYLES.includes(value)) return { success: false, error: 'Geçersiz balon stili.' };
+  if (value !== 'default' && !hasActivePlus(userId)) {
+    return { success: false, error: 'Mesaj balonu stilleri yalnızca Sauran Plus abonelerine açık.' };
+  }
+  db.prepare(`UPDATE users SET bubble_style = ? WHERE id = ?`).run(value, userId);
+  return { success: true, bubble_style: value };
 }
 
 // "Şu an ne oynuyorum": elle girilen kısa metin. Arkadaşlara yalnızca kullanıcı paylaşımı açıksa ve 12 saatten yeniyse gösterilir.
@@ -3462,7 +3479,7 @@ function getHubMessages(hubId, limit = 50, viewerId = null) {
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.kind,
            messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
-           users.chat_theme, users.profile_color, users.name_effect,
+           users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE hub_id = ?
@@ -3477,7 +3494,7 @@ function getMessageById(id, viewerId = null) {
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
-           users.chat_theme, users.profile_color, users.name_effect,
+           users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE messages.id = ?
@@ -3512,6 +3529,7 @@ function hydrateMessage(row, viewerId = null) {
     row.chat_theme = senderIsPlus ? (row.chat_theme || 'classic') : 'classic';
     if ('profile_color' in row) row.profile_color = senderIsPlus ? (row.profile_color || null) : null;
     row.plus_active = Boolean(senderIsPlus);
+    row.bubble_style = senderIsPlus ? (row.bubble_style || 'default') : 'default';
     row.name_effect = row.user_id && hasFeature(row.user_id, 'name_effect') ? (row.name_effect || 'none') : 'none';
   }
 
@@ -5244,7 +5262,7 @@ function getDmMessages(userId, otherUserId, limit = 50) {
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
-           users.chat_theme, users.profile_color, users.name_effect,
+           users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE room = ?
@@ -6582,6 +6600,8 @@ module.exports = {
   updateProfileTheme,
   NAME_EFFECTS,
   updateNameEffect,
+  BUBBLE_STYLES,
+  updateBubbleStyle,
   updateActivity,
   GIFT_PRODUCTS,
   listGiftProducts,

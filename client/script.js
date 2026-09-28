@@ -4000,6 +4000,7 @@ profileBtn.addEventListener(
         renderChatThemePicker();
         renderProfileColorPicker();
         renderProfileThemePicker();
+        renderBubbleStylePicker();
         renderNameEffectPicker();
         renderActivityControls();
         renderProfileEffectPicker();
@@ -4169,6 +4170,45 @@ document.getElementById('name-effect-picker')?.addEventListener('click', async (
         renderProfile();
     } catch (error) {
         console.error('İsim efekti güncellenemedi:', error);
+        showToast('Güncellenemedi.');
+    }
+});
+
+// Sauran Plus: mesaj balonu stili. Aynı kilit deseni.
+function renderBubbleStylePicker() {
+    const picker = document.getElementById('bubble-style-picker');
+    const hint = document.getElementById('bubble-style-hint');
+    if (!picker || !currentUser) return;
+    const isPlus = Boolean(currentUser.plus_active);
+    const active = currentUser.bubble_style || 'default';
+    picker.querySelectorAll('.chat-theme-option').forEach((btn) => {
+        const style = btn.dataset.bubble;
+        btn.disabled = style !== 'default' && !isPlus;
+        btn.classList.toggle('selected', style === active);
+        btn.title = btn.disabled ? 'Sauran Plus gerekli' : '';
+    });
+    hint.textContent = isPlus ? '' : 'Mesaj balonu stilleri Sauran Plus abonelerine açıktır.';
+}
+
+document.getElementById('bubble-style-picker')?.addEventListener('click', async (event) => {
+    const btn = event.target.closest('.chat-theme-option');
+    if (!btn || btn.disabled) return;
+    try {
+        const response = await fetch('/api/profile/bubble-style', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ bubble_style: btn.dataset.bubble })
+        });
+        const data = await response.json();
+        if (!data.success) { showToast(data.error || 'Güncellenemedi.'); return; }
+        currentUser.bubble_style = data.bubble_style;
+        renderBubbleStylePicker();
+        document.querySelectorAll('.hub-msg, .dm-msg').forEach((el) => {
+            if (String(el.dataset.userId || '') === String(currentUser.id)) applyChatTheme(el, currentUser.id, currentUser.chat_theme, data.bubble_style);
+        });
+    } catch (error) {
+        console.error('Balon stili güncellenemedi:', error);
         showToast('Güncellenemedi.');
     }
 });
@@ -7229,6 +7269,7 @@ function appendDmCallLog(msg) {
     const row = document.createElement('div');
     row.className = `dm-call-log${status === 'answered' ? '' : ' is-missed'}`;
     row.dataset.messageId = msg.id;
+    row.dataset.userId = msg.user_id;
     row.innerHTML = `<span class="dm-call-log-pill"><span aria-hidden="true">${icon}</span><span class="dm-call-log-text">${escapeHtml(label)}</span><span class="dm-call-log-time">${escapeHtml(time)}</span></span>`;
 
     dmFeed.appendChild(row);
@@ -7249,6 +7290,7 @@ function appendDmMessage(msg) {
     const wrap = document.createElement('div');
     wrap.className = `dm-msg ${isMine ? 'dm-msg-mine' : 'dm-msg-theirs'}`;
     wrap.dataset.messageId = msg.id;
+    wrap.dataset.userId = msg.user_id;
 
     renderDmMessageIntoWrap(wrap, msg, isMine);
 
@@ -7263,7 +7305,7 @@ function appendDmMessage(msg) {
 
 function renderDmMessageIntoWrap(wrap, msg, isMine) {
 
-    applyChatTheme(wrap, msg.user_id, msg.chat_theme);
+    applyChatTheme(wrap, msg.user_id, msg.chat_theme, msg.bubble_style);
 
     const time = msg.created_at
         ? new Date(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
@@ -7361,10 +7403,21 @@ function resolveChatTheme(userId, theme) {
     return knownChatThemes.get(userId) || 'classic';
 }
 const CHAT_THEME_CLASSES = ['chat-theme-soft', 'chat-theme-contrast'];
-function applyChatTheme(wrap, userId, theme) {
+// Sauran Plus mesaj balonu stili: sohbet temasıyla aynı önbellek deseni.
+const knownBubbleStyles = new Map();
+const BUBBLE_CLASSES = ['bubble-round', 'bubble-glass', 'bubble-outline', 'bubble-shadow'];
+function resolveBubbleStyle(userId, style) {
+    if (style !== undefined) { knownBubbleStyles.set(userId, style || 'default'); return style || 'default'; }
+    if (currentUser && userId === currentUser.id) return currentUser.bubble_style || 'default';
+    return knownBubbleStyles.get(userId) || 'default';
+}
+function applyChatTheme(wrap, userId, theme, bubble) {
     const resolved = resolveChatTheme(userId, theme);
     CHAT_THEME_CLASSES.forEach((c) => wrap.classList.remove(c));
     if (resolved && resolved !== 'classic') wrap.classList.add('chat-theme-' + resolved);
+    const b = resolveBubbleStyle(userId, bubble);
+    BUBBLE_CLASSES.forEach((c) => wrap.classList.remove(c));
+    if (b && b !== 'default') wrap.classList.add('bubble-' + b);
 }
 
 // Sauran Plus: özel profil rengi. getUserColor(username) yerine bu kullanılır — aynı önbellek deseni
@@ -12889,6 +12942,7 @@ function appendHubMessage(msg) {
     const wrap = document.createElement('div');
     wrap.className = 'hub-msg';
     wrap.dataset.messageId = msg.id;
+    wrap.dataset.userId = msg.user_id;
 
     renderHubMessageIntoWrap(wrap, msg);
 
@@ -12919,7 +12973,7 @@ function renderHubMessageIntoWrap(wrap, msg) {
 
     const isMine = currentUser && msg.user_id === currentUser.id;
     wrap.classList.toggle('msg-mine', Boolean(isMine));
-    applyChatTheme(wrap, msg.user_id, msg.chat_theme);
+    applyChatTheme(wrap, msg.user_id, msg.chat_theme, msg.bubble_style);
     const opts = { context: 'hub' };
     const actions = buildMsgActionsBarHtml(msg, opts);
     const replyQuote = buildMsgReplyQuoteHtml(msg);
