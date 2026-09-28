@@ -39,3 +39,7 @@ keystore.properties
 !.env.example
 !*.env.example
 *service-account*.json
+
+# Masaüstü (Electron) uygulaması — üretilen dosyalar
+desktop/node_modules/
+desktop/dist/

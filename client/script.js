@@ -4102,12 +4102,58 @@ document.getElementById('profile-color-reset-btn')?.addEventListener('click', ()
 });
 
 // "Şu an ne oynuyorum": kullanıcı yazar, isterse paylaşımı kapatır; yalnızca arkadaşlar görür.
+let autoGameInitDone = false;
 function renderActivityControls() {
     const input = document.getElementById('activity-input');
     const toggle = document.getElementById('activity-show-toggle');
     if (!input || !currentUser) return;
+    if (!autoGameInitDone) { autoGameInitDone = true; initAutoGameToggle(); }
     input.value = currentUser.activity_text || '';
     toggle.checked = currentUser.show_activity !== false;
+}
+
+// Sauran Windows uygulaması (window.sauranDesktop): kullanıcı açık rıza verirse çalışan tanınmış oyunu algılar.
+// Oyun adı otomatik yazılır (auto=true → sunucu kalp atışı kesilirse 20 dk sonra gizler), oyun kapanınca temizlenir.
+let autoGameCleanup = null;
+let autoGameHeartbeat = null;
+let autoGameCurrent = null;
+
+function stopAutoGame(clearActivity) {
+    if (autoGameCleanup) { autoGameCleanup(); autoGameCleanup = null; }
+    if (autoGameHeartbeat) { clearInterval(autoGameHeartbeat); autoGameHeartbeat = null; }
+    window.sauranDesktop?.setDetection(false);
+    if (clearActivity && autoGameCurrent) saveActivity({ activity_text: '' });
+    autoGameCurrent = null;
+}
+
+function startAutoGame() {
+    if (!window.sauranDesktop || autoGameCleanup) return;
+    const apply = (game) => {
+        if (game === autoGameCurrent) return;
+        autoGameCurrent = game;
+        if (game) saveActivity({ activity_text: game, auto: true });
+        else saveActivity({ activity_text: '' });
+    };
+    autoGameCleanup = window.sauranDesktop.onGame(apply);
+    autoGameHeartbeat = setInterval(() => {
+        if (autoGameCurrent) saveActivity({ activity_text: autoGameCurrent, auto: true });
+    }, 5 * 60 * 1000);
+    window.sauranDesktop.setDetection(true);
+}
+
+function initAutoGameToggle() {
+    const row = document.getElementById('activity-auto-row');
+    const toggle = document.getElementById('activity-auto-toggle');
+    if (!row || !toggle || !window.sauranDesktop?.isDesktop) return;
+    row.style.display = '';
+    let enabled = false;
+    try { enabled = localStorage.getItem('sauran_auto_game') === '1'; } catch (_) {}
+    toggle.checked = enabled;
+    if (enabled) startAutoGame();
+    toggle.addEventListener('change', () => {
+        try { localStorage.setItem('sauran_auto_game', toggle.checked ? '1' : '0'); } catch (_) {}
+        if (toggle.checked) startAutoGame(); else stopAutoGame(true);
+    });
 }
 
 async function saveActivity(payload) {

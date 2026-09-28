@@ -966,7 +966,7 @@ app.patch('/api/profile/activity', (req, res) => {
     if (!user) return res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
 
     const body = req.body || {};
-    const result = updateActivity(user.id, { text: body.activity_text, show: body.show_activity });
+    const result = updateActivity(user.id, { text: body.activity_text, show: body.show_activity, auto: body.auto === true });
     if (!result.success) return res.status(400).json(result);
     return res.json(result);
   } catch (error) {

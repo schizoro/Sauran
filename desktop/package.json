@@ -1,0 +1,23 @@
+{
+  "name": "sauran-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sauran Windows masaüstü uygulaması — web uygulamasını sarar ve (kullanıcı izniyle) oynanan oyunu algılar.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node test-games.js",
+    "dist": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "online.sauran.desktop",
+    "productName": "Sauran",
+    "files": ["main.js", "preload.js", "games.js"],
+    "win": { "target": "nsis", "signAndEditExecutable": false },
+    "nsis": { "oneClick": true, "perMachine": false }
+  }
+}

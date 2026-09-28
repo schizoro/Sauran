@@ -94,6 +94,10 @@ if (!userColumns.includes('profile_color')) {
   // Sauran Plus: kullanıcı adından otomatik hesaplanan rengin yerine geçen özel renk (hex). Plus bitince yok sayılır.
   db.exec(`ALTER TABLE users ADD COLUMN profile_color TEXT`);
 }
+if (!userColumns.includes('activity_auto')) {
+  // Etkinlik masaüstü uygulamasının otomatik oyun algılamasından geldiyse 1: kalp atışı kesilirse kısa sürede (20 dk) bayatlar.
+  db.exec(`ALTER TABLE users ADD COLUMN activity_auto INTEGER NOT NULL DEFAULT 0`);
+}
 if (!userColumns.includes('bubble_style')) {
   // Sauran Plus: mesaj balonu stili (default/round/glass/outline/shadow). Plus bitince 'default' görünür.
   db.exec(`ALTER TABLE users ADD COLUMN bubble_style TEXT DEFAULT 'default'`);
@@ -2409,15 +2413,18 @@ function updateBubbleStyle(userId, style) {
 const ACTIVITY_MAX_CHARS = 40;
 const ACTIVITY_FRESH_HOURS = 12;
 
-function updateActivity(userId, { text, show }) {
+const ACTIVITY_AUTO_FRESH_MINUTES = 20;
+
+function updateActivity(userId, { text, show, auto }) {
   const sets = [];
   const params = [];
   if (text !== undefined) {
     const clean = String(text || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
     if (clean.length > ACTIVITY_MAX_CHARS) return { success: false, error: `En fazla ${ACTIVITY_MAX_CHARS} karakter.` };
     if (/https?:\/\/|www\./i.test(clean)) return { success: false, error: 'Bağlantı yazılamaz.' };
-    sets.push('activity_text = ?', 'activity_at = CURRENT_TIMESTAMP');
-    params.push(clean || null);
+    sets.push('activity_text = ?', 'activity_at = CURRENT_TIMESTAMP', 'activity_auto = ?');
+    params.push(auto ? 1 : 0);
+    params.splice(params.length - 1, 0, clean || null);
   }
   if (show !== undefined) {
     sets.push('show_activity = ?');
@@ -2432,7 +2439,8 @@ function updateActivity(userId, { text, show }) {
 function freshActivity(row) {
   if (!row || !row.show_activity || !row.activity_text || !row.activity_at) return null;
   const at = new Date(String(row.activity_at).replace(' ', 'T') + 'Z').getTime();
-  return Date.now() - at <= ACTIVITY_FRESH_HOURS * 3600 * 1000 ? row.activity_text : null;
+  const windowMs = row.activity_auto ? ACTIVITY_AUTO_FRESH_MINUTES * 60 * 1000 : ACTIVITY_FRESH_HOURS * 3600 * 1000;
+  return Date.now() - at <= windowMs ? row.activity_text : null;
 }
 
 // Sauran Plus: kullanıcı adı efekti. 'none' herkese açık; diğerleri Plus'a ya da hediye edilene.
@@ -4491,14 +4499,14 @@ function getFriendshipStatus(a, b) {
 
 function listFriends(userId) {
   return db.prepare(`
-    SELECT users.id, users.username, users.status, users.avatar_data, users.avatar_visibility, users.profile_color, users.name_effect, users.activity_text, users.activity_at, users.show_activity,
+    SELECT users.id, users.username, users.status, users.avatar_data, users.avatar_visibility, users.profile_color, users.name_effect, users.activity_text, users.activity_at, users.show_activity, users.activity_auto,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) AS avatar_frame,
            EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) AS plus_active
     FROM friendships
     INNER JOIN users ON users.id = CASE WHEN friendships.user_low = ? THEN friendships.user_high ELSE friendships.user_low END
     WHERE friendships.status = 'accepted' AND (friendships.user_low = ? OR friendships.user_high = ?)
     ORDER BY users.username COLLATE NOCASE
-  `).all(userId, userId, userId).map((f) => { const { avatar_visibility, activity_text, activity_at, show_activity, ...rest } = f; rest.activity = freshActivity({ activity_text, activity_at, show_activity }); if (!rest.plus_active) rest.profile_color = null; if (!hasFeature(f.id, 'name_effect')) rest.name_effect = 'none'; return maskAvatarFor(userId, f.id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']); });
+  `).all(userId, userId, userId).map((f) => { const { avatar_visibility, activity_text, activity_at, show_activity, activity_auto, ...rest } = f; rest.activity = freshActivity({ activity_text, activity_at, show_activity, activity_auto }); if (!rest.plus_active) rest.profile_color = null; if (!hasFeature(f.id, 'name_effect')) rest.name_effect = 'none'; return maskAvatarFor(userId, f.id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']); });
 }
 
 function listIncomingRequests(userId) {
@@ -4726,7 +4734,7 @@ function confirmPasswordReset(email, code, newPassword) {
 
 function getUserPublicProfile(viewerId, targetId) {
   const user = db.prepare(`
-    SELECT id, username, status, about_me, avatar_data, banner_data, avatar_visibility, minor_until, profile_color, profile_effect, profile_theme, name_effect, activity_text, activity_at, show_activity
+    SELECT id, username, status, about_me, avatar_data, banner_data, avatar_visibility, minor_until, profile_color, profile_effect, profile_theme, name_effect, activity_text, activity_at, show_activity, activity_auto
     FROM users WHERE id = ?
   `).get(targetId);
 
