@@ -2541,7 +2541,12 @@ function updateBanner(userId, dataUrl) {
         return { success: false, error: 'Geçersiz görsel formatı.' };
       }
 
-      if (dataUrl.length > 3_000_000) {
+      // Sauran Plus: animasyonlu (GIF) kapak fotoğrafı, kırpılmadan olduğu gibi yüklenir (istemci 5MB ham dosya sınırı uyguluyor).
+      const isGif = dataUrl.startsWith('data:image/gif;base64,');
+      if (isGif && !hasActivePlus(userId)) {
+        return { success: false, error: 'Animasyonlu kapak fotoğrafı yalnızca Sauran Plus abonelerine açık.' };
+      }
+      if (dataUrl.length > (isGif ? 7_000_000 : 3_000_000)) {
         return { success: false, error: 'Görsel çok büyük.' };
       }
     }

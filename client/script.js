@@ -2439,7 +2439,22 @@ bannerFileInput.addEventListener('change', async () => {
 
     try {
 
-        const dataUrl = await openImageCropper(file, { aspect: 16 / 9, outWidth: 900, title: 'Kapak Fotoğrafını Kırp' });
+        // Sauran Plus: animasyonlu (GIF) kapak fotoğrafı — kırpma aracı GIF'i tek kareye düzleştirdiği için
+        // Plus abonesinde GIF olduğu gibi yüklenir; Plus olmayan GIF seçerse bilgilendirilir.
+        let dataUrl;
+        if (file.type === 'image/gif') {
+            if (!currentUser?.plus_active) {
+                showToast('Hareketli kapak fotoğrafı Sauran Plus abonelerine açıktır.');
+                return;
+            }
+            if (file.size > 5 * 1024 * 1024) {
+                showToast("Animasyonlu kapak fotoğrafı limiti 5 MB'dir.");
+                return;
+            }
+            dataUrl = await readFileAsDataUrl(file);
+        } else {
+            dataUrl = await openImageCropper(file, { aspect: 16 / 9, outWidth: 900, title: 'Kapak Fotoğrafını Kırp' });
+        }
 
         if (!dataUrl) return;
 
