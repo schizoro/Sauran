@@ -1105,6 +1105,37 @@ html.auth-pending #login-screen { visibility: hidden; }
   .sf-overlay::before, .sf-highlight { animation: none; }
 }
 
+/* ── Sauran Plus çerçevesi: satın alınmaz/hediye edilmez, aktif abonelikte otomatik açılır. Neon/Ocean/Galaxy
+   gibi "sade" bir parlama değil — dönen degrade halka + mesaj balonundaki ("Yumuşak" tema) ile AYNI yükselen
+   ışıltı tozu animasyonu, saf CSS (görsel dosya gerekmez). ── */
+.frame-plus { position: relative; cursor: pointer; }
+.pf-overlay { position: absolute; inset: -9%; border-radius: 50%; pointer-events: none; z-index: 1; overflow: hidden; }
+.pf-ring {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(from 0deg, #4c1d78, #9333ea, #d946ef, #9333ea, #4c1d78);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 8%), #000 calc(100% - 8%));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 8%), #000 calc(100% - 8%));
+  filter: drop-shadow(0 0 3px rgba(168, 85, 247, .85));
+  animation: pfRingSpin 5s linear infinite;
+}
+.pf-dust {
+  position: absolute; bottom: 4%; width: 6%; height: 6%; min-width: 2.5px; min-height: 2.5px; border-radius: 50%;
+  background: #fff; box-shadow: 0 0 0.3em rgba(255, 255, 255, .95), 0 0 0.6em rgba(216, 170, 255, 1); opacity: 0;
+  animation: pfDustRise 3.2s ease-in infinite;
+}
+.pf-dust:nth-child(2) { left: 18%; animation-delay: 0s; }
+.pf-dust:nth-child(3) { left: 42%; animation-delay: .8s; }
+.pf-dust:nth-child(4) { left: 64%; animation-delay: 1.6s; }
+.pf-dust:nth-child(5) { left: 84%; animation-delay: 2.4s; }
+@keyframes pfRingSpin { to { transform: rotate(360deg); } }
+@keyframes pfDustRise {
+  0% { transform: translateY(0) scale(.6); opacity: 0; }
+  18% { opacity: 1; }
+  85% { opacity: .35; }
+  100% { transform: translateY(-115%) scale(.3); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .pf-ring { animation: none; } .pf-dust { animation: none; opacity: 0; } }
+
 /* ── Market ürün kartları (gift.html'e benzer sade sayfa stiline eklenir) */
 
 /* ── Sauran Market / Kitaplığım: artık ayrı sayfa değil, uygulama içi panel (geçiş takılması yok) ── */

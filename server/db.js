@@ -1377,7 +1377,7 @@ function getDeletedDmMessages(userId, token, limit = 50) {
   const rows = db.prepare(`
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
-           (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
+           (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
@@ -3058,7 +3058,8 @@ const COSMETIC_ITEMS = {
   ocean:     { slot: 'avatar_frame', label: 'Ocean',            rarity: 'rare',      price: 150, purchasable: false, market_visible: true,  giftable: true,  description: 'Hafif dalga hissi veren mavi tonlu çerçeve.' },
   neon:      { slot: 'avatar_frame', label: 'Neon',             rarity: 'epic',      price: 300, purchasable: false, market_visible: true,  giftable: true,  description: 'Parlayan kenarlı neon çerçeve.' },
   galaxy:    { slot: 'avatar_frame', label: 'Galaxy',           rarity: 'legendary', price: 500, purchasable: false, market_visible: true,  giftable: true,  description: 'Yıldızların hafif hareket ettiği uzay temalı çerçeve.' },
-  supporter: { slot: 'avatar_frame', label: 'Sauran Supporter', rarity: 'special',   price: null, purchasable: false, market_visible: false, giftable: true,  description: 'Sauran\'ın geliştirme döneminde projeye destek veren özel topluluk üyelerine ait. Market\'te satılmaz.' }
+  supporter: { slot: 'avatar_frame', label: 'Sauran Supporter', rarity: 'special',   price: null, purchasable: false, market_visible: false, giftable: true,  description: 'Sauran\'ın geliştirme döneminde projeye destek veren özel topluluk üyelerine ait. Market\'te satılmaz.' },
+  plus:      { slot: 'avatar_frame', label: 'Sauran Plus',      rarity: 'special',   price: null, purchasable: false, market_visible: false, giftable: false, description: 'Aktif Sauran Plus/Premium abonelerine otomatik açılır; mesaj balonundaki gibi yükselen mor ışıltı tozuyla.' }
 };
 
 function listCosmeticItems({ includeHidden } = {}) {
@@ -3075,12 +3076,19 @@ function ensureClassicFrame(userId) {
 
 function listUserCosmetics(userId) {
   const rows = db.prepare(`SELECT item_key, acquired_via, created_at FROM user_cosmetics WHERE user_id = ? ORDER BY id`).all(userId);
-  return rows.map((r) => ({ ...r, ...(COSMETIC_ITEMS[r.item_key] || {}) }));
+  const items = rows.map((r) => ({ ...r, ...(COSMETIC_ITEMS[r.item_key] || {}) }));
+  // "Sauran Plus" çerçevesi satın alınmaz/hediye edilmez — aktif abonelikte otomatik "sahip" sayılır (bkz. equipCosmetic).
+  if (hasActivePlus(userId) && !items.some((i) => i.item_key === 'plus')) {
+    items.push({ item_key: 'plus', acquired_via: 'plus_subscription', created_at: null, ...COSMETIC_ITEMS.plus });
+  }
+  return items;
 }
 
 function getEquippedCosmetics(userId) {
   const row = db.prepare(`SELECT avatar_frame FROM user_equipped WHERE user_id = ?`).get(userId);
-  return { avatar_frame: (row && row.avatar_frame) || 'classic' };
+  let frame = (row && row.avatar_frame) || 'classic';
+  if (frame === 'plus' && !hasActivePlus(userId)) frame = 'classic';
+  return { avatar_frame: frame };
 }
 
 // Yönetici verme (Market henüz kapalı): envantere ekler; kuşanmaz (kullanıcı kendi seçer).
@@ -3098,8 +3106,12 @@ function equipCosmetic(userId, slot, itemKey) {
   if (itemKey !== null) {
     const item = COSMETIC_ITEMS[itemKey];
     if (!item || item.slot !== slot) return { success: false, error: 'Geçersiz ürün.' };
-    const owned = db.prepare(`SELECT 1 FROM user_cosmetics WHERE user_id = ? AND item_key = ?`).get(userId, itemKey);
-    if (!owned) return { success: false, error: 'Bu ürüne sahip değilsin.' };
+    if (itemKey === 'plus') {
+      if (!hasActivePlus(userId)) return { success: false, error: 'Bu çerçeve yalnızca Sauran Plus abonelerine açık.' };
+    } else {
+      const owned = db.prepare(`SELECT 1 FROM user_cosmetics WHERE user_id = ? AND item_key = ?`).get(userId, itemKey);
+      if (!owned) return { success: false, error: 'Bu ürüne sahip değilsin.' };
+    }
   }
   db.prepare(`INSERT INTO user_equipped (user_id, avatar_frame) VALUES (?, ?)
               ON CONFLICT(user_id) DO UPDATE SET avatar_frame = excluded.avatar_frame`).run(userId, itemKey);
@@ -3293,7 +3305,7 @@ function getHubDetail(hubId, userId) {
 
   const members = db.prepare(`
     SELECT hub_members.user_id, hub_members.role_id, hub_members.permission_tier, users.username, users.status, users.avatar_data, users.avatar_visibility, users.minor_until, users.profile_color, users.name_effect,
-           (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) AS avatar_frame,
+           (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) END) AS avatar_frame,
            EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) AS plus_active
     FROM hub_members
     INNER JOIN users ON users.id = hub_members.user_id
@@ -3474,7 +3486,7 @@ function isHubBanned(hubId, userId) {
 function listHubBans(hubId, viewerId = null) {
   return db.prepare(`
     SELECT users.id, users.username, users.avatar_data, users.avatar_visibility, hub_bans.created_at,
-           (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) AS avatar_frame
+           (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) END) AS avatar_frame
     FROM hub_bans
     INNER JOIN users ON users.id = hub_bans.user_id
     WHERE hub_bans.hub_id = ?
@@ -3486,7 +3498,7 @@ function getHubMessages(hubId, limit = 50, viewerId = null) {
   const rows = db.prepare(`
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.kind,
            messages.payload, messages.edited, messages.created_at, users.avatar_data,
-           (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
+           (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
@@ -3501,7 +3513,7 @@ function getMessageById(id, viewerId = null) {
   return hydrateMessage(db.prepare(`
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
-           (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
+           (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
@@ -4500,7 +4512,7 @@ function getFriendshipStatus(a, b) {
 function listFriends(userId) {
   return db.prepare(`
     SELECT users.id, users.username, users.status, users.avatar_data, users.avatar_visibility, users.profile_color, users.name_effect, users.activity_text, users.activity_at, users.show_activity, users.activity_auto,
-           (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) AS avatar_frame,
+           (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) END) AS avatar_frame,
            EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) AS plus_active
     FROM friendships
     INNER JOIN users ON users.id = CASE WHEN friendships.user_low = ? THEN friendships.user_high ELSE friendships.user_low END
@@ -5269,7 +5281,7 @@ function getDmMessages(userId, otherUserId, limit = 50) {
   const rows = db.prepare(`
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
-           (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
+           (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id

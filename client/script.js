@@ -1830,9 +1830,21 @@ function supporterFrameOverlayHtml() {
     </span>`;
 }
 
-const AVATAR_FRAME_CLASSES = ['frame-ocean', 'frame-neon', 'frame-galaxy', 'frame-supporter'];
+// Sauran Plus çerçevesi: satın alınmaz/hediye edilmez — aktif abonelikte otomatik açılır. Mesaj balonundaki
+// gibi yükselen mor ışıltı tozuyla, dönen bir halka (saf CSS, görsel dosya gerekmez).
+function plusFrameOverlayHtml() {
+    return `<span class="pf-overlay" aria-hidden="true"><span class="pf-ring"></span><span class="pf-dust"></span><span class="pf-dust"></span><span class="pf-dust"></span><span class="pf-dust"></span></span>`;
+}
+function frameOverlayHtml(frameKey) {
+    if (frameKey === 'supporter') return supporterFrameOverlayHtml();
+    if (frameKey === 'plus') return plusFrameOverlayHtml();
+    return '';
+}
+
+const AVATAR_FRAME_CLASSES = ['frame-ocean', 'frame-neon', 'frame-galaxy', 'frame-supporter', 'frame-plus'];
 const AVATAR_FRAME_INFO = {
     supporter: { title: '👑 Sauran Supporter', text: "Sauran'ın geliştirme döneminde projeye destek veren özel topluluk üyelerine ait. Market'te satılmaz." },
+    plus: { title: '✦ Sauran Plus', text: 'Aktif Sauran Plus/Premium abonelerine otomatik açılan, yükselen ışıltı tozlu mor çerçeve.' },
     ocean: { title: '🌊 Ocean', text: 'Hafif dalga hissi veren mavi tonlu çerçeve.' },
     neon: { title: '⚡ Neon', text: 'Parlayan kenarlı neon çerçeve.' },
     galaxy: { title: '🌌 Galaxy', text: 'Yıldızların hafif hareket ettiği uzay temalı çerçeve.' }
@@ -1856,10 +1868,11 @@ function usernameCardHtml(username, isPlus, nameEffect) {
 function applyAvatarFrame(el, frameKey) {
     if (!el) return;
     AVATAR_FRAME_CLASSES.forEach((c) => el.classList.remove(c));
-    el.querySelectorAll(':scope > .sf-overlay').forEach((n) => n.remove());
+    el.querySelectorAll(':scope > .sf-overlay, :scope > .pf-overlay').forEach((n) => n.remove());
     if (frameKey && frameKey !== 'classic') {
         el.classList.add('frame-' + frameKey);
-        if (frameKey === 'supporter') el.insertAdjacentHTML('beforeend', supporterFrameOverlayHtml());
+        const overlay = frameOverlayHtml(frameKey);
+        if (overlay) el.insertAdjacentHTML('beforeend', overlay);
     }
     el.dataset.frameKey = frameKey && frameKey !== 'classic' ? frameKey : '';
 }
@@ -5811,7 +5824,7 @@ function renderFriendFavorites() {
             ? `<img src="${escapeAttr(f.avatar_data)}" alt="">`
             : escapeHtml((f.username || '?').charAt(0).toUpperCase());
         const frameClass = frameKey && frameKey !== 'classic' ? ` frame-${escapeAttr(frameKey)}` : '';
-        const frameOverlay = frameKey === 'supporter' ? supporterFrameOverlayHtml() : '';
+        const frameOverlay = frameOverlayHtml(frameKey);
         return `
             <button type="button" class="friends-fav" data-friend-id="${f.id}" data-friend-name="${escapeAttr(f.username)}" title="${escapeAttr(f.username)}">
                 <span class="friends-fav-avatar${frameClass}" style="--user-color:${favColor};">
@@ -5871,7 +5884,7 @@ function renderFriendsSidebar(friends) {
         knownNameFx.set(f.id, f.name_effect || 'none');
         const frameKey = resolveFrame(f.id, f.avatar_frame);
         const frameClass = frameKey && frameKey !== 'classic' ? ` frame-${escapeAttr(frameKey)}` : '';
-        const frameOverlay = frameKey === 'supporter' ? supporterFrameOverlayHtml() : '';
+        const frameOverlay = frameOverlayHtml(frameKey);
 
         const avatarInner = f.avatar_data
             ? `<img src="${escapeAttr(f.avatar_data)}" alt="">`
@@ -6656,6 +6669,9 @@ const RARITY_LABEL = { free: 'Ücretsiz', rare: 'Rare', epic: 'Epic', legendary:
 function mkPreviewHtml(item) {
     if (item.key === 'supporter') {
         return `<span class="sf-overlay" aria-hidden="true"><img src="assets/frame-supporter.png" class="sf-ring-img" alt="${escapeHtml(item.label)}"><span class="sf-highlight"></span></span>`;
+    }
+    if (item.key === 'plus') {
+        return `${escapeHtml(item.label.charAt(0))}${plusFrameOverlayHtml()}`;
     }
     return escapeHtml(item.label.charAt(0));
 }
@@ -7550,7 +7566,7 @@ function avatarButtonHtml(userId, avatarData, username, frameKey, profileColor) 
     `;
 
     if (!frameKey || frameKey === 'classic') return btn;
-    const overlay = frameKey === 'supporter' ? supporterFrameOverlayHtml() : '';
+    const overlay = frameOverlayHtml(frameKey);
     return `<span class="msg-avatar-frame-wrap frame-${escapeAttr(frameKey)}" data-frame-key="${escapeAttr(frameKey)}">${btn}${overlay}</span>`;
 
 }
@@ -8812,7 +8828,7 @@ function voiceAvatarInnerHtml(userId, username) {
 function voiceFrameParts(userId) {
     const frameKey = resolveFrame(userId);
     if (!frameKey || frameKey === 'classic') return { cls: '', overlay: '' };
-    return { cls: ` frame-${frameKey}`, overlay: frameKey === 'supporter' ? supporterFrameOverlayHtml() : '' };
+    return { cls: ` frame-${frameKey}`, overlay: frameOverlayHtml(frameKey) };
 }
 
 const VOICE_MIC_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>';
