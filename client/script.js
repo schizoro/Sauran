@@ -1745,10 +1745,19 @@ const AVATAR_FRAME_INFO = {
     neon: { title: '⚡ Neon', text: 'Parlayan kenarlı neon çerçeve.' },
     galaxy: { title: '🌌 Galaxy', text: 'Yıldızların hafif hareket ettiği uzay temalı çerçeve.' }
 };
-// Sauran Plus "Oyuncu İsim Kartı": kullanıcı adının hemen yanında mor parlak bir hap rozet,
+// Sauran Plus rozeti: kullanıcı adının hemen yanında mor parlak "★ PLUS" hap rozeti,
 // içinden yükselip kaybolan ışıltı tozlarıyla (Supporter'ın altın halkasından ayrı, mor/Plus kimliği).
 function plusBadgeHtml(isPlus) {
     return isPlus ? ` <span class="plus-name-card" title="Sauran Plus"><i class="pnc-star">★</i><span class="pnc-label">PLUS</span><i class="pnc-dust"></i><i class="pnc-dust"></i><i class="pnc-dust"></i></span>` : '';
+}
+
+// Sauran Plus "Oyuncu İsim Kartı": rozetten AYRI bir özellik — kullanıcı adının kendisi mor parlak
+// bir kart üzerinde görünür (ışıltı tozu yükselir), her yerde (mesaj, üye/arkadaş listesi, sesli oda,
+// profil) kullanıcı adı basılan her noktada kullanılmalı.
+function usernameCardHtml(username, isPlus) {
+    const safe = escapeHtml(username);
+    if (!isPlus) return safe;
+    return `<span class="plus-name-plate"><i class="pnp-dust"></i><i class="pnp-dust"></i><i class="pnp-dust"></i><span class="pnp-text">${safe}</span></span>`;
 }
 
 function applyAvatarFrame(el, frameKey) {
@@ -1852,7 +1861,7 @@ function renderProfile() {
             'none';
 
     profileModalUsername.innerHTML =
-        `${escapeHtml(currentUser.username)}${plusBadgeHtml(currentUser.plus_active)}`;
+        `${usernameCardHtml(currentUser.username, currentUser.plus_active)}${plusBadgeHtml(currentUser.plus_active)}`;
 
 
     // ------------------------------------------------
@@ -5373,6 +5382,7 @@ function renderFriendFavorites() {
     box.style.display = '';
     row.innerHTML = friendFavorites.map((f) => {
         if (f.avatar_data) knownAvatars.set(f.id, f.avatar_data);
+        knownVoicePlus.set(f.id, Boolean(f.plus_active));
         const frameKey = resolveFrame(f.id, f.avatar_frame);
         const favColor = resolveUserColor(f.id, f.username, f.profile_color);
         const unread = unreadDmCounts.get(f.id) || 0;
@@ -5389,7 +5399,7 @@ function renderFriendFavorites() {
                     ${unread > 0 ? `<span class="friends-fav-unread">${unread > 9 ? '9+' : unread}</span>` : ''}
                     ${frameOverlay}
                 </span>
-                <span class="friends-fav-name">${escapeHtml(f.username)}</span>
+                <span class="friends-fav-name">${usernameCardHtml(f.username, f.plus_active)}</span>
             </button>`;
     }).join('');
 
@@ -5436,6 +5446,7 @@ function renderFriendsSidebar(friends) {
 
         // Arkadaş listesi (gizlilik ayarına göre süzülmüş) profil görselinin güncel kaynağıdır; DM başlığı da bundan yararlanır.
         if (f.avatar_data) knownAvatars.set(f.id, f.avatar_data); else knownAvatars.delete(f.id);
+        knownVoicePlus.set(f.id, Boolean(f.plus_active));
         const frameKey = resolveFrame(f.id, f.avatar_frame);
         const frameClass = frameKey && frameKey !== 'classic' ? ` frame-${escapeAttr(frameKey)}` : '';
         const frameOverlay = frameKey === 'supporter' ? supporterFrameOverlayHtml() : '';
@@ -5458,7 +5469,7 @@ function renderFriendsSidebar(friends) {
                     ${frameOverlay}
                     <span class="status-hex status-hex-sm friends-sidebar-status ${statusClass}" title="${escapeAttr(statusTitle)}"></span>
                 </span>
-                <span class="friends-sidebar-name">${escapeHtml(f.username)}</span>
+                <span class="friends-sidebar-name">${usernameCardHtml(f.username, f.plus_active)}</span>
                 ${unread > 0 ? `<span class="friends-sidebar-unread">${unread}</span>` : ''}
             </div>
         `;
@@ -5596,7 +5607,7 @@ function renderTopFriends(friends) {
     topFriendsList.innerHTML = friends.map(f => `
         <div class="top-friend-item" data-user-id="${f.id}">
             <span class="profile-avatar" style="--user-color:${getUserColor(f.username)};">${f.username.charAt(0).toUpperCase()}</span>
-            <span>${escapeHtml(f.username)}</span>
+            <span>${usernameCardHtml(f.username, f.plus_active)}</span>
         </div>
     `).join('');
 
@@ -6534,7 +6545,7 @@ function renderOtherProfile() {
     otherProfileAvatarImg.src = hasAvatar ? profile.avatar_data : '';
     otherProfileAvatarImg.style.display = hasAvatar ? 'block' : 'none';
 
-    otherProfileUsername.innerHTML = `${escapeHtml(profile.username)}${plusBadgeHtml(profile.plus_active)}`;
+    otherProfileUsername.innerHTML = `${usernameCardHtml(profile.username, profile.plus_active)}${plusBadgeHtml(profile.plus_active)}`;
 
     // ÖNEMLİ: presence (gerçek bağlantı durumu) ile kullanıcının seçtiği
     // manuel durum birbirinden ayrı. Kullanıcı "Müsait" seçmiş olsa bile
@@ -6779,7 +6790,7 @@ async function openDeletedDm(token) {
 
 
 function renderDmTitle(userId, username) {
-    dmModalTitle.innerHTML = `${avatarButtonHtml(userId, null, username)}<span class="dm-title-name">${escapeHtml(username)}</span>`;
+    dmModalTitle.innerHTML = `${avatarButtonHtml(userId, null, username)}<span class="dm-title-name">${usernameCardHtml(username, isVoicePlus(userId))}</span>`;
     wireMsgAvatars(dmModalTitle);
 }
 
@@ -7680,7 +7691,7 @@ async function openForwardModal(messageId) {
 
             listEl.innerHTML = friends.map(f => `
                 <label class="report-reason-option" data-user-id="${f.id}" style="cursor:pointer;">
-                    <span>${escapeHtml(f.username)}</span>
+                    <span>${usernameCardHtml(f.username, f.plus_active)}</span>
                 </label>
             `).join('');
 
@@ -8559,7 +8570,7 @@ function voiceRoomMembersHtml(room) {
         : participants.map((p) => `
             <div class="hub-voice-room-member${p.user_id === currentUser?.id ? ' is-self' : ''}">
                 <span class="hub-voice-member-avatar${voiceFrameParts(p.user_id).cls}" style="--user-color:${resolveUserColor(p.user_id, p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}${voiceFrameParts(p.user_id).overlay}</span>
-                <span class="hub-voice-member-name">${escapeHtml(p.username)}${voiceSelfTagHtml(p.user_id)}</span>
+                <span class="hub-voice-member-name">${usernameCardHtml(p.username, isVoicePlus(p.user_id))}${voiceSelfTagHtml(p.user_id)}</span>
                 ${voiceStatusIconsHtml(p, true)}
             </div>
         `).join('');
@@ -8728,7 +8739,7 @@ function renderVoiceRoomPreviewList(room) {
     voiceRoomPreviewList.innerHTML = participants.map((p) => `
         <div class="voice-room-preview-person">
             <span class="voice-room-preview-avatar${voiceFrameParts(p.user_id).cls}" style="--user-color:${resolveUserColor(p.user_id, p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}${voiceFrameParts(p.user_id).overlay}</span>
-            <span class="voice-room-preview-name">${escapeHtml(p.username)}</span>
+            <span class="voice-room-preview-name">${usernameCardHtml(p.username, isVoicePlus(p.user_id))}</span>
             ${voiceStatusIconsHtml(p, false)}
         </div>
     `).join('');
@@ -8844,7 +8855,7 @@ function renderHubRoomGrid(participants) {
     grid.innerHTML = (participants || []).map((p) => `
         <div class="call-hub-room-person${p.user_id === currentUser?.id ? ' is-self' : ''}${isVoicePlus(p.user_id) ? ' plus-voice' : ''}">
             <span class="call-hub-room-avatar${voiceFrameParts(p.user_id).cls}" style="--user-color:${resolveUserColor(p.user_id, p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}${voiceFrameParts(p.user_id).overlay}</span>
-            <span class="call-hub-room-name">${escapeHtml(p.username)}</span>
+            <span class="call-hub-room-name">${usernameCardHtml(p.username, isVoicePlus(p.user_id))}</span>
             ${p.user_id === currentUser?.id ? `<span class="voice-self-tag">${t('voice-room-you')}</span>` : ''}
             ${p.user_id === currentUser?.id ? '' /* görüşme ekranında kendi kartında düğme yok (mikrofon alt çubukta); yan paneldeki liste düğmeleri korunur */ : voiceStatusIconsHtml(p, true)}
         </div>
@@ -9246,7 +9257,7 @@ function buildDiscoverCard(lobby, rank) {
         <p class="discover-card-desc">${escapeHtml(lobby.description || '')}</p>
         <div class="discover-card-meta">
             <span>👥 ${escapeHtml(cap)} ${escapeHtml(t('discover-members'))}</span>${pop}${voice}
-            <span>${escapeHtml(t('discover-owner'))}: ${escapeHtml(lobby.owner_username)}${lobby.owner_plus ? ' <span class="plus-badge plus-badge-sm" title="Sauran Plus">✦ PLUS</span>' : ''}</span>
+            <span>${escapeHtml(t('discover-owner'))}: ${usernameCardHtml(lobby.owner_username, lobby.owner_plus)}${lobby.owner_plus ? ' <span class="plus-badge plus-badge-sm" title="Sauran Plus">✦ PLUS</span>' : ''}</span>
         </div>
         <button type="button" class="discover-card-cta">${escapeHtml(t('discover-view-lobby'))}</button>
     `;
@@ -9548,7 +9559,7 @@ function renderDiscoverDetail(lobby) {
             <span class="discover-card-avatar">${discoverAvatarHtml(lobby)}</span>
             <div style="min-width:0;">
                 <div class="discover-card-name" style="white-space:normal;">${escapeHtml(lobby.name)}</div>
-                <div class="discover-detail-owner">${escapeHtml(t('discover-owner'))}: ${escapeHtml(lobby.owner_username)}${lobby.owner_plus ? ' <span class="plus-badge plus-badge-sm" title="Sauran Plus">✦ PLUS</span>' : ''}</div>
+                <div class="discover-detail-owner">${escapeHtml(t('discover-owner'))}: ${usernameCardHtml(lobby.owner_username, lobby.owner_plus)}${lobby.owner_plus ? ' <span class="plus-badge plus-badge-sm" title="Sauran Plus">✦ PLUS</span>' : ''}</div>
             </div>
         </div>
         <div class="discover-facts">
@@ -10374,7 +10385,7 @@ hubInviteFriendBtn.addEventListener(
 
                 li.innerHTML = `
                     ${avatarButtonHtml(friend.id, friend.avatar_data, friend.username, friend.avatar_frame, friend.profile_color)}
-                    <span class="liquid-friend-name">${escapeHtml(friend.username)}</span>
+                    <span class="liquid-friend-name">${usernameCardHtml(friend.username, friend.plus_active)}</span>
                     <button class="liquid-friend-invite-btn" data-invite-user="${friend.id}" type="button">Davet Et</button>
                 `;
 
@@ -12000,6 +12011,7 @@ function renderHubMembers() {
     hubMemberList.innerHTML = orderedMembers.map((m, idx) => {
 
         const avatar = avatarButtonHtml(m.user_id, m.avatar_data, m.username, m.avatar_frame, m.profile_color);
+        knownVoicePlus.set(m.user_id, Boolean(m.plus_active));
         const isSelf = m.user_id === currentUser.id;
         const tierBadge = m.permission_tier === 'owner' ? ' 👑' : m.permission_tier === 'moderator' ? ' 🛡️' : '';
 
@@ -12015,7 +12027,7 @@ function renderHubMembers() {
                     ${avatar}
                     <span class="hub-member-dot" style="background:${m.online ? '#57f287' : '#4b5563'};"></span>
                 </span>
-                <span class="hub-member-name">${escapeHtml(m.username)}${tierBadge}</span>
+                <span class="hub-member-name">${usernameCardHtml(m.username, m.plus_active)}${tierBadge}</span>
                 ${showMenu ? `
                     <div class="hub-member-menu-wrap">
                         <button class="hub-member-menu-btn" type="button">⋯</button>
@@ -12461,7 +12473,7 @@ function renderHubMessageIntoWrap(wrap, msg) {
 
     const header = `
         <div class="header">
-            <span class="username">${escapeHtml(msg.username)}</span>
+            <span class="username">${usernameCardHtml(msg.username, msg.plus_active)}</span>
             <span class="time">${time}${editedTag}</span>
             ${pinnedTag}
         </div>

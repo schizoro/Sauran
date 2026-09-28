@@ -3390,6 +3390,7 @@ function hydrateMessage(row, viewerId = null) {
     const senderIsPlus = row.user_id && hasActivePlus(row.user_id);
     row.chat_theme = senderIsPlus ? (row.chat_theme || 'classic') : 'classic';
     if ('profile_color' in row) row.profile_color = senderIsPlus ? (row.profile_color || null) : null;
+    row.plus_active = Boolean(senderIsPlus);
   }
 
   let result = row;
