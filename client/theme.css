@@ -1402,3 +1402,17 @@ html.auth-pending #login-screen { visibility: hidden; }
 @keyframes stkSteam { 0%, 100% { transform: translateY(0); opacity: .9; } 50% { transform: translateY(-4px); opacity: .45; } }
 @keyframes stkFlame { 0%, 100% { transform: scale(1, 1) rotate(-3deg); } 50% { transform: scale(.9, 1.12) rotate(3deg); } }
 @keyframes stkGlow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(1.08); } }
+
+/* ── Sauran Plus "Profil Teması": profil penceresinin renk şeması (kendi ve başkasının profilinde) ── */
+.chat-theme-picker-wrap { flex-wrap: wrap; }
+.chat-theme-picker-wrap .chat-theme-option { flex: 1 1 30%; min-width: 84px; }
+.ptheme-swatch-midnight { background: linear-gradient(135deg, #1a1f4a, #3d2a7a); }
+.ptheme-swatch-sunset { background: linear-gradient(135deg, #ff7a59, #b93a8c); }
+.ptheme-swatch-forest { background: linear-gradient(135deg, #2f9a5a, #17513a); }
+.ptheme-swatch-sakura { background: linear-gradient(135deg, #ffb3d1, #c76bb0); }
+.ptheme-swatch-ocean { background: linear-gradient(135deg, #2aa8ff, #1a4fa8); }
+.profile-modal-box[data-profile-theme="midnight"] { background-image: linear-gradient(160deg, rgba(61, 42, 122, .55), rgba(26, 31, 74, .35)); box-shadow: 0 0 0 1px rgba(140, 120, 255, .35), 0 8px 40px rgba(30, 20, 90, .5); }
+.profile-modal-box[data-profile-theme="sunset"] { background-image: linear-gradient(160deg, rgba(255, 122, 89, .32), rgba(185, 58, 140, .30)); box-shadow: 0 0 0 1px rgba(255, 140, 110, .35), 0 8px 40px rgba(140, 40, 90, .4); }
+.profile-modal-box[data-profile-theme="forest"] { background-image: linear-gradient(160deg, rgba(47, 154, 90, .34), rgba(23, 81, 58, .34)); box-shadow: 0 0 0 1px rgba(90, 200, 130, .35), 0 8px 40px rgba(20, 80, 50, .45); }
+.profile-modal-box[data-profile-theme="sakura"] { background-image: linear-gradient(160deg, rgba(255, 179, 209, .30), rgba(199, 107, 176, .28)); box-shadow: 0 0 0 1px rgba(255, 170, 205, .35), 0 8px 40px rgba(150, 70, 130, .4); }
+.profile-modal-box[data-profile-theme="ocean"] { background-image: linear-gradient(160deg, rgba(42, 168, 255, .32), rgba(26, 79, 168, .34)); box-shadow: 0 0 0 1px rgba(90, 190, 255, .35), 0 8px 40px rgba(20, 60, 140, .45); }

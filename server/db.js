@@ -94,6 +94,10 @@ if (!userColumns.includes('profile_color')) {
   // Sauran Plus: kullanıcı adından otomatik hesaplanan rengin yerine geçen özel renk (hex). Plus bitince yok sayılır.
   db.exec(`ALTER TABLE users ADD COLUMN profile_color TEXT`);
 }
+if (!userColumns.includes('profile_theme')) {
+  // Sauran Plus: profil penceresinin renk teması (default/midnight/sunset/forest/sakura/ocean).
+  db.exec(`ALTER TABLE users ADD COLUMN profile_theme TEXT DEFAULT 'default'`);
+}
 if (!userColumns.includes('profile_effect')) {
   // Sauran Plus: profil penceresinde avatarın çevresinde animasyonlu efekt (none/aura/sparkle). Plus bitince 'none' döner.
   db.exec(`ALTER TABLE users ADD COLUMN profile_effect TEXT DEFAULT 'none'`);
@@ -2370,14 +2374,27 @@ function updateProfileColor(userId, color) {
   return { success: true, profile_color: value };
 }
 
+// Sauran Plus: profil penceresinin renk teması. 'default' herkese açık; diğerleri Plus'a ya da hediye edilene.
+const PROFILE_THEMES = ['default', 'midnight', 'sunset', 'forest', 'sakura', 'ocean'];
+
+function updateProfileTheme(userId, theme) {
+  const value = String(theme || 'default');
+  if (!PROFILE_THEMES.includes(value)) return { success: false, error: 'Geçersiz profil teması.' };
+  if (value !== 'default' && !hasFeature(userId, 'profile_theme')) {
+    return { success: false, error: 'Profil temaları yalnızca Sauran Plus abonelerine (ya da hediye edilenlere) açık.' };
+  }
+  db.prepare(`UPDATE users SET profile_theme = ? WHERE id = ?`).run(value, userId);
+  return { success: true, profile_theme: value };
+}
+
 // Sauran Plus: profil penceresinde avatarın çevresinde animasyonlu efekt.
 const PROFILE_EFFECTS = ['none', 'aura', 'sparkle'];
 
 function updateProfileEffect(userId, effect) {
   const value = String(effect || 'none');
   if (!PROFILE_EFFECTS.includes(value)) return { success: false, error: 'Geçersiz profil efekti.' };
-  if (value !== 'none' && !hasActivePlus(userId)) {
-    return { success: false, error: 'Bu profil efekti yalnızca Sauran Plus abonelerine açık.' };
+  if (value !== 'none' && !hasFeature(userId, 'profile_effect')) {
+    return { success: false, error: 'Bu profil efekti yalnızca Sauran Plus abonelerine (ya da hediye edilenlere) açık.' };
   }
   db.prepare(`UPDATE users SET profile_effect = ? WHERE id = ?`).run(value, userId);
   return { success: true, profile_effect: value };
@@ -2616,7 +2633,7 @@ function updateHub(hubId, userId, { name, image_data, theme, ...discovery }) {
   if (theme !== undefined) {
     theme = String(theme || 'default');
     if (!HUB_THEMES.includes(theme)) return { success: false, error: 'Geçersiz Lobi teması.' };
-    if (theme !== 'default' && !hasActivePlus(userId)) return { success: false, error: 'Lobi teması yalnızca Sauran Plus abonelerine açık.' };
+    if (theme !== 'default' && !hasFeature(userId, 'lobby_theme')) return { success: false, error: 'Lobi teması yalnızca Sauran Plus abonelerine (ya da hediye edilenlere) açık.' };
   }
 
   // Keşfet alanları: hepsi doğrulanmadan hiçbir alan (ad/görsel dahil) değiştirilmez.
@@ -2658,7 +2675,7 @@ function updateHub(hubId, userId, { name, image_data, theme, ...discovery }) {
 const DISCOVER_SUMMARY_SELECT = `
   hubs.id, hubs.name, hubs.category, hubs.topic, hubs.description, hubs.language, hubs.join_policy, hubs.mic_requirement,
   hubs.capacity, hubs.created_at, hubs.created_by, users.username AS owner_username,
-  EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = hubs.created_by AND entitlements.product = 'plus' AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) AS owner_plus,
+  EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = hubs.created_by AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) AS owner_plus,
   CASE WHEN hubs.image_data IS NOT NULL AND hubs.image_data != '' THEN 1 ELSE 0 END AS has_image,
   (SELECT COUNT(*) FROM hub_members WHERE hub_members.hub_id = hubs.id) AS member_count,
   (SELECT MAX(messages.created_at) FROM messages WHERE messages.hub_id = hubs.id) AS last_activity,
@@ -2998,15 +3015,14 @@ function equipCosmetic(userId, slot, itemKey) {
 const GIFT_PRODUCTS = {
   coin:          { label: 'Sauran Coin',        type: 'balance', enabled: true,  min: 1, max: 100000, unit: 'Coin' },
   plus:          { label: 'Sauran Plus',        type: 'timed',   enabled: true,  min: 1, max: 3650,   unit: 'gün' },
-  premium:       { label: 'Sauran Premium',     type: 'timed',   enabled: false, min: 1, max: 3650,   unit: 'gün' },
-  profile_theme: { label: 'Profil teması',      type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
-  profile_effect:{ label: 'Profil efekti',      type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
+  premium:       { label: 'Sauran Premium',     type: 'timed',   enabled: true,  min: 1, max: 3650,   unit: 'gün' },
+  profile_theme: { label: 'Profil teması',      type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' },
+  profile_effect:{ label: 'Profil efekti',      type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' },
   name_effect:   { label: 'İsim efekti',        type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
-  avatar_frame:  { label: 'Avatar çerçevesi',   type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
-  lobby_theme:   { label: 'Lobi teması',        type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
+  lobby_theme:   { label: 'Lobi teması',        type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' },
   lobby_image:   { label: 'Lobi görseli hakkı', type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
   custom_emoji:  { label: 'Özel emoji',         type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
-  sticker_pack:  { label: 'Sticker paketi',     type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' }
+  sticker_pack:  { label: 'Sticker paketi',     type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' }
 };
 
 function listGiftProducts() {
@@ -3182,7 +3198,7 @@ function getHubDetail(hubId, userId) {
   const members = db.prepare(`
     SELECT hub_members.user_id, hub_members.role_id, hub_members.permission_tier, users.username, users.status, users.avatar_data, users.avatar_visibility, users.minor_until, users.profile_color,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) AS avatar_frame,
-           EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product = 'plus' AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) AS plus_active
+           EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) AS plus_active
     FROM hub_members
     INNER JOIN users ON users.id = hub_members.user_id
     WHERE hub_members.hub_id = ?
@@ -3199,7 +3215,7 @@ function getHubDetail(hubId, userId) {
 
   return {
     ...hub,
-    theme: hasActivePlus(hub.created_by) ? (hub.theme || 'default') : 'default',
+    theme: hasFeature(hub.created_by, 'lobby_theme') ? (hub.theme || 'default') : 'default',
     roles,
     members,
     is_member: Boolean(membership),
@@ -3840,22 +3856,42 @@ const FILE_MAX_BYTES_PLUS = 100 * 1024 * 1024;
 // Sauran Plus: aktif abonelik var mı (entitlements'ta süresi geçmemiş 'plus' kaydı).
 function hasActivePlus(userId) {
   if (!userId) return false;
-  return Boolean(db.prepare(`SELECT 1 FROM entitlements WHERE user_id = ? AND product = 'plus' AND (expires_at IS NULL OR expires_at > datetime('now')) LIMIT 1`).get(userId));
+  return Boolean(db.prepare(`SELECT 1 FROM entitlements WHERE user_id = ? AND product IN ('plus', 'premium') AND (expires_at IS NULL OR expires_at > datetime('now')) LIMIT 1`).get(userId));
+}
+
+// Tek tek açılabilen Plus özellikleri: aktif Plus/Premium hepsine sahiptir; Hediye Aracı'ndan tek bir özellik hediye edilen
+// kullanıcı (entitlements'ta o ürün anahtarıyla kalıcı kayıt) yalnızca o özelliği kullanır.
+const PLUS_FEATURES = ['profile_theme', 'profile_effect', 'name_effect', 'lobby_theme', 'lobby_image', 'sticker_pack', 'custom_emoji'];
+
+function hasFeature(userId, key) {
+  if (!userId || !PLUS_FEATURES.includes(key)) return false;
+  if (hasActivePlus(userId)) return true;
+  return Boolean(db.prepare(`SELECT 1 FROM entitlements WHERE user_id = ? AND product = ? AND (expires_at IS NULL OR expires_at > datetime('now')) LIMIT 1`).get(userId, key));
+}
+
+function listFeatures(userId) {
+  return PLUS_FEATURES.filter((k) => hasFeature(userId, k));
 }
 
 const PLUS_MONTHLY_COINS = 100;
+const PREMIUM_MONTHLY_COINS = 250;
+
+function hasActivePremium(userId) {
+  if (!userId) return false;
+  return Boolean(db.prepare(`SELECT 1 FROM entitlements WHERE user_id = ? AND product = 'premium' AND (expires_at IS NULL OR expires_at > datetime('now')) LIMIT 1`).get(userId));
+}
 
 // Şu anki aktif tüm Plus aboneleri için, bu ay (İstanbul takvimi) henüz verilmediyse 100 Coin yükler.
 // Açılışta ve günde bir çağrılır; her kullanıcı-ay için en fazla bir kez çalışır (plus_coin_grants UNIQUE).
 function grantMonthlyPlusCoins() {
   const month = istanbulDay().slice(0, 7); // 'YYYY-MM'
-  const activePlusUsers = db.prepare(`SELECT DISTINCT user_id FROM entitlements WHERE product = 'plus' AND (expires_at IS NULL OR expires_at > datetime('now'))`).all();
+  const activePlusUsers = db.prepare(`SELECT DISTINCT user_id FROM entitlements WHERE product IN ('plus', 'premium') AND (expires_at IS NULL OR expires_at > datetime('now'))`).all();
   let granted = 0;
   const insertGrant = db.prepare(`INSERT OR IGNORE INTO plus_coin_grants (user_id, month) VALUES (?, ?)`);
   for (const { user_id } of activePlusUsers) {
     const info = insertGrant.run(user_id, month);
     if (info.changes > 0) {
-      grantCoins(user_id, PLUS_MONTHLY_COINS, 'plus_monthly', month);
+      grantCoins(user_id, hasActivePremium(user_id) ? PREMIUM_MONTHLY_COINS : PLUS_MONTHLY_COINS, 'plus_monthly', month);
       granted += 1;
     }
   }
@@ -3937,7 +3973,7 @@ function stickerEmoji(id) {
 
 function validateStickerFor(userId, stickerId) {
   if (PLUS_STICKERS.includes(stickerId)) {
-    return hasActivePlus(userId) ? null : 'Bu çıkartma yalnızca Sauran Plus abonelerine açık.';
+    return hasFeature(userId, 'sticker_pack') ? null : 'Bu çıkartma yalnızca Sauran Plus abonelerine (ya da hediye edilenlere) açık.';
   }
   return STICKERS.includes(stickerId) ? null : 'Geçersiz çıkartma.';
 }
@@ -4365,7 +4401,7 @@ function listFriends(userId) {
   return db.prepare(`
     SELECT users.id, users.username, users.status, users.avatar_data, users.avatar_visibility, users.profile_color,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) AS avatar_frame,
-           EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product = 'plus' AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) AS plus_active
+           EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) AS plus_active
     FROM friendships
     INNER JOIN users ON users.id = CASE WHEN friendships.user_low = ? THEN friendships.user_high ELSE friendships.user_low END
     WHERE friendships.status = 'accepted' AND (friendships.user_low = ? OR friendships.user_high = ?)
@@ -4598,7 +4634,7 @@ function confirmPasswordReset(email, code, newPassword) {
 
 function getUserPublicProfile(viewerId, targetId) {
   const user = db.prepare(`
-    SELECT id, username, status, about_me, avatar_data, banner_data, avatar_visibility, minor_until, profile_color, profile_effect
+    SELECT id, username, status, about_me, avatar_data, banner_data, avatar_visibility, minor_until, profile_color, profile_effect, profile_theme
     FROM users WHERE id = ?
   `).get(targetId);
 
@@ -4620,7 +4656,8 @@ function getUserPublicProfile(viewerId, targetId) {
     banner_data: visible ? user.banner_data : null,
     avatar_frame: visible ? getEquippedCosmetics(targetId).avatar_frame : null,
     profile_color: (visible && hasActivePlus(targetId)) ? user.profile_color : null,
-    profile_effect: (visible && hasActivePlus(targetId)) ? (user.profile_effect || 'none') : 'none',
+    profile_effect: (visible && hasFeature(targetId, 'profile_effect')) ? (user.profile_effect || 'none') : 'none',
+    profile_theme: hasFeature(targetId, 'profile_theme') ? (user.profile_theme || 'default') : 'default',
     plus_active: hasActivePlus(targetId),
     friendship_status: isSelf ? 'self' : friendship,
     blocked_by_me: blockedByMe
@@ -6451,12 +6488,18 @@ module.exports = {
   grantCosmetic,
   equipCosmetic,
   hasActivePlus,
+  hasActivePremium,
+  hasFeature,
+  listFeatures,
+  PLUS_FEATURES,
   grantMonthlyPlusCoins,
   CHAT_THEMES,
   updateChatTheme,
   updateProfileColor,
   PROFILE_EFFECTS,
   updateProfileEffect,
+  PROFILE_THEMES,
+  updateProfileTheme,
   GIFT_PRODUCTS,
   listGiftProducts,
   giftProduct,

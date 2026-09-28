@@ -76,11 +76,15 @@ const {
   saveDmSticker,
   likeHub,
   hasActivePlus,
+  hasActivePremium,
+  hasFeature,
+  listFeatures,
   grantMonthlyPlusCoins,
   CHAT_THEMES,
   updateChatTheme,
   updateProfileColor,
   updateProfileEffect,
+  updateProfileTheme,
   listGiftProducts,
   giftProduct,
   listRecentGifts,
@@ -409,7 +413,7 @@ function getUserFromSessionToken(token) {
 
   const user = db.prepare(`
     SELECT users.id, users.username, users.email, users.about_me,
-           users.status, users.avatar_visibility, users.avatar_data, users.banner_data, users.chat_theme, users.profile_color, users.profile_effect,
+           users.status, users.avatar_visibility, users.avatar_data, users.banner_data, users.chat_theme, users.profile_color, users.profile_effect, users.profile_theme,
            users.minor_until, users.platform_role, users.dev_notice_seen, users.dev_notice_new, users.account_status,
            users.role_acceptance_pending, users.role_accepted_role, users.role_notice_kind, users.role_notice_at,
            sessions.expires_at
@@ -442,6 +446,7 @@ function getUserFromSessionToken(token) {
     chat_theme: user.chat_theme,
     profile_color: user.profile_color,
     profile_effect: user.profile_effect,
+    profile_theme: user.profile_theme,
     is_minor: isMinorUntil(user.minor_until),
     ...platformRoleFields(user),
     dev_notice: devNoticeFor(user.dev_notice_seen, user.dev_notice_new)
@@ -637,7 +642,7 @@ app.get('/api/me', (req, res) => {
     }
 
     const plusActive = hasActivePlus(user.id);
-    return res.json({ success: true, user: { ...user, avatar_frame: getEquippedCosmetics(user.id).avatar_frame, plus_active: plusActive, chat_theme: plusActive ? (user.chat_theme || 'classic') : 'classic', profile_color: plusActive ? (user.profile_color || null) : null, profile_effect: plusActive ? (user.profile_effect || 'none') : 'none' } });
+    return res.json({ success: true, user: { ...user, avatar_frame: getEquippedCosmetics(user.id).avatar_frame, plus_active: plusActive, chat_theme: plusActive ? (user.chat_theme || 'classic') : 'classic', profile_color: plusActive ? (user.profile_color || null) : null, profile_effect: hasFeature(user.id, 'profile_effect') ? (user.profile_effect || 'none') : 'none', profile_theme: hasFeature(user.id, 'profile_theme') ? (user.profile_theme || 'default') : 'default', features: listFeatures(user.id), premium_active: hasActivePremium(user.id) } });
 
   } catch (error) {
     console.error('Session kontrol hatası:', error);
@@ -913,6 +918,21 @@ app.patch('/api/profile/effect', (req, res) => {
     return res.json(result);
   } catch (error) {
     console.error('Profil efekti güncelleme hatası:', error);
+    return res.status(500).json({ success: false, error: 'Güncellenemedi.' });
+  }
+});
+
+// Sauran Plus: profil teması (default/midnight/sunset/forest/sakura/ocean); Plus ya da hediye şartı updateProfileTheme içinde.
+app.patch('/api/profile/theme', (req, res) => {
+  try {
+    const user = getUserFromRequest(req);
+    if (!user) return res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
+
+    const result = updateProfileTheme(user.id, req.body.profile_theme);
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (error) {
+    console.error('Profil teması güncelleme hatası:', error);
     return res.status(500).json({ success: false, error: 'Güncellenemedi.' });
   }
 });

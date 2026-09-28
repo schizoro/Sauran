@@ -62,6 +62,11 @@ function stickerInnerHtml(id) {
     return stickerEmoji(id);
 }
 
+// Sunucu /api/me ile kullanıcının açık özelliklerini gönderir (Plus/Premium hepsi, hediye tek özellik).
+function userHasFeature(key) {
+    return Boolean(currentUser && Array.isArray(currentUser.features) && currentUser.features.includes(key));
+}
+
 function stickerIsPlus(id) {
     return Boolean(id && id.startsWith('plus-'));
 }
@@ -1843,6 +1848,7 @@ function renderProfile() {
     applyAvatarFrame(document.getElementById('rail-profile'), currentUser.avatar_frame);
     applyAvatarFrame(document.getElementById('profile-modal-avatar-wrap'), currentUser.avatar_frame);
     applyProfileEffect(document.getElementById('profile-modal-avatar-wrap'), currentUser.profile_effect);
+    applyProfileTheme(document.querySelector('#profile-modal .profile-modal-box'), currentUser.profile_theme);
 
     const color =
         resolveUserColor(
@@ -3931,6 +3937,7 @@ profileBtn.addEventListener(
         }
         renderChatThemePicker();
         renderProfileColorPicker();
+        renderProfileThemePicker();
         renderProfileEffectPicker();
 
     }
@@ -4029,12 +4036,53 @@ document.getElementById('profile-color-reset-btn')?.addEventListener('click', ()
     if (!btn.disabled) saveProfileColor(null);
 });
 
+// Sauran Plus: profil teması (pencerenin renk şeması). Aynı kilit deseni.
+function renderProfileThemePicker() {
+    const picker = document.getElementById('profile-theme-picker');
+    const hint = document.getElementById('profile-theme-hint');
+    if (!picker || !currentUser) return;
+    const allowed = userHasFeature('profile_theme');
+    const active = currentUser.profile_theme || 'default';
+    picker.querySelectorAll('.chat-theme-option').forEach((btn) => {
+        const theme = btn.dataset.ptheme;
+        btn.disabled = theme !== 'default' && !allowed;
+        btn.classList.toggle('selected', theme === active);
+        btn.title = btn.disabled ? 'Sauran Plus gerekli' : '';
+    });
+    hint.textContent = allowed ? '' : 'Profil temaları Sauran Plus abonelerine açıktır.';
+}
+
+function applyProfileTheme(boxEl, theme) {
+    if (boxEl) boxEl.dataset.profileTheme = theme || 'default';
+}
+
+document.getElementById('profile-theme-picker')?.addEventListener('click', async (event) => {
+    const btn = event.target.closest('.chat-theme-option');
+    if (!btn || btn.disabled) return;
+    try {
+        const response = await fetch('/api/profile/theme', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ profile_theme: btn.dataset.ptheme })
+        });
+        const data = await response.json();
+        if (!data.success) { showToast(data.error || 'Güncellenemedi.'); return; }
+        currentUser.profile_theme = data.profile_theme;
+        renderProfileThemePicker();
+        renderProfile();
+    } catch (error) {
+        console.error('Profil teması güncellenemedi:', error);
+        showToast('Güncellenemedi.');
+    }
+});
+
 // Sauran Plus: profil penceresinde avatar çevresinde animasyonlu efekt. Aynı kilit deseni.
 function renderProfileEffectPicker() {
     const picker = document.getElementById('profile-effect-picker');
     const hint = document.getElementById('profile-effect-hint');
     if (!picker || !currentUser) return;
-    const isPlus = Boolean(currentUser.plus_active);
+    const isPlus = userHasFeature('profile_effect');
     const active = currentUser.profile_effect || 'none';
     picker.querySelectorAll('.chat-theme-option').forEach((btn) => {
         const effect = btn.dataset.effect;
@@ -6641,6 +6689,7 @@ function renderOtherProfile() {
 
     applyAvatarFrame(document.getElementById('other-profile-avatar-wrap'), profile.avatar_frame);
     applyProfileEffect(document.getElementById('other-profile-avatar-wrap'), profile.profile_effect);
+    applyProfileTheme(document.querySelector('#other-profile-modal .profile-modal-box'), profile.profile_theme);
     otherProfileAvatarImg.src = hasAvatar ? profile.avatar_data : '';
     otherProfileAvatarImg.style.display = hasAvatar ? 'block' : 'none';
 
@@ -7888,7 +7937,7 @@ function wireStickerPicker(prefix, onPick) {
         btn.innerHTML = stickerInnerHtml(sticker.id);
         btn.title = 'Sauran Plus';
         btn.addEventListener('click', () => {
-            if (!currentUser?.plus_active) {
+            if (!userHasFeature('sticker_pack')) {
                 showToast('Hareketli çıkartmalar Sauran Plus abonelerine açıktır.');
                 return;
             }
@@ -9107,7 +9156,7 @@ function renderHubThemePicker() {
     const block = document.getElementById('hubset-theme-block');
     if (!block || !currentHub) return;
     block.style.display = currentHub.is_owner ? '' : 'none';
-    const isPlus = Boolean(currentUser?.plus_active);
+    const isPlus = userHasFeature('lobby_theme');
     document.querySelectorAll('#hubset-theme-picker .chat-theme-option').forEach((btn) => {
         const theme = btn.dataset.hubTheme;
         btn.disabled = theme !== 'default' && !isPlus;
