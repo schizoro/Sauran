@@ -1831,9 +1831,16 @@ function supporterFrameOverlayHtml() {
 }
 
 // Sauran Plus çerçevesi: satın alınmaz/hediye edilmez — aktif abonelikte otomatik açılır. Mesaj balonundaki
-// gibi yükselen mor ışıltı tozuyla, dönen bir halka (saf CSS, görsel dosya gerekmez).
+// gibi yükselen mor ışıltı tozuyla, iki katmanlı zıt yönde dönen halka + nabız atan dış parıltı +
+// sabit duran küçük yıldız pırıltılarıyla (saf CSS, görsel dosya gerekmez) — sade bir parlamadan daha zengin.
 function plusFrameOverlayHtml() {
-    return `<span class="pf-overlay" aria-hidden="true"><span class="pf-ring"></span><span class="pf-dust"></span><span class="pf-dust"></span><span class="pf-dust"></span><span class="pf-dust"></span></span>`;
+    return `<span class="pf-overlay" aria-hidden="true">
+        <span class="pf-glow"></span>
+        <span class="pf-ring pf-ring-outer"></span>
+        <span class="pf-ring pf-ring-inner"></span>
+        <span class="pf-dust"></span><span class="pf-dust"></span><span class="pf-dust"></span><span class="pf-dust"></span><span class="pf-dust"></span><span class="pf-dust"></span><span class="pf-dust"></span>
+        <span class="pf-spark"></span><span class="pf-spark"></span><span class="pf-spark"></span>
+    </span>`;
 }
 function frameOverlayHtml(frameKey) {
     if (frameKey === 'supporter') return supporterFrameOverlayHtml();
