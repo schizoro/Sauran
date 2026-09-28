@@ -850,7 +850,7 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 .hub-side-backdrop { display: none; }
 .hub-side-backdrop.open { display: block; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45); z-index: 55; }
 
-.hub-members-toggle-btn {
+button.hub-members-toggle-btn {
   position: fixed; top: 50%; right: 0; transform: translateY(-50%);
   width: 26px; height: 52px; border-radius: 12px 0 0 12px; z-index: 61;
   display: flex; align-items: center; justify-content: center; padding: 0;
