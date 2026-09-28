@@ -86,6 +86,7 @@ const {
   updateProfileEffect,
   updateProfileTheme,
   updateNameEffect,
+  updateActivity,
   listGiftProducts,
   giftProduct,
   listRecentGifts,
@@ -414,7 +415,7 @@ function getUserFromSessionToken(token) {
 
   const user = db.prepare(`
     SELECT users.id, users.username, users.email, users.about_me,
-           users.status, users.avatar_visibility, users.avatar_data, users.banner_data, users.chat_theme, users.profile_color, users.profile_effect, users.profile_theme, users.name_effect,
+           users.status, users.avatar_visibility, users.avatar_data, users.banner_data, users.chat_theme, users.profile_color, users.profile_effect, users.profile_theme, users.name_effect, users.activity_text, users.show_activity,
            users.minor_until, users.platform_role, users.dev_notice_seen, users.dev_notice_new, users.account_status,
            users.role_acceptance_pending, users.role_accepted_role, users.role_notice_kind, users.role_notice_at,
            sessions.expires_at
@@ -449,6 +450,8 @@ function getUserFromSessionToken(token) {
     profile_effect: user.profile_effect,
     profile_theme: user.profile_theme,
     name_effect: user.name_effect,
+    activity_text: user.activity_text || '',
+    show_activity: user.show_activity !== 0,
     is_minor: isMinorUntil(user.minor_until),
     ...platformRoleFields(user),
     dev_notice: devNoticeFor(user.dev_notice_seen, user.dev_notice_new)
@@ -950,6 +953,22 @@ app.patch('/api/profile/name-effect', (req, res) => {
     return res.json(result);
   } catch (error) {
     console.error('İsim efekti güncelleme hatası:', error);
+    return res.status(500).json({ success: false, error: 'Güncellenemedi.' });
+  }
+});
+
+// "Şu an ne oynuyorum": metin ve paylaşım anahtarı. Yalnızca arkadaşlar görür (getUserPublicProfile / listFriends).
+app.patch('/api/profile/activity', (req, res) => {
+  try {
+    const user = getUserFromRequest(req);
+    if (!user) return res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
+
+    const body = req.body || {};
+    const result = updateActivity(user.id, { text: body.activity_text, show: body.show_activity });
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (error) {
+    console.error('Etkinlik güncelleme hatası:', error);
     return res.status(500).json({ success: false, error: 'Güncellenemedi.' });
   }
 });

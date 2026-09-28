@@ -94,6 +94,12 @@ if (!userColumns.includes('profile_color')) {
   // Sauran Plus: kullanıcı adından otomatik hesaplanan rengin yerine geçen özel renk (hex). Plus bitince yok sayılır.
   db.exec(`ALTER TABLE users ADD COLUMN profile_color TEXT`);
 }
+if (!userColumns.includes('activity_text')) {
+  // "Şu an ne oynuyorum": kullanıcının elle yazdığı kısa etkinlik; yalnızca arkadaşlar görür, 12 saat sonra bayatlar.
+  db.exec(`ALTER TABLE users ADD COLUMN activity_text TEXT`);
+  db.exec(`ALTER TABLE users ADD COLUMN activity_at DATETIME`);
+  db.exec(`ALTER TABLE users ADD COLUMN show_activity INTEGER NOT NULL DEFAULT 1`);
+}
 if (!userColumns.includes('name_effect')) {
   // Sauran Plus: kullanıcı adı metni için animasyonlu efekt (none/gradient/glow/rainbow/shimmer).
   db.exec(`ALTER TABLE users ADD COLUMN name_effect TEXT DEFAULT 'none'`);
@@ -2382,6 +2388,36 @@ function updateProfileColor(userId, color) {
   return { success: true, profile_color: value };
 }
 
+// "Şu an ne oynuyorum": elle girilen kısa metin. Arkadaşlara yalnızca kullanıcı paylaşımı açıksa ve 12 saatten yeniyse gösterilir.
+const ACTIVITY_MAX_CHARS = 40;
+const ACTIVITY_FRESH_HOURS = 12;
+
+function updateActivity(userId, { text, show }) {
+  const sets = [];
+  const params = [];
+  if (text !== undefined) {
+    const clean = String(text || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (clean.length > ACTIVITY_MAX_CHARS) return { success: false, error: `En fazla ${ACTIVITY_MAX_CHARS} karakter.` };
+    if (/https?:\/\/|www\./i.test(clean)) return { success: false, error: 'Bağlantı yazılamaz.' };
+    sets.push('activity_text = ?', 'activity_at = CURRENT_TIMESTAMP');
+    params.push(clean || null);
+  }
+  if (show !== undefined) {
+    sets.push('show_activity = ?');
+    params.push(show ? 1 : 0);
+  }
+  if (!sets.length) return { success: false, error: 'Değişiklik yok.' };
+  db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...params, userId);
+  const row = db.prepare(`SELECT activity_text, show_activity FROM users WHERE id = ?`).get(userId);
+  return { success: true, activity_text: row.activity_text || '', show_activity: Boolean(row.show_activity) };
+}
+
+function freshActivity(row) {
+  if (!row || !row.show_activity || !row.activity_text || !row.activity_at) return null;
+  const at = new Date(String(row.activity_at).replace(' ', 'T') + 'Z').getTime();
+  return Date.now() - at <= ACTIVITY_FRESH_HOURS * 3600 * 1000 ? row.activity_text : null;
+}
+
 // Sauran Plus: kullanıcı adı efekti. 'none' herkese açık; diğerleri Plus'a ya da hediye edilene.
 const NAME_EFFECTS = ['none', 'gradient', 'glow', 'rainbow', 'shimmer'];
 
@@ -4432,14 +4468,14 @@ function getFriendshipStatus(a, b) {
 
 function listFriends(userId) {
   return db.prepare(`
-    SELECT users.id, users.username, users.status, users.avatar_data, users.avatar_visibility, users.profile_color, users.name_effect,
+    SELECT users.id, users.username, users.status, users.avatar_data, users.avatar_visibility, users.profile_color, users.name_effect, users.activity_text, users.activity_at, users.show_activity,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) AS avatar_frame,
            EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) AS plus_active
     FROM friendships
     INNER JOIN users ON users.id = CASE WHEN friendships.user_low = ? THEN friendships.user_high ELSE friendships.user_low END
     WHERE friendships.status = 'accepted' AND (friendships.user_low = ? OR friendships.user_high = ?)
     ORDER BY users.username COLLATE NOCASE
-  `).all(userId, userId, userId).map((f) => { const { avatar_visibility, ...rest } = f; if (!rest.plus_active) rest.profile_color = null; if (!hasFeature(f.id, 'name_effect')) rest.name_effect = 'none'; return maskAvatarFor(userId, f.id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']); });
+  `).all(userId, userId, userId).map((f) => { const { avatar_visibility, activity_text, activity_at, show_activity, ...rest } = f; rest.activity = freshActivity({ activity_text, activity_at, show_activity }); if (!rest.plus_active) rest.profile_color = null; if (!hasFeature(f.id, 'name_effect')) rest.name_effect = 'none'; return maskAvatarFor(userId, f.id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']); });
 }
 
 function listIncomingRequests(userId) {
@@ -4667,7 +4703,7 @@ function confirmPasswordReset(email, code, newPassword) {
 
 function getUserPublicProfile(viewerId, targetId) {
   const user = db.prepare(`
-    SELECT id, username, status, about_me, avatar_data, banner_data, avatar_visibility, minor_until, profile_color, profile_effect, profile_theme, name_effect
+    SELECT id, username, status, about_me, avatar_data, banner_data, avatar_visibility, minor_until, profile_color, profile_effect, profile_theme, name_effect, activity_text, activity_at, show_activity
     FROM users WHERE id = ?
   `).get(targetId);
 
@@ -4692,6 +4728,7 @@ function getUserPublicProfile(viewerId, targetId) {
     profile_effect: (visible && hasFeature(targetId, 'profile_effect')) ? (user.profile_effect || 'none') : 'none',
     profile_theme: hasFeature(targetId, 'profile_theme') ? (user.profile_theme || 'default') : 'default',
     name_effect: hasFeature(targetId, 'name_effect') ? (user.name_effect || 'none') : 'none',
+    activity: (isSelf || (viewerId != null && areFriends(viewerId, targetId))) ? freshActivity(user) : null,
     plus_active: hasActivePlus(targetId),
     friendship_status: isSelf ? 'self' : friendship,
     blocked_by_me: blockedByMe
@@ -6540,6 +6577,7 @@ module.exports = {
   updateProfileTheme,
   NAME_EFFECTS,
   updateNameEffect,
+  updateActivity,
   GIFT_PRODUCTS,
   listGiftProducts,
   giftProduct,

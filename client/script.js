@@ -3940,6 +3940,7 @@ profileBtn.addEventListener(
         renderProfileColorPicker();
         renderProfileThemePicker();
         renderNameEffectPicker();
+        renderActivityControls();
         renderProfileEffectPicker();
 
     }
@@ -4037,6 +4038,42 @@ document.getElementById('profile-color-reset-btn')?.addEventListener('click', ()
     const btn = document.getElementById('profile-color-reset-btn');
     if (!btn.disabled) saveProfileColor(null);
 });
+
+// "Şu an ne oynuyorum": kullanıcı yazar, isterse paylaşımı kapatır; yalnızca arkadaşlar görür.
+function renderActivityControls() {
+    const input = document.getElementById('activity-input');
+    const toggle = document.getElementById('activity-show-toggle');
+    if (!input || !currentUser) return;
+    input.value = currentUser.activity_text || '';
+    toggle.checked = currentUser.show_activity !== false;
+}
+
+async function saveActivity(payload) {
+    try {
+        const response = await fetch('/api/profile/activity', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (!data.success) { showToast(data.error || 'Güncellenemedi.'); return false; }
+        currentUser.activity_text = data.activity_text;
+        currentUser.show_activity = data.show_activity;
+        renderActivityControls();
+        return true;
+    } catch (error) {
+        console.error('Etkinlik güncellenemedi:', error);
+        showToast('Güncellenemedi.');
+        return false;
+    }
+}
+
+document.getElementById('activity-save-btn')?.addEventListener('click', async () => {
+    if (await saveActivity({ activity_text: document.getElementById('activity-input').value })) showToast('Kaydedildi.');
+});
+document.getElementById('activity-clear-btn')?.addEventListener('click', () => saveActivity({ activity_text: '' }));
+document.getElementById('activity-show-toggle')?.addEventListener('change', (event) => saveActivity({ show_activity: event.target.checked }));
 
 // Sauran Plus: isim efekti (kullanıcı adı metninde animasyon). Aynı kilit deseni.
 function renderNameEffectPicker() {
@@ -5656,7 +5693,7 @@ function renderFriendsSidebar(friends) {
                     ${frameOverlay}
                     <span class="status-hex status-hex-sm friends-sidebar-status ${statusClass}" title="${escapeAttr(statusTitle)}"></span>
                 </span>
-                <span class="friends-sidebar-name">${usernameCardHtml(f.username, f.plus_active, f.name_effect)}</span>
+                <span class="friends-sidebar-name">${usernameCardHtml(f.username, f.plus_active, f.name_effect)}${f.activity ? `<small class="friends-activity">🎮 ${escapeHtml(f.activity)}</small>` : ''}</span>
                 ${unread > 0 ? `<span class="friends-sidebar-unread">${unread}</span>` : ''}
             </div>
         `;
@@ -6783,6 +6820,11 @@ function renderOtherProfile() {
     otherProfileAvatarImg.src = hasAvatar ? profile.avatar_data : '';
     otherProfileAvatarImg.style.display = hasAvatar ? 'block' : 'none';
 
+    const otherActivityEl = document.getElementById('other-profile-activity');
+    if (otherActivityEl) {
+        otherActivityEl.style.display = profile.activity ? '' : 'none';
+        otherActivityEl.textContent = profile.activity ? `🎮 ${profile.activity}` : '';
+    }
     otherProfileUsername.innerHTML = `${usernameCardHtml(profile.username, profile.plus_active, profile.name_effect)}${plusBadgeHtml(profile.plus_active)}`;
 
     // ÖNEMLİ: presence (gerçek bağlantı durumu) ile kullanıcının seçtiği

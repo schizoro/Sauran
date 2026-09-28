@@ -1132,6 +1132,7 @@
 
                 <h3 id="other-profile-username" class="profile-modal-username"></h3>
                 <span id="other-profile-status-label" class="status-label"></span>
+                <span id="other-profile-activity" class="profile-activity" style="display:none;"></span>
 
             </div>
 
@@ -1309,6 +1310,17 @@
                         <span id="about-me-count" class="about-me-count">0/300</span>
                         <button id="about-me-save-btn" class="about-btn about-btn-primary" type="button" data-i18n="save">Kaydet</button>
                     </div>
+                </div>
+
+                <div class="profile-field-block">
+                    <span class="profile-field-label">Şu an ne oynuyorum?</span>
+                    <div class="activity-row">
+                        <input type="text" id="activity-input" class="hub-name-input" maxlength="40" placeholder="Örn. Mobile Legends">
+                        <button type="button" id="activity-save-btn" class="about-btn about-btn-primary">Kaydet</button>
+                        <button type="button" id="activity-clear-btn" class="about-btn about-btn-ghost">Temizle</button>
+                    </div>
+                    <label class="activity-toggle"><input type="checkbox" id="activity-show-toggle"> <span>Arkadaşlarım profilimde ne oynadığımı görsün</span></label>
+                    <p class="hubset-hint">Yalnızca arkadaşların görür; 12 saat sonra kendiliğinden gizlenir.</p>
                 </div>
 
                 <div class="profile-field-block">
