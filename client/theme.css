@@ -285,12 +285,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 /* ── Sohbet: prototipteki gibi tek sütun, sola hizalı, kutusuz ───────── */
 #hub-messages, .hub-messages { max-width: 860px; margin-left: auto; margin-right: auto; width: 100%; }
 .hub-msg, .hub-msg.msg-mine { align-self: stretch; max-width: none; width: auto; flex-direction: row; padding: 8px 12px; gap: 14px; }
-/* Sauran Plus "Yumuşak"/"Kontrast" sohbet teması: arka planlı bir kutu olduğu için tam satır genişliği yerine
-   normal bir mesaj balonu gibi içeriğe göre boyutlanır (sola/sağa hizalı, taşan tozlar için relative+overflow:hidden). */
-.hub-msg.chat-theme-soft, .hub-msg.chat-theme-contrast, .dm-msg.chat-theme-soft, .dm-msg.chat-theme-contrast {
+/* Sauran Plus "Yumuşak"/"Kontrast" sohbet teması ve balon stilleri: kutu yalnızca iletinin kendisini sarar
+   (kullanıcı adı/avatar kutunun DIŞINDA kalır — bkz. .hub-msg-bubble, script.js applyChatTheme). Kutu, mesaj
+   uzunluğuna göre boyutlanır ve gönderene göre sola/sağa hizalanır (taşan tozlar için overflow: hidden). */
+.hub-msg-bubble { width: fit-content; max-width: 100%; }
+.dm-msg.chat-theme-soft, .dm-msg.chat-theme-contrast {
   align-self: flex-start; max-width: 78%; width: fit-content; overflow: hidden;
 }
-.hub-msg.msg-mine.chat-theme-soft, .hub-msg.msg-mine.chat-theme-contrast, .dm-msg.dm-msg-mine.chat-theme-soft, .dm-msg.dm-msg-mine.chat-theme-contrast {
+.dm-msg.dm-msg-mine.chat-theme-soft, .dm-msg.dm-msg-mine.chat-theme-contrast {
   align-self: flex-end;
 }
 .hub-msg.msg-mine .header { flex-direction: row; }
@@ -1261,28 +1263,29 @@ html.auth-pending #login-screen { visibility: hidden; }
   background: #fff; box-shadow: 0 0 4px rgba(255, 255, 255, .9);
 }
 
-/* ── Sauran Plus: temel sohbet temaları (yalnızca aboneyken sunucu bu değeri döndürür) ──── */
-.hub-msg.chat-theme-soft, .dm-msg.chat-theme-soft {
+/* ── Sauran Plus: temel sohbet temaları (yalnızca aboneyken sunucu bu değeri döndürür). Lobi'de sınıflar
+   .hub-msg-bubble üzerinde (yalnızca ileti), DM'de .dm-msg'nin kendisi üzerindedir (zaten yalnızca ileti). ── */
+.hub-msg-bubble.chat-theme-soft, .dm-msg.chat-theme-soft {
   background: linear-gradient(135deg, rgba(109, 91, 208, .10), rgba(79, 124, 255, .06));
   border-radius: 14px;
 }
-.hub-msg.chat-theme-contrast, .dm-msg.chat-theme-contrast {
+.hub-msg-bubble.chat-theme-contrast, .dm-msg.chat-theme-contrast {
   background: rgba(79, 124, 255, .05);
   border-left: 2.5px solid #6d5bd0;
   border-radius: 4px;
 }
-.hub-msg.chat-theme-soft.msg-mine, .dm-msg.chat-theme-soft.dm-msg-mine {
+.hub-msg.msg-mine .hub-msg-bubble.chat-theme-soft, .dm-msg.chat-theme-soft.dm-msg-mine {
   background: linear-gradient(135deg, rgba(109, 91, 208, .16), rgba(79, 124, 255, .10));
 }
-.hub-msg.chat-theme-contrast.msg-mine, .dm-msg.chat-theme-contrast.dm-msg-mine {
+.hub-msg.msg-mine .hub-msg-bubble.chat-theme-contrast, .dm-msg.chat-theme-contrast.dm-msg-mine {
   border-left-color: #4f7cff;
   background: rgba(109, 91, 208, .08);
 }
 
 /* "Yumuşak" temada kutunun alt kısmından üst kısmına doğru yükselen mor ışıltı tozu — kutu dışına taşmaz
-   (overflow: hidden, chat-theme-soft için yukarıda tanımlı), mesaj metninin ARKASINDA kalır (z-index). */
-.hub-msg.chat-theme-soft, .dm-msg.chat-theme-soft { position: relative; isolation: isolate; }
-.hub-msg.chat-theme-soft::before, .dm-msg.chat-theme-soft::before {
+   (overflow: hidden), mesaj metninin ARKASINDA kalır (z-index). */
+.hub-msg-bubble.chat-theme-soft, .dm-msg.chat-theme-soft { position: relative; isolation: isolate; overflow: hidden; }
+.hub-msg-bubble.chat-theme-soft::before, .dm-msg.chat-theme-soft::before {
   content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
   background-image:
     radial-gradient(circle, rgba(185, 139, 255, .85) 0 1.1px, transparent 1.6px),
@@ -1294,13 +1297,13 @@ html.auth-pending #login-screen { visibility: hidden; }
   background-position: 14% 100%, 42% 100%, 68% 100%, 86% 100%;
   animation: softDustRise 4.2s linear infinite;
 }
-.hub-msg.chat-theme-soft > *, .dm-msg.chat-theme-soft > * { position: relative; z-index: 1; }
+.hub-msg-bubble.chat-theme-soft > *, .dm-msg.chat-theme-soft > * { position: relative; z-index: 1; }
 @keyframes softDustRise {
   from { background-position: 14% 100%, 42% 100%, 68% 100%, 86% 100%; }
   to   { background-position: 14% -46px, 42% -58px, 68% -40px, 86% -52px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .hub-msg.chat-theme-soft::before, .dm-msg.chat-theme-soft::before { animation: none; opacity: .35; }
+  .hub-msg-bubble.chat-theme-soft::before, .dm-msg.chat-theme-soft::before { animation: none; opacity: .35; }
 }
 
 /* ── Sohbet Teması seçici (profil, yalnızca Plus için aktif) ─────────── */
@@ -1514,10 +1517,15 @@ html.auth-pending #login-screen { visibility: hidden; }
 .bubble-swatch-glass { background: linear-gradient(135deg, rgba(255,255,255,.28), rgba(255,255,255,.06)); box-shadow: 0 0 0 1px rgba(255,255,255,.3); border-radius: 8px; }
 .bubble-swatch-outline { background: transparent; box-shadow: 0 0 0 1.5px rgba(140, 170, 255, .7); border-radius: 8px; }
 .bubble-swatch-shadow { border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,.6); }
-.hub-msg.bubble-round, .dm-msg.bubble-round { border-radius: 22px; padding-left: 18px; padding-right: 18px; }
-.hub-msg.bubble-glass, .dm-msg.bubble-glass { border-radius: 14px; background: linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,.03)); box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-.hub-msg.bubble-outline, .dm-msg.bubble-outline { border-radius: 12px; background: transparent; box-shadow: inset 0 0 0 1.5px rgba(140, 170, 255, .55); }
-.hub-msg.bubble-shadow, .dm-msg.bubble-shadow { border-radius: 12px; box-shadow: 0 6px 16px rgba(0, 0, 0, .45); }
+/* Lobi'de balon sınıfları .hub-msg-bubble üzerinde (yalnızca ileti); DM'de .dm-msg'nin kendisi üzerinde. */
+.hub-msg-bubble.chat-theme-soft, .hub-msg-bubble.chat-theme-contrast,
+.hub-msg-bubble.bubble-round, .hub-msg-bubble.bubble-glass, .hub-msg-bubble.bubble-outline, .hub-msg-bubble.bubble-shadow {
+  padding: 6px 12px;
+}
+.hub-msg-bubble.bubble-round, .dm-msg.bubble-round { border-radius: 22px; padding-left: 18px; padding-right: 18px; }
+.hub-msg-bubble.bubble-glass, .dm-msg.bubble-glass { border-radius: 14px; background: linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,.03)); box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.hub-msg-bubble.bubble-outline, .dm-msg.bubble-outline { border-radius: 12px; background: transparent; box-shadow: inset 0 0 0 1.5px rgba(140, 170, 255, .55); }
+.hub-msg-bubble.bubble-shadow, .dm-msg.bubble-shadow { border-radius: 12px; box-shadow: 0 6px 16px rgba(0, 0, 0, .45); }
 
 .screenshare-fps-badge { position: absolute; left: 8px; bottom: 8px; z-index: 5; padding: 2px 8px; border-radius: 999px; background: rgba(0,0,0,.65); color: #7ee787; font-size: 12px; font-weight: 700; pointer-events: none; }
 

@@ -4302,7 +4302,7 @@ document.getElementById('bubble-style-picker')?.addEventListener('click', async 
         currentUser.bubble_style = data.bubble_style;
         renderBubbleStylePicker();
         document.querySelectorAll('.hub-msg, .dm-msg').forEach((el) => {
-            if (String(el.dataset.userId || '') === String(currentUser.id)) applyChatTheme(el, currentUser.id, currentUser.chat_theme, data.bubble_style);
+            if (String(el.dataset.userId || '') === String(currentUser.id)) applyChatTheme(el, currentUser.id, currentUser.chat_theme, data.bubble_style, el.querySelector('.hub-msg-bubble') || el);
         });
     } catch (error) {
         console.error('Balon stili güncellenemedi:', error);
@@ -7508,13 +7508,16 @@ function resolveBubbleStyle(userId, style) {
     if (currentUser && userId === currentUser.id) return currentUser.bubble_style || 'default';
     return knownBubbleStyles.get(userId) || 'default';
 }
-function applyChatTheme(wrap, userId, theme, bubble) {
+// target: sınıfların uygulanacağı öğe — DM'de balonun kendisi (wrap), Lobi'de ise yalnızca ileti
+// içeriğini saran .hub-msg-bubble (kullanıcı adı/avatar kutunun DIŞINDA kalsın diye). Belirtilmezse wrap kullanılır.
+function applyChatTheme(wrap, userId, theme, bubble, target) {
+    const el = target || wrap;
     const resolved = resolveChatTheme(userId, theme);
-    CHAT_THEME_CLASSES.forEach((c) => wrap.classList.remove(c));
-    if (resolved && resolved !== 'classic') wrap.classList.add('chat-theme-' + resolved);
+    CHAT_THEME_CLASSES.forEach((c) => el.classList.remove(c));
+    if (resolved && resolved !== 'classic') el.classList.add('chat-theme-' + resolved);
     const b = resolveBubbleStyle(userId, bubble);
-    BUBBLE_CLASSES.forEach((c) => wrap.classList.remove(c));
-    if (b && b !== 'default') wrap.classList.add('bubble-' + b);
+    BUBBLE_CLASSES.forEach((c) => el.classList.remove(c));
+    if (b && b !== 'default') el.classList.add('bubble-' + b);
 }
 
 // Sauran Plus: özel profil rengi. getUserColor(username) yerine bu kullanılır — aynı önbellek deseni
@@ -13097,7 +13100,6 @@ function renderHubMessageIntoWrap(wrap, msg) {
 
     const isMine = currentUser && msg.user_id === currentUser.id;
     wrap.classList.toggle('msg-mine', Boolean(isMine));
-    applyChatTheme(wrap, msg.user_id, msg.chat_theme, msg.bubble_style);
     const opts = { context: 'hub' };
     const actions = buildMsgActionsBarHtml(msg, opts);
     const replyQuote = buildMsgReplyQuoteHtml(msg);
@@ -13141,7 +13143,10 @@ function renderHubMessageIntoWrap(wrap, msg) {
 
     }
 
-    wrap.innerHTML = `${avatar}<div class="hub-msg-body">${header}${actions}${replyQuote}${body}${reactionsRow}</div>`;
+    wrap.innerHTML = `${avatar}<div class="hub-msg-body">${header}${actions}<div class="hub-msg-bubble">${replyQuote}${body}</div>${reactionsRow}</div>`;
+
+    // Sohbet teması/balon stili yalnızca .hub-msg-bubble'a uygulanır — kullanıcı adı ve avatar kutunun dışında kalır.
+    applyChatTheme(wrap, msg.user_id, msg.chat_theme, msg.bubble_style, wrap.querySelector('.hub-msg-bubble'));
 
     wireVoiceCards(wrap);
     wireMsgAvatars(wrap);
