@@ -1428,3 +1428,11 @@ html.auth-pending #login-screen { visibility: hidden; }
 @keyframes nfxSlide { from { background-position: 0% 0; } to { background-position: -200% 0; } }
 @keyframes nfxGlow { 0%, 100% { text-shadow: 0 0 3px rgba(92, 200, 255, .45); } 50% { text-shadow: 0 0 8px rgba(92, 200, 255, .95), 0 0 14px rgba(185, 139, 255, .6); } }
 @media (prefers-reduced-motion: reduce) { .name-fx { animation: none !important; } }
+
+/* ── Sauran Plus "Lobi Arka Planı": Lobi sahibinin yüklediği görsel, okunabilirlik için koyulaştırılarak sohbet alanına yerleşir ── */
+.hub-detail-view.has-hub-bg {
+  background-image: linear-gradient(rgba(10, 13, 17, .74), rgba(10, 13, 17, .88)), var(--hub-bg-image);
+  background-size: cover; background-position: center;
+}
+.hub-bg-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.hub-bg-preview { width: 72px; height: 41px; border-radius: 8px; background: var(--glass-2, rgba(255,255,255,.06)) center / cover no-repeat; box-shadow: 0 0 0 1px var(--border-soft, rgba(255,255,255,.1)); flex-shrink: 0; }

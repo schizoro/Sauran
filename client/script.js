@@ -9198,6 +9198,35 @@ const hubSettingsSaveBtn = document.getElementById('hub-settings-save-btn');
 
 let hubSettingsNewImageData = undefined;
 let hubSettingsTheme = 'default';
+let hubSettingsBgImage = undefined; // undefined = değişmedi, null = kaldır, string = yeni görsel
+
+function renderHubBgControls() {
+    const preview = document.getElementById('hubset-bg-preview');
+    if (!preview || !currentHub) return;
+    const allowed = userHasFeature('lobby_image');
+    const shown = hubSettingsBgImage === undefined ? currentHub.bg_image : hubSettingsBgImage;
+    preview.style.backgroundImage = shown ? `url(${shown})` : '';
+    document.getElementById('hubset-bg-pick-btn').disabled = !allowed;
+    document.getElementById('hubset-bg-clear-btn').disabled = !allowed || !shown;
+    document.getElementById('hubset-bg-hint').textContent = allowed ? '' : 'Lobi arka planı Sauran Plus abonelerine açıktır.';
+}
+
+document.getElementById('hubset-bg-pick-btn')?.addEventListener('click', () => document.getElementById('hubset-bg-input').click());
+document.getElementById('hubset-bg-clear-btn')?.addEventListener('click', () => { hubSettingsBgImage = null; renderHubBgControls(); });
+document.getElementById('hubset-bg-input')?.addEventListener('change', async (event) => {
+    const file = event.target.files[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+        const dataUrl = await openImageCropper(file, { aspect: 16 / 9, outWidth: 960, title: 'Lobi Arka Planını Kırp' });
+        if (!dataUrl) return;
+        hubSettingsBgImage = dataUrl;
+        renderHubBgControls();
+    } catch (error) {
+        console.error('Arka plan işlenemedi:', error);
+        showToast('Görsel işlenemedi.');
+    }
+});
 
 function renderHubThemePicker() {
     const block = document.getElementById('hubset-theme-block');
@@ -9226,7 +9255,9 @@ hubSettingsOpenBtn.addEventListener('click', () => {
 
     hubSettingsNewImageData = undefined;
     hubSettingsTheme = currentHub.theme || 'default';
+    hubSettingsBgImage = undefined;
     renderHubThemePicker();
+    renderHubBgControls();
     hubSettingsNameInput.value = currentHub.name || '';
     hubSettingsError.textContent = '';
 
@@ -10019,6 +10050,7 @@ hubSettingsSaveBtn.addEventListener('click', async () => {
     if (currentHub.is_owner) {
         Object.assign(body, collectHubDiscoverSettings());
         if (hubSettingsTheme !== (currentHub.theme || 'default')) body.theme = hubSettingsTheme;
+        if (hubSettingsBgImage !== undefined) body.bg_image = hubSettingsBgImage;
     }
 
     try {
@@ -10755,6 +10787,9 @@ function renderHubDetail() {
     if (!currentHub) return;
 
     hubDetailView.dataset.hubTheme = currentHub.theme || 'default';
+    hubDetailView.classList.toggle('has-hub-bg', Boolean(currentHub.bg_image));
+    if (currentHub.bg_image) hubDetailView.style.setProperty('--hub-bg-image', `url(${currentHub.bg_image})`);
+    else hubDetailView.style.removeProperty('--hub-bg-image');
 
     if (currentHub.image_data) {
         hubDetailIcon.innerHTML = `<img src="${currentHub.image_data}" alt="" style="width:22px;height:22px;border-radius:6px;object-fit:cover;">`;

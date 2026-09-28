@@ -261,6 +261,10 @@ const DISCOVER_HUB_COLUMNS = {
 for (const [column, definition] of Object.entries(DISCOVER_HUB_COLUMNS)) {
   if (!hubColumns.includes(column)) db.exec(`ALTER TABLE hubs ADD COLUMN ${column} ${definition}`);
 }
+if (!hubColumns.includes('bg_image')) {
+  // Sauran Plus: Lobi arka plan görseli (kırpılmış data URL). Sahibin yetkisi yoksa istemciye gönderilmez.
+  db.exec(`ALTER TABLE hubs ADD COLUMN bg_image TEXT`);
+}
 if (!hubColumns.includes('theme')) {
   // Sauran Plus: Lobi teması (yalnızca Plus abonesi Lobi sahibi ayarlayabilir; sahibin Plus'ı bitince 'default' görünür).
   db.exec(`ALTER TABLE hubs ADD COLUMN theme TEXT NOT NULL DEFAULT 'default'`);
@@ -2642,7 +2646,9 @@ function createHub(userId, { name, image_data, ...discovery }) {
 
 const HUB_THEMES = ['default', 'aurora', 'ember', 'forest'];
 
-function updateHub(hubId, userId, { name, image_data, theme, ...discovery }) {
+const HUB_BG_MAX_CHARS = 900_000;
+
+function updateHub(hubId, userId, { name, image_data, theme, bg_image, ...discovery }) {
   const hub = db.prepare(`SELECT * FROM hubs WHERE id = ?`).get(hubId);
   if (!hub) return { success: false, error: 'Lobi bulunamadı.' };
   if (hub.created_by !== userId) return { success: false, error: 'Sadece Lobi sahibi düzenleyebilir.' };
@@ -2651,6 +2657,12 @@ function updateHub(hubId, userId, { name, image_data, theme, ...discovery }) {
     theme = String(theme || 'default');
     if (!HUB_THEMES.includes(theme)) return { success: false, error: 'Geçersiz Lobi teması.' };
     if (theme !== 'default' && !hasFeature(userId, 'lobby_theme')) return { success: false, error: 'Lobi teması yalnızca Sauran Plus abonelerine (ya da hediye edilenlere) açık.' };
+  }
+
+  if (bg_image) {
+    if (!hasFeature(userId, 'lobby_image')) return { success: false, error: 'Lobi arka plan görseli yalnızca Sauran Plus abonelerine (ya da hediye edilenlere) açık.' };
+    if (typeof bg_image !== 'string' || !/^data:image\/(png|jpe?g|webp);base64,/.test(bg_image)) return { success: false, error: 'Geçersiz arka plan görseli formatı.' };
+    if (bg_image.length > HUB_BG_MAX_CHARS) return { success: false, error: 'Arka plan görseli çok büyük.' };
   }
 
   // Keşfet alanları: hepsi doğrulanmadan hiçbir alan (ad/görsel dahil) değiştirilmez.
@@ -2675,6 +2687,7 @@ function updateHub(hubId, userId, { name, image_data, theme, ...discovery }) {
   }
 
   if (theme !== undefined) db.prepare(`UPDATE hubs SET theme = ? WHERE id = ?`).run(theme, hubId);
+  if (bg_image !== undefined) db.prepare(`UPDATE hubs SET bg_image = ? WHERE id = ?`).run(bg_image ? (stripImageMetadata(bg_image) || null) : null, hubId);
 
   for (const [key, value] of Object.entries(checked.fields)) {
     db.prepare(`UPDATE hubs SET ${key} = ? WHERE id = ?`).run(value, hubId);
@@ -3037,7 +3050,7 @@ const GIFT_PRODUCTS = {
   profile_effect:{ label: 'Profil efekti',      type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' },
   name_effect:   { label: 'İsim efekti',        type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' },
   lobby_theme:   { label: 'Lobi teması',        type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' },
-  lobby_image:   { label: 'Lobi görseli hakkı', type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
+  lobby_image:   { label: 'Lobi görseli hakkı', type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' },
   custom_emoji:  { label: 'Özel emoji',         type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
   sticker_pack:  { label: 'Sticker paketi',     type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' }
 };
@@ -3234,6 +3247,7 @@ function getHubDetail(hubId, userId) {
   return {
     ...hub,
     theme: hasFeature(hub.created_by, 'lobby_theme') ? (hub.theme || 'default') : 'default',
+    bg_image: hasFeature(hub.created_by, 'lobby_image') ? (hub.bg_image || null) : null,
     roles,
     members,
     is_member: Boolean(membership),
