@@ -1488,3 +1488,12 @@ html.auth-pending #login-screen { visibility: hidden; }
 .hub-msg.bubble-shadow, .dm-msg.bubble-shadow { border-radius: 12px; box-shadow: 0 6px 16px rgba(0, 0, 0, .45); }
 
 .screenshare-fps-badge { position: absolute; left: 8px; bottom: 8px; z-index: 5; padding: 2px 8px; border-radius: 999px; background: rgba(0,0,0,.65); color: #7ee787; font-size: 12px; font-weight: 700; pointer-events: none; }
+
+/* ── Ekran paylaşımı FPS seçici ── */
+.share-fps-box { width: 460px; }
+.share-fps-opt { display: block; width: 100%; text-align: left; margin-top: 10px; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.05); color: #e2e8f4; cursor: pointer; }
+.share-fps-opt:hover:not(:disabled) { border-color: rgba(92, 200, 255, .55); background: rgba(92, 200, 255, .1); }
+.share-fps-opt.selected { border-color: rgba(92, 200, 255, .7); box-shadow: 0 0 0 1px rgba(92, 200, 255, .35) inset; }
+.share-fps-opt:disabled { opacity: .45; cursor: default; }
+.share-fps-opt small { display: block; margin-top: 4px; color: #8e9bb0; font-size: 12px; }
+.share-fps-tag { font-size: 10px; padding: 1px 7px; border-radius: 999px; background: rgba(255, 190, 60, .18); color: #ffd28a; margin-left: 4px; }

@@ -4101,19 +4101,55 @@ document.getElementById('profile-color-reset-btn')?.addEventListener('click', ()
     if (!btn.disabled) saveProfileColor(null);
 });
 
-// Deneysel: 60 FPS ekran paylaşımı isteği (yalnızca Plus). Sonuç izleyicide ölçülen FPS rozetiyle görülür.
-document.getElementById('fps60-toggle')?.addEventListener('change', (event) => {
-    try { localStorage.setItem('sauran_fps60', event.target.checked ? '1' : '0'); } catch (_) {}
-});
-function renderFps60Toggle() {
-    const row = document.getElementById('fps60-row');
-    const toggle = document.getElementById('fps60-toggle');
-    if (!row || !toggle) return;
-    const isPlus = Boolean(currentUser?.plus_active);
-    row.style.display = isPlus ? '' : 'none';
-    let on = false;
-    try { on = localStorage.getItem('sauran_fps60') === '1'; } catch (_) {}
-    toggle.checked = on;
+// Ekran paylaşımı FPS seçici: 60 (Plus, deneysel) / 30 / 15. Son seçim hatırlanır.
+function askShareFps() {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('share-fps-modal');
+        const isPlus = Boolean(currentUser?.plus_active);
+        let last = '30';
+        try { last = localStorage.getItem('sauran_share_fps') || '30'; } catch (_) {}
+        if (last === '60' && !isPlus) last = '30';
+        const opts = [...modal.querySelectorAll('.share-fps-opt')];
+        const closeBtn = document.getElementById('share-fps-close-btn');
+        const finish = (value) => {
+            modal.style.display = 'none';
+            opts.forEach((o) => { o.onclick = null; });
+            closeBtn.onclick = null;
+            modal.onclick = null;
+            resolve(value);
+        };
+        opts.forEach((opt) => {
+            const fps = opt.dataset.fps;
+            opt.disabled = fps === '60' && !isPlus;
+            opt.classList.toggle('selected', fps === last);
+            opt.onclick = () => {
+                try { localStorage.setItem('sauran_share_fps', fps); } catch (_) {}
+                finish(fps);
+            };
+        });
+        closeBtn.onclick = () => finish(null);
+        modal.onclick = (e) => { if (e.target === modal) finish(null); };
+        modal.style.display = 'flex';
+    });
+}
+
+async function startScreenShareWithFps(fps, quality) {
+    const layers = {
+        '60': { low: { maxBitrate: 600000, maxFramerate: 15, scaleResolutionDownBy: 2 }, medium: { maxBitrate: 1200000, maxFramerate: 30, scaleResolutionDownBy: 1 }, high: { maxBitrate: 2500000, maxFramerate: 60, scaleResolutionDownBy: 1 } },
+        '15': { low: { maxBitrate: 400000, maxFramerate: 15, scaleResolutionDownBy: 2 }, medium: { maxBitrate: 800000, maxFramerate: 15, scaleResolutionDownBy: 1 }, high: { maxBitrate: 1500000, maxFramerate: 15, scaleResolutionDownBy: 1 } }
+    };
+    if (fps === '30' || !layers[fps]) {
+        await callFrame.startScreenShare({ screenVideoSendSettings: { maxQuality: quality } });
+        return;
+    }
+    try {
+        await callFrame.startScreenShare({ screenVideoSendSettings: { encodings: layers[fps] } });
+    } catch (error) {
+        // Kullanıcı tarayıcı seçicisini iptal ettiyse hatayı yukarı bırak; ayar reddedildiyse standart kaliteye dön.
+        if (error?.name === 'NotAllowedError') throw error;
+        console.warn(fps + ' FPS ayarı reddedildi, standart kaliteye dönülüyor:', error);
+        await callFrame.startScreenShare({ screenVideoSendSettings: { maxQuality: quality } });
+    }
 }
 
 // "Şu an ne oynuyorum": kullanıcı yazar, isterse paylaşımı kapatır; yalnızca arkadaşlar görür.
@@ -4123,7 +4159,6 @@ function renderActivityControls() {
     const toggle = document.getElementById('activity-show-toggle');
     if (!input || !currentUser) return;
     if (!autoGameInitDone) { autoGameInitDone = true; initAutoGameToggle(); }
-    renderFps60Toggle();
     input.value = currentUser.activity_text || '';
     toggle.checked = currentUser.show_activity !== false;
 }
@@ -9425,12 +9460,12 @@ document.getElementById('call-hub-room-watch-btn').addEventListener('click', () 
 
 });
 
-// Deneysel 60 FPS testi açıkken (localStorage sauran_fps60) izleyici penceresinde ölçülen gerçek FPS'i gösterir.
+// İzleyici penceresinde ölçülen gerçek FPS'i gösterir (paylaşan tarafın seçimini izleyen bilmez, ölçüm her zaman açık).
 let fpsMeterStop = null;
 function startScreenshareFpsMeter(video, viewer) {
     if (fpsMeterStop) fpsMeterStop();
     let badge = viewer.querySelector('.screenshare-fps-badge');
-    if (localStorage.getItem('sauran_fps60') !== '1' || typeof video.requestVideoFrameCallback !== 'function') {
+    if (typeof video.requestVideoFrameCallback !== 'function') {
         if (badge) badge.remove();
         return;
     }
@@ -11713,24 +11748,10 @@ callScreenshareBtn.addEventListener('click', async () => {
             // Sauran Plus: daha yüksek ekran paylaşımı kalitesi (Daily'nin desteklediği maxQuality kademesi:
             // low/medium/high). Herkes 'medium' alır, Plus 'high' — temel kalite kısıtlanmıyor, yalnızca yükseltiliyor.
             const quality = currentUser?.plus_active ? 'high' : 'medium';
-            // DENEYSEL (yalnızca Plus): 60 FPS isteği. Daily istemci doğrulaması 60'ı kabul ediyor ama sunucu/tarayıcı
-            // gerçekten taşıyor mu bilinmiyor — izleyen tarafta ölçülen FPS (bkz. startScreenshareFpsMeter) sonucu gösterir.
-            // Ayar reddedilirse eski davranışa (maxQuality) düşer.
-            const wantFps60 = currentUser?.plus_active && localStorage.getItem('sauran_fps60') === '1';
-            if (wantFps60) {
-                try {
-                    await callFrame.startScreenShare({ screenVideoSendSettings: { encodings: {
-                        low: { maxBitrate: 600000, maxFramerate: 15, scaleResolutionDownBy: 2 },
-                        medium: { maxBitrate: 1200000, maxFramerate: 30, scaleResolutionDownBy: 1 },
-                        high: { maxBitrate: 2500000, maxFramerate: 60, scaleResolutionDownBy: 1 }
-                    } } });
-                } catch (fpsError) {
-                    console.warn('60 FPS ayarı reddedildi, standart kaliteye dönülüyor:', fpsError);
-                    await callFrame.startScreenShare({ screenVideoSendSettings: { maxQuality: quality } });
-                }
-            } else {
-                await callFrame.startScreenShare({ screenVideoSendSettings: { maxQuality: quality } });
-            }
+            // Paylaşım başlamadan önce akıcılık (FPS) seçtirilir; tarayıcının kendi ekran seçici penceresi FPS seçeneği sunmaz.
+            const fps = await askShareFps();
+            if (!fps) return;
+            await startScreenShareWithFps(fps, quality);
             callScreenshareBtn.classList.add('active');
         }
 
