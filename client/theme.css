@@ -285,6 +285,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 /* ── Sohbet: prototipteki gibi tek sütun, sola hizalı, kutusuz ───────── */
 #hub-messages, .hub-messages { max-width: 860px; margin-left: auto; margin-right: auto; width: 100%; }
 .hub-msg, .hub-msg.msg-mine { align-self: stretch; max-width: none; width: auto; flex-direction: row; padding: 8px 12px; gap: 14px; }
+/* Sauran Plus "Yumuşak"/"Kontrast" sohbet teması: arka planlı bir kutu olduğu için tam satır genişliği yerine
+   normal bir mesaj balonu gibi içeriğe göre boyutlanır (sola/sağa hizalı, taşan tozlar için relative+overflow:hidden). */
+.hub-msg.chat-theme-soft, .hub-msg.chat-theme-contrast, .dm-msg.chat-theme-soft, .dm-msg.chat-theme-contrast {
+  align-self: flex-start; max-width: 78%; width: fit-content; overflow: hidden;
+}
+.hub-msg.msg-mine.chat-theme-soft, .hub-msg.msg-mine.chat-theme-contrast, .dm-msg.dm-msg-mine.chat-theme-soft, .dm-msg.dm-msg-mine.chat-theme-contrast {
+  align-self: flex-end;
+}
 .hub-msg.msg-mine .header { flex-direction: row; }
 .hub-msg.msg-mine .hub-msg-body { text-align: left; }
 .hub-msg.msg-mine .hub-msg-actions { left: auto; right: 6px; }
@@ -1269,6 +1277,30 @@ html.auth-pending #login-screen { visibility: hidden; }
 .hub-msg.chat-theme-contrast.msg-mine, .dm-msg.chat-theme-contrast.dm-msg-mine {
   border-left-color: #4f7cff;
   background: rgba(109, 91, 208, .08);
+}
+
+/* "Yumuşak" temada kutunun alt kısmından üst kısmına doğru yükselen mor ışıltı tozu — kutu dışına taşmaz
+   (overflow: hidden, chat-theme-soft için yukarıda tanımlı), mesaj metninin ARKASINDA kalır (z-index). */
+.hub-msg.chat-theme-soft, .dm-msg.chat-theme-soft { position: relative; isolation: isolate; }
+.hub-msg.chat-theme-soft::before, .dm-msg.chat-theme-soft::before {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background-image:
+    radial-gradient(circle, rgba(185, 139, 255, .85) 0 1.1px, transparent 1.6px),
+    radial-gradient(circle, rgba(147, 112, 219, .7) 0 1px, transparent 1.5px),
+    radial-gradient(circle, rgba(216, 180, 254, .8) 0 1px, transparent 1.4px),
+    radial-gradient(circle, rgba(168, 130, 255, .6) 0 .9px, transparent 1.3px);
+  background-repeat: repeat-y;
+  background-size: 34px 46px, 46px 58px, 26px 40px, 58px 52px;
+  background-position: 14% 100%, 42% 100%, 68% 100%, 86% 100%;
+  animation: softDustRise 4.2s linear infinite;
+}
+.hub-msg.chat-theme-soft > *, .dm-msg.chat-theme-soft > * { position: relative; z-index: 1; }
+@keyframes softDustRise {
+  from { background-position: 14% 100%, 42% 100%, 68% 100%, 86% 100%; }
+  to   { background-position: 14% -46px, 42% -58px, 68% -40px, 86% -52px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-msg.chat-theme-soft::before, .dm-msg.chat-theme-soft::before { animation: none; opacity: .35; }
 }
 
 /* ── Sohbet Teması seçici (profil, yalnızca Plus için aktif) ─────────── */
