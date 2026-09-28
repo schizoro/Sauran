@@ -4101,6 +4101,21 @@ document.getElementById('profile-color-reset-btn')?.addEventListener('click', ()
     if (!btn.disabled) saveProfileColor(null);
 });
 
+// Deneysel: 60 FPS ekran paylaşımı isteği (yalnızca Plus). Sonuç izleyicide ölçülen FPS rozetiyle görülür.
+document.getElementById('fps60-toggle')?.addEventListener('change', (event) => {
+    try { localStorage.setItem('sauran_fps60', event.target.checked ? '1' : '0'); } catch (_) {}
+});
+function renderFps60Toggle() {
+    const row = document.getElementById('fps60-row');
+    const toggle = document.getElementById('fps60-toggle');
+    if (!row || !toggle) return;
+    const isPlus = Boolean(currentUser?.plus_active);
+    row.style.display = isPlus ? '' : 'none';
+    let on = false;
+    try { on = localStorage.getItem('sauran_fps60') === '1'; } catch (_) {}
+    toggle.checked = on;
+}
+
 // "Şu an ne oynuyorum": kullanıcı yazar, isterse paylaşımı kapatır; yalnızca arkadaşlar görür.
 let autoGameInitDone = false;
 function renderActivityControls() {
@@ -4108,6 +4123,7 @@ function renderActivityControls() {
     const toggle = document.getElementById('activity-show-toggle');
     if (!input || !currentUser) return;
     if (!autoGameInitDone) { autoGameInitDone = true; initAutoGameToggle(); }
+    renderFps60Toggle();
     input.value = currentUser.activity_text || '';
     toggle.checked = currentUser.show_activity !== false;
 }
@@ -9405,10 +9421,34 @@ document.getElementById('call-hub-room-watch-btn').addEventListener('click', () 
     const viewer = document.getElementById('call-screenshare-viewer');
     viewer.className = 'call-screenshare-viewer corner-tr';
     viewer.style.display = 'block';
+    startScreenshareFpsMeter(video, viewer);
 
 });
 
+// Deneysel 60 FPS testi açıkken (localStorage sauran_fps60) izleyici penceresinde ölçülen gerçek FPS'i gösterir.
+let fpsMeterStop = null;
+function startScreenshareFpsMeter(video, viewer) {
+    if (fpsMeterStop) fpsMeterStop();
+    let badge = viewer.querySelector('.screenshare-fps-badge');
+    if (localStorage.getItem('sauran_fps60') !== '1' || typeof video.requestVideoFrameCallback !== 'function') {
+        if (badge) badge.remove();
+        return;
+    }
+    if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'screenshare-fps-badge';
+        viewer.appendChild(badge);
+    }
+    let frames = 0;
+    let stopped = false;
+    const onFrame = () => { if (stopped) return; frames += 1; video.requestVideoFrameCallback(onFrame); };
+    video.requestVideoFrameCallback(onFrame);
+    const timer = setInterval(() => { badge.textContent = `≈ ${frames} FPS`; frames = 0; }, 1000);
+    fpsMeterStop = () => { stopped = true; clearInterval(timer); badge.remove(); fpsMeterStop = null; };
+}
+
 function closeScreenshareViewer() {
+    if (fpsMeterStop) fpsMeterStop();
     const viewer = document.getElementById('call-screenshare-viewer');
     const video = document.getElementById('call-screenshare-video');
     if (document.fullscreenElement === viewer) document.exitFullscreen?.();
@@ -11673,7 +11713,24 @@ callScreenshareBtn.addEventListener('click', async () => {
             // Sauran Plus: daha yüksek ekran paylaşımı kalitesi (Daily'nin desteklediği maxQuality kademesi:
             // low/medium/high). Herkes 'medium' alır, Plus 'high' — temel kalite kısıtlanmıyor, yalnızca yükseltiliyor.
             const quality = currentUser?.plus_active ? 'high' : 'medium';
-            await callFrame.startScreenShare({ screenVideoSendSettings: { maxQuality: quality } });
+            // DENEYSEL (yalnızca Plus): 60 FPS isteği. Daily istemci doğrulaması 60'ı kabul ediyor ama sunucu/tarayıcı
+            // gerçekten taşıyor mu bilinmiyor — izleyen tarafta ölçülen FPS (bkz. startScreenshareFpsMeter) sonucu gösterir.
+            // Ayar reddedilirse eski davranışa (maxQuality) düşer.
+            const wantFps60 = currentUser?.plus_active && localStorage.getItem('sauran_fps60') === '1';
+            if (wantFps60) {
+                try {
+                    await callFrame.startScreenShare({ screenVideoSendSettings: { encodings: {
+                        low: { maxBitrate: 600000, maxFramerate: 15, scaleResolutionDownBy: 2 },
+                        medium: { maxBitrate: 1200000, maxFramerate: 30, scaleResolutionDownBy: 1 },
+                        high: { maxBitrate: 2500000, maxFramerate: 60, scaleResolutionDownBy: 1 }
+                    } } });
+                } catch (fpsError) {
+                    console.warn('60 FPS ayarı reddedildi, standart kaliteye dönülüyor:', fpsError);
+                    await callFrame.startScreenShare({ screenVideoSendSettings: { maxQuality: quality } });
+                }
+            } else {
+                await callFrame.startScreenShare({ screenVideoSendSettings: { maxQuality: quality } });
+            }
             callScreenshareBtn.classList.add('active');
         }
 

@@ -1486,3 +1486,5 @@ html.auth-pending #login-screen { visibility: hidden; }
 .hub-msg.bubble-glass, .dm-msg.bubble-glass { border-radius: 14px; background: linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,.03)); box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .hub-msg.bubble-outline, .dm-msg.bubble-outline { border-radius: 12px; background: transparent; box-shadow: inset 0 0 0 1.5px rgba(140, 170, 255, .55); }
 .hub-msg.bubble-shadow, .dm-msg.bubble-shadow { border-radius: 12px; box-shadow: 0 6px 16px rgba(0, 0, 0, .45); }
+
+.screenshare-fps-badge { position: absolute; left: 8px; bottom: 8px; z-index: 5; padding: 2px 8px; border-radius: 999px; background: rgba(0,0,0,.65); color: #7ee787; font-size: 12px; font-weight: 700; pointer-events: none; }
