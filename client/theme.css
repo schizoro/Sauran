@@ -1143,6 +1143,37 @@ html.auth-pending #login-screen { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) { .plus-badge { animation: none; } }
 .plus-badge-sm { font-size: 9px; padding: 1px 5px 1px 4px; margin-left: 3px; }
 
+/* ── Sauran Plus: "Oyuncu İsim Kartı" — mor parlak hap, içinden yükselen ışıltı tozu ──── */
+.plus-name-card {
+  position: relative; display: inline-flex; align-items: center; gap: 3px; vertical-align: middle;
+  padding: 1.5px 8px 1.5px 6px; border-radius: 999px; margin-left: 4px; overflow: hidden;
+  font-size: 9.5px; font-weight: 800; letter-spacing: .05em; white-space: nowrap; color: #fbf0ff;
+  background: linear-gradient(135deg, #5b1a8a, #9333ea 55%, #d946ef 100%);
+  box-shadow: 0 0 0 1px rgba(216, 180, 254, .55), 0 0 8px rgba(168, 85, 247, .6);
+  animation: pncGlow 2.6s ease-in-out infinite;
+}
+.pnc-star { font-style: normal; font-size: 8.5px; line-height: 1; color: #fff7d6; text-shadow: 0 0 4px rgba(255, 255, 255, .85); }
+.pnc-label { line-height: 1; }
+.pnc-dust {
+  position: absolute; bottom: 1px; width: 2px; height: 2px; border-radius: 50%;
+  background: #f3e8ff; box-shadow: 0 0 4px 1px rgba(216, 180, 254, .9); opacity: 0;
+  animation: pncRise 2.6s ease-in infinite; will-change: transform, opacity;
+}
+.pnc-dust:nth-child(3) { left: 18%; animation-delay: 0s; }
+.pnc-dust:nth-child(4) { left: 48%; animation-delay: .9s; }
+.pnc-dust:nth-child(5) { left: 76%; animation-delay: 1.7s; }
+@keyframes pncGlow {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(216, 180, 254, .5), 0 0 6px rgba(168, 85, 247, .45); }
+  50% { box-shadow: 0 0 0 1px rgba(232, 200, 255, .85), 0 0 12px rgba(217, 70, 239, .8); }
+}
+@keyframes pncRise {
+  0% { transform: translateY(0) scale(1); opacity: 0; }
+  15% { opacity: .95; }
+  80% { opacity: .45; }
+  100% { transform: translateY(-13px) scale(.35); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .plus-name-card { animation: none; } .pnc-dust { animation: none; opacity: 0; } }
+
 /* ── Sauran Plus: temel sohbet temaları (yalnızca aboneyken sunucu bu değeri döndürür) ──── */
 .hub-msg.chat-theme-soft, .dm-msg.chat-theme-soft {
   background: linear-gradient(135deg, rgba(109, 91, 208, .10), rgba(79, 124, 255, .06));

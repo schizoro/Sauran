@@ -1745,9 +1745,10 @@ const AVATAR_FRAME_INFO = {
     neon: { title: '⚡ Neon', text: 'Parlayan kenarlı neon çerçeve.' },
     galaxy: { title: '🌌 Galaxy', text: 'Yıldızların hafif hareket ettiği uzay temalı çerçeve.' }
 };
-// Sauran Plus rozeti: kullanıcı adının hemen yanında küçük "✦ PLUS" etiketi (mor/mavi, Supporter'dan ayrı renk/anlam).
+// Sauran Plus "Oyuncu İsim Kartı": kullanıcı adının hemen yanında mor parlak bir hap rozet,
+// içinden yükselip kaybolan ışıltı tozlarıyla (Supporter'ın altın halkasından ayrı, mor/Plus kimliği).
 function plusBadgeHtml(isPlus) {
-    return isPlus ? ' <span class="plus-badge" title="Sauran Plus">✦ PLUS</span>' : '';
+    return isPlus ? ` <span class="plus-name-card" title="Sauran Plus"><i class="pnc-star">★</i><span class="pnc-label">PLUS</span><i class="pnc-dust"></i><i class="pnc-dust"></i><i class="pnc-dust"></i></span>` : '';
 }
 
 function applyAvatarFrame(el, frameKey) {
