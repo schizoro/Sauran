@@ -1770,6 +1770,20 @@ function applyAvatarFrame(el, frameKey) {
     }
     el.dataset.frameKey = frameKey && frameKey !== 'classic' ? frameKey : '';
 }
+
+// Sauran Plus: profil penceresinde avatarın çevresinde animasyonlu efekt (aura/sparkle). Yalnızca büyük
+// profil avatarına uygulanır (rail/topbar gibi küçük avatarlara değil — orada çerçeve zaten yeterli).
+const PROFILE_EFFECT_CLASSES = ['profile-effect-aura', 'profile-effect-sparkle'];
+function applyProfileEffect(el, effect) {
+    if (!el) return;
+    PROFILE_EFFECT_CLASSES.forEach((c) => el.classList.remove(c));
+    el.querySelectorAll(':scope > .pfx-sparkle').forEach((n) => n.remove());
+    if (effect === 'aura') el.classList.add('profile-effect-aura');
+    else if (effect === 'sparkle') {
+        el.classList.add('profile-effect-sparkle');
+        el.insertAdjacentHTML('beforeend', '<i class="pfx-sparkle"></i><i class="pfx-sparkle"></i><i class="pfx-sparkle"></i><i class="pfx-sparkle"></i>');
+    }
+}
 // Yalnızca başkasının profilinde: kendi profilinde aynı avatar tıklaması zaten "avatarı değiştir" anlamına geliyor.
 document.addEventListener('click', (event) => {
     const wrap = event.target.closest && event.target.closest('#other-profile-avatar-wrap[data-frame-key]');
@@ -1785,6 +1799,7 @@ function renderProfile() {
     applyAvatarFrame(document.getElementById('topbar-profile-avatar-wrap'), currentUser.avatar_frame);
     applyAvatarFrame(document.getElementById('rail-profile'), currentUser.avatar_frame);
     applyAvatarFrame(document.getElementById('profile-modal-avatar-wrap'), currentUser.avatar_frame);
+    applyProfileEffect(document.getElementById('profile-modal-avatar-wrap'), currentUser.profile_effect);
 
     const color =
         resolveUserColor(
@@ -3873,6 +3888,7 @@ profileBtn.addEventListener(
         }
         renderChatThemePicker();
         renderProfileColorPicker();
+        renderProfileEffectPicker();
 
     }
 );
@@ -3968,6 +3984,45 @@ document.getElementById('profile-color-save-btn')?.addEventListener('click', () 
 document.getElementById('profile-color-reset-btn')?.addEventListener('click', () => {
     const btn = document.getElementById('profile-color-reset-btn');
     if (!btn.disabled) saveProfileColor(null);
+});
+
+// Sauran Plus: profil penceresinde avatar çevresinde animasyonlu efekt. Aynı kilit deseni.
+function renderProfileEffectPicker() {
+    const picker = document.getElementById('profile-effect-picker');
+    const hint = document.getElementById('profile-effect-hint');
+    if (!picker || !currentUser) return;
+    const isPlus = Boolean(currentUser.plus_active);
+    const active = currentUser.profile_effect || 'none';
+    picker.querySelectorAll('.chat-theme-option').forEach((btn) => {
+        const effect = btn.dataset.effect;
+        const locked = effect !== 'none' && !isPlus;
+        btn.disabled = locked;
+        btn.classList.toggle('selected', effect === active);
+        btn.title = locked ? 'Sauran Plus gerekli' : '';
+    });
+    hint.textContent = isPlus ? '' : 'Aura ve Işıltı efektleri Sauran Plus abonelerine açıktır.';
+}
+
+document.getElementById('profile-effect-picker')?.addEventListener('click', async (event) => {
+    const btn = event.target.closest('.chat-theme-option');
+    if (!btn || btn.disabled) return;
+    const effect = btn.dataset.effect;
+    try {
+        const response = await fetch('/api/profile/effect', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ profile_effect: effect })
+        });
+        const data = await response.json();
+        if (!data.success) { showToast(data.error || 'Güncellenemedi.'); return; }
+        currentUser.profile_effect = data.profile_effect;
+        renderProfileEffectPicker();
+        renderProfile();
+    } catch (error) {
+        console.error('Profil efekti güncellenemedi:', error);
+        showToast('Güncellenemedi.');
+    }
 });
 
 // Hakkımda bilgi balonu: masaüstünde hover/odak (CSS), dokunmatikte/tıklamada aç-kapa
@@ -6542,6 +6597,7 @@ function renderOtherProfile() {
     otherProfileAvatar.style.display = hasAvatar ? 'none' : 'flex';
 
     applyAvatarFrame(document.getElementById('other-profile-avatar-wrap'), profile.avatar_frame);
+    applyProfileEffect(document.getElementById('other-profile-avatar-wrap'), profile.profile_effect);
     otherProfileAvatarImg.src = hasAvatar ? profile.avatar_data : '';
     otherProfileAvatarImg.style.display = hasAvatar ? 'block' : 'none';
 

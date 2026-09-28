@@ -94,6 +94,10 @@ if (!userColumns.includes('profile_color')) {
   // Sauran Plus: kullanıcı adından otomatik hesaplanan rengin yerine geçen özel renk (hex). Plus bitince yok sayılır.
   db.exec(`ALTER TABLE users ADD COLUMN profile_color TEXT`);
 }
+if (!userColumns.includes('profile_effect')) {
+  // Sauran Plus: profil penceresinde avatarın çevresinde animasyonlu efekt (none/aura/sparkle). Plus bitince 'none' döner.
+  db.exec(`ALTER TABLE users ADD COLUMN profile_effect TEXT DEFAULT 'none'`);
+}
 
 const VALID_STATUSES = ['active', 'idle', 'busy', 'invisible'];
 const VALID_VISIBILITIES = ['public', 'friends', 'private'];
@@ -2362,6 +2366,19 @@ function updateProfileColor(userId, color) {
   return { success: true, profile_color: value };
 }
 
+// Sauran Plus: profil penceresinde avatarın çevresinde animasyonlu efekt.
+const PROFILE_EFFECTS = ['none', 'aura', 'sparkle'];
+
+function updateProfileEffect(userId, effect) {
+  const value = String(effect || 'none');
+  if (!PROFILE_EFFECTS.includes(value)) return { success: false, error: 'Geçersiz profil efekti.' };
+  if (value !== 'none' && !hasActivePlus(userId)) {
+    return { success: false, error: 'Bu profil efekti yalnızca Sauran Plus abonelerine açık.' };
+  }
+  db.prepare(`UPDATE users SET profile_effect = ? WHERE id = ?`).run(value, userId);
+  return { success: true, profile_effect: value };
+}
+
 const ABOUT_ME_MAX_FREE = 300;
 const ABOUT_ME_MAX_PLUS = 600;
 
@@ -4550,7 +4567,7 @@ function confirmPasswordReset(email, code, newPassword) {
 
 function getUserPublicProfile(viewerId, targetId) {
   const user = db.prepare(`
-    SELECT id, username, status, about_me, avatar_data, banner_data, avatar_visibility, minor_until, profile_color
+    SELECT id, username, status, about_me, avatar_data, banner_data, avatar_visibility, minor_until, profile_color, profile_effect
     FROM users WHERE id = ?
   `).get(targetId);
 
@@ -4572,6 +4589,7 @@ function getUserPublicProfile(viewerId, targetId) {
     banner_data: visible ? user.banner_data : null,
     avatar_frame: visible ? getEquippedCosmetics(targetId).avatar_frame : null,
     profile_color: (visible && hasActivePlus(targetId)) ? user.profile_color : null,
+    profile_effect: (visible && hasActivePlus(targetId)) ? (user.profile_effect || 'none') : 'none',
     plus_active: hasActivePlus(targetId),
     friendship_status: isSelf ? 'self' : friendship,
     blocked_by_me: blockedByMe
@@ -6406,6 +6424,8 @@ module.exports = {
   CHAT_THEMES,
   updateChatTheme,
   updateProfileColor,
+  PROFILE_EFFECTS,
+  updateProfileEffect,
   GIFT_PRODUCTS,
   listGiftProducts,
   giftProduct,
