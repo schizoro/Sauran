@@ -1757,7 +1757,7 @@ function plusBadgeHtml(isPlus) {
 function usernameCardHtml(username, isPlus) {
     const safe = escapeHtml(username);
     if (!isPlus) return safe;
-    return `<span class="plus-name-plate"><i class="pnp-dust"></i><i class="pnp-dust"></i><i class="pnp-dust"></i><span class="pnp-text">${safe}</span></span>`;
+    return `<span class="plus-name-plate"><i class="pnp-dust"></i><i class="pnp-dust"></i><i class="pnp-dust"></i><i class="pnp-dust"></i><span class="pnp-text">${safe}</span></span>`;
 }
 
 function applyAvatarFrame(el, frameKey) {
