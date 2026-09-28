@@ -16,7 +16,7 @@
   "build": {
     "appId": "online.sauran.desktop",
     "productName": "Sauran",
-    "files": ["main.js", "preload.js", "games.js"],
+    "files": ["main.js", "preload.js", "games.js", "picker.html", "picker-preload.js"],
     "win": { "target": "nsis", "signAndEditExecutable": false },
     "nsis": { "oneClick": true, "perMachine": false }
   }

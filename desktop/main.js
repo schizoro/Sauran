@@ -44,6 +44,44 @@ function setDetection(enabled) {
     }
 }
 
+// Paylaşılacak ekranı/pencereyi seçtiren küçük modal pencere. Seçilen desktopCapturer kaynağını, iptalde null döndürür.
+async function pickShareSource() {
+    const sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 320, height: 180 }, fetchWindowIcons: false });
+    const byId = new Map(sources.map((s) => [s.id, s]));
+    const list = sources.map((s) => ({ id: s.id, name: s.name, isScreen: s.id.startsWith('screen:'), thumbnail: s.thumbnail.toDataURL() }));
+
+    return new Promise((resolve) => {
+        const picker = new BrowserWindow({
+            width: 780,
+            height: 580,
+            parent: win || undefined,
+            modal: Boolean(win),
+            title: 'Ekran paylaş',
+            backgroundColor: '#0f1319',
+            autoHideMenuBar: true,
+            minimizable: false,
+            webPreferences: { preload: path.join(__dirname, 'picker-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }
+        });
+        let done = false;
+        const finish = (source) => {
+            if (done) return;
+            done = true;
+            ipcMain.removeListener('picker:choose', onChoose);
+            ipcMain.removeListener('picker:cancel', onCancel);
+            if (!picker.isDestroyed()) picker.close();
+            resolve(source);
+        };
+        const fromPicker = (event) => event.sender === picker.webContents;
+        const onChoose = (event, id) => { if (fromPicker(event)) finish(byId.get(id) || null); };
+        const onCancel = (event) => { if (fromPicker(event)) finish(null); };
+        ipcMain.on('picker:choose', onChoose);
+        ipcMain.on('picker:cancel', onCancel);
+        picker.on('closed', () => finish(null));
+        picker.webContents.on('did-finish-load', () => picker.webContents.send('picker:sources', list));
+        picker.loadFile(path.join(__dirname, 'picker.html'));
+    });
+}
+
 function createWindow() {
     win = new BrowserWindow({
         width: 1280,
@@ -79,10 +117,12 @@ app.whenReady().then(() => {
         const allowed = ['media', 'notifications', 'display-capture', 'clipboard-sanitized-write', 'fullscreen'];
         callback(allowed.includes(permission) && isAppOrigin(details.requestingUrl || contents.getURL()));
     });
-    session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
-        desktopCapturer.getSources({ types: ['screen', 'window'] })
-            .then((sources) => callback(sources.length ? { video: sources[0] } : {}))
-            .catch(() => callback({}));
+    // Ekran paylaşımı: kullanıcı önce bir ekran/pencere seçer (seçici penceresi), iptal ederse paylaşım başlamaz.
+    session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
+        let source = null;
+        try { source = await pickShareSource(); } catch (_) { source = null; }
+        // İptalde boş yanıt sayfaya AbortError döndürür (Electron ek olarak bir uyarı fırlatır; zararsız, yutuyoruz).
+        try { callback(source ? { video: source } : {}); } catch (_) { /* iptal */ }
     });
 
     ipcMain.handle('sauran:set-detection', (event, enabled) => { setDetection(Boolean(enabled)); return true; });

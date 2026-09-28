@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>Paylaşılacak ekranı seç</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0f1319; color: #d7dde8; font: 14px -apple-system, 'Segoe UI', sans-serif; display: flex; flex-direction: column; height: 100vh; }
+  header { padding: 16px 20px 8px; font-size: 16px; font-weight: 700; color: #5cc8ff; }
+  main { flex: 1; overflow-y: auto; padding: 4px 20px 12px; }
+  h2 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #6b7280; margin: 14px 0 8px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .card { background: rgba(255,255,255,.05); border: 2px solid transparent; border-radius: 12px; padding: 8px; cursor: pointer; text-align: center; transition: .15s; }
+  .card:hover { background: rgba(255,255,255,.09); }
+  .card.selected { border-color: #5cc8ff; background: rgba(92,200,255,.12); }
+  .card img { width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #05070a; border-radius: 8px; display: block; }
+  .card span { display: block; margin-top: 6px; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px; border-top: 1px solid rgba(255,255,255,.08); }
+  button { padding: 9px 20px; border-radius: 999px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06); color: #d7dde8; font-weight: 700; cursor: pointer; }
+  button.primary { border-color: rgba(92,200,255,.6); background: rgba(92,200,255,.2); color: #5cc8ff; }
+  button:disabled { opacity: .4; cursor: default; }
+  .empty { color: #6b7280; padding: 30px; text-align: center; }
+</style>
+</head>
+<body>
+<header>Paylaşılacak ekranı veya pencereyi seç</header>
+<main id="list"><div class="empty">Yükleniyor...</div></main>
+<footer>
+  <button id="cancel" type="button">İptal</button>
+  <button id="share" class="primary" type="button" disabled>Paylaş</button>
+</footer>
+<script>
+  let selected = null;
+  const share = document.getElementById('share');
+  function section(title, items) {
+    if (!items.length) return '';
+    return '<h2>' + title + '</h2><div class="grid">' + items.map((s) =>
+      '<div class="card" data-id="' + s.id.replace(/"/g, '') + '"><img alt="" src="' + s.thumbnail + '"><span></span></div>').join('') + '</div>';
+  }
+  window.pickerApi.onSources((sources) => {
+    const list = document.getElementById('list');
+    if (!sources.length) { list.innerHTML = '<div class="empty">Paylaşılabilecek ekran bulunamadı.</div>'; return; }
+    list.innerHTML = section('Ekranlar', sources.filter((s) => s.isScreen)) + section('Pencereler', sources.filter((s) => !s.isScreen));
+    list.querySelectorAll('.card').forEach((card) => {
+      const src = sources.find((s) => s.id === card.dataset.id);
+      card.querySelector('span').textContent = src ? src.name : '';
+      card.addEventListener('click', () => {
+        list.querySelectorAll('.card.selected').forEach((c) => c.classList.remove('selected'));
+        card.classList.add('selected');
+        selected = card.dataset.id;
+        share.disabled = false;
+      });
+      card.addEventListener('dblclick', () => window.pickerApi.choose(card.dataset.id));
+    });
+  });
+  share.addEventListener('click', () => { if (selected) window.pickerApi.choose(selected); });
+  document.getElementById('cancel').addEventListener('click', () => window.pickerApi.cancel());
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') window.pickerApi.cancel(); });
+</script>
+</body>
+</html>
