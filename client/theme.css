@@ -1436,3 +1436,7 @@ html.auth-pending #login-screen { visibility: hidden; }
 }
 .hub-bg-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .hub-bg-preview { width: 72px; height: 41px; border-radius: 8px; background: var(--glass-2, rgba(255,255,255,.06)) center / cover no-repeat; box-shadow: 0 0 0 1px var(--border-soft, rgba(255,255,255,.1)); flex-shrink: 0; }
+
+/* ── Sauran Plus "Özel emoji paketi": ek tepki emojileri (kilitliyse soluk) ── */
+.msg-reaction-picker { flex-wrap: wrap; max-width: 250px; }
+.msg-reaction-picker .react-extra.locked { opacity: .35; filter: grayscale(.6); }

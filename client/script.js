@@ -7424,6 +7424,8 @@ function showCenterToast(message) {
 
 const QUICK_REACTION_EMOJIS = ['❤️', '😂', '👍', '🔥', '😮'];
 const ALL_REACTION_EMOJIS = ['❤️', '😂', '👍', '👎', '😮', '😢', '🔥'];
+// Sauran Plus "Özel emoji paketi": ek tepki emojileri (sunucu yetkisiz eklemeyi reddeder).
+const EXTRA_REACTION_EMOJIS = ['🥰', '😎', '🤩', '🥳', '🤔', '💯', '🎉', '🙏', '👏', '💀', '😭', '✨'];
 const FORWARDABLE_KINDS = ['text', 'dm', 'voice', 'dm_voice', 'image', 'dm_image', 'video', 'dm_video', 'file', 'dm_file'];
 
 let hubReplyTarget = null;
@@ -7494,6 +7496,7 @@ function buildMsgActionsBarHtml(msg, opts) {
             <button class="msg-action-quick" data-quick="more" type="button" title="${t('message-more-actions')}" aria-label="${t('message-more-actions')}">⋯</button>
             <div class="msg-reaction-picker liquid-glass" style="display:none;">
                 ${ALL_REACTION_EMOJIS.map(e => `<button type="button" data-emoji="${e}">${e}</button>`).join('')}
+                ${EXTRA_REACTION_EMOJIS.map(e => `<button type="button" class="react-extra${userHasFeature('custom_emoji') ? '' : ' locked'}" data-emoji="${e}" title="Sauran Plus">${e}</button>`).join('')}
             </div>
             <div class="msg-actions-menu liquid-glass" style="display:none;">${menuHtml}</div>
         </div>
@@ -7565,6 +7568,7 @@ function wireMessageActions(wrap, msg, opts) {
         picker?.querySelectorAll('[data-emoji]').forEach((btn) => {
             btn.addEventListener('click', (event) => {
                 event.stopPropagation();
+                if (btn.classList.contains('locked')) { showToast('Ek emoji paketi Sauran Plus abonelerine açıktır.'); return; }
                 picker.style.display = 'none';
                 sendReactionRequest(msg.id, btn.dataset.emoji, false);
             });

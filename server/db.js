@@ -3051,7 +3051,7 @@ const GIFT_PRODUCTS = {
   name_effect:   { label: 'İsim efekti',        type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' },
   lobby_theme:   { label: 'Lobi teması',        type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' },
   lobby_image:   { label: 'Lobi görseli hakkı', type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' },
-  custom_emoji:  { label: 'Özel emoji',         type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
+  custom_emoji:  { label: 'Özel emoji',         type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' },
   sticker_pack:  { label: 'Sticker paketi',     type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' }
 };
 
@@ -5255,6 +5255,8 @@ db.exec(`
 `);
 
 const ALLOWED_REACTION_EMOJIS = ['❤️', '😂', '👍', '👎', '😮', '😢', '🔥'];
+// Sauran Plus "Özel emoji paketi": ek tepki emojileri. Eklemek yalnızca yetkiliye açık; herkes başkalarının tepkisini görür.
+const EXTRA_REACTION_EMOJIS = ['🥰', '😎', '🤩', '🥳', '🤔', '💯', '🎉', '🙏', '👏', '💀', '😭', '✨'];
 
 function getMessageReactions(messageId, viewerId) {
   const rows = db.prepare(`
@@ -5282,7 +5284,9 @@ function getMessageAccessInfo(messageId, actorId) {
 }
 
 function addReaction(messageId, userId, emoji) {
-  if (!ALLOWED_REACTION_EMOJIS.includes(emoji)) return { success: false, error: 'Geçersiz emoji.' };
+  const isExtra = EXTRA_REACTION_EMOJIS.includes(emoji);
+  if (!ALLOWED_REACTION_EMOJIS.includes(emoji) && !isExtra) return { success: false, error: 'Geçersiz emoji.' };
+  if (isExtra && !hasFeature(userId, 'custom_emoji')) return { success: false, error: 'Bu emoji paketi yalnızca Sauran Plus abonelerine (ya da hediye edilenlere) açık.' };
 
   const { msg, hasAccess } = getMessageAccessInfo(messageId, userId);
   if (!msg) return { success: false, error: 'Mesaj bulunamadı.' };
