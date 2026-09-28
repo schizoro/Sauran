@@ -1416,3 +1416,15 @@ html.auth-pending #login-screen { visibility: hidden; }
 .profile-modal-box[data-profile-theme="forest"] { background-image: linear-gradient(160deg, rgba(47, 154, 90, .34), rgba(23, 81, 58, .34)); box-shadow: 0 0 0 1px rgba(90, 200, 130, .35), 0 8px 40px rgba(20, 80, 50, .45); }
 .profile-modal-box[data-profile-theme="sakura"] { background-image: linear-gradient(160deg, rgba(255, 179, 209, .30), rgba(199, 107, 176, .28)); box-shadow: 0 0 0 1px rgba(255, 170, 205, .35), 0 8px 40px rgba(150, 70, 130, .4); }
 .profile-modal-box[data-profile-theme="ocean"] { background-image: linear-gradient(160deg, rgba(42, 168, 255, .32), rgba(26, 79, 168, .34)); box-shadow: 0 0 0 1px rgba(90, 190, 255, .35), 0 8px 40px rgba(20, 60, 140, .45); }
+
+/* ── Sauran Plus "İsim Efekti": kullanıcı adı metninde animasyon (isim kartından bağımsız; kart varsa içinde çalışır) ── */
+.nfx-preview { font-weight: 700; font-size: 14px; line-height: 1.2; }
+.name-fx { font-weight: 700; }
+.name-fx-gradient, .name-fx-rainbow, .name-fx-shimmer { -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; background-size: 200% 100%; }
+.name-fx-gradient { background-image: linear-gradient(90deg, #5cc8ff, #b98bff, #ff8fd0, #5cc8ff); animation: nfxSlide 5s linear infinite; }
+.name-fx-rainbow { background-image: linear-gradient(90deg, #ff6b6b, #ffb14d, #ffe14d, #6fdc7a, #6ab7ff, #b98bff, #ff6b6b); animation: nfxSlide 4s linear infinite; }
+.name-fx-shimmer { background-image: linear-gradient(100deg, #cfd6e4 30%, #ffffff 50%, #cfd6e4 70%); animation: nfxSlide 2.6s linear infinite; }
+.name-fx-glow { color: #eaf6ff; animation: nfxGlow 2.4s ease-in-out infinite; }
+@keyframes nfxSlide { from { background-position: 0% 0; } to { background-position: -200% 0; } }
+@keyframes nfxGlow { 0%, 100% { text-shadow: 0 0 3px rgba(92, 200, 255, .45); } 50% { text-shadow: 0 0 8px rgba(92, 200, 255, .95), 0 0 14px rgba(185, 139, 255, .6); } }
+@media (prefers-reduced-motion: reduce) { .name-fx { animation: none !important; } }

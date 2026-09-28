@@ -94,6 +94,10 @@ if (!userColumns.includes('profile_color')) {
   // Sauran Plus: kullanıcı adından otomatik hesaplanan rengin yerine geçen özel renk (hex). Plus bitince yok sayılır.
   db.exec(`ALTER TABLE users ADD COLUMN profile_color TEXT`);
 }
+if (!userColumns.includes('name_effect')) {
+  // Sauran Plus: kullanıcı adı metni için animasyonlu efekt (none/gradient/glow/rainbow/shimmer).
+  db.exec(`ALTER TABLE users ADD COLUMN name_effect TEXT DEFAULT 'none'`);
+}
 if (!userColumns.includes('profile_theme')) {
   // Sauran Plus: profil penceresinin renk teması (default/midnight/sunset/forest/sakura/ocean).
   db.exec(`ALTER TABLE users ADD COLUMN profile_theme TEXT DEFAULT 'default'`);
@@ -1356,7 +1360,7 @@ function getDeletedDmMessages(userId, token, limit = 50) {
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
-           users.chat_theme, users.profile_color,
+           users.chat_theme, users.profile_color, users.name_effect,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE messages.room = ? AND messages.hub_id IS NULL
@@ -2374,6 +2378,19 @@ function updateProfileColor(userId, color) {
   return { success: true, profile_color: value };
 }
 
+// Sauran Plus: kullanıcı adı efekti. 'none' herkese açık; diğerleri Plus'a ya da hediye edilene.
+const NAME_EFFECTS = ['none', 'gradient', 'glow', 'rainbow', 'shimmer'];
+
+function updateNameEffect(userId, effect) {
+  const value = String(effect || 'none');
+  if (!NAME_EFFECTS.includes(value)) return { success: false, error: 'Geçersiz isim efekti.' };
+  if (value !== 'none' && !hasFeature(userId, 'name_effect')) {
+    return { success: false, error: 'İsim efektleri yalnızca Sauran Plus abonelerine (ya da hediye edilenlere) açık.' };
+  }
+  db.prepare(`UPDATE users SET name_effect = ? WHERE id = ?`).run(value, userId);
+  return { success: true, name_effect: value };
+}
+
 // Sauran Plus: profil penceresinin renk teması. 'default' herkese açık; diğerleri Plus'a ya da hediye edilene.
 const PROFILE_THEMES = ['default', 'midnight', 'sunset', 'forest', 'sakura', 'ocean'];
 
@@ -3018,7 +3035,7 @@ const GIFT_PRODUCTS = {
   premium:       { label: 'Sauran Premium',     type: 'timed',   enabled: true,  min: 1, max: 3650,   unit: 'gün' },
   profile_theme: { label: 'Profil teması',      type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' },
   profile_effect:{ label: 'Profil efekti',      type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' },
-  name_effect:   { label: 'İsim efekti',        type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
+  name_effect:   { label: 'İsim efekti',        type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' },
   lobby_theme:   { label: 'Lobi teması',        type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' },
   lobby_image:   { label: 'Lobi görseli hakkı', type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
   custom_emoji:  { label: 'Özel emoji',         type: 'item',    enabled: false, min: 1, max: 1,      unit: 'adet' },
@@ -3196,7 +3213,7 @@ function getHubDetail(hubId, userId) {
   `).all(hubId);
 
   const members = db.prepare(`
-    SELECT hub_members.user_id, hub_members.role_id, hub_members.permission_tier, users.username, users.status, users.avatar_data, users.avatar_visibility, users.minor_until, users.profile_color,
+    SELECT hub_members.user_id, hub_members.role_id, hub_members.permission_tier, users.username, users.status, users.avatar_data, users.avatar_visibility, users.minor_until, users.profile_color, users.name_effect,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) AS avatar_frame,
            EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) AS plus_active
     FROM hub_members
@@ -3205,6 +3222,7 @@ function getHubDetail(hubId, userId) {
   `).all(hubId).map((m) => {
     const { avatar_visibility, minor_until, ...rest } = m;
     if (!rest.plus_active) rest.profile_color = null;
+    if (!hasFeature(m.user_id, 'name_effect')) rest.name_effect = 'none';
     const masked = maskAvatarFor(userId, m.user_id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']);
     return presenceVisibleTo(userId, m.user_id, minor_until) ? masked : { ...masked, status: 'invisible' };
   });
@@ -3389,7 +3407,7 @@ function getHubMessages(hubId, limit = 50, viewerId = null) {
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.kind,
            messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
-           users.chat_theme, users.profile_color,
+           users.chat_theme, users.profile_color, users.name_effect,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE hub_id = ?
@@ -3404,7 +3422,7 @@ function getMessageById(id, viewerId = null) {
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
-           users.chat_theme, users.profile_color,
+           users.chat_theme, users.profile_color, users.name_effect,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE messages.id = ?
@@ -3439,6 +3457,7 @@ function hydrateMessage(row, viewerId = null) {
     row.chat_theme = senderIsPlus ? (row.chat_theme || 'classic') : 'classic';
     if ('profile_color' in row) row.profile_color = senderIsPlus ? (row.profile_color || null) : null;
     row.plus_active = Boolean(senderIsPlus);
+    row.name_effect = row.user_id && hasFeature(row.user_id, 'name_effect') ? (row.name_effect || 'none') : 'none';
   }
 
   let result = row;
@@ -4399,14 +4418,14 @@ function getFriendshipStatus(a, b) {
 
 function listFriends(userId) {
   return db.prepare(`
-    SELECT users.id, users.username, users.status, users.avatar_data, users.avatar_visibility, users.profile_color,
+    SELECT users.id, users.username, users.status, users.avatar_data, users.avatar_visibility, users.profile_color, users.name_effect,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) AS avatar_frame,
            EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) AS plus_active
     FROM friendships
     INNER JOIN users ON users.id = CASE WHEN friendships.user_low = ? THEN friendships.user_high ELSE friendships.user_low END
     WHERE friendships.status = 'accepted' AND (friendships.user_low = ? OR friendships.user_high = ?)
     ORDER BY users.username COLLATE NOCASE
-  `).all(userId, userId, userId).map((f) => { const { avatar_visibility, ...rest } = f; if (!rest.plus_active) rest.profile_color = null; return maskAvatarFor(userId, f.id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']); });
+  `).all(userId, userId, userId).map((f) => { const { avatar_visibility, ...rest } = f; if (!rest.plus_active) rest.profile_color = null; if (!hasFeature(f.id, 'name_effect')) rest.name_effect = 'none'; return maskAvatarFor(userId, f.id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']); });
 }
 
 function listIncomingRequests(userId) {
@@ -4634,7 +4653,7 @@ function confirmPasswordReset(email, code, newPassword) {
 
 function getUserPublicProfile(viewerId, targetId) {
   const user = db.prepare(`
-    SELECT id, username, status, about_me, avatar_data, banner_data, avatar_visibility, minor_until, profile_color, profile_effect, profile_theme
+    SELECT id, username, status, about_me, avatar_data, banner_data, avatar_visibility, minor_until, profile_color, profile_effect, profile_theme, name_effect
     FROM users WHERE id = ?
   `).get(targetId);
 
@@ -4658,6 +4677,7 @@ function getUserPublicProfile(viewerId, targetId) {
     profile_color: (visible && hasActivePlus(targetId)) ? user.profile_color : null,
     profile_effect: (visible && hasFeature(targetId, 'profile_effect')) ? (user.profile_effect || 'none') : 'none',
     profile_theme: hasFeature(targetId, 'profile_theme') ? (user.profile_theme || 'default') : 'default',
+    name_effect: hasFeature(targetId, 'name_effect') ? (user.name_effect || 'none') : 'none',
     plus_active: hasActivePlus(targetId),
     friendship_status: isSelf ? 'self' : friendship,
     blocked_by_me: blockedByMe
@@ -5168,7 +5188,7 @@ function getDmMessages(userId, otherUserId, limit = 50) {
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) AS avatar_frame,
-           users.chat_theme, users.profile_color,
+           users.chat_theme, users.profile_color, users.name_effect,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE room = ?
@@ -6500,6 +6520,8 @@ module.exports = {
   updateProfileEffect,
   PROFILE_THEMES,
   updateProfileTheme,
+  NAME_EFFECTS,
+  updateNameEffect,
   GIFT_PRODUCTS,
   listGiftProducts,
   giftProduct,
