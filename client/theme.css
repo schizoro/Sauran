@@ -1471,3 +1471,7 @@ html.auth-pending #login-screen { visibility: hidden; }
 .activity-toggle { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12.5px; color: var(--text-secondary, #b6bfcc); cursor: pointer; }
 .profile-activity { display: block; margin-top: 4px; font-size: 12px; color: #8fd0ff; }
 .friends-activity { display: block; font-size: 10.5px; font-weight: 500; color: #8fd0ff; opacity: .85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Bildirim sesi paketi seçici (Ayarlar > Bildirimler) ── */
+.sound-pack-block { margin-top: 12px; }
+.sound-ic { font-size: 18px; line-height: 1.2; }

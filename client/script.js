@@ -105,23 +105,67 @@ function playAppTone(ctx, freq, startTime, duration, type = 'sine', gainPeak = 0
     osc.stop(startTime + duration + 0.03);
 }
 
-// Bildirim (arkadaşlık isteği, lobi daveti vb.) için iki notalı yükselen "ding".
-function playNotifSound() {
-    if (!notifSoundEnabled) return;
+// Sauran Plus: bildirim sesi paketleri. Her nota: [frekans, başlangıç gecikmesi (sn), süre (sn), dalga, ses seviyesi].
+// 'classic' herkeste varsayılan; diğerleri Plus/Premium için (seçim bu cihazda tutulur, Plus bitince otomatik classic).
+const SOUND_PACKS = {
+    classic: { label: 'Klasik', notif: [[880, 0, .14, 'sine', .2], [1318.5, .09, .18, 'sine', .2]], msg: [[660, 0, .1, 'sine', .15]] },
+    crystal: { label: 'Kristal', notif: [[1568, 0, .12, 'triangle', .16], [2093, .08, .14, 'triangle', .16], [2637, .17, .2, 'triangle', .14]], msg: [[1760, 0, .09, 'triangle', .13]] },
+    bubble: { label: 'Baloncuk', notif: [[420, 0, .07, 'sine', .22], [640, .07, .09, 'sine', .22]], msg: [[330, 0, .06, 'sine', .2], [480, .05, .07, 'sine', .18]] },
+    chime: { label: 'Çan', notif: [[659, 0, .18, 'sine', .16], [831, .1, .18, 'sine', .16], [988, .2, .26, 'sine', .16]], msg: [[988, 0, .14, 'sine', .13]] },
+    retro: { label: 'Retro', notif: [[440, 0, .07, 'square', .07], [660, .08, .07, 'square', .07], [880, .16, .1, 'square', .07]], msg: [[520, 0, .06, 'square', .06]] },
+    soft: { label: 'Yumuşak', notif: [[523, 0, .3, 'sine', .11], [659, .12, .34, 'sine', .11]], msg: [[440, 0, .18, 'sine', .1]] }
+};
+
+function currentSoundPack() {
+    let id = 'classic';
+    try { id = localStorage.getItem('sauran_sound_pack') || 'classic'; } catch (_) {}
+    if (!SOUND_PACKS[id] || (id !== 'classic' && !currentUser?.plus_active)) id = 'classic';
+    return SOUND_PACKS[id];
+}
+
+function playSoundPattern(notes) {
     const ctx = getAppAudioCtx();
     if (!ctx) return;
     const now = ctx.currentTime;
-    playAppTone(ctx, 880, now, 0.14, 'sine', 0.2);
-    playAppTone(ctx, 1318.5, now + 0.09, 0.18, 'sine', 0.2);
+    notes.forEach(([freq, delay, dur, type, gain]) => playAppTone(ctx, freq, now + delay, dur, type, gain));
 }
 
-// Gelen DM mesajı için tek, yumuşak "pop".
+// Bildirim (arkadaşlık isteği, lobi daveti vb.) sesi.
+function playNotifSound() {
+    if (!notifSoundEnabled) return;
+    playSoundPattern(currentSoundPack().notif);
+}
+
+// Gelen mesaj sesi.
 function playMessageSound() {
     if (!notifSoundEnabled) return;
-    const ctx = getAppAudioCtx();
-    if (!ctx) return;
-    playAppTone(ctx, 660, ctx.currentTime, 0.1, 'sine', 0.15);
+    playSoundPattern(currentSoundPack().msg);
 }
+
+function renderSoundPackPicker() {
+    const picker = document.getElementById('sound-pack-picker');
+    const hint = document.getElementById('sound-pack-hint');
+    if (!picker) return;
+    const isPlus = Boolean(currentUser?.plus_active);
+    let active = 'classic';
+    try { active = localStorage.getItem('sauran_sound_pack') || 'classic'; } catch (_) {}
+    if (!isPlus) active = 'classic';
+    picker.querySelectorAll('.chat-theme-option').forEach((btn) => {
+        const id = btn.dataset.sound;
+        btn.disabled = id !== 'classic' && !isPlus;
+        btn.classList.toggle('selected', id === active);
+        btn.title = btn.disabled ? 'Sauran Plus gerekli' : '';
+    });
+    if (hint) hint.textContent = isPlus ? '' : 'Farklı bildirim sesleri Sauran Plus abonelerine açıktır.';
+}
+
+document.getElementById('sound-pack-picker')?.addEventListener('click', (event) => {
+    const btn = event.target.closest('.chat-theme-option');
+    if (!btn || btn.disabled) return;
+    try { localStorage.setItem('sauran_sound_pack', btn.dataset.sound); } catch (_) {}
+    renderSoundPackPicker();
+    playSoundPattern(SOUND_PACKS[btn.dataset.sound].notif);
+});
 
 // Sesli odaya biri katılınca yükselen, ayrılınca alçalan iki notalı kısa ses.
 let notifInappEnabled = true;
@@ -1844,6 +1888,8 @@ document.addEventListener('click', (event) => {
 function renderProfile() {
 
     if (!currentUser) return;
+
+    renderSoundPackPicker();
 
     applyAvatarFrame(document.getElementById('topbar-profile-avatar-wrap'), currentUser.avatar_frame);
     applyAvatarFrame(document.getElementById('rail-profile'), currentUser.avatar_frame);
