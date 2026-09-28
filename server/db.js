@@ -3926,7 +3926,8 @@ const PLUS_STICKER_EMOJIS = {
   'plus-cat': '🐱', 'plus-dog': '🐶', 'plus-bunny': '🐰', 'plus-bear': '🐻', 'plus-panda': '🐼',
   'plus-fox': '🦊', 'plus-chick': '🐥', 'plus-penguin': '🐧', 'plus-frog': '🐸', 'plus-unicorn': '🦄',
   'plus-octopus': '🐙', 'plus-whale': '🐳', 'plus-donut': '🍩', 'plus-strawberry': '🍓', 'plus-teddy': '🧸',
-  'plus-star': '⭐', 'plus-rainbow': '🌈', 'plus-clover': '🍀', 'plus-sparkle-heart': '💖', 'plus-balloon': '🎈'
+  'plus-star': '⭐', 'plus-rainbow': '🌈', 'plus-clover': '🍀', 'plus-sparkle-heart': '💖', 'plus-balloon': '🎈',
+  'plus-coffee': '☕', 'plus-pizza': '🍕', 'plus-cake': '🎂', 'plus-gamepad': '🎮', 'plus-bulb': '💡', 'plus-ghost': '👻'
 };
 const PLUS_STICKERS = Object.keys(PLUS_STICKER_EMOJIS);
 

@@ -134,12 +134,77 @@
             head: `<path d="M60 106 C8 74 12 26 42 24 C52 23 58 28 60 34 C62 28 68 23 78 24 C108 26 112 74 60 106Z" fill="#ff6fa5"/><path d="M34 40 Q40 32 48 34" fill="none" stroke="#ffb3d1" stroke-width="4" stroke-linecap="round"/>`,
             front: `<g class="stk-twinkle"><path d="M104 22 l2 6 6 2 -6 2 -2 6 -2 -6 -6 -2 6 -2Z" fill="#fff6c2"/><path d="M14 20 l1.6 4.4 4.4 1.6 -4.4 1.6 -1.6 4.4 -1.6 -4.4 -4.4 -1.6 4.4 -1.6Z" fill="#fff6c2"/></g>`
         },
+        'plus-coffee': {
+            c: '#f7ead2', k: '#c99a5b', eyes: 'happy', mouth: 'smile', noBody: true, noFeet: true, noArms: true, fy: 26,
+            back: `<g class="stk-steam"><path d="M46 36 Q40 28 46 20 Q52 12 46 6" fill="none" stroke="#dfe6f0" stroke-width="4" stroke-linecap="round"/><path d="M62 36 Q56 28 62 20 Q68 12 62 6" fill="none" stroke="#dfe6f0" stroke-width="4" stroke-linecap="round"/><path d="M78 36 Q72 28 78 20 Q84 12 78 6" fill="none" stroke="#dfe6f0" stroke-width="4" stroke-linecap="round"/></g><ellipse cx="60" cy="108" rx="40" ry="8" fill="#e4d2b0" stroke="#c99a5b" stroke-width="1.6"/>`,
+            head: `<path d="M86 60 Q108 58 106 76 Q104 90 84 90" fill="none" stroke="#c99a5b" stroke-width="7" stroke-linecap="round"/><path d="M22 46 L98 46 L92 96 Q90 106 80 106 L40 106 Q30 106 28 96Z" fill="#f7ead2" stroke="#c99a5b" stroke-width="2" stroke-linejoin="round"/><ellipse cx="60" cy="46" rx="38" ry="8" fill="#7a4a2a" stroke="#c99a5b" stroke-width="2"/>`
+        },
+        'plus-pizza': {
+            c: '#ffcf5c', k: '#e39a2d', eyes: 'dot', mouth: 'open', noBody: true, noFeet: true, noArms: true, fy: 8,
+            head: `<path d="M60 112 L16 36 Q60 14 104 36Z" fill="#ffcf5c" stroke="#e39a2d" stroke-width="2.4" stroke-linejoin="round"/><path d="M16 36 Q60 14 104 36" fill="none" stroke="#e8a33d" stroke-width="10" stroke-linecap="round"/><g fill="#e8504a" stroke="#c23a35" stroke-width="1.4"><circle cx="38" cy="50" r="6"/><circle cx="82" cy="48" r="6"/><circle cx="60" cy="88" r="5.4"/></g><g fill="#5cc45a"><circle cx="70" cy="70" r="2.4"/><circle cx="48" cy="76" r="2.2"/><circle cx="78" cy="88" r="2"/></g>`
+        },
+        'plus-cake': {
+            c: '#ffd6e8', k: '#e58fb5', eyes: 'happy', mouth: 'smile', noBody: true, noFeet: true, noArms: true, fy: 20,
+            head: `<rect x="24" y="52" width="72" height="54" rx="12" fill="#ffd6e8" stroke="#e58fb5" stroke-width="2"/><path d="M24 64 Q24 52 36 52 L84 52 Q96 52 96 64 Q90 76 84 66 Q78 78 70 66 Q62 76 56 66 Q48 78 42 66 Q34 76 24 64Z" fill="#fff" stroke="#e58fb5" stroke-width="1.6" stroke-linejoin="round"/><circle cx="60" cy="46" r="8" fill="#ff5a6e" stroke="#d93a50" stroke-width="1.6"/><rect x="58" y="24" width="4" height="14" rx="1.6" fill="#7fd0ff"/>`,
+            front: `<g class="stk-flame"><path d="M60 8 Q54 18 60 24 Q66 18 60 8Z" fill="#ffb02e" stroke="#ff7a1a" stroke-width="1.2"/></g>`
+        },
+        'plus-gamepad': {
+            c: '#6a6ae0', k: '#4646b8', eyes: 'dot', mouth: 'open', noBody: true, noFeet: true, noArms: true, fy: 6,
+            head: `<path d="M28 44 Q60 30 92 44 Q112 52 108 86 Q104 104 92 96 Q84 90 76 84 L44 84 Q36 90 28 96 Q16 104 12 86 Q8 52 28 44Z" fill="#6a6ae0" stroke="#4646b8" stroke-width="2" stroke-linejoin="round"/><g fill="#2f2f7a"><rect x="13" y="58" width="16" height="6" rx="2"/><rect x="18" y="53" width="6" height="16" rx="2"/></g><circle cx="97" cy="54" r="4" fill="#ffd84d"/><circle cx="106" cy="62" r="4" fill="#ff6b6b"/><circle cx="88" cy="62" r="4" fill="#6fdc7a"/><circle cx="97" cy="70" r="4" fill="#6ab7ff"/>`
+        },
+        'plus-bulb': {
+            c: '#ffe066', k: '#e6b800', eyes: 'dot', mouth: 'smile', noBody: true, noFeet: true, noArms: true, fy: -2,
+            back: `<g class="stk-glow"><g stroke="#ffe066" stroke-width="4" stroke-linecap="round"><path d="M60 4 L60 12"/><path d="M22 22 L28 28"/><path d="M98 22 L92 28"/><path d="M8 54 L16 54"/><path d="M112 54 L104 54"/></g></g>`,
+            head: `<path d="M60 16 A32 32 0 0 1 78 74 L78 84 L42 84 L42 74 A32 32 0 0 1 60 16Z" fill="#ffe066" stroke="#e6b800" stroke-width="2.2" stroke-linejoin="round"/><rect x="42" y="84" width="36" height="8" rx="3" fill="#b8c0cc" stroke="#8b94a3" stroke-width="1.6"/><rect x="46" y="92" width="28" height="8" rx="3" fill="#b8c0cc" stroke="#8b94a3" stroke-width="1.6"/><path d="M50 100 L70 100 L66 108 L54 108Z" fill="#8b94a3"/>`
+        },
+        'plus-ghost': {
+            c: '#f5f5ff', k: '#c9caee', eyes: 'dot', mouth: 'o', noBody: true, noFeet: true, fy: 4,
+            head: `<path d="M26 104 L26 52 A34 34 0 0 1 94 52 L94 104 L82 94 L71 104 L60 94 L49 104 L38 94Z" fill="#f5f5ff" stroke="#c9caee" stroke-width="2" stroke-linejoin="round"/>`
+        },
         'plus-balloon': {
             c: '#ff5a5a', k: '#d93a3a', eyes: 'dot', mouth: 'smile', noBody: true, noFeet: true, noArms: true, body: 'float', fy: -4,
             back: `<path class="stk-string" d="M60 92 Q52 102 60 110 Q68 118 58 122" fill="none" stroke="#9aa3b5" stroke-width="2.4" stroke-linecap="round"/>`,
             head: `<ellipse cx="60" cy="50" rx="32" ry="38" fill="#ff5a5a"/><path d="M60 88 L53 98 L67 98Z" fill="#d93a3a" stroke="#d93a3a" stroke-width="2" stroke-linejoin="round"/><path d="M40 30 Q44 20 52 18" fill="none" stroke="#ff9a9a" stroke-width="4.4" stroke-linecap="round"/>`
         }
     };
+
+    // Her karakterin hareketi farklı: kimi el sallar, kimi yalnızca yüz ifadesi değiştirir, kimi gövdesiyle oynar.
+    // alt/mouth2: yüz ifadesi periyodik olarak bu ikinciye geçer.
+    const TUNE = {
+        'plus-cat': { wave: 'r', body: 'bob', alt: 'happy', mouth2: 'open' },
+        'plus-dog': { body: 'hop', alt: 'happy' },
+        'plus-bunny': { body: 'hop', alt: 'sleepy' },
+        'plus-bear': { wave: 'both', alt: 'happy' },
+        'plus-panda': { body: 'roll', alt: 'sleepy', mouth2: 'smile' },
+        'plus-fox': { alt: 'dot', mouth2: 'open' },
+        'plus-chick': { wave: 'both', alt: 'happy' },
+        'plus-penguin': { body: 'sway', alt: 'wink' },
+        'plus-frog': { body: 'hop' },
+        'plus-unicorn': { body: 'float', alt: 'happy' },
+        'plus-octopus': { body: 'sway', alt: 'happy' },
+        'plus-whale': { body: 'float', alt: 'dot' },
+        'plus-donut': { body: 'roll', alt: 'heart' },
+        'plus-strawberry': { alt: 'happy', mouth2: 'smile' },
+        'plus-teddy': { alt: 'dot' },
+        'plus-star': { body: 'twinkle', alt: 'dot', mouth2: 'smile' },
+        'plus-rainbow': { body: 'float', alt: 'sleepy' },
+        'plus-clover': { body: 'roll', alt: 'wink' },
+        'plus-sparkle-heart': { body: 'pulse', alt: 'heart' },
+        'plus-balloon': { body: 'float', alt: 'happy' },
+        'plus-coffee': { alt: 'sleepy' },
+        'plus-pizza': { body: 'sway', alt: 'happy' },
+        'plus-cake': { alt: 'heart', mouth2: 'open' },
+        'plus-gamepad': { body: 'bob', alt: 'happy' },
+        'plus-bulb': { alt: 'star', mouth2: 'open' },
+        'plus-ghost': { body: 'float', wave: 'both', alt: 'star' }
+    };
+    Object.keys(D).forEach((k) => {
+        const t = TUNE[k] || {};
+        D[k].wave = t.wave;
+        D[k].body = t.body;
+        D[k].alt = t.alt;
+        D[k].mouth2 = t.mouth2;
+    });
 
     // Hangi hayvanlar karanlık yüz üzerinde (panda göz çevresi) — gözler beyaz noktalı kalır, ek işlem gerekmez.
 
@@ -166,8 +231,8 @@
         if (!d.noArms) {
             const f = d.arm || (d.noBody ? d.k : d.c);
             const ay = d.noBody ? 74 : 88;
-            const lc = d.wave === 'l' || d.wave === 'both' ? 'stk-wave-l' : 'stk-swing-l';
-            const rc = d.wave === 'r' || d.wave === 'both' ? 'stk-wave-r' : 'stk-swing-r';
+            const lc = d.wave === 'l' || d.wave === 'both' ? 'stk-wave-l' : '';
+            const rc = d.wave === 'r' || d.wave === 'both' ? 'stk-wave-r' : '';
             parts.push(arm('l', f, lc, ay, d.k) + arm('r', f, rc, ay, d.k));
         }
         parts.push(d.head || `<circle cx="60" cy="52" r="34" fill="${d.c}" stroke="${d.k}" stroke-width="1.8"/>`);
@@ -175,13 +240,13 @@
         const y = 52;
         const face = [
             cheeks(y + 12),
-            d.eyes === 'none' ? '' : eyes[d.eyes](y),
+            d.eyes === 'none' ? '' : (d.alt ? `<g class="stk-ex-a">${eyes[d.eyes](y)}</g><g class="stk-ex-b">${eyes[d.alt](y)}</g>` : eyes[d.eyes](y)),
             d.nose || '',
-            (mouths[d.mouth] || mouths.none)(y + 12)
+            d.mouth2 ? `<g class="stk-ex-a">${(mouths[d.mouth] || mouths.none)(y + 12)}</g><g class="stk-ex-b">${mouths[d.mouth2](y + 12)}</g>` : (mouths[d.mouth] || mouths.none)(y + 12)
         ].join('');
         parts.push(`<g transform="translate(0 ${fy})">${face}</g>`);
         parts.push(d.front || '');
-        return `<svg class="stk-svg stk-body-${d.body || 'bob'}" viewBox="0 0 120 124" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g class="stk-root">${parts.join('')}</g></svg>`;
+        return `<svg class="stk-svg stk-body-${d.body || 'none'}" viewBox="0 0 120 124" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g class="stk-root">${parts.join('')}</g></svg>`;
     }
 
     window.plusStickerSvg = plusStickerSvg;

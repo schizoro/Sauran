@@ -40,7 +40,13 @@ const PLUS_STICKERS = [
     { id: 'plus-rainbow', emoji: '🌈' },
     { id: 'plus-clover', emoji: '🍀' },
     { id: 'plus-sparkle-heart', emoji: '💖' },
-    { id: 'plus-balloon', emoji: '🎈' }
+    { id: 'plus-balloon', emoji: '🎈' },
+    { id: 'plus-coffee', emoji: '☕' },
+    { id: 'plus-pizza', emoji: '🍕' },
+    { id: 'plus-cake', emoji: '🎂' },
+    { id: 'plus-gamepad', emoji: '🎮' },
+    { id: 'plus-bulb', emoji: '💡' },
+    { id: 'plus-ghost', emoji: '👻' }
 ];
 
 function stickerEmoji(id) {

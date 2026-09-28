@@ -1327,7 +1327,7 @@ html.auth-pending #login-screen { visibility: hidden; }
 .sticker-plus-btn:hover .stk-svg * { animation-play-state: running; }
 .hub-msg-sticker.stk-msg, .dm-msg-sticker.stk-msg { display: block; width: 116px; height: 120px; font-size: 0; }
 .stk-svg { display: block; width: 100%; height: 100%; overflow: visible; }
-.stk-svg * { transform-box: fill-box; }
+.stk-svg [class*="stk-"] { transform-box: fill-box; }
 .stk-root { transform-origin: 50% 100%; }
 .stk-body-bob .stk-root { animation: stkBob 1.7s ease-in-out infinite; }
 .stk-body-hop .stk-root { animation: stkHop 1.5s ease-in-out infinite; }
@@ -1392,3 +1392,13 @@ html.auth-pending #login-screen { visibility: hidden; }
 @keyframes stkLeaf { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(6deg); } }
 @keyframes stkRainbow { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.04); opacity: .85; } }
 @media (prefers-reduced-motion: reduce) { .stk-svg *, .stk-svg { animation: none !important; } }
+.stk-ex-a { animation: stkExA 6s ease-in-out infinite; }
+.stk-ex-b { animation: stkExB 6s ease-in-out infinite; opacity: 0; }
+.stk-steam { animation: stkSteam 2.4s ease-in-out infinite; }
+.stk-flame { transform-origin: 50% 100%; animation: stkFlame .7s ease-in-out infinite; }
+.stk-glow { transform-origin: 50% 60%; animation: stkGlow 1.8s ease-in-out infinite; }
+@keyframes stkExA { 0%, 55%, 100% { opacity: 1; } 62%, 90% { opacity: 0; } }
+@keyframes stkExB { 0%, 55%, 100% { opacity: 0; } 62%, 90% { opacity: 1; } }
+@keyframes stkSteam { 0%, 100% { transform: translateY(0); opacity: .9; } 50% { transform: translateY(-4px); opacity: .45; } }
+@keyframes stkFlame { 0%, 100% { transform: scale(1, 1) rotate(-3deg); } 50% { transform: scale(.9, 1.12) rotate(3deg); } }
+@keyframes stkGlow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(1.08); } }
