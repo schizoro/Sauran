@@ -1497,3 +1497,6 @@ html.auth-pending #login-screen { visibility: hidden; }
 .share-fps-opt:disabled { opacity: .45; cursor: default; }
 .share-fps-opt small { display: block; margin-top: 4px; color: #8e9bb0; font-size: 12px; }
 .share-fps-tag { font-size: 10px; padding: 1px 7px; border-radius: 999px; background: rgba(255, 190, 60, .18); color: #ffd28a; margin-left: 4px; }
+
+/* Sesli oda ekranı (z-index 200) üstünde görünmesi için: FPS seçici, çağrı katmanından yüksek olmalı. */
+#share-fps-modal { z-index: 320; }
