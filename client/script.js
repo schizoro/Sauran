@@ -19,8 +19,37 @@ const STICKERS = [
     { id: 'pray', emoji: '🙏' }
 ];
 
+// Sauran Plus: hareketli çıkartmalar (emoji + CSS animasyonu). Sunucu tarafı yalnızca aktif Plus'a izin verir.
+const PLUS_STICKERS = [
+    { id: 'plus-cat', emoji: '🐱', anim: 'wiggle' },
+    { id: 'plus-dog', emoji: '🐶', anim: 'bounce' },
+    { id: 'plus-bunny', emoji: '🐰', anim: 'hop' },
+    { id: 'plus-bear', emoji: '🐻', anim: 'sway' },
+    { id: 'plus-panda', emoji: '🐼', anim: 'roll' },
+    { id: 'plus-fox', emoji: '🦊', anim: 'wiggle' },
+    { id: 'plus-chick', emoji: '🐥', anim: 'hop' },
+    { id: 'plus-penguin', emoji: '🐧', anim: 'sway' },
+    { id: 'plus-frog', emoji: '🐸', anim: 'bounce' },
+    { id: 'plus-unicorn', emoji: '🦄', anim: 'float' },
+    { id: 'plus-octopus', emoji: '🐙', anim: 'sway' },
+    { id: 'plus-whale', emoji: '🐳', anim: 'float' },
+    { id: 'plus-donut', emoji: '🍩', anim: 'roll' },
+    { id: 'plus-strawberry', emoji: '🍓', anim: 'bounce' },
+    { id: 'plus-teddy', emoji: '🧸', anim: 'wiggle' },
+    { id: 'plus-star', emoji: '⭐', anim: 'twinkle' },
+    { id: 'plus-rainbow', emoji: '🌈', anim: 'float' },
+    { id: 'plus-clover', emoji: '🍀', anim: 'roll' },
+    { id: 'plus-sparkle-heart', emoji: '💖', anim: 'pulse' },
+    { id: 'plus-balloon', emoji: '🎈', anim: 'float' }
+];
+
 function stickerEmoji(id) {
-    return STICKERS.find((s) => s.id === id)?.emoji || '❔';
+    return STICKERS.find((s) => s.id === id)?.emoji || PLUS_STICKERS.find((s) => s.id === id)?.emoji || '❔';
+}
+
+function stickerAnimClass(id) {
+    const anim = PLUS_STICKERS.find((s) => s.id === id)?.anim;
+    return anim ? ` sticker-anim sticker-anim-${anim}` : '';
 }
 
 // =====================================================
@@ -7007,7 +7036,7 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
 
     } else if (msg.kind === 'dm_sticker' && msg.payload) {
 
-        body = `<span class="dm-msg-sticker">${stickerEmoji(msg.payload.id)}</span>`;
+        body = `<span class="dm-msg-sticker${stickerAnimClass(msg.payload.id)}">${stickerEmoji(msg.payload.id)}</span>`;
 
     } else {
 
@@ -7827,6 +7856,28 @@ function wireStickerPicker(prefix, onPick) {
         btn.textContent = sticker.emoji;
         btn.title = sticker.id;
         btn.addEventListener('click', () => {
+            picker.style.display = 'none';
+            onPick(sticker.id);
+        });
+        picker.appendChild(btn);
+    });
+
+    const plusLabel = document.createElement('div');
+    plusLabel.className = 'sticker-picker-label';
+    plusLabel.innerHTML = '<span class="plus-badge plus-badge-sm" style="margin-left:0;">✦ PLUS</span> Hareketli çıkartmalar';
+    picker.appendChild(plusLabel);
+
+    PLUS_STICKERS.forEach((sticker) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `sticker-plus-btn sticker-anim-${sticker.anim}`;
+        btn.textContent = sticker.emoji;
+        btn.title = 'Sauran Plus';
+        btn.addEventListener('click', () => {
+            if (!currentUser?.plus_active) {
+                showToast('Hareketli çıkartmalar Sauran Plus abonelerine açıktır.');
+                return;
+            }
             picker.style.display = 'none';
             onPick(sticker.id);
         });
@@ -12602,7 +12653,7 @@ function renderHubMessageIntoWrap(wrap, msg) {
 
     } else if (msg.kind === 'sticker' && msg.payload) {
 
-        body = `<div class="hub-msg-sticker">${stickerEmoji(msg.payload.id)}</div>`;
+        body = `<div class="hub-msg-sticker${stickerAnimClass(msg.payload.id)}">${stickerEmoji(msg.payload.id)}</div>`;
 
     } else {
 

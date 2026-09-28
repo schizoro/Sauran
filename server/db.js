@@ -3920,14 +3920,30 @@ const STICKER_EMOJIS = {
   sleep: '😴', cool: '😎', wink: '😉', ok: '👌', pray: '🙏'
 };
 
+// Sauran Plus: 20 hareketli çıkartma (istemcide emoji + CSS animasyonu). Yalnızca aktif Plus abonesi gönderebilir;
+// abonelik bitse bile daha önce gönderilmiş mesajlar görünmeye devam eder.
+const PLUS_STICKER_EMOJIS = {
+  'plus-cat': '🐱', 'plus-dog': '🐶', 'plus-bunny': '🐰', 'plus-bear': '🐻', 'plus-panda': '🐼',
+  'plus-fox': '🦊', 'plus-chick': '🐥', 'plus-penguin': '🐧', 'plus-frog': '🐸', 'plus-unicorn': '🦄',
+  'plus-octopus': '🐙', 'plus-whale': '🐳', 'plus-donut': '🍩', 'plus-strawberry': '🍓', 'plus-teddy': '🧸',
+  'plus-star': '⭐', 'plus-rainbow': '🌈', 'plus-clover': '🍀', 'plus-sparkle-heart': '💖', 'plus-balloon': '🎈'
+};
+const PLUS_STICKERS = Object.keys(PLUS_STICKER_EMOJIS);
+
 function stickerEmoji(id) {
-  return STICKER_EMOJIS[id] || '❔';
+  return STICKER_EMOJIS[id] || PLUS_STICKER_EMOJIS[id] || '❔';
+}
+
+function validateStickerFor(userId, stickerId) {
+  if (PLUS_STICKERS.includes(stickerId)) {
+    return hasActivePlus(userId) ? null : 'Bu çıkartma yalnızca Sauran Plus abonelerine açık.';
+  }
+  return STICKERS.includes(stickerId) ? null : 'Geçersiz çıkartma.';
 }
 
 function createHubSticker(hubId, userId, username, stickerId) {
-  if (!STICKERS.includes(stickerId)) {
-    return { success: false, error: 'Geçersiz çıkartma.' };
-  }
+  const stickerError = validateStickerFor(userId, stickerId);
+  if (stickerError) return { success: false, error: stickerError };
 
   const payload = JSON.stringify({ id: stickerId });
 
@@ -3947,9 +3963,8 @@ function saveDmSticker(fromId, fromUsername, toId, stickerId) {
   // Askıdaki hesaba YENİ mesaj gönderilemez (mevcut DM geçmişi olduğu gibi durur).
   if (isAccountSuspended(toId)) return { success: false, error: DM_UNAVAILABLE_ERROR };
 
-  if (!STICKERS.includes(stickerId)) {
-    return { success: false, error: 'Geçersiz çıkartma.' };
-  }
+  const stickerError = validateStickerFor(fromId, stickerId);
+  if (stickerError) return { success: false, error: stickerError };
 
   const payload = JSON.stringify({ id: stickerId });
 

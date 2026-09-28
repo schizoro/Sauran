@@ -1316,3 +1316,26 @@ html.auth-pending #login-screen { visibility: hidden; }
 .gift-box-claim-btn { width: 100%; }
 .gift-collected-tag { font-size: 12px; color: #7ee787; font-weight: 600; }
 .gift-notification-card { position: relative; }
+
+/* ── Sauran Plus hareketli çıkartmalar: emoji + CSS animasyonu (mesajda sürekli, seçicide üzerine gelince) ── */
+.sticker-picker { max-height: 300px; overflow-y: auto; overflow-x: hidden; width: 236px; box-sizing: border-box; }
+.sticker-picker-label { grid-column: 1 / -1; font-size: 11px; color: var(--text-tertiary, #8e9297); padding: 6px 2px 2px; display: flex; align-items: center; gap: 6px; }
+.sticker-anim-wiggle   { --sa: stkWiggle 1.6s ease-in-out infinite; }
+.sticker-anim-bounce   { --sa: stkBounce 1.2s ease-in-out infinite; }
+.sticker-anim-hop      { --sa: stkHop 1.4s ease-in-out infinite; }
+.sticker-anim-sway     { --sa: stkSway 2.4s ease-in-out infinite; }
+.sticker-anim-roll     { --sa: stkRoll 3s ease-in-out infinite; }
+.sticker-anim-float    { --sa: stkFloat 2.8s ease-in-out infinite; }
+.sticker-anim-twinkle  { --sa: stkTwinkle 1.8s ease-in-out infinite; }
+.sticker-anim-pulse    { --sa: stkPulse 1.1s ease-in-out infinite; }
+.hub-msg-sticker.sticker-anim, .dm-msg-sticker.sticker-anim { display: inline-block; width: fit-content; animation: var(--sa); transform-origin: 50% 80%; }
+.sticker-plus-btn:hover { animation: var(--sa); }
+@keyframes stkWiggle { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg); } }
+@keyframes stkBounce { 0%, 100% { transform: translateY(0) scale(1, 1); } 45% { transform: translateY(-14%) scale(.96, 1.06); } 70% { transform: translateY(0) scale(1.06, .94); } }
+@keyframes stkHop { 0%, 60%, 100% { transform: translateY(0); } 25% { transform: translateY(-18%); } 40% { transform: translateY(0); } 50% { transform: translateY(-8%); } }
+@keyframes stkSway { 0%, 100% { transform: translateX(-6%) rotate(-4deg); } 50% { transform: translateX(6%) rotate(4deg); } }
+@keyframes stkRoll { 0%, 100% { transform: rotate(-14deg); } 50% { transform: rotate(14deg); } }
+@keyframes stkFloat { 0%, 100% { transform: translateY(4%); } 50% { transform: translateY(-8%); } }
+@keyframes stkTwinkle { 0%, 100% { transform: scale(1) rotate(0); filter: brightness(1); } 50% { transform: scale(1.12) rotate(12deg); filter: brightness(1.25); } }
+@keyframes stkPulse { 0%, 100% { transform: scale(1); } 30% { transform: scale(1.14); } 55% { transform: scale(.97); } }
+@media (prefers-reduced-motion: reduce) { .hub-msg-sticker.sticker-anim, .dm-msg-sticker.sticker-anim, .sticker-plus-btn:hover { animation: none; } }
