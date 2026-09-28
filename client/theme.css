@@ -1231,6 +1231,20 @@ html.auth-pending #login-screen { visibility: hidden; }
 }
 @media (prefers-reduced-motion: reduce) { .profile-effect-aura::before { animation: none; } .pfx-sparkle { animation: none; opacity: 0; } }
 
+/* ── Sauran Plus "Lobi Teması": Lobi sahibi seçer, tüm üyeler görür (sahibin Plus'ı bitince sunucu 'default' döner) ── */
+.hub-detail-view[data-hub-theme="aurora"] {
+  background-image: radial-gradient(ellipse at 15% 0%, rgba(120, 80, 255, .16), transparent 55%), radial-gradient(ellipse at 90% 100%, rgba(40, 220, 200, .12), transparent 55%);
+}
+.hub-detail-view[data-hub-theme="ember"] {
+  background-image: radial-gradient(ellipse at 10% 0%, rgba(255, 110, 60, .15), transparent 55%), radial-gradient(ellipse at 95% 100%, rgba(255, 190, 70, .10), transparent 55%);
+}
+.hub-detail-view[data-hub-theme="forest"] {
+  background-image: radial-gradient(ellipse at 12% 0%, rgba(60, 200, 120, .14), transparent 55%), radial-gradient(ellipse at 92% 100%, rgba(90, 160, 90, .12), transparent 55%);
+}
+.hub-theme-swatch-aurora { background: linear-gradient(135deg, rgba(120, 80, 255, .6), rgba(40, 220, 200, .5)); }
+.hub-theme-swatch-ember { background: linear-gradient(135deg, rgba(255, 110, 60, .6), rgba(255, 190, 70, .5)); }
+.hub-theme-swatch-forest { background: linear-gradient(135deg, rgba(60, 200, 120, .6), rgba(90, 160, 90, .5)); }
+
 /* Seçici önizleme rozetleri (Ayarlar > Profil Efekti) */
 .chat-theme-swatch-aura { background: radial-gradient(circle, rgba(147, 51, 234, .6) 0%, rgba(92, 200, 255, .3) 60%, transparent 80%); }
 .chat-theme-swatch-sparkle { background: linear-gradient(135deg, rgba(76, 29, 120, .5), rgba(217, 70, 239, .35)); position: relative; }

@@ -9036,12 +9036,36 @@ const hubSettingsError = document.getElementById('hub-settings-error');
 const hubSettingsSaveBtn = document.getElementById('hub-settings-save-btn');
 
 let hubSettingsNewImageData = undefined;
+let hubSettingsTheme = 'default';
+
+function renderHubThemePicker() {
+    const block = document.getElementById('hubset-theme-block');
+    if (!block || !currentHub) return;
+    block.style.display = currentHub.is_owner ? '' : 'none';
+    const isPlus = Boolean(currentUser?.plus_active);
+    document.querySelectorAll('#hubset-theme-picker .chat-theme-option').forEach((btn) => {
+        const theme = btn.dataset.hubTheme;
+        btn.disabled = theme !== 'default' && !isPlus;
+        btn.classList.toggle('selected', theme === hubSettingsTheme);
+        btn.title = btn.disabled ? 'Sauran Plus gerekli' : '';
+    });
+    document.getElementById('hubset-theme-hint').textContent = isPlus ? '' : 'Lobi temaları Sauran Plus abonelerine açıktır.';
+}
+
+document.getElementById('hubset-theme-picker')?.addEventListener('click', (event) => {
+    const btn = event.target.closest('.chat-theme-option');
+    if (!btn || btn.disabled) return;
+    hubSettingsTheme = btn.dataset.hubTheme;
+    renderHubThemePicker();
+});
 
 hubSettingsOpenBtn.addEventListener('click', () => {
 
     if (!currentHub) return;
 
     hubSettingsNewImageData = undefined;
+    hubSettingsTheme = currentHub.theme || 'default';
+    renderHubThemePicker();
     hubSettingsNameInput.value = currentHub.name || '';
     hubSettingsError.textContent = '';
 
@@ -9831,7 +9855,10 @@ hubSettingsSaveBtn.addEventListener('click', async () => {
 
     const body = { name };
     if (hubSettingsNewImageData !== undefined) body.image_data = hubSettingsNewImageData;
-    if (currentHub.is_owner) Object.assign(body, collectHubDiscoverSettings());
+    if (currentHub.is_owner) {
+        Object.assign(body, collectHubDiscoverSettings());
+        if (hubSettingsTheme !== (currentHub.theme || 'default')) body.theme = hubSettingsTheme;
+    }
 
     try {
 
@@ -10565,6 +10592,8 @@ hubBackBtn.addEventListener(
 function renderHubDetail() {
 
     if (!currentHub) return;
+
+    hubDetailView.dataset.hubTheme = currentHub.theme || 'default';
 
     if (currentHub.image_data) {
         hubDetailIcon.innerHTML = `<img src="${currentHub.image_data}" alt="" style="width:22px;height:22px;border-radius:6px;object-fit:cover;">`;

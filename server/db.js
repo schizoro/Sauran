@@ -253,6 +253,10 @@ const DISCOVER_HUB_COLUMNS = {
 for (const [column, definition] of Object.entries(DISCOVER_HUB_COLUMNS)) {
   if (!hubColumns.includes(column)) db.exec(`ALTER TABLE hubs ADD COLUMN ${column} ${definition}`);
 }
+if (!hubColumns.includes('theme')) {
+  // Sauran Plus: Lobi teması (yalnızca Plus abonesi Lobi sahibi ayarlayabilir; sahibin Plus'ı bitince 'default' görünür).
+  db.exec(`ALTER TABLE hubs ADD COLUMN theme TEXT NOT NULL DEFAULT 'default'`);
+}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS hub_join_requests (
@@ -2602,10 +2606,18 @@ function createHub(userId, { name, image_data, ...discovery }) {
   }
 }
 
-function updateHub(hubId, userId, { name, image_data, ...discovery }) {
+const HUB_THEMES = ['default', 'aurora', 'ember', 'forest'];
+
+function updateHub(hubId, userId, { name, image_data, theme, ...discovery }) {
   const hub = db.prepare(`SELECT * FROM hubs WHERE id = ?`).get(hubId);
   if (!hub) return { success: false, error: 'Lobi bulunamadı.' };
   if (hub.created_by !== userId) return { success: false, error: 'Sadece Lobi sahibi düzenleyebilir.' };
+
+  if (theme !== undefined) {
+    theme = String(theme || 'default');
+    if (!HUB_THEMES.includes(theme)) return { success: false, error: 'Geçersiz Lobi teması.' };
+    if (theme !== 'default' && !hasActivePlus(userId)) return { success: false, error: 'Lobi teması yalnızca Sauran Plus abonelerine açık.' };
+  }
 
   // Keşfet alanları: hepsi doğrulanmadan hiçbir alan (ad/görsel dahil) değiştirilmez.
   const discoveryInput = {};
@@ -2627,6 +2639,8 @@ function updateHub(hubId, userId, { name, image_data, ...discovery }) {
     }
     db.prepare(`UPDATE hubs SET image_data = ? WHERE id = ?`).run(stripImageMetadata(image_data) || null, hubId);
   }
+
+  if (theme !== undefined) db.prepare(`UPDATE hubs SET theme = ? WHERE id = ?`).run(theme, hubId);
 
   for (const [key, value] of Object.entries(checked.fields)) {
     db.prepare(`UPDATE hubs SET ${key} = ? WHERE id = ?`).run(value, hubId);
@@ -3185,6 +3199,7 @@ function getHubDetail(hubId, userId) {
 
   return {
     ...hub,
+    theme: hasActivePlus(hub.created_by) ? (hub.theme || 'default') : 'default',
     roles,
     members,
     is_member: Boolean(membership),
