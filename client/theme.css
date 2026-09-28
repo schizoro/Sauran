@@ -1178,8 +1178,8 @@ html.auth-pending #login-screen { visibility: hidden; }
    üzerinde görünür. Mesaj/üye/arkadaş listesi/sesli oda/profil, kullanıcı adı basılan HER yerde kullanılır.
    Boyut ebeveyn font-size'ına göre (em) ölçeklenir, böylece her bağlamda doğru görünür. */
 .plus-name-plate {
-  position: relative; display: inline-flex; align-items: center; padding: 0 0.28em; margin: -0.05em -0.05em;
-  border-radius: 0.3em; overflow: hidden; isolation: isolate;
+  position: relative; display: inline-flex; align-items: center; padding: 0 0.1em;
+  border-radius: 0.2em; overflow: hidden; isolation: isolate;
   background: linear-gradient(135deg, rgba(76, 29, 120, .55), rgba(147, 51, 234, .4) 100%);
   box-shadow: 0 0 0 1px rgba(216, 180, 254, .22);
 }
