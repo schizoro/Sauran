@@ -4017,13 +4017,7 @@ profileBtn.addEventListener(
             aboutInput.value = currentUser?.about_me || '';
             if (aboutCount) aboutCount.textContent = `${aboutInput.value.length}/${max}`;
         }
-        renderChatThemePicker();
-        renderProfileColorPicker();
-        renderProfileThemePicker();
-        renderBubbleStylePicker();
-        renderNameEffectPicker();
         renderActivityControls();
-        renderProfileEffectPicker();
 
     }
 );
@@ -6723,6 +6717,13 @@ async function loadMarketModal() {
     document.getElementById('market-grid-locked').innerHTML = locked.map((i) => mkCardHtml(i, { showPrice: true })).join('');
     document.getElementById('market-locked-title').style.display = locked.length ? '' : 'none';
     main.style.display = '';
+    // Profilden Market'e taşınan Plus kişiselleştirmeleri (coin fiyatlandırması henüz yok, "Yakında" görünür).
+    renderChatThemePicker();
+    renderBubbleStylePicker();
+    renderProfileColorPicker();
+    renderProfileThemePicker();
+    renderNameEffectPicker();
+    renderProfileEffectPicker();
 }
 
 async function loadInventoryModal() {
