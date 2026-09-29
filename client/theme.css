@@ -1355,62 +1355,46 @@ html.auth-pending #login-screen { visibility: hidden; }
   81% { opacity: .65; }
   100% { transform: translateY(-61px) translateX(12px) rotate(310deg) scale(.5); opacity: 0; }
 }
-/* Duman: TEK kaynak — video referansındaki gibi altta sürekli kabaran yoğun bir "duman kütlesi"
-   (.pfx-smoke-base, karnabahar dokusu, organik border-radius ile) ve ondan yukarı doğru kıvrılarak,
-   dalgalanarak yükselen ince duman lüleleri (.pfx-smoke-wisp). Lüleler S-eğrisi çizerek sağa-sola
-   kıvrılır, yükseldikçe hem genişler hem incelir ve Sakura yapraklarıyla AYNI yükseklikte (-64px)
-   tamamen kaybolur. Taban kütlesi kalıcı/nefes alan bir şekilde her zaman görünür kalır. */
-.pfx-smoke-base {
-  position: absolute; left: 50%; bottom: -10%; pointer-events: none;
-  background: radial-gradient(ellipse, rgba(255, 255, 255, .92) 0%, rgba(225, 225, 235, .5) 55%, transparent 80%);
-  filter: blur(1.4px);
+/* Duman: TEK, KESİNTİSİZ gövde — asla kaybolup yeniden BELİRMEZ (bu yüzden "parça parça çıkan bulut"
+   hissi vermiyor). Alt ortadan başlayıp konteynerin tepesine kadar uzanan, kendi gradyanıyla üstte
+   Sakura yapraklarıyla AYNI noktada (~%84 yükseklik ≈ -64px) saydamlaşarak "kaybolan" 3 üst üste binen
+   sütun. Tek hareketleri: kökü sabit, gövdesi gerçek dumanki gibi sağa-sola sallanıp hafifçe genişleyip
+   daralan organik bir salınım (translateX/rotate/scaleX) — hiçbir an opacity 0'a inip yeniden 0'dan
+   belirmiyor, bu yüzden sürekli akan TEK bir duman gibi görünür. */
+.pfx-smoke-col {
+  position: absolute; left: 50%; bottom: 0; width: 30%; height: 100%; pointer-events: none;
+  transform-origin: 50% 100%;
+  background: linear-gradient(to top,
+    rgba(255, 255, 255, .55) 0%,
+    rgba(240, 240, 248, .4) 14%,
+    rgba(231, 231, 243, .24) 30%,
+    rgba(223, 223, 238, .12) 48%,
+    rgba(219, 219, 236, .04) 66%,
+    rgba(219, 219, 236, 0) 80%);
+  filter: blur(1.6px);
 }
-.pfx-smoke-base:nth-child(1) { width: 30px; height: 22px; margin-left: -15px; animation: pfxSmokeBaseA 3.4s ease-in-out infinite; }
-.pfx-smoke-base:nth-child(2) { width: 22px; height: 17px; margin-left: -30px; bottom: -14%; animation: pfxSmokeBaseB 2.8s ease-in-out infinite .3s; }
-.pfx-smoke-base:nth-child(3) { width: 22px; height: 17px; margin-left: 8px;   bottom: -14%; animation: pfxSmokeBaseA 3.1s ease-in-out infinite .6s; }
-.pfx-smoke-base:nth-child(4) { width: 18px; height: 14px; margin-left: -6px;  bottom: -6%;  animation: pfxSmokeBaseB 2.6s ease-in-out infinite .15s; }
-@keyframes pfxSmokeBaseA {
-  0%, 100% { transform: scale(1) rotate(0deg); border-radius: 46% 54% 61% 39% / 55% 45% 55% 45%; opacity: .8; }
-  50% { transform: scale(1.15) rotate(6deg); border-radius: 58% 42% 47% 53% / 45% 58% 42% 55%; opacity: .95; }
+.pfx-smoke-col:nth-child(1) { margin-left: -19%; width: 24%; animation: pfxSmokeSwayA 6.4s ease-in-out infinite; }
+.pfx-smoke-col:nth-child(2) { margin-left: -15%; width: 30%; animation: pfxSmokeSwayB 7.8s ease-in-out infinite -2.4s; opacity: .7; }
+.pfx-smoke-col:nth-child(3) { margin-left: -11%; width: 22%; animation: pfxSmokeSwayC 5.6s ease-in-out infinite -1.1s; opacity: .65; }
+@keyframes pfxSmokeSwayA {
+  0%, 100% { transform: translateX(0) rotate(0deg) scaleX(1); }
+  25%  { transform: translateX(5%) rotate(4deg) scaleX(1.08); }
+  50%  { transform: translateX(-3%) rotate(-3deg) scaleX(.94); }
+  75%  { transform: translateX(6%) rotate(5deg) scaleX(1.1); }
 }
-@keyframes pfxSmokeBaseB {
-  0%, 100% { transform: scale(1) rotate(0deg); border-radius: 55% 45% 40% 60% / 40% 55% 45% 60%; opacity: .75; }
-  50% { transform: scale(1.18) rotate(-7deg); border-radius: 42% 58% 55% 45% / 58% 42% 60% 40%; opacity: .9; }
+@keyframes pfxSmokeSwayB {
+  0%, 100% { transform: translateX(0) rotate(0deg) scaleX(1); }
+  30%  { transform: translateX(-6%) rotate(-5deg) scaleX(.92); }
+  60%  { transform: translateX(4%) rotate(4deg) scaleX(1.07); }
+  85%  { transform: translateX(-4%) rotate(-3deg) scaleX(.96); }
 }
-.pfx-smoke-wisp {
-  position: absolute; left: 50%; bottom: 0; width: 15px; height: 20px; opacity: 0; pointer-events: none;
-  background: linear-gradient(to top, rgba(255, 255, 255, .85), rgba(230, 230, 240, .4) 65%, transparent 100%);
-  filter: blur(1.4px);
+@keyframes pfxSmokeSwayC {
+  0%, 100% { transform: translateX(0) rotate(0deg) scaleX(1); }
+  20%  { transform: translateX(4%) rotate(3deg) scaleX(1.05); }
+  55%  { transform: translateX(-5%) rotate(-4deg) scaleX(.9); }
+  80%  { transform: translateX(3%) rotate(3deg) scaleX(1.04); }
 }
-.pfx-smoke-wisp:nth-child(5) { margin-left: -7px;  animation: pfxSmokeWisp1 4.3s ease-out infinite; animation-delay: 0s; }
-.pfx-smoke-wisp:nth-child(6) { margin-left: -18px; animation: pfxSmokeWisp2 4.8s ease-out infinite; animation-delay: 1.4s; }
-.pfx-smoke-wisp:nth-child(7) { margin-left: 4px;   animation: pfxSmokeWisp3 4.1s ease-out infinite; animation-delay: 2.7s; }
-.pfx-smoke-wisp:nth-child(8) { margin-left: -9px;  animation: pfxSmokeWisp2 4.6s ease-out infinite; animation-delay: 3.9s; }
-@keyframes pfxSmokeWisp1 {
-  0%   { transform: translateY(0) translateX(0) rotate(0deg) scale(.5); opacity: 0; border-radius: 50% 50% 40% 60% / 60% 60% 40% 40%; }
-  12%  { opacity: .8; }
-  30%  { transform: translateY(-17px) translateX(5px) rotate(9deg) scale(.8); border-radius: 55% 45% 50% 50% / 45% 55% 45% 55%; }
-  52%  { transform: translateY(-33px) translateX(-6px) rotate(-11deg) scale(1.05); border-radius: 42% 58% 55% 45% / 58% 42% 60% 40%; opacity: .55; }
-  76%  { transform: translateY(-50px) translateX(6px) rotate(13deg) scale(1.25); border-radius: 60% 40% 45% 55% / 40% 60% 45% 55%; opacity: .3; }
-  100% { transform: translateY(-64px) translateX(-3px) rotate(4deg) scale(1.4); opacity: 0; }
-}
-@keyframes pfxSmokeWisp2 {
-  0%   { transform: translateY(0) translateX(0) rotate(0deg) scale(.45); opacity: 0; border-radius: 45% 55% 60% 40% / 55% 45% 60% 40%; }
-  14%  { opacity: .75; }
-  34%  { transform: translateY(-19px) translateX(-7px) rotate(-10deg) scale(.85); border-radius: 50% 50% 45% 55% / 40% 60% 45% 55%; }
-  58%  { transform: translateY(-37px) translateX(8px) rotate(12deg) scale(1.1); border-radius: 58% 42% 50% 50% / 55% 45% 58% 42%; opacity: .5; }
-  80%  { transform: translateY(-53px) translateX(-5px) rotate(-8deg) scale(1.3); border-radius: 40% 60% 55% 45% / 45% 55% 40% 60%; opacity: .28; }
-  100% { transform: translateY(-64px) translateX(4px) rotate(6deg) scale(1.45); opacity: 0; }
-}
-@keyframes pfxSmokeWisp3 {
-  0%   { transform: translateY(0) translateX(0) rotate(0deg) scale(.5); opacity: 0; border-radius: 55% 45% 45% 55% / 45% 55% 55% 45%; }
-  10%  { opacity: .8; }
-  32%  { transform: translateY(-15px) translateX(6px) rotate(8deg) scale(.78); border-radius: 48% 52% 55% 45% / 58% 42% 48% 52%; }
-  56%  { transform: translateY(-31px) translateX(-8px) rotate(-13deg) scale(1); border-radius: 60% 40% 42% 58% / 42% 58% 55% 45%; opacity: .5; }
-  78%  { transform: translateY(-49px) translateX(7px) rotate(10deg) scale(1.2); border-radius: 45% 55% 58% 42% / 55% 45% 42% 58%; opacity: .3; }
-  100% { transform: translateY(-64px) translateX(-4px) rotate(-3deg) scale(1.35); opacity: 0; }
-}
-@media (prefers-reduced-motion: reduce) { .pfx-petal, .pfx-smoke-base, .pfx-smoke-wisp { animation: none; opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .pfx-petal, .pfx-smoke-col { animation: none; } }
 
 /* ── Sauran Plus "Lobi Teması": Lobi sahibi seçer, tüm üyeler görür (sahibin Plus'ı bitince sunucu 'default' döner) ── */
 .hub-detail-view[data-hub-theme="aurora"] {
