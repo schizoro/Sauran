@@ -1897,7 +1897,8 @@ function applyProfileEffect(el, effect) {
         el.insertAdjacentHTML('beforeend', '<span class="pfx-mask">' + '<i class="pfx-petal"></i>'.repeat(12) + '</span>');
     } else if (effect === 'smoke') {
         el.classList.add('profile-effect-smoke');
-        el.insertAdjacentHTML('beforeend', '<span class="pfx-mask">' + '<i class="pfx-smoke"></i>'.repeat(6) + '</span>');
+        // Alt kısımda sürekli kabaran yoğun bir duman kütlesi (base) + ondan yukarı kıvrılarak yükselen ince lüleler (wisp).
+        el.insertAdjacentHTML('beforeend', '<span class="pfx-mask">' + '<i class="pfx-smoke-base"></i>'.repeat(4) + '<i class="pfx-smoke-wisp"></i>'.repeat(4) + '</span>');
     }
 }
 // Yalnızca başkasının profilinde: kendi profilinde aynı avatar tıklaması zaten "avatarı değiştir" anlamına geliyor.
