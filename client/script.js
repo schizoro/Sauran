@@ -6812,7 +6812,14 @@ document.addEventListener('click', async (e) => {
     const grid = btn.closest('#market-grid-owned, #market-grid-locked, #inventory-grid');
     if (!grid) return;
     btn.disabled = true; btn.textContent = 'Kuşanılıyor...';
-    await fetch('/api/me/cosmetics/equip', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ item_key: btn.dataset.mkEquip }) });
+    const response = await fetch('/api/me/cosmetics/equip', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ item_key: btn.dataset.mkEquip }) });
+    const data = await response.json().catch(() => null);
+    // Kuşanma isteği başarılıysa uygulamayı kapatıp açmaya gerek kalmadan anında yansısın:
+    // kendi çerçevemizi her yerde (üst çubuk, ray, profil, mesajlarımız) currentUser üzerinden çiziyoruz.
+    if (data?.success && currentUser) {
+        currentUser.avatar_frame = data.avatar_frame;
+        renderProfile();
+    }
     if (document.getElementById('market-modal').style.display === 'flex') loadMarketModal();
     if (document.getElementById('inventory-modal').style.display === 'flex') loadInventoryModal();
 });
