@@ -1884,17 +1884,20 @@ function applyAvatarFrame(el, frameKey) {
     el.dataset.frameKey = frameKey && frameKey !== 'classic' ? frameKey : '';
 }
 
-// Sauran Plus: profil penceresinde avatarın çevresinde animasyonlu efekt (aura/sparkle). Yalnızca büyük
+// Sauran Plus: profil penceresinde avatarın çevresinde animasyonlu efekt (sakura/duman). Yalnızca büyük
 // profil avatarına uygulanır (rail/topbar gibi küçük avatarlara değil — orada çerçeve zaten yeterli).
-const PROFILE_EFFECT_CLASSES = ['profile-effect-aura', 'profile-effect-sparkle'];
+// Parçacıklar dairesel bir maske (.pfx-mask, overflow:hidden) içinde durur — avatar penceresini taşmaz.
+const PROFILE_EFFECT_CLASSES = ['profile-effect-sakura', 'profile-effect-smoke'];
 function applyProfileEffect(el, effect) {
     if (!el) return;
     PROFILE_EFFECT_CLASSES.forEach((c) => el.classList.remove(c));
-    el.querySelectorAll(':scope > .pfx-sparkle').forEach((n) => n.remove());
-    if (effect === 'aura') el.classList.add('profile-effect-aura');
-    else if (effect === 'sparkle') {
-        el.classList.add('profile-effect-sparkle');
-        el.insertAdjacentHTML('beforeend', '<i class="pfx-sparkle"></i><i class="pfx-sparkle"></i><i class="pfx-sparkle"></i><i class="pfx-sparkle"></i>');
+    el.querySelectorAll(':scope > .pfx-mask').forEach((n) => n.remove());
+    if (effect === 'sakura') {
+        el.classList.add('profile-effect-sakura');
+        el.insertAdjacentHTML('beforeend', '<span class="pfx-mask">' + '<i class="pfx-petal"></i>'.repeat(6) + '</span>');
+    } else if (effect === 'smoke') {
+        el.classList.add('profile-effect-smoke');
+        el.insertAdjacentHTML('beforeend', '<span class="pfx-mask">' + '<i class="pfx-smoke"></i>'.repeat(4) + '</span>');
     }
 }
 // Yalnızca başkasının profilinde: kendi profilinde aynı avatar tıklaması zaten "avatarı değiştir" anlamına geliyor.
@@ -4379,7 +4382,7 @@ function renderProfileEffectPicker() {
         btn.classList.toggle('selected', effect === active);
         btn.title = locked ? 'Sauran Plus gerekli' : '';
     });
-    hint.textContent = isPlus ? '' : 'Aura ve Işıltı efektleri Sauran Plus abonelerine açıktır.';
+    hint.textContent = isPlus ? '' : 'Sakura ve Duman efektleri Sauran Plus abonelerine açıktır.';
 }
 
 document.getElementById('profile-effect-picker')?.addEventListener('click', async (event) => {
