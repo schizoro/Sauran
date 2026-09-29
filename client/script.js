@@ -1894,7 +1894,7 @@ function applyProfileEffect(el, effect) {
     el.querySelectorAll(':scope > .pfx-mask').forEach((n) => n.remove());
     if (effect === 'sakura') {
         el.classList.add('profile-effect-sakura');
-        el.insertAdjacentHTML('beforeend', '<span class="pfx-mask">' + '<i class="pfx-petal"></i>'.repeat(6) + '</span>');
+        el.insertAdjacentHTML('beforeend', '<span class="pfx-mask">' + '<i class="pfx-petal"></i>'.repeat(12) + '</span>');
     } else if (effect === 'smoke') {
         el.classList.add('profile-effect-smoke');
         el.insertAdjacentHTML('beforeend', '<span class="pfx-mask">' + '<i class="pfx-smoke"></i>'.repeat(4) + '</span>');
