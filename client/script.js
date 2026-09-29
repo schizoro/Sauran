@@ -1884,10 +1884,10 @@ function applyAvatarFrame(el, frameKey) {
     el.dataset.frameKey = frameKey && frameKey !== 'classic' ? frameKey : '';
 }
 
-// Sauran Plus: profil penceresinde avatarın çevresinde animasyonlu efekt (sakura/duman). Yalnızca büyük
-// profil avatarına uygulanır (rail/topbar gibi küçük avatarlara değil — orada çerçeve zaten yeterli).
+// Sauran Plus: profil penceresinde avatarın çevresinde animasyonlu efekt (sakura/sahne ışıkları). Yalnızca
+// büyük profil avatarına uygulanır (rail/topbar gibi küçük avatarlara değil — orada çerçeve zaten yeterli).
 // Parçacıklar dairesel bir maske (.pfx-mask, overflow:hidden) içinde durur — avatar penceresini taşmaz.
-const PROFILE_EFFECT_CLASSES = ['profile-effect-sakura', 'profile-effect-smoke'];
+const PROFILE_EFFECT_CLASSES = ['profile-effect-sakura', 'profile-effect-stagelights'];
 function applyProfileEffect(el, effect) {
     if (!el) return;
     PROFILE_EFFECT_CLASSES.forEach((c) => el.classList.remove(c));
@@ -1895,10 +1895,10 @@ function applyProfileEffect(el, effect) {
     if (effect === 'sakura') {
         el.classList.add('profile-effect-sakura');
         el.insertAdjacentHTML('beforeend', '<span class="pfx-mask">' + '<i class="pfx-petal"></i>'.repeat(12) + '</span>');
-    } else if (effect === 'smoke') {
-        el.classList.add('profile-effect-smoke');
-        // Tek, kesintisiz duman gövdesi: hiç kaybolup yeniden belirmiyor, sadece organik şekilde sallanıp yayılıyor.
-        el.insertAdjacentHTML('beforeend', '<span class="pfx-mask">' + '<i class="pfx-smoke-col"></i>'.repeat(3) + '</span>');
+    } else if (effect === 'stagelights') {
+        el.classList.add('profile-effect-stagelights');
+        // 4 ince ışık huzmesi, alt kısımlara yayılmış, sürekli sağa-sola sallanıyor (hiç kaybolup yeniden belirmiyor).
+        el.insertAdjacentHTML('beforeend', '<span class="pfx-mask">' + '<i class="pfx-stagelight"></i>'.repeat(4) + '</span>');
     }
 }
 // Yalnızca başkasının profilinde: kendi profilinde aynı avatar tıklaması zaten "avatarı değiştir" anlamına geliyor.
@@ -4383,7 +4383,7 @@ function renderProfileEffectPicker() {
         btn.classList.toggle('selected', effect === active);
         btn.title = locked ? 'Sauran Plus gerekli' : '';
     });
-    hint.textContent = isPlus ? '' : 'Sakura ve Duman efektleri Sauran Plus abonelerine açıktır.';
+    hint.textContent = isPlus ? '' : 'Sakura ve Sahne Işıkları efektleri Sauran Plus abonelerine açıktır.';
 }
 
 document.getElementById('profile-effect-picker')?.addEventListener('click', async (event) => {

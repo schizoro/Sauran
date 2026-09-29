@@ -2470,7 +2470,7 @@ function updateProfileTheme(userId, theme) {
 }
 
 // Sauran Plus: profil penceresinde avatarın çevresinde animasyonlu efekt.
-const PROFILE_EFFECTS = ['none', 'sakura', 'smoke'];
+const PROFILE_EFFECTS = ['none', 'sakura', 'stagelights'];
 
 function updateProfileEffect(userId, effect) {
   const value = String(effect || 'none');

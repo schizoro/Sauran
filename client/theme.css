@@ -1288,8 +1288,8 @@ html.auth-pending #login-screen { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) { .plus-name-plate { animation: none; } .pnp-dust { animation: none; opacity: 0; } }
 
 /* ── Sauran Plus "Profil Efekti": profil penceresindeki BÜYÜK avatarın çevresinde animasyon.
-   İki seçenek: Sakura (alttan yükselip avatarın üstünden süzülen çiçek yaprakları) ve Duman
-   (alttan yükselip dağılan yumuşak duman bulutları). Parçacıklar .pfx-mask içinde (border-radius:50%,
+   İki seçenek: Sakura (alttan yükselip avatarın üstünden süzülen çiçek yaprakları) ve Sahne Işıkları
+   (alt kısımlara yayılmış, sürekli sağa-sola sallanan ince ışık huzmeleri). Parçacıklar .pfx-mask içinde (border-radius:50%,
    overflow:hidden) durur — avatar dairesinin dışına TAŞMAZ, cinsiyet ayrımı gözetmeyen nötr efektler. ── */
 .pfx-mask {
   position: absolute; inset: 0; border-radius: 50%; overflow: hidden; pointer-events: none; z-index: 2;
@@ -1355,14 +1355,12 @@ html.auth-pending #login-screen { visibility: hidden; }
   81% { opacity: .65; }
   100% { transform: translateY(-61px) translateX(12px) rotate(310deg) scale(.5); opacity: 0; }
 }
-/* Duman: TEK, KESİNTİSİZ gövde — asla kaybolup yeniden BELİRMEZ (bu yüzden "parça parça çıkan bulut"
-   hissi vermiyor). Alt ortadan başlayıp konteynerin tepesine kadar uzanan, kendi gradyanıyla üstte
-   Sakura yapraklarıyla AYNI noktada (~%84 yükseklik ≈ -64px) saydamlaşarak "kaybolan" 3 üst üste binen
-   sütun. Tek hareketleri: kökü sabit, gövdesi gerçek dumanki gibi sağa-sola sallanıp hafifçe genişleyip
-   daralan organik bir salınım (translateX/rotate/scaleX) — hiçbir an opacity 0'a inip yeniden 0'dan
-   belirmiyor, bu yüzden sürekli akan TEK bir duman gibi görünür. */
-.pfx-smoke-col {
-  position: absolute; left: 50%; bottom: 0; width: 30%; height: 100%; pointer-events: none;
+/* Sahne Işıkları: TEK, KESİNTİSİZ gövdeler — asla kaybolup yeniden BELİRMEZ. 4 ince ışık huzmesi alt
+   kısımlara yayılmış şekilde konumlanır, her biri kendi kökünden (alt uç) sürekli sağa-sola sallanır
+   (translateX/rotate/scaleX) ve Sakura yapraklarıyla AYNI noktada (~%80-84 yükseklik) kendi gradyanıyla
+   saydamlaşarak "kaybolur". Hiçbir an opacity 0'a inip yeniden 0'dan belirmiyor. */
+.pfx-stagelight {
+  position: absolute; left: 50%; bottom: 0; width: 14%; height: 100%; pointer-events: none;
   transform-origin: 50% 100%;
   background: linear-gradient(to top,
     rgba(255, 255, 255, .55) 0%,
@@ -1371,11 +1369,12 @@ html.auth-pending #login-screen { visibility: hidden; }
     rgba(223, 223, 238, .12) 48%,
     rgba(219, 219, 236, .04) 66%,
     rgba(219, 219, 236, 0) 80%);
-  filter: blur(1.6px);
+  filter: blur(1.3px);
 }
-.pfx-smoke-col:nth-child(1) { margin-left: -19%; width: 24%; animation: pfxSmokeSwayA 6.4s ease-in-out infinite; }
-.pfx-smoke-col:nth-child(2) { margin-left: -15%; width: 30%; animation: pfxSmokeSwayB 7.8s ease-in-out infinite -2.4s; opacity: .7; }
-.pfx-smoke-col:nth-child(3) { margin-left: -11%; width: 22%; animation: pfxSmokeSwayC 5.6s ease-in-out infinite -1.1s; opacity: .65; }
+.pfx-stagelight:nth-child(1) { margin-left: -35%; width: 11%; animation: pfxSmokeSwayA 6.4s ease-in-out infinite; }
+.pfx-stagelight:nth-child(2) { margin-left: -14%; width: 13%; animation: pfxSmokeSwayB 7.8s ease-in-out infinite -2.4s; opacity: .75; }
+.pfx-stagelight:nth-child(3) { margin-left: 6%;   width: 12%; animation: pfxSmokeSwayC 5.6s ease-in-out infinite -1.1s; opacity: .7; }
+.pfx-stagelight:nth-child(4) { margin-left: 26%;  width: 10%; animation: pfxSmokeSwayA 6.9s ease-in-out infinite -3.6s; opacity: .68; }
 @keyframes pfxSmokeSwayA {
   0%, 100% { transform: translateX(0) rotate(0deg) scaleX(1); }
   25%  { transform: translateX(5%) rotate(4deg) scaleX(1.08); }
@@ -1394,7 +1393,7 @@ html.auth-pending #login-screen { visibility: hidden; }
   55%  { transform: translateX(-5%) rotate(-4deg) scaleX(.9); }
   80%  { transform: translateX(3%) rotate(3deg) scaleX(1.04); }
 }
-@media (prefers-reduced-motion: reduce) { .pfx-petal, .pfx-smoke-col { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .pfx-petal, .pfx-stagelight { animation: none; } }
 
 /* ── Sauran Plus "Lobi Teması": Lobi sahibi seçer, tüm üyeler görür (sahibin Plus'ı bitince sunucu 'default' döner) ── */
 .hub-detail-view[data-hub-theme="aurora"] {
@@ -1416,12 +1415,13 @@ html.auth-pending #login-screen { visibility: hidden; }
   content: ''; position: absolute; bottom: -4px; left: 40%; width: 5px; height: 5px; border-radius: 0 70% 0 70%;
   background: linear-gradient(135deg, #ffc3e0, #f472b6); animation: pfxPetalRise 2.2s ease-in infinite;
 }
-.chat-theme-swatch-smoke { background: linear-gradient(160deg, rgba(150, 150, 170, .4), rgba(90, 90, 110, .25)); position: relative; overflow: hidden; }
-.chat-theme-swatch-smoke::before {
-  content: ''; position: absolute; bottom: -6px; left: 30%; width: 14px; height: 14px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(235, 235, 245, .8), transparent 75%); filter: blur(1px);
-  animation: pfxSmokeRise 2.6s ease-out infinite;
+.chat-theme-swatch-stagelights { background: linear-gradient(160deg, rgba(60, 40, 90, .5), rgba(20, 15, 35, .35)); position: relative; overflow: hidden; }
+.chat-theme-swatch-stagelights::before, .chat-theme-swatch-stagelights::after {
+  content: ''; position: absolute; bottom: -3px; width: 3px; height: 16px; border-radius: 2px; transform-origin: bottom center;
+  background: linear-gradient(to top, rgba(255, 255, 255, .8), transparent 85%);
 }
+.chat-theme-swatch-stagelights::before { left: 30%; animation: pfxSmokeSwayA 2.4s ease-in-out infinite; }
+.chat-theme-swatch-stagelights::after { left: 60%; animation: pfxSmokeSwayC 2s ease-in-out infinite; }
 
 /* ── Sauran Plus: temel sohbet temaları (yalnızca aboneyken sunucu bu değeri döndürür). Lobi'de sınıflar
    .hub-msg-bubble üzerinde (yalnızca ileti), DM'de .dm-msg'nin kendisi üzerindedir (zaten yalnızca ileti). ── */
