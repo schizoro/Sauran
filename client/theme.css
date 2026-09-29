@@ -1295,10 +1295,10 @@ html.auth-pending #login-screen { visibility: hidden; }
   position: absolute; inset: 0; border-radius: 50%; overflow: hidden; pointer-events: none; z-index: 2;
 }
 .pfx-petal {
-  position: absolute; bottom: -8%; width: 9px; height: 9px; opacity: 0; pointer-events: none;
+  position: absolute; bottom: 2%; width: 9px; height: 9px; opacity: 0; pointer-events: none;
   background: linear-gradient(135deg, #ffc3e0, #ff8fc4 60%, #f472b6); border-radius: 0 70% 0 70%;
   box-shadow: 0 0 3px rgba(255, 140, 200, .6);
-  animation: pfxPetalRise 3.6s ease-in infinite;
+  animation: pfxPetalRise 3.6s ease-out infinite;
 }
 .pfx-petal:nth-child(1) { left: 4%; width: 8px; height: 8px; animation-delay: 0s; }
 .pfx-petal:nth-child(2) { left: 16%; width: 7px; height: 7px; animation-delay: .3s; }
@@ -1314,10 +1314,10 @@ html.auth-pending #login-screen { visibility: hidden; }
 .pfx-petal:nth-child(12) { left: 96%; width: 7px; height: 7px; animation-delay: .15s; }
 @keyframes pfxPetalRise {
   0% { transform: translateY(0) translateX(0) rotate(0deg) scale(.6); opacity: 0; }
-  15% { opacity: .95; }
-  50% { transform: translateY(-55%) translateX(4px) rotate(160deg) scale(1); }
-  80% { opacity: .8; }
-  100% { transform: translateY(-115%) translateX(-3px) rotate(320deg) scale(.5); opacity: 0; }
+  12% { opacity: 1; }
+  55% { transform: translateY(-34px) translateX(3px) rotate(150deg) scale(1); opacity: 1; }
+  78% { opacity: .75; }
+  100% { transform: translateY(-64px) translateX(-2px) rotate(300deg) scale(.55); opacity: 0; }
 }
 .pfx-smoke {
   position: absolute; bottom: -30%; width: 42%; height: 42%; border-radius: 50%; opacity: 0; pointer-events: none;
