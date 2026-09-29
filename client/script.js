@@ -1897,7 +1897,7 @@ function applyProfileEffect(el, effect) {
         el.insertAdjacentHTML('beforeend', '<span class="pfx-mask">' + '<i class="pfx-petal"></i>'.repeat(12) + '</span>');
     } else if (effect === 'smoke') {
         el.classList.add('profile-effect-smoke');
-        el.insertAdjacentHTML('beforeend', '<span class="pfx-mask">' + '<i class="pfx-smoke"></i>'.repeat(4) + '</span>');
+        el.insertAdjacentHTML('beforeend', '<span class="pfx-mask">' + '<i class="pfx-smoke"></i>'.repeat(10) + '</span>');
     }
 }
 // Yalnızca başkasının profilinde: kendi profilinde aynı avatar tıklaması zaten "avatarı değiştir" anlamına geliyor.

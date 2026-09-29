@@ -1355,21 +1355,41 @@ html.auth-pending #login-screen { visibility: hidden; }
   81% { opacity: .65; }
   100% { transform: translateY(-61px) translateX(12px) rotate(310deg) scale(.5); opacity: 0; }
 }
+/* Duman: alt orta kısım HARİÇ dairenin her yanından (sol kenar, sağ kenar, alt-sol, alt-sağ, üste yakın
+   kenarlar) sürekli çıkıp yukarı doğru yükselen ve yükseldikçe sürekli yayılan/genişleyen bulutlar.
+   Çok sayıda parça + iç içe geçen gecikmeler sayesinde aralıksız/sürekli bir duman hissi verir. */
 .pfx-smoke {
-  position: absolute; bottom: -30%; width: 42%; height: 42%; border-radius: 50%; opacity: 0; pointer-events: none;
-  background: radial-gradient(circle, rgba(235, 235, 245, .65) 0%, rgba(200, 200, 220, .28) 55%, transparent 78%);
-  filter: blur(2.5px); mix-blend-mode: screen;
-  animation: pfxSmokeRise 5.2s ease-out infinite;
+  position: absolute; width: 40%; height: 40%; border-radius: 50%; opacity: 0; pointer-events: none;
+  background: radial-gradient(circle, rgba(255, 255, 255, .9) 0%, rgba(235, 235, 245, .55) 45%, rgba(210, 210, 225, .0) 78%);
+  filter: blur(2px);
 }
-.pfx-smoke:nth-child(1) { left: -6%; animation-delay: 0s; }
-.pfx-smoke:nth-child(2) { left: 20%; width: 34%; height: 34%; animation-delay: 1.3s; }
-.pfx-smoke:nth-child(3) { left: 44%; animation-delay: 2.6s; }
-.pfx-smoke:nth-child(4) { left: 64%; width: 36%; height: 36%; animation-delay: 3.9s; }
-@keyframes pfxSmokeRise {
-  0% { transform: translateY(0) scale(.5); opacity: 0; }
-  20% { opacity: .55; }
-  60% { opacity: .4; }
-  100% { transform: translateY(-95%) scale(1.5); opacity: 0; }
+.pfx-smoke:nth-child(1)  { left: -14%; bottom: 6%;  width: 40%; height: 40%; animation: pfxSmokeRiseL 4.8s ease-out infinite; animation-delay: 0s; }
+.pfx-smoke:nth-child(2)  { left: 78%;  bottom: 10%; width: 36%; height: 36%; animation: pfxSmokeRiseR 5.4s ease-out infinite; animation-delay: .6s; }
+.pfx-smoke:nth-child(3)  { left: -8%;  bottom: 34%; width: 32%; height: 32%; animation: pfxSmokeRiseL 5.1s ease-out infinite; animation-delay: 1.2s; }
+.pfx-smoke:nth-child(4)  { left: 82%;  bottom: 30%; width: 34%; height: 34%; animation: pfxSmokeRiseR 4.6s ease-out infinite; animation-delay: 1.8s; }
+.pfx-smoke:nth-child(5)  { left: 4%;   bottom: -8%; width: 38%; height: 38%; animation: pfxSmokeRiseC 5.6s ease-out infinite; animation-delay: 2.4s; }
+.pfx-smoke:nth-child(6)  { left: 60%;  bottom: -6%; width: 36%; height: 36%; animation: pfxSmokeRiseC 5s   ease-out infinite; animation-delay: 3s; }
+.pfx-smoke:nth-child(7)  { left: -12%; bottom: 60%; width: 28%; height: 28%; animation: pfxSmokeRiseL 4.4s ease-out infinite; animation-delay: 3.6s; }
+.pfx-smoke:nth-child(8)  { left: 84%;  bottom: 56%; width: 30%; height: 30%; animation: pfxSmokeRiseR 5.2s ease-out infinite; animation-delay: 4.2s; }
+.pfx-smoke:nth-child(9)  { left: 30%;  bottom: -10%; width: 34%; height: 34%; animation: pfxSmokeRiseC 4.9s ease-out infinite; animation-delay: 1.5s; }
+.pfx-smoke:nth-child(10) { left: -10%; bottom: 12%; width: 30%; height: 30%; animation: pfxSmokeRiseL 5.3s ease-out infinite; animation-delay: 4.8s; }
+@keyframes pfxSmokeRiseL {
+  0% { transform: translateY(0) translateX(0) scale(.45); opacity: 0; }
+  16% { opacity: .85; }
+  55% { transform: translateY(-55%) translateX(10%) scale(1.15); opacity: .75; }
+  100% { transform: translateY(-105%) translateX(20%) scale(1.9); opacity: 0; }
+}
+@keyframes pfxSmokeRiseR {
+  0% { transform: translateY(0) translateX(0) scale(.45); opacity: 0; }
+  16% { opacity: .85; }
+  55% { transform: translateY(-55%) translateX(-10%) scale(1.15); opacity: .75; }
+  100% { transform: translateY(-105%) translateX(-20%) scale(1.9); opacity: 0; }
+}
+@keyframes pfxSmokeRiseC {
+  0% { transform: translateY(0) translateX(0) scale(.4); opacity: 0; }
+  16% { opacity: .8; }
+  55% { transform: translateY(-58%) translateX(3%) scale(1.2); opacity: .7; }
+  100% { transform: translateY(-108%) translateX(-4%) scale(2); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .pfx-petal, .pfx-smoke { animation: none; opacity: 0; } }
 
