@@ -323,6 +323,7 @@
                 <button id="market-open-btn" class="topbar-menu-item" type="button">🛍️ <span>Sauran Market</span></button>
                 <button id="inventory-open-btn" class="topbar-menu-item" type="button">🎒 <span>Kitaplığım</span></button>
                 <button id="subs-open-btn" class="topbar-menu-item" type="button">💎 <span>Abonelikler</span></button>
+                <button id="plusfx-open-btn" class="topbar-menu-item" type="button">✦ <span>Plus Özellikleri</span></button>
 
                 <button id="settings-btn" class="topbar-menu-item" title="Ayarlar" type="button">⚙️ <span data-i18n="menu-settings">Ayarlar</span></button>
 
@@ -855,85 +856,100 @@
                     <div id="market-locked-title" class="mk-section-title">🔒 Henüz Alınmadı</div>
                     <div id="market-grid-locked" class="mk-grid"></div>
 
-                    <div class="mk-plus-sections">
-                        <div class="profile-field-block mk-plus-block">
-                            <span class="profile-field-label">Sohbet Teması <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span> <span class="mk-price-soon">Fiyat: Yakında</span></span>
-                            <div id="chat-theme-picker" class="chat-theme-picker">
-                                <button type="button" class="chat-theme-option" data-theme="classic">
-                                    <span class="chat-theme-swatch"></span>Klasik
-                                </button>
-                                <button type="button" class="chat-theme-option" data-theme="soft">
-                                    <span class="chat-theme-swatch chat-theme-swatch-soft"></span>Yumuşak
-                                </button>
-                                <button type="button" class="chat-theme-option" data-theme="contrast">
-                                    <span class="chat-theme-swatch chat-theme-swatch-contrast"></span>Kontrast
-                                </button>
-                            </div>
-                            <p id="chat-theme-hint" class="hubset-hint"></p>
-                        </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-                        <div class="profile-field-block mk-plus-block">
-                            <span class="profile-field-label">Mesaj Balonu <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span> <span class="mk-price-soon">Fiyat: Yakında</span></span>
-                            <div id="bubble-style-picker" class="chat-theme-picker chat-theme-picker-wrap">
-                                <button type="button" class="chat-theme-option" data-bubble="default"><span class="bubble-swatch"></span>Klasik</button>
-                                <button type="button" class="chat-theme-option" data-bubble="round"><span class="bubble-swatch bubble-swatch-round"></span>Yuvarlak</button>
-                                <button type="button" class="chat-theme-option" data-bubble="glass"><span class="bubble-swatch bubble-swatch-glass"></span>Cam</button>
-                                <button type="button" class="chat-theme-option" data-bubble="outline"><span class="bubble-swatch bubble-swatch-outline"></span>Çerçeve</button>
-                                <button type="button" class="chat-theme-option" data-bubble="shadow"><span class="bubble-swatch bubble-swatch-shadow"></span>Gölge</button>
-                            </div>
-                            <p id="bubble-style-hint" class="hubset-hint"></p>
+    <div id="plusfx-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-box market-modal-box">
+            <div class="modal-header">
+                <span>✦ Plus Özellikleri</span>
+                <button id="plusfx-close-btn">✕</button>
+            </div>
+            <div class="market-modal-body">
+                <p class="mk-sub">Sauran Plus'a ait tüm kişiselleştirmeler burada. Plus ya da Premium aktifken hepsini kullanabilirsin.</p>
+                <div id="plusfx-status" class="mk-state" style="padding:4px 0 10px;"></div>
+                <div class="mk-section-title">🖼️ Plus Avatar Çerçevesi</div>
+                <div id="plusfx-frame-grid" class="mk-grid"></div>
+                <div class="mk-plus-sections">
+                    <div class="profile-field-block mk-plus-block">
+                        <span class="profile-field-label">Sohbet Teması <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
+                        <div id="chat-theme-picker" class="chat-theme-picker">
+                            <button type="button" class="chat-theme-option" data-theme="classic">
+                                <span class="chat-theme-swatch"></span>Klasik
+                            </button>
+                            <button type="button" class="chat-theme-option" data-theme="soft">
+                                <span class="chat-theme-swatch chat-theme-swatch-soft"></span>Yumuşak
+                            </button>
+                            <button type="button" class="chat-theme-option" data-theme="contrast">
+                                <span class="chat-theme-swatch chat-theme-swatch-contrast"></span>Kontrast
+                            </button>
                         </div>
+                        <p id="chat-theme-hint" class="hubset-hint"></p>
+                    </div>
 
-                        <div class="profile-field-block mk-plus-block">
-                            <span class="profile-field-label">Profil Rengi <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span> <span class="mk-price-soon">Fiyat: Yakında</span></span>
-                            <div class="profile-color-row">
-                                <input type="color" id="profile-color-input" value="#5cc8ff">
-                                <button type="button" id="profile-color-save-btn" class="about-btn about-btn-primary">Uygula</button>
-                                <button type="button" id="profile-color-reset-btn" class="about-btn about-btn-ghost">Varsayılana Dön</button>
-                            </div>
-                            <p id="profile-color-hint" class="hubset-hint"></p>
+                    <div class="profile-field-block mk-plus-block">
+                        <span class="profile-field-label">Mesaj Balonu <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
+                        <div id="bubble-style-picker" class="chat-theme-picker chat-theme-picker-wrap">
+                            <button type="button" class="chat-theme-option" data-bubble="default"><span class="bubble-swatch"></span>Klasik</button>
+                            <button type="button" class="chat-theme-option" data-bubble="round"><span class="bubble-swatch bubble-swatch-round"></span>Yuvarlak</button>
+                            <button type="button" class="chat-theme-option" data-bubble="glass"><span class="bubble-swatch bubble-swatch-glass"></span>Cam</button>
+                            <button type="button" class="chat-theme-option" data-bubble="outline"><span class="bubble-swatch bubble-swatch-outline"></span>Çerçeve</button>
+                            <button type="button" class="chat-theme-option" data-bubble="shadow"><span class="bubble-swatch bubble-swatch-shadow"></span>Gölge</button>
                         </div>
+                        <p id="bubble-style-hint" class="hubset-hint"></p>
+                    </div>
 
-                        <div class="profile-field-block mk-plus-block">
-                            <span class="profile-field-label">Profil Teması <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span> <span class="mk-price-soon">Fiyat: Yakında</span></span>
-                            <div id="profile-theme-picker" class="chat-theme-picker chat-theme-picker-wrap">
-                                <button type="button" class="chat-theme-option" data-ptheme="default"><span class="chat-theme-swatch"></span>Klasik</button>
-                                <button type="button" class="chat-theme-option" data-ptheme="midnight"><span class="chat-theme-swatch ptheme-swatch-midnight"></span>Gece</button>
-                                <button type="button" class="chat-theme-option" data-ptheme="sunset"><span class="chat-theme-swatch ptheme-swatch-sunset"></span>Gün Batımı</button>
-                                <button type="button" class="chat-theme-option" data-ptheme="forest"><span class="chat-theme-swatch ptheme-swatch-forest"></span>Orman</button>
-                                <button type="button" class="chat-theme-option" data-ptheme="sakura"><span class="chat-theme-swatch ptheme-swatch-sakura"></span>Sakura</button>
-                                <button type="button" class="chat-theme-option" data-ptheme="ocean"><span class="chat-theme-swatch ptheme-swatch-ocean"></span>Okyanus</button>
-                            </div>
-                            <p id="profile-theme-hint" class="hubset-hint"></p>
+                    <div class="profile-field-block mk-plus-block">
+                        <span class="profile-field-label">Profil Rengi <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
+                        <div class="profile-color-row">
+                            <input type="color" id="profile-color-input" value="#5cc8ff">
+                            <button type="button" id="profile-color-save-btn" class="about-btn about-btn-primary">Uygula</button>
+                            <button type="button" id="profile-color-reset-btn" class="about-btn about-btn-ghost">Varsayılana Dön</button>
                         </div>
+                        <p id="profile-color-hint" class="hubset-hint"></p>
+                    </div>
 
-                        <div class="profile-field-block mk-plus-block">
-                            <span class="profile-field-label">İsim Efekti <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span> <span class="mk-price-soon">Fiyat: Yakında</span></span>
-                            <div id="name-effect-picker" class="chat-theme-picker chat-theme-picker-wrap">
-                                <button type="button" class="chat-theme-option" data-nfx="none"><span class="nfx-preview">Ad</span>Yok</button>
-                                <button type="button" class="chat-theme-option" data-nfx="gradient"><span class="nfx-preview name-fx name-fx-gradient">Ad</span>Gradyan</button>
-                                <button type="button" class="chat-theme-option" data-nfx="glow"><span class="nfx-preview name-fx name-fx-glow">Ad</span>Parıltı</button>
-                                <button type="button" class="chat-theme-option" data-nfx="rainbow"><span class="nfx-preview name-fx name-fx-rainbow">Ad</span>Gökkuşağı</button>
-                                <button type="button" class="chat-theme-option" data-nfx="shimmer"><span class="nfx-preview name-fx name-fx-shimmer">Ad</span>Işıltı</button>
-                            </div>
-                            <p id="name-effect-hint" class="hubset-hint"></p>
+                    <div class="profile-field-block mk-plus-block">
+                        <span class="profile-field-label">Profil Teması <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
+                        <div id="profile-theme-picker" class="chat-theme-picker chat-theme-picker-wrap">
+                            <button type="button" class="chat-theme-option" data-ptheme="default"><span class="chat-theme-swatch"></span>Klasik</button>
+                            <button type="button" class="chat-theme-option" data-ptheme="midnight"><span class="chat-theme-swatch ptheme-swatch-midnight"></span>Gece</button>
+                            <button type="button" class="chat-theme-option" data-ptheme="sunset"><span class="chat-theme-swatch ptheme-swatch-sunset"></span>Gün Batımı</button>
+                            <button type="button" class="chat-theme-option" data-ptheme="forest"><span class="chat-theme-swatch ptheme-swatch-forest"></span>Orman</button>
+                            <button type="button" class="chat-theme-option" data-ptheme="sakura"><span class="chat-theme-swatch ptheme-swatch-sakura"></span>Sakura</button>
+                            <button type="button" class="chat-theme-option" data-ptheme="ocean"><span class="chat-theme-swatch ptheme-swatch-ocean"></span>Okyanus</button>
                         </div>
+                        <p id="profile-theme-hint" class="hubset-hint"></p>
+                    </div>
 
-                        <div class="profile-field-block mk-plus-block">
-                            <span class="profile-field-label">Profil Efekti <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span> <span class="mk-price-soon">Fiyat: Yakında</span></span>
-                            <div id="profile-effect-picker" class="chat-theme-picker">
-                                <button type="button" class="chat-theme-option" data-effect="none">
-                                    <span class="chat-theme-swatch"></span>Yok
-                                </button>
-                                <button type="button" class="chat-theme-option" data-effect="sakura">
-                                    <span class="chat-theme-swatch chat-theme-swatch-sakura"></span>Sakura
-                                </button>
-                                <button type="button" class="chat-theme-option" data-effect="stagelights">
-                                    <span class="chat-theme-swatch chat-theme-swatch-stagelights"></span>Sahne Işıkları
-                                </button>
-                            </div>
-                            <p id="profile-effect-hint" class="hubset-hint"></p>
+                    <div class="profile-field-block mk-plus-block">
+                        <span class="profile-field-label">İsim Efekti <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
+                        <div id="name-effect-picker" class="chat-theme-picker chat-theme-picker-wrap">
+                            <button type="button" class="chat-theme-option" data-nfx="none"><span class="nfx-preview">Ad</span>Yok</button>
+                            <button type="button" class="chat-theme-option" data-nfx="gradient"><span class="nfx-preview name-fx name-fx-gradient">Ad</span>Gradyan</button>
+                            <button type="button" class="chat-theme-option" data-nfx="glow"><span class="nfx-preview name-fx name-fx-glow">Ad</span>Parıltı</button>
+                            <button type="button" class="chat-theme-option" data-nfx="rainbow"><span class="nfx-preview name-fx name-fx-rainbow">Ad</span>Gökkuşağı</button>
+                            <button type="button" class="chat-theme-option" data-nfx="shimmer"><span class="nfx-preview name-fx name-fx-shimmer">Ad</span>Işıltı</button>
                         </div>
+                        <p id="name-effect-hint" class="hubset-hint"></p>
+                    </div>
+
+                    <div class="profile-field-block mk-plus-block">
+                        <span class="profile-field-label">Profil Efekti <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
+                        <div id="profile-effect-picker" class="chat-theme-picker">
+                            <button type="button" class="chat-theme-option" data-effect="none">
+                                <span class="chat-theme-swatch"></span>Yok
+                            </button>
+                            <button type="button" class="chat-theme-option" data-effect="sakura">
+                                <span class="chat-theme-swatch chat-theme-swatch-sakura"></span>Sakura
+                            </button>
+                            <button type="button" class="chat-theme-option" data-effect="stagelights">
+                                <span class="chat-theme-swatch chat-theme-swatch-stagelights"></span>Sahne Işıkları
+                            </button>
+                        </div>
+                        <p id="profile-effect-hint" class="hubset-hint"></p>
                     </div>
                 </div>
             </div>

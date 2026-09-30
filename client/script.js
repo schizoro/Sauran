@@ -6714,14 +6714,46 @@ async function loadMarketModal() {
         if (w.status === 200) { const wb = await w.json(); document.getElementById('market-wallet').textContent = `🪙 ${wb.balance} Coin`; }
     } catch (_) {}
     const classic = { key: 'classic', label: 'Klasik', rarity: 'free', price: 0, purchasable: false, owned: true, equipped: r.body.equipped === 'classic' };
-    const items = [classic, ...r.body.items];
+    // Plus'a ait ürünler (Plus çerçevesi) Market'te gösterilmez; "Plus Özellikleri" panelinde yer alır.
+    const items = [classic, ...r.body.items.filter((i) => !PLUS_ONLY_ITEM_KEYS.has(i.key))];
     const owned = items.filter((i) => i.owned);
     const locked = items.filter((i) => !i.owned);
     document.getElementById('market-grid-owned').innerHTML = owned.map((i) => mkCardHtml(i, { showPrice: false })).join('') || '<p class="mk-state" style="padding:12px 0;">Henüz hiçbir şeye sahip değilsin.</p>';
     document.getElementById('market-grid-locked').innerHTML = locked.map((i) => mkCardHtml(i, { showPrice: true })).join('');
     document.getElementById('market-locked-title').style.display = locked.length ? '' : 'none';
     main.style.display = '';
-    // Profilden Market'e taşınan Plus kişiselleştirmeleri (coin fiyatlandırması henüz yok, "Yakında" görünür).
+}
+
+// =====================================================
+// PLUS ÖZELLİKLERİ (Plus'a ait tüm kişiselleştirmeler tek panelde; Market'te satılmaz)
+// =====================================================
+
+const PLUS_ONLY_ITEM_KEYS = new Set(['plus']);
+
+async function loadPlusFeaturesModal() {
+    const status = document.getElementById('plusfx-status');
+    const grid = document.getElementById('plusfx-frame-grid');
+    status.textContent = '';
+    let plus = { active: false }, premium = { active: false };
+    try {
+        const s = await fetch('/api/me/subscription', { credentials: 'include' });
+        const d = await s.json();
+        if (d.success) { plus = d.plus; premium = d.premium; }
+    } catch (_) {}
+    const active = plus.active || premium.active;
+    status.innerHTML = active
+        ? '<span class="subs-status subs-status-on" style="display:inline-block;">✓ Plus aktif</span>'
+        : 'Bu özellikleri kullanmak için Sauran Plus gerekir. Ayrıntılar Abonelikler bölümünde.';
+    const r = await mkFetchFrames();
+    const frames = r.status === 200 ? r.body.items.filter((i) => PLUS_ONLY_ITEM_KEYS.has(i.key)) : [];
+    if (!frames.length) {
+        // Sunucu Plus çerçevesini yalnızca sahibine döndürür; sahip değilsen önizleme olarak göster.
+        frames.push({ key: 'plus', label: 'Sauran Plus', rarity: 'special', owned: false, equipped: false });
+    }
+    grid.innerHTML = frames.map((i) => mkCardHtml(i, { showPrice: false }).replace(
+        /<button class="mk-btn" disabled>[^<]*<\/button>/,
+        '<button class="mk-btn" disabled>✦ Plus ile açılır</button>'
+    )).join('');
     renderChatThemePicker();
     renderBubbleStylePicker();
     renderProfileColorPicker();
@@ -6729,6 +6761,14 @@ async function loadMarketModal() {
     renderNameEffectPicker();
     renderProfileEffectPicker();
 }
+
+document.getElementById('plusfx-open-btn')?.addEventListener('click', () => {
+    closeTopbarDropdown();
+    document.getElementById('plusfx-modal').style.display = 'flex';
+    loadPlusFeaturesModal();
+});
+document.getElementById('plusfx-close-btn')?.addEventListener('click', () => { document.getElementById('plusfx-modal').style.display = 'none'; });
+document.getElementById('plusfx-modal')?.addEventListener('click', (e) => { if (e.target.id === 'plusfx-modal') e.currentTarget.style.display = 'none'; });
 
 async function loadInventoryModal() {
     const state = document.getElementById('inventory-state');
@@ -6814,7 +6854,7 @@ document.getElementById('inventory-modal')?.addEventListener('click', (e) => { i
 document.addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-mk-equip]');
     if (!btn) return;
-    const grid = btn.closest('#market-grid-owned, #market-grid-locked, #inventory-grid');
+    const grid = btn.closest('#market-grid-owned, #market-grid-locked, #inventory-grid, #plusfx-frame-grid');
     if (!grid) return;
     btn.disabled = true; btn.textContent = 'Kuşanılıyor...';
     const response = await fetch('/api/me/cosmetics/equip', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ item_key: btn.dataset.mkEquip }) });
@@ -6827,6 +6867,7 @@ document.addEventListener('click', async (e) => {
     }
     if (document.getElementById('market-modal').style.display === 'flex') loadMarketModal();
     if (document.getElementById('inventory-modal').style.display === 'flex') loadInventoryModal();
+    if (document.getElementById('plusfx-modal').style.display === 'flex') loadPlusFeaturesModal();
 });
 
 
