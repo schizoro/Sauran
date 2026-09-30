@@ -2391,7 +2391,6 @@ function updateProfileColor(userId, color) {
   }
   const value = String(color || '');
   if (!HEX_COLOR_RE.test(value)) return { success: false, error: 'Geçersiz renk (ör. #5cc8ff).' };
-  if (!hasActivePlus(userId)) return { success: false, error: 'Özel profil rengi yalnızca Sauran Plus abonelerine açık.' };
   db.prepare(`UPDATE users SET profile_color = ? WHERE id = ?`).run(value, userId);
   return { success: true, profile_color: value };
 }
@@ -2539,10 +2538,13 @@ function updateAvatar(userId, dataUrl) {
         return { success: false, error: 'Geçersiz görsel formatı.' };
       }
 
-      // Kırpılmış statik fotoğraflar ~2MB'ı geçmez. Sauran Plus'ın animasyonlu (GIF) avatarı kırpılmadan,
+      // Kırpılmış statik fotoğraflar ~2MB'ı geçmez. Sauran Premium'un animasyonlu (GIF) avatarı kırpılmadan,
       // olduğu gibi yüklendiği için daha büyük olabilir (istemci 5MB ham dosya sınırı uyguluyor, base64 ~6.7MB).
       const isGif = dataUrl.startsWith('data:image/gif;base64,');
-      const maxLen = (isGif && hasActivePlus(userId)) ? 7_000_000 : 2_000_000;
+      if (isGif && !hasActivePremium(userId)) {
+        return { success: false, error: 'Animasyonlu profil fotoğrafı yalnızca Sauran Premium abonelerine açık.' };
+      }
+      const maxLen = isGif ? 7_000_000 : 2_000_000;
       if (dataUrl.length > maxLen) {
         return { success: false, error: 'Görsel çok büyük.' };
       }
@@ -3312,7 +3314,6 @@ function getHubDetail(hubId, userId) {
     WHERE hub_members.hub_id = ?
   `).all(hubId).map((m) => {
     const { avatar_visibility, minor_until, ...rest } = m;
-    if (!rest.plus_active) rest.profile_color = null;
     if (!hasFeature(m.user_id, 'name_effect')) rest.name_effect = 'none';
     const masked = maskAvatarFor(userId, m.user_id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']);
     return presenceVisibleTo(userId, m.user_id, minor_until) ? masked : { ...masked, status: 'invisible' };
@@ -3547,7 +3548,7 @@ function hydrateMessage(row, viewerId = null) {
   if ('chat_theme' in row) {
     const senderIsPlus = row.user_id && hasActivePlus(row.user_id);
     row.chat_theme = senderIsPlus ? (row.chat_theme || 'classic') : 'classic';
-    if ('profile_color' in row) row.profile_color = senderIsPlus ? (row.profile_color || null) : null;
+    if ('profile_color' in row) row.profile_color = row.profile_color || null; // profil rengi herkese açık
     row.plus_active = Boolean(senderIsPlus);
     row.bubble_style = senderIsPlus ? (row.bubble_style || 'default') : 'default';
     row.name_effect = row.user_id && hasFeature(row.user_id, 'name_effect') ? (row.name_effect || 'none') : 'none';
@@ -3963,7 +3964,8 @@ function createHubVoiceMessage(hubId, userId, username, audioData, duration) {
 }
 
 const FILE_MAX_BYTES_FREE = 25 * 1024 * 1024;
-const FILE_MAX_BYTES_PLUS = 100 * 1024 * 1024;
+const FILE_MAX_BYTES_PLUS = 50 * 1024 * 1024;
+const FILE_MAX_BYTES_PREMIUM = 100 * 1024 * 1024;
 
 // Sauran Plus: aktif abonelik var mı (entitlements'ta süresi geçmemiş 'plus' kaydı).
 function hasActivePlus(userId) {
@@ -4015,7 +4017,7 @@ function validateFilePayload(fileData, mime, size, userId) {
     return { success: false, error: 'Geçersiz dosya formatı.' };
   }
 
-  const maxBytes = hasActivePlus(userId) ? FILE_MAX_BYTES_PLUS : FILE_MAX_BYTES_FREE;
+  const maxBytes = hasActivePremium(userId) ? FILE_MAX_BYTES_PREMIUM : (hasActivePlus(userId) ? FILE_MAX_BYTES_PLUS : FILE_MAX_BYTES_FREE);
   const maxLabel = `${Math.round(maxBytes / (1024 * 1024))} MB`;
   const declaredSize = Number(size) || 0;
   if (declaredSize > maxBytes) {
@@ -4518,7 +4520,7 @@ function listFriends(userId) {
     INNER JOIN users ON users.id = CASE WHEN friendships.user_low = ? THEN friendships.user_high ELSE friendships.user_low END
     WHERE friendships.status = 'accepted' AND (friendships.user_low = ? OR friendships.user_high = ?)
     ORDER BY users.username COLLATE NOCASE
-  `).all(userId, userId, userId).map((f) => { const { avatar_visibility, activity_text, activity_at, show_activity, activity_auto, ...rest } = f; rest.activity = freshActivity({ activity_text, activity_at, show_activity, activity_auto }); if (!rest.plus_active) rest.profile_color = null; if (!hasFeature(f.id, 'name_effect')) rest.name_effect = 'none'; return maskAvatarFor(userId, f.id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']); });
+  `).all(userId, userId, userId).map((f) => { const { avatar_visibility, activity_text, activity_at, show_activity, activity_auto, ...rest } = f; rest.activity = freshActivity({ activity_text, activity_at, show_activity, activity_auto }); if (!hasFeature(f.id, 'name_effect')) rest.name_effect = 'none'; return maskAvatarFor(userId, f.id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']); });
 }
 
 function listIncomingRequests(userId) {
@@ -4767,7 +4769,7 @@ function getUserPublicProfile(viewerId, targetId) {
     avatar_data: visible ? user.avatar_data : null,
     banner_data: visible ? user.banner_data : null,
     avatar_frame: visible ? getEquippedCosmetics(targetId).avatar_frame : null,
-    profile_color: (visible && hasActivePlus(targetId)) ? user.profile_color : null,
+    profile_color: visible ? (user.profile_color || null) : null,
     profile_effect: (visible && hasFeature(targetId, 'profile_effect')) ? (user.profile_effect || 'none') : 'none',
     profile_theme: hasFeature(targetId, 'profile_theme') ? (user.profile_theme || 'default') : 'default',
     name_effect: hasFeature(targetId, 'name_effect') ? (user.name_effect || 'none') : 'none',

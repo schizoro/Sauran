@@ -901,15 +901,6 @@
                         <p id="bubble-style-hint" class="hubset-hint"></p>
                     </div>
 
-                    <div class="profile-field-block mk-plus-block">
-                        <span class="profile-field-label">Profil Rengi <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
-                        <div class="profile-color-row">
-                            <input type="color" id="profile-color-input" value="#5cc8ff">
-                            <button type="button" id="profile-color-save-btn" class="about-btn about-btn-primary">Uygula</button>
-                            <button type="button" id="profile-color-reset-btn" class="about-btn about-btn-ghost">Varsayılana Dön</button>
-                        </div>
-                        <p id="profile-color-hint" class="hubset-hint"></p>
-                    </div>
 
                     <div class="profile-field-block mk-plus-block">
                         <span class="profile-field-label">Profil Teması <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
@@ -1434,6 +1425,20 @@
                 </div>
 
                 <div class="profile-field-block">
+                    <div class="about-label-row">
+                        <span class="profile-field-label">Profil Rengi</span>
+                        <button class="about-info-btn" type="button" aria-label="Bilgi" aria-expanded="false" aria-describedby="profile-color-info-tip">ⓘ</button>
+                        <span id="profile-color-info-tip" class="about-info-tip" role="tooltip">Avatarında kullanılan vurgu rengi; profil fotoğrafın yoksa baş harfin de bu renkte görünür. Sohbetlerde, arkadaş listesinde ve profilinde herkes bu rengi görür. "Varsayılana Dön" ile otomatik renge geri dönebilirsin.</span>
+                    </div>
+                    <div class="profile-color-row">
+                        <input type="color" id="profile-color-input" value="#5cc8ff">
+                        <button type="button" id="profile-color-save-btn" class="about-btn about-btn-primary">Uygula</button>
+                        <button type="button" id="profile-color-reset-btn" class="about-btn about-btn-ghost">Varsayılana Dön</button>
+                    </div>
+                    <p id="profile-color-hint" class="hubset-hint"></p>
+                </div>
+
+                <div class="profile-field-block">
                     <span class="profile-field-label">Şu an ne oynuyorum?</span>
                     <div class="activity-row">
                         <input type="text" id="activity-input" class="hub-name-input" maxlength="40" placeholder="Örn. Mobile Legends">
@@ -1538,7 +1543,7 @@
                             <label class="notif-pref-row"><input type="checkbox" data-pref="inapp_enabled"><span data-i18n="notif-pref-inapp">Uygulama içi bildirimler</span></label>
                             <label class="notif-pref-row"><input type="checkbox" data-pref="sound_enabled"><span data-i18n="notif-pref-sound">Bildirim sesleri</span></label>
                             <div class="sound-pack-block">
-                                <span class="notif-pref-group-title">Bildirim sesi <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
+                                <span class="notif-pref-group-title">Bildirim sesi</span>
                                 <div id="sound-pack-picker" class="chat-theme-picker chat-theme-picker-wrap">
                                     <button type="button" class="chat-theme-option" data-sound="classic"><span class="sound-ic">🔔</span>Klasik</button>
                                     <button type="button" class="chat-theme-option" data-sound="crystal"><span class="sound-ic">💎</span>Kristal</button>

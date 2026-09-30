@@ -105,8 +105,8 @@ function playAppTone(ctx, freq, startTime, duration, type = 'sine', gainPeak = 0
     osc.stop(startTime + duration + 0.03);
 }
 
-// Sauran Plus: bildirim sesi paketleri. Her nota: [frekans, başlangıç gecikmesi (sn), süre (sn), dalga, ses seviyesi].
-// 'classic' herkeste varsayılan; diğerleri Plus/Premium için (seçim bu cihazda tutulur, Plus bitince otomatik classic).
+// Bildirim sesi paketleri (Ayarlar > Bildirimler; herkese açık). Her nota: [frekans, başlangıç gecikmesi (sn), süre (sn), dalga, ses seviyesi].
+// 'classic' varsayılan; seçim bu cihazda tutulur.
 const SOUND_PACKS = {
     classic: { label: 'Klasik', notif: [[880, 0, .14, 'sine', .2], [1318.5, .09, .18, 'sine', .2]], msg: [[660, 0, .1, 'sine', .15]] },
     crystal: { label: 'Kristal', notif: [[1568, 0, .12, 'triangle', .16], [2093, .08, .14, 'triangle', .16], [2637, .17, .2, 'triangle', .14]], msg: [[1760, 0, .09, 'triangle', .13]] },
@@ -119,7 +119,7 @@ const SOUND_PACKS = {
 function currentSoundPack() {
     let id = 'classic';
     try { id = localStorage.getItem('sauran_sound_pack') || 'classic'; } catch (_) {}
-    if (!SOUND_PACKS[id] || (id !== 'classic' && !currentUser?.plus_active)) id = 'classic';
+    if (!SOUND_PACKS[id]) id = 'classic';
     return SOUND_PACKS[id];
 }
 
@@ -146,17 +146,15 @@ function renderSoundPackPicker() {
     const picker = document.getElementById('sound-pack-picker');
     const hint = document.getElementById('sound-pack-hint');
     if (!picker) return;
-    const isPlus = Boolean(currentUser?.plus_active);
     let active = 'classic';
     try { active = localStorage.getItem('sauran_sound_pack') || 'classic'; } catch (_) {}
-    if (!isPlus) active = 'classic';
+    if (!SOUND_PACKS[active]) active = 'classic';
     picker.querySelectorAll('.chat-theme-option').forEach((btn) => {
-        const id = btn.dataset.sound;
-        btn.disabled = id !== 'classic' && !isPlus;
-        btn.classList.toggle('selected', id === active);
-        btn.title = btn.disabled ? 'Sauran Plus gerekli' : '';
+        btn.disabled = false;
+        btn.title = '';
+        btn.classList.toggle('selected', btn.dataset.sound === active);
     });
-    if (hint) hint.textContent = isPlus ? '' : 'Farklı bildirim sesleri Sauran Plus abonelerine açıktır.';
+    if (hint) hint.textContent = '';
 }
 
 document.getElementById('sound-pack-picker')?.addEventListener('click', (event) => {
@@ -2021,6 +2019,8 @@ function renderProfile() {
         'active'
     );
 
+    renderProfileColorPicker();
+
 }
 
 
@@ -2417,9 +2417,9 @@ avatarFileInput.addEventListener(
 
         try {
 
-            // Sauran Plus: animasyonlu (GIF) profil fotoğrafı — kırpma aracı her kareyi tek kareye
-            // düzleştirdiği için Plus abonesinde GIF'i kırpmadan, olduğu gibi (animasyonlu) yüklüyoruz.
-            const isAnimatedGif = file.type === 'image/gif' && currentUser?.plus_active;
+            // Sauran Premium: animasyonlu (GIF) profil fotoğrafı — kırpma aracı her kareyi tek kareye
+            // düzleştirdiği için Premium abonesinde GIF'i kırpmadan, olduğu gibi (animasyonlu) yüklüyoruz.
+            const isAnimatedGif = file.type === 'image/gif' && currentUser?.premium_active;
             let dataUrl;
             if (isAnimatedGif) {
                 const GIF_MAX_BYTES = 5 * 1024 * 1024;
@@ -4075,19 +4075,18 @@ document.getElementById('chat-theme-picker')?.addEventListener('click', async (e
     }
 });
 
-// Sauran Plus: özel profil rengi. Aynı kilit deseni — Plus olmayanlar seçiciyi görür ama uygulayamaz.
+// Profil rengi (Profil penceresinde, herkese açık).
 function renderProfileColorPicker() {
     const input = document.getElementById('profile-color-input');
     const saveBtn = document.getElementById('profile-color-save-btn');
     const resetBtn = document.getElementById('profile-color-reset-btn');
     const hint = document.getElementById('profile-color-hint');
     if (!input || !currentUser) return;
-    const isPlus = Boolean(currentUser.plus_active);
-    input.disabled = !isPlus;
-    saveBtn.disabled = !isPlus;
-    resetBtn.disabled = !isPlus || !currentUser.profile_color;
+    input.disabled = false;
+    saveBtn.disabled = false;
+    resetBtn.disabled = !currentUser.profile_color;
     input.value = currentUser.profile_color || getUserColor(currentUser.username);
-    hint.textContent = isPlus ? '' : 'Özel profil rengi Sauran Plus abonelerine açıktır.';
+    if (hint) hint.textContent = '';
 }
 
 async function saveProfileColor(color) {
@@ -4408,15 +4407,16 @@ document.getElementById('profile-effect-picker')?.addEventListener('click', asyn
     }
 });
 
-// Hakkımda bilgi balonu: masaüstünde hover/odak (CSS), dokunmatikte/tıklamada aç-kapa
-(function initAboutInfoTip() {
-    const btn = document.getElementById('about-info-btn');
-    const row = btn && btn.closest('.about-label-row');
-    if (!btn || !row) return;
-    const setOpen = (open) => { row.classList.toggle('open', open); btn.setAttribute('aria-expanded', open ? 'true' : 'false'); };
-    btn.addEventListener('click', (event) => { event.stopPropagation(); setOpen(!row.classList.contains('open')); });
-    document.addEventListener('click', (event) => { if (!row.contains(event.target)) setOpen(false); });
-    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') setOpen(false); });
+// Bilgi balonları (Hakkımda, Profil Rengi): masaüstünde hover/odak (CSS), dokunmatikte/tıklamada aç-kapa
+(function initAboutInfoTips() {
+    document.querySelectorAll('.about-info-btn').forEach((btn) => {
+        const row = btn.closest('.about-label-row');
+        if (!row) return;
+        const setOpen = (open) => { row.classList.toggle('open', open); btn.setAttribute('aria-expanded', open ? 'true' : 'false'); };
+        btn.addEventListener('click', (event) => { event.stopPropagation(); setOpen(!row.classList.contains('open')); });
+        document.addEventListener('click', (event) => { if (!row.contains(event.target)) setOpen(false); });
+        document.addEventListener('keydown', (event) => { if (event.key === 'Escape') setOpen(false); });
+    });
 })();
 
 document.getElementById('about-me-save-btn')?.addEventListener('click', async () => {
@@ -6756,7 +6756,6 @@ async function loadPlusFeaturesModal() {
     )).join('');
     renderChatThemePicker();
     renderBubbleStylePicker();
-    renderProfileColorPicker();
     renderProfileThemePicker();
     renderNameEffectPicker();
     renderProfileEffectPicker();
@@ -6797,7 +6796,7 @@ document.getElementById('inventory-open-btn')?.addEventListener('click', () => {
     document.getElementById('inventory-modal').style.display = 'flex';
     loadInventoryModal();
 });
-const SUBS_PLUS_ITEMS = `<li><span class="subs-ic">✦</span><span>Mor <b>PLUS</b> rozeti ve parıltılı isim kartı</span></li><li><span class="subs-ic">🪙</span><span>Her ay <b>100 Sauran Coin</b></span></li><li><span class="subs-ic">📎</span><span><b>100 MB</b> dosya/video yükleme <small>(ücretsiz: 25 MB)</small></span></li><li><span class="subs-ic">📝</span><span>Hakkımda alanı <b>600 karakter</b> <small>(ücretsiz: 300)</small></span></li><li><span class="subs-ic">🎨</span><span>Sohbet teması, profil rengi, <b>profil teması</b> ve <b>profil efekti</b></span></li><li><span class="subs-ic">🔤</span><span><b>İsim efektleri</b> (gradyan, parıltı, gökkuşağı, ışıltı)</span></li><li><span class="subs-ic">🖼️</span><span><b>Animasyonlu (GIF)</b> profil fotoğrafı ve <b>kapak fotoğrafı</b></span></li><li><span class="subs-ic">💬</span><span><b>Mesaj balonu stilleri</b> (yuvarlak, cam, çerçeve, gölge)</span></li><li><span class="subs-ic">🔔</span><span><b>6 farklı bildirim sesi</b></span></li><li><span class="subs-ic">🎙️</span><span>Sesli odada özel konuşma göstergesi</span></li><li><span class="subs-ic">🖥️</span><span>Yüksek kalite ekran paylaşımı</span></li><li><span class="subs-ic">🏠</span><span>Lobi için <b>tema</b> ve <b>özel arka plan görseli</b></span></li><li><span class="subs-ic">🧸</span><span><b>26 hareketli çıkartma</b></span></li><li><span class="subs-ic">😍</span><span><b>12 ek tepki emojisi</b></span></li><li><span class="subs-ic">👑</span><span>Lobi sahibi olarak Keşfet'te Plus rozeti</span></li>`;
+const SUBS_PLUS_ITEMS = `<li><span class="subs-ic">✦</span><span>Mor <b>PLUS</b> rozeti ve parıltılı isim kartı</span></li><li><span class="subs-ic">🪙</span><span>Her ay <b>100 Sauran Coin</b></span></li><li><span class="subs-ic">📎</span><span><b>50 MB</b> dosya/video yükleme <small>(ücretsiz: 25 MB)</small></span></li><li><span class="subs-ic">📝</span><span>Hakkımda alanı <b>600 karakter</b> <small>(ücretsiz: 300)</small></span></li><li><span class="subs-ic">🎨</span><span>Sohbet teması, <b>profil teması</b> ve <b>profil efekti</b></span></li><li><span class="subs-ic">🔤</span><span><b>İsim efektleri</b> (gradyan, parıltı, gökkuşağı, ışıltı)</span></li><li><span class="subs-ic">🖼️</span><span><b>Animasyonlu (GIF)</b> kapak fotoğrafı</span></li><li><span class="subs-ic">💬</span><span><b>Mesaj balonu stilleri</b> (yuvarlak, cam, çerçeve, gölge)</span></li><li><span class="subs-ic">🎙️</span><span>Sesli odada özel konuşma göstergesi</span></li><li><span class="subs-ic">🖥️</span><span>Yüksek kalite ekran paylaşımı</span></li><li><span class="subs-ic">🏠</span><span>Lobi için <b>tema</b> ve <b>özel arka plan görseli</b></span></li><li><span class="subs-ic">🧸</span><span><b>26 hareketli çıkartma</b></span></li><li><span class="subs-ic">😍</span><span><b>12 ek tepki emojisi</b></span></li><li><span class="subs-ic">👑</span><span>Lobi sahibi olarak Keşfet'te Plus rozeti</span></li>`;
 
 function subsStatusHtml(state, otherActive) {
     if (state.active) {
@@ -6830,8 +6829,11 @@ async function loadSubscriptions() {
             <p class="subs-card-tag">Plus'taki her şey <b>+</b> daha fazlası.</p>
             <ul class="subs-list">
                 <li class="subs-plus-all"><span class="subs-ic">✓</span><span><b>Sauran Plus'taki her şey:</b></span></li>
-                ${SUBS_PLUS_ITEMS.replace(/Her ay <b>100 Sauran Coin<\/b>/, 'Her ay <b>250 Sauran Coin</b> <small>(Plus: 100)</small>')}
+                ${SUBS_PLUS_ITEMS
+                    .replace(/Her ay <b>100 Sauran Coin<\/b>/, 'Her ay <b>250 Sauran Coin</b> <small>(Plus: 100)</small>')
+                    .replace(/<b>50 MB<\/b> dosya\/video yükleme <small>\(ücretsiz: 25 MB\)<\/small>/, '<b>100 MB</b> dosya/video yükleme <small>(Plus: 50 MB)</small>')}
                 <li class="subs-extra-head"><span class="subs-ic">＋</span><span><b>Ek olarak Premium'da:</b></span></li>
+                <li><span class="subs-ic">🎞️</span><span><b>Animasyonlu (GIF)</b> profil fotoğrafı</span></li>
                 <li class="subs-soon"><span class="subs-ic">🚀</span><span>Yeni Premium'a özel ayrıcalıklar <small>(yakında)</small></span></li>
             </ul>
             ${subsStatusHtml(premium, false)}
@@ -7596,7 +7598,7 @@ function applyChatTheme(wrap, userId, theme, bubble, target) {
     if (b && b !== 'default') el.classList.add('bubble-' + b);
 }
 
-// Sauran Plus: özel profil rengi. getUserColor(username) yerine bu kullanılır — aynı önbellek deseni
+// Profil rengi (herkese açık). getUserColor(username) yerine bu kullanılır — aynı önbellek deseni
 // (avatar_frame/chat_theme ile aynı yerlerden geçer); veri gelmeyen tekrar render'da son bilinen değeri döner.
 const knownUserColors = new Map();
 function resolveUserColor(userId, username, customColor) {
@@ -8313,8 +8315,12 @@ document.getElementById('forward-modal-close-btn').addEventListener('click', () 
 // =====================================================
 
 const FILE_MAX_BYTES_FREE = 25 * 1024 * 1024;
-const FILE_MAX_BYTES_PLUS = 100 * 1024 * 1024;
-function currentFileMaxBytes() { return (currentUser && currentUser.plus_active) ? FILE_MAX_BYTES_PLUS : FILE_MAX_BYTES_FREE; }
+const FILE_MAX_BYTES_PLUS = 50 * 1024 * 1024;
+const FILE_MAX_BYTES_PREMIUM = 100 * 1024 * 1024;
+function currentFileMaxBytes() {
+    if (currentUser && currentUser.premium_active) return FILE_MAX_BYTES_PREMIUM;
+    return (currentUser && currentUser.plus_active) ? FILE_MAX_BYTES_PLUS : FILE_MAX_BYTES_FREE;
+}
 function fileMaxLabel() { return `${Math.round(currentFileMaxBytes() / (1024 * 1024))} MB`; }
 
 function formatFileSize(bytes) {

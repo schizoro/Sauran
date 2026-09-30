@@ -238,7 +238,7 @@ const io = new Server(server, {
   cors: { origin: true, credentials: true, methods: ['GET', 'POST'] },
   // Bağlantı (el sıkışma) yalnızca izinli origin'den kabul edilir; izinsiz origin'e CORS başlığı olsa bile bağlantı REDDEDİLİR.
   allowRequest: (req, callback) => callback(null, isRequestOriginAllowed(req.headers.origin, req.headers.host)),
-  // Sauran Plus dosya limiti 100 MB'a çıkabildiği için (~1.4 kat base64 payı ile ~140 MB) tampon buna göre büyütüldü.
+  // Sauran Premium dosya limiti 100 MB'a çıkabildiği için (~1.4 kat base64 payı ile ~140 MB) tampon buna göre büyütüldü.
   maxHttpBufferSize: 140_000_000
 });
 
@@ -649,7 +649,7 @@ app.get('/api/me', (req, res) => {
     }
 
     const plusActive = hasActivePlus(user.id);
-    return res.json({ success: true, user: { ...user, avatar_frame: getEquippedCosmetics(user.id).avatar_frame, plus_active: plusActive, chat_theme: plusActive ? (user.chat_theme || 'classic') : 'classic', profile_color: plusActive ? (user.profile_color || null) : null, bubble_style: plusActive ? (user.bubble_style || 'default') : 'default', profile_effect: hasFeature(user.id, 'profile_effect') ? (user.profile_effect || 'none') : 'none', profile_theme: hasFeature(user.id, 'profile_theme') ? (user.profile_theme || 'default') : 'default', name_effect: hasFeature(user.id, 'name_effect') ? (user.name_effect || 'none') : 'none', features: listFeatures(user.id), premium_active: hasActivePremium(user.id) } });
+    return res.json({ success: true, user: { ...user, avatar_frame: getEquippedCosmetics(user.id).avatar_frame, plus_active: plusActive, chat_theme: plusActive ? (user.chat_theme || 'classic') : 'classic', profile_color: user.profile_color || null, bubble_style: plusActive ? (user.bubble_style || 'default') : 'default', profile_effect: hasFeature(user.id, 'profile_effect') ? (user.profile_effect || 'none') : 'none', profile_theme: hasFeature(user.id, 'profile_theme') ? (user.profile_theme || 'default') : 'default', name_effect: hasFeature(user.id, 'name_effect') ? (user.name_effect || 'none') : 'none', features: listFeatures(user.id), premium_active: hasActivePremium(user.id) } });
 
   } catch (error) {
     console.error('Session kontrol hatası:', error);
@@ -899,7 +899,7 @@ app.patch('/api/profile/chat-theme', (req, res) => {
   }
 });
 
-// Sauran Plus: özel profil rengi (hex). null/'' = kaldır (herkes yapabilir); geçerli hex yalnızca Plus'a (updateProfileColor içinde kontrol edilir).
+// Profil rengi (hex), herkese açık. null/'' = varsayılana dön.
 app.patch('/api/profile/color', (req, res) => {
   try {
     const user = getUserFromRequest(req);
