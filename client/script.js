@@ -10320,17 +10320,45 @@ const hubMembersToggleBtn = document.getElementById('hub-members-toggle-btn');
 const hubDetailSide = document.getElementById('hub-detail-side');
 const hubSideBackdrop = document.getElementById('hub-side-backdrop');
 
+// Bilgisayarda yan paneller: 'dock' (yan sütun, sohbet kullanılabilir — varsayılan) | 'overlay' (perdeli açılır pencere).
+const SIDEDOCK_MQ = window.matchMedia('(min-width: 1101px)');
+function sideDockPref() {
+    try { return localStorage.getItem('sauran_sidedock') === 'overlay' ? 'overlay' : 'dock'; } catch (_) { return 'dock'; }
+}
+function sideDockActive() { return SIDEDOCK_MQ.matches && sideDockPref() === 'dock'; }
+
+// side: panel, backdrop, toggle düğmesi, body sınıfı
+function setHubSide(side, backdrop, toggle, dockClass, open) {
+    side.classList.toggle('open', open);
+    toggle.classList.toggle('open', open);
+    const dock = sideDockActive();
+    backdrop.classList.toggle('open', open && !dock);
+    document.body.classList.toggle(dockClass, open && dock);
+}
+function refreshHubSides() {
+    setHubSide(hubDetailSide, hubSideBackdrop, hubMembersToggleBtn, 'dock-members', hubDetailSide.classList.contains('open'));
+    setHubSide(hubVoiceRoomsSide, hubVoiceRoomsBackdrop, hubVoiceRoomsToggleBtn, 'dock-voice', hubVoiceRoomsSide.classList.contains('open'));
+    document.querySelectorAll('[data-sidedock]').forEach((b) => b.classList.toggle('active', b.dataset.sidedock === sideDockPref()));
+}
+
+function addSideCloseBtn(side, onClose) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'hub-side-close-btn';
+    btn.setAttribute('aria-label', 'Paneli kapat');
+    btn.title = 'Kapat';
+    btn.textContent = '✕';
+    btn.addEventListener('click', onClose);
+    side.prepend(btn);
+}
+
 hubMembersToggleBtn.addEventListener('click', () => {
-    hubDetailSide.classList.toggle('open');
-    hubSideBackdrop.classList.toggle('open');
-    hubMembersToggleBtn.classList.toggle('open');
+    setHubSide(hubDetailSide, hubSideBackdrop, hubMembersToggleBtn, 'dock-members', !hubDetailSide.classList.contains('open'));
 });
 
-hubSideBackdrop.addEventListener('click', () => {
-    hubDetailSide.classList.remove('open');
-    hubSideBackdrop.classList.remove('open');
-    hubMembersToggleBtn.classList.remove('open');
-});
+const closeMembersSide = () => setHubSide(hubDetailSide, hubSideBackdrop, hubMembersToggleBtn, 'dock-members', false);
+hubSideBackdrop.addEventListener('click', closeMembersSide);
+addSideCloseBtn(hubDetailSide, closeMembersSide);
 
 const hubDeleteBtn = document.getElementById('hub-delete-btn');
 
@@ -10343,16 +10371,19 @@ const hubInRoomPill = document.getElementById('hub-in-room-pill');
 const hubInRoomName = document.getElementById('hub-in-room-name');
 
 hubVoiceRoomsToggleBtn.addEventListener('click', () => {
-    hubVoiceRoomsSide.classList.toggle('open');
-    hubVoiceRoomsBackdrop.classList.toggle('open');
-    hubVoiceRoomsToggleBtn.classList.toggle('open');
+    setHubSide(hubVoiceRoomsSide, hubVoiceRoomsBackdrop, hubVoiceRoomsToggleBtn, 'dock-voice', !hubVoiceRoomsSide.classList.contains('open'));
 });
 
-hubVoiceRoomsBackdrop.addEventListener('click', () => {
-    hubVoiceRoomsSide.classList.remove('open');
-    hubVoiceRoomsBackdrop.classList.remove('open');
-    hubVoiceRoomsToggleBtn.classList.remove('open');
-});
+const closeVoiceSide = () => setHubSide(hubVoiceRoomsSide, hubVoiceRoomsBackdrop, hubVoiceRoomsToggleBtn, 'dock-voice', false);
+hubVoiceRoomsBackdrop.addEventListener('click', closeVoiceSide);
+addSideCloseBtn(hubVoiceRoomsSide, closeVoiceSide);
+
+SIDEDOCK_MQ.addEventListener('change', refreshHubSides);
+document.querySelectorAll('[data-sidedock]').forEach((b) => b.addEventListener('click', () => {
+    try { localStorage.setItem('sauran_sidedock', b.dataset.sidedock); } catch (_) { /* yoksay */ }
+    refreshHubSides();
+}));
+refreshHubSides();
 
 hubInRoomPill.addEventListener('click', () => {
     if (callFrame) {

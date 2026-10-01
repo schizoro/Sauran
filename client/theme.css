@@ -2284,3 +2284,26 @@ body.in-group[data-view="hub-detail"] .topbar-lobby-badge { display: none !impor
 /* Ek menü / çıkartma seçici: ortak dropdown animasyonu translateX(-50%) içerdiği için solda yarısı ekran dışından kayıyordu */
 @keyframes attachPopIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .composer-attach-menu, .sticker-picker { animation: attachPopIn 0.16s ease-out; }
+
+/* ── Lobi yan panelleri: kapatma düğmesi + bilgisayarda yan sütun modu ── */
+.hub-side-close-btn {
+  position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; border-radius: 50%;
+  border: 0; background: var(--glass-1); color: var(--text-secondary); font-size: 14px; cursor: pointer;
+  box-shadow: var(--hi), 0 0 0 1px var(--border-soft); z-index: 2; display: flex; align-items: center; justify-content: center;
+}
+.hub-side-close-btn:hover { color: var(--text-primary, #fff); background: var(--glass-2); }
+.hub-detail-side, .hub-voice-rooms-side { position: fixed; }
+.hub-detail-side .hub-side-title, .hub-voice-rooms-side .hub-side-title { padding-right: 34px; }
+.sidedock-setting { display: none; }
+@media (min-width: 1101px) {
+  .sidedock-setting { display: block; }
+  body.dock-members[data-view="hub-detail"] .hub-detail-main { margin-right: 284px; transition: margin 0.25s ease; }
+  body.dock-voice[data-view="hub-detail"] .hub-detail-main { margin-left: 272px; transition: margin 0.25s ease; }
+  body.dock-members .hub-detail-side, body.dock-voice .hub-voice-rooms-side { box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong); }
+  body.dock-members[data-view="hub-detail"] .hub-members-toggle-btn { display: none; }
+}
+@media (min-width: 1101px) {
+  /* Üst çubuk (z 80) şeffaf alanıyla panelin ✕ düğmesini örtmesin */
+  .hub-voice-rooms-side.open { z-index: 85; }
+  .hub-detail-side { top: 72px; }
+}
