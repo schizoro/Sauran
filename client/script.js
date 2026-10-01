@@ -3948,6 +3948,15 @@ const I18N = {
     'hub-bans-title': { tr: 'Yasaklılar', en: 'Banned Users' },
     'hub-bans-empty': { tr: 'Yasaklı kimse yok.', en: 'No one is banned.' },
     'hub-mutes-title': { tr: 'Susturulanlar', en: 'Muted users' },
+    'slowmode-label': { tr: '🐢 Yavaş mod', en: '🐢 Slow mode' },
+    'slowmode-off': { tr: 'Kapalı', en: 'Off' },
+    'slowmode-hint': { tr: 'Üyeler sohbete bu aralıktan daha sık mesaj gönderemez. Kurucu ve moderatörler muaftır. Değişiklik hemen uygulanır.', en: 'Members can\'t send messages more often than this. The founder and moderators are exempt. Applies immediately.' },
+    'slowmode-on-bar': { tr: '🐢 Yavaş mod açık: {d} aralıkla mesaj gönderilebilir.', en: '🐢 Slow mode is on: one message every {d}.' },
+    'slowmode-exempt-bar': { tr: '🐢 Yavaş mod açık ({d}). Sen muafsın.', en: '🐢 Slow mode is on ({d}). You are exempt.' },
+    'slowmode-wait-bar': { tr: '🐢 Yavaş mod: {s} sonra yeniden yazabilirsin.', en: '🐢 Slow mode: you can send again in {s}.' },
+    'slowmode-wait-toast': { tr: 'Yavaş mod: {s} sonra gönderebilirsin.', en: 'Slow mode: you can send in {s}.' },
+    'slowmode-changed-on': { tr: '{u} yavaş modu açtı ({d}).', en: '{u} turned on slow mode ({d}).' },
+    'slowmode-changed-off': { tr: '{u} yavaş modu kapattı.', en: '{u} turned off slow mode.' },
     'hubset-sec-general': { tr: 'Genel', en: 'General' },
     'hubset-sec-general-desc': { tr: 'Lobinin adı, görseli ve görünümü.', en: 'Name, image and look of the lobby.' },
     'hubset-sec-visibility': { tr: 'Görünürlük ve Katılım', en: 'Visibility & joining' },
@@ -5020,11 +5029,43 @@ function connectToChat() {
     // Lobi mesajları
     // -------------------------------------------------
 
+    socket.on('slow_mode_wait', (data) => {
+        if (!currentHub || Number(data?.hub_id) !== currentHub.id) return;
+        // Sunucu reddetti: "gönderiliyor" balonu kaldırılır, yazı geri konur, geri sayım başlar.
+        const entry = data.client_id && pendingSends.get(data.client_id);
+        if (entry) {
+            clearTimeout(entry.timer);
+            pendingSends.delete(data.client_id);
+            const text = entry.content || '';
+            entry.el.remove();
+            if (text && !hubMessageInput.value) hubMessageInput.value = text;
+        }
+        slowModeUntil = Date.now() + Number(data.retry_after || 0) * 1000;
+        renderSlowModeBar();
+        showToast(t('slowmode-wait-toast').replace('{s}', formatSlowDuration(data.retry_after)));
+    });
+
+    socket.on('hub_slow_mode', (data) => {
+        if (!currentHub || Number(data?.hub_id) !== currentHub.id) return;
+        const changed = Number(currentHub.slow_mode_seconds || 0) !== Number(data.seconds);
+        currentHub.slow_mode_seconds = Number(data.seconds) || 0;
+        if (!currentHub.slow_mode_seconds) slowModeUntil = 0;
+        const sel = document.getElementById('hubset-slowmode');
+        if (sel) sel.value = String(currentHub.slow_mode_seconds);
+        renderSlowModeBar();
+        if (changed && data.by && data.by !== currentUser?.username) {
+            showToast(currentHub.slow_mode_seconds
+                ? t('slowmode-changed-on').replace('{u}', data.by).replace('{d}', formatSlowDuration(currentHub.slow_mode_seconds))
+                : t('slowmode-changed-off').replace('{u}', data.by));
+        }
+    });
+
     socket.on(
         'hub_message',
         (msg) => {
 
             if (!resolvePendingSend(msg) && !feedPaging.hub.hasNewer) appendHubMessage(msg);
+            if (currentHub && Number(msg.hub_id ?? currentHub.id) === currentHub.id && currentUser && msg.user_id === currentUser.id) startSlowModeCooldown(currentHub.slow_mode_seconds);
             typingDoneBy('hub', msg.user_id);
 
             if (currentHub && document.visibilityState === 'visible') markReadSoon('hub', currentHub.id, msg.id);
@@ -11194,6 +11235,7 @@ hubSettingsOpenBtn.addEventListener('click', () => {
     hubSettingsNameInput.disabled = !isOwner;
     hubSettingsImageBtn.disabled = !isOwner;
     document.getElementById('hubset-everyone').value = currentHub.mention_everyone || 'owner';
+    document.getElementById('hubset-slowmode').value = String(currentHub.slow_mode_seconds || 0);
 
     const canModerate = currentHub.my_permission_tier === 'owner' || currentHub.my_permission_tier === 'moderator';
     document.getElementById('hub-settings-bans-section').style.display = canModerate ? 'flex' : 'none';
@@ -12763,6 +12805,7 @@ async function openHub(hubId) {
         if (!data.success) return;
 
         currentHub = data.hub;
+        resetSlowModeForHub();
 
         switchToView('hub-detail');
         renderHubDetail();
@@ -14655,6 +14698,99 @@ mentionSuggest.addEventListener('mousedown', (event) => {
     applyMention(Number(btn.dataset.mentionIndex));
 });
 
+
+// =====================================================
+// YAVAŞ MOD
+// =====================================================
+var slowModeUntil = 0;      // bu cihazda tekrar gönderilebilecek an (ms)
+var slowModeTicker = null;
+
+function formatSlowDuration(sec) {
+    sec = Number(sec) || 0;
+    let tr = true;
+    try { tr = (localStorage.getItem('sauran_lang') || 'tr') !== 'en'; } catch (_) { /* yoksay */ }
+    if (sec >= 3600 && sec % 3600 === 0) return tr ? `${sec / 3600} saat` : `${sec / 3600} h`;
+    if (sec >= 60) {
+        const m = Math.floor(sec / 60), s = sec % 60;
+        if (!s) return tr ? `${m} dk` : `${m} min`;
+        return tr ? `${m} dk ${s} sn` : `${m} min ${s} s`;
+    }
+    return tr ? `${sec} sn` : `${sec} s`;
+}
+
+function slowModeActiveForMe() {
+    return Boolean(currentHub && Number(currentHub.slow_mode_seconds) > 0 && !currentHub.slow_mode_exempt);
+}
+
+function slowModeRemaining() {
+    return Math.max(0, Math.ceil((slowModeUntil - Date.now()) / 1000));
+}
+
+function renderSlowModeBar() {
+    const bar = document.getElementById('hub-slowmode-bar');
+    const sendBtn = document.getElementById('hub-send-btn');
+    if (!bar) return;
+    const seconds = currentHub ? Number(currentHub.slow_mode_seconds) || 0 : 0;
+    const remaining = slowModeActiveForMe() ? slowModeRemaining() : 0;
+    if (!seconds) {
+        bar.style.display = 'none';
+    } else {
+        bar.style.display = 'flex';
+        bar.classList.toggle('waiting', remaining > 0);
+        bar.textContent = remaining > 0
+            ? t('slowmode-wait-bar').replace('{s}', formatSlowDuration(remaining))
+            : currentHub.slow_mode_exempt
+                ? t('slowmode-exempt-bar').replace('{d}', formatSlowDuration(seconds))
+                : t('slowmode-on-bar').replace('{d}', formatSlowDuration(seconds));
+    }
+    sendBtn?.classList.toggle('slowmode-locked', remaining > 0);
+    if (remaining > 0 && !slowModeTicker) {
+        slowModeTicker = setInterval(() => {
+            renderSlowModeBar();
+            if (!slowModeActiveForMe() || slowModeRemaining() <= 0) { clearInterval(slowModeTicker); slowModeTicker = null; renderSlowModeBar(); }
+        }, 1000);
+    }
+}
+
+function startSlowModeCooldown(seconds) {
+    if (!slowModeActiveForMe()) return;
+    slowModeUntil = Math.max(slowModeUntil, Date.now() + Number(seconds) * 1000);
+    renderSlowModeBar();
+}
+
+// Gönderim engellenirse true döner ve kullanıcıya kalan süre gösterilir.
+function slowModeGuard() {
+    if (!slowModeActiveForMe()) return false;
+    const remaining = slowModeRemaining();
+    if (remaining <= 0) return false;
+    showToast(t('slowmode-wait-toast').replace('{s}', formatSlowDuration(remaining)));
+    renderSlowModeBar();
+    return true;
+}
+
+function resetSlowModeForHub() {
+    slowModeUntil = currentHub && currentHub.slow_mode_retry_after ? Date.now() + Number(currentHub.slow_mode_retry_after) * 1000 : 0;
+    renderSlowModeBar();
+}
+
+document.getElementById('hubset-slowmode').addEventListener('change', async (event) => {
+    if (!currentHub) return;
+    const select = event.target;
+    const previous = String(currentHub.slow_mode_seconds || 0);
+    try {
+        const response = await fetch(`/api/hubs/${currentHub.id}/slow-mode`, {
+            method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ seconds: Number(select.value) })
+        });
+        const data = await response.json();
+        if (!data.success) { select.value = previous; showToast(data.error || 'Olmadı.'); return; }
+        currentHub.slow_mode_seconds = data.seconds;
+        renderSlowModeBar();
+    } catch (_) {
+        select.value = previous;
+    }
+});
+
 hubChatForm.addEventListener(
     'submit',
     (event) => {
@@ -14664,6 +14800,7 @@ hubChatForm.addEventListener(
 
         const content = hubMessageInput.value.trim();
         if (!content || !currentHub || !socket) return;
+        if (slowModeGuard()) return;
         if (feedPaging.hub.hasNewer) returnToLatest('hub');
 
         const clientId = newClientId();
@@ -14672,6 +14809,8 @@ hubChatForm.addEventListener(
         }
         typingSendStop('hub');
         socket.emit('hub_chat_message', { hub_id: currentHub.id, content, reply_to_message_id: hubReplyTarget, client_id: clientId });
+        if (content.length <= 500) startSlowModeCooldown(currentHub.slow_mode_seconds);
+        if (pendingSends.get(clientId)) pendingSends.get(clientId).content = content;
 
         hubMessageInput.value = '';
         cancelMessageReply('hub');

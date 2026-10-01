@@ -17,8 +17,8 @@ Durum: `[ ]` sırada · `[~]` yapılıyor · `[x]` tamamlandı
 - [x] **E-posta adresini değiştirme** — Ayarlar → Güvenlik; şifre (2FA açıksa ayrıca kod) ister, yeni adrese 6 haneli kod gider, kod girilince değişir ve eski adrese bilgi e-postası gider. Adres ayarlarda maskeli görünür.
 
 ## 3. Moderasyon
-- [ ] Yavaş mod (mesajlar arası zorunlu bekleme) ← sıradaki
-- [ ] Kelime filtresi / otomatik moderasyon
+- [x] **Yavaş mod** — Lobi ayarları → Moderasyon; 5 sn – 1 saat. Kurucu ve moderatörler açıp kapatır ve muaftır. Üye yazma alanının üstünde geri sayım görür; metin, dosya, anket, çıkartma hepsi sunucuda da sınırlanır, yenilemede sayaç korunur.
+- [ ] Kelime filtresi / otomatik moderasyon ← sıradaki
 - [ ] Lobi içi moderasyon kaydı (kim kimi attı/banladı/susturdu)
 - [ ] Davet kodlarına süre ve kullanım sınırı
 

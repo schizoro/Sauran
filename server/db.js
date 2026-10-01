@@ -7365,7 +7365,49 @@ function cancelEmailChange(userId) {
   return { success: true };
 }
 
+// =====================================================
+// YAVAŞ MOD (lobi sohbetinde mesajlar arası zorunlu bekleme)
+// =====================================================
+{
+  const cols = db.prepare(`PRAGMA table_info(hubs)`).all().map((c) => c.name);
+  if (!cols.includes('slow_mode_seconds')) db.exec(`ALTER TABLE hubs ADD COLUMN slow_mode_seconds INTEGER NOT NULL DEFAULT 0`);
+}
+const SLOW_MODE_OPTIONS = [0, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600];
+
+function getHubSlowMode(hubId) {
+  const row = db.prepare(`SELECT slow_mode_seconds FROM hubs WHERE id = ?`).get(hubId);
+  return row ? Number(row.slow_mode_seconds) || 0 : 0;
+}
+
+// Kurucu ve moderatörler açıp kapatabilir (ve kendileri bu sınırdan muaftır).
+function setHubSlowMode(hubId, userId, seconds) {
+  seconds = Number(seconds);
+  if (!SLOW_MODE_OPTIONS.includes(seconds)) return { success: false, status: 400, error: 'Geçersiz yavaş mod süresi.' };
+  const tier = getMemberTier(hubId, userId);
+  if (tier !== 'owner' && tier !== 'moderator') return { success: false, status: 403, error: 'Yavaş modu yalnızca kurucu ve moderatörler değiştirebilir.' };
+  db.prepare(`UPDATE hubs SET slow_mode_seconds = ? WHERE id = ?`).run(seconds, hubId);
+  return { success: true, seconds };
+}
+
+function isSlowModeExempt(hubId, userId) {
+  const tier = getMemberTier(hubId, userId);
+  return tier === 'owner' || tier === 'moderator';
+}
+
+// Kullanıcının bu lobideki son mesajının zamanı (ms). Sunucu yeniden başlasa da bekleme korunur.
+function lastHubPostAt(hubId, userId) {
+  const row = db.prepare(`SELECT MAX(created_at) AS t FROM messages WHERE hub_id = ? AND user_id = ?`).get(hubId, userId);
+  if (!row || !row.t) return 0;
+  const ms = Date.parse(String(row.t).replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(row.t) ? '' : 'Z'));
+  return Number.isFinite(ms) ? ms : 0;
+}
+
 module.exports = {
+  SLOW_MODE_OPTIONS,
+  getHubSlowMode,
+  setHubSlowMode,
+  isSlowModeExempt,
+  lastHubPostAt,
   requestEmailChange,
   confirmEmailChange,
   cancelEmailChange,

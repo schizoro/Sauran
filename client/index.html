@@ -516,6 +516,8 @@
                             <button type="button" id="hub-reply-cancel-btn" title="Yanıtı iptal et">✕</button>
                         </div>
 
+                        <div id="hub-slowmode-bar" class="hub-slowmode-bar" style="display:none;" aria-live="polite"></div>
+
                         <form id="hub-chat-form" class="composer-form">
                             <div class="composer-input-box">
                                 <div class="composer-attach-wrap">
@@ -839,6 +841,25 @@
                         <div class="hubset-panel-head">
                             <h3 data-i18n="hubset-sec-moderation">Moderasyon</h3>
                             <p data-i18n="hubset-sec-moderation-desc">Yasaklar, sesli oda susturmaları ve oda giriş engelleri.</p>
+                        </div>
+
+                        <div class="hubset-card" id="hubset-slowmode-card">
+                            <label class="profile-field-label" for="hubset-slowmode" data-i18n="slowmode-label">🐢 Yavaş mod</label>
+                            <select id="hubset-slowmode" class="discover-select">
+                                <option value="0" data-i18n="slowmode-off">Kapalı</option>
+                                <option value="5">5 sn</option>
+                                <option value="10">10 sn</option>
+                                <option value="15">15 sn</option>
+                                <option value="30">30 sn</option>
+                                <option value="60">1 dk</option>
+                                <option value="120">2 dk</option>
+                                <option value="300">5 dk</option>
+                                <option value="600">10 dk</option>
+                                <option value="900">15 dk</option>
+                                <option value="1800">30 dk</option>
+                                <option value="3600">1 saat</option>
+                            </select>
+                            <p class="hubset-hint" data-i18n="slowmode-hint">Üyeler sohbete bu aralıktan daha sık mesaj gönderemez. Kurucu ve moderatörler muaftır. Değişiklik hemen uygulanır.</p>
                         </div>
 
                         <div id="hub-settings-bans-section" class="hubset-tabs" role="tablist" style="display:none;">

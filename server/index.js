@@ -214,6 +214,10 @@ const {
   enableTwoFactor,
   verifyTwoFactorCode,
   requestEmailChange,
+  getHubSlowMode,
+  setHubSlowMode,
+  isSlowModeExempt,
+  lastHubPostAt,
   confirmEmailChange,
   cancelEmailChange,
   maskEmail,
@@ -437,6 +441,34 @@ const adminWriteLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyFn: 
 const fileUploadLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla dosya gönderildi. Biraz sonra tekrar dene.' });
 
 // Socket üzerinden gönderilen mesajlar için basit hız sınırlama (spam koruması).
+// ── Yavaş mod ── Son gönderim zamanı bellekte tutulur (anlık), yoksa veritabanındaki son mesajdan bulunur.
+const slowModeLastPost = new Map(); // `${hubId}:${userId}` -> ms
+
+function slowModeWait(hubId, userId) {
+  const seconds = getHubSlowMode(hubId);
+  if (!seconds || isSlowModeExempt(hubId, userId)) return 0;
+  const key = `${hubId}:${userId}`;
+  const last = Math.max(slowModeLastPost.get(key) || 0, lastHubPostAt(hubId, userId));
+  const remainingMs = last + seconds * 1000 - Date.now();
+  return remainingMs > 0 ? Math.ceil(remainingMs / 1000) : 0;
+}
+
+function markSlowModePost(hubId, userId) {
+  if (!getHubSlowMode(hubId)) return;
+  if (slowModeLastPost.size > 20000) {
+    const cutoff = Date.now() - 3600 * 1000;
+    for (const [k, t] of slowModeLastPost) if (t < cutoff) slowModeLastPost.delete(k);
+  }
+  slowModeLastPost.set(`${hubId}:${userId}`, Date.now());
+}
+
+function slowModeBlocked(res, hubId, userId) {
+  const wait = slowModeWait(hubId, userId);
+  if (!wait) return false;
+  res.status(429).json({ success: false, error: `Yavaş mod açık: ${wait} sn sonra tekrar gönderebilirsin.`, retry_after: wait });
+  return true;
+}
+
 function isSocketMessageRateLimited(socket) {
   const now = Date.now();
   const windowMs = 10_000;
@@ -2097,6 +2129,21 @@ app.patch('/api/hubs/:id', (req, res) => {
   }
 });
 
+app.put('/api/hubs/:id/slow-mode', contentWriteLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const hubId = Number(req.params.id);
+    const result = setHubSlowMode(hubId, user.id, req.body?.seconds);
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    io.to(`hub:${hubId}`).emit('hub_slow_mode', { hub_id: hubId, seconds: result.seconds, by: user.username });
+    return res.json(result);
+  } catch (error) {
+    console.error('Yavaş mod hatası:', error);
+    return res.status(500).json({ success: false, error: 'Yavaş mod değiştirilemedi.' });
+  }
+});
+
 app.get('/api/hubs/:id', (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
@@ -2116,6 +2163,8 @@ app.get('/api/hubs/:id', (req, res) => {
 
     hub.members = hub.members.map(m => ({ ...m, online: isVisiblyOnline(m.user_id, m.status) }));
     hub.can_mention_everyone = canMentionEveryone(hubId, user.id);
+    hub.slow_mode_exempt = isSlowModeExempt(hubId, user.id);
+    hub.slow_mode_retry_after = slowModeWait(hubId, user.id);
     if (canDecideJoinRequests(hubId, user.id)) hub.pending_join_requests = countPendingHubJoinRequests(hubId);
 
     return res.json({ success: true, hub });
@@ -2551,6 +2600,8 @@ app.post('/api/hubs/:id/poll', contentWriteLimiter, (req, res) => {
     return res.status(403).json({ success: false, error: 'Bu Lobi\'a üye değilsin.' });
   }
 
+  if (slowModeBlocked(res, hubId, user.id)) return;
+
   try {
     const result = createHubPoll(hubId, user.id, user.username, req.body?.question, req.body?.options);
 
@@ -2558,6 +2609,7 @@ app.post('/api/hubs/:id/poll', contentWriteLimiter, (req, res) => {
       return res.status(400).json(result);
     }
 
+    markSlowModePost(hubId, user.id);
     emitHubMessage(hubId, result.message);
 
     return res.json(result);
@@ -2605,6 +2657,8 @@ app.post('/api/hubs/:id/share', fileUploadLimiter, (req, res) => {
     return res.status(403).json({ success: false, error: 'Bu Lobi\'a üye değilsin.' });
   }
 
+  if (slowModeBlocked(res, hubId, user.id)) return;
+
   try {
     const result = createHubShare(hubId, user.id, user.username, req.body?.content, req.body?.url);
 
@@ -2612,6 +2666,7 @@ app.post('/api/hubs/:id/share', fileUploadLimiter, (req, res) => {
       return res.status(400).json(result);
     }
 
+    markSlowModePost(hubId, user.id);
     emitHubMessage(hubId, result.message);
 
     return res.json(result);
@@ -2632,6 +2687,8 @@ app.post('/api/hubs/:id/voice', fileUploadLimiter, (req, res) => {
     return res.status(403).json({ success: false, error: 'Bu Lobi\'a üye değilsin.' });
   }
 
+  if (slowModeBlocked(res, hubId, user.id)) return;
+
   try {
     const result = createHubVoiceMessage(hubId, user.id, user.username, req.body?.audio_data, req.body?.duration);
 
@@ -2639,6 +2696,7 @@ app.post('/api/hubs/:id/voice', fileUploadLimiter, (req, res) => {
       return res.status(400).json(result);
     }
 
+    markSlowModePost(hubId, user.id);
     emitHubMessage(hubId, result.message);
 
     return res.json(result);
@@ -2659,6 +2717,8 @@ app.post('/api/hubs/:id/file', fileUploadLimiter, (req, res) => {
     return res.status(403).json({ success: false, error: 'Bu Lobi\'a üye değilsin.' });
   }
 
+  if (slowModeBlocked(res, hubId, user.id)) return;
+
   try {
     const result = createHubFileMessage(hubId, user.id, user.username, req.body?.file);
 
@@ -2666,6 +2726,7 @@ app.post('/api/hubs/:id/file', fileUploadLimiter, (req, res) => {
       return res.status(400).json(result);
     }
 
+    markSlowModePost(hubId, user.id);
     emitHubMessage(hubId, result.message);
 
     return res.json(result);
@@ -2686,6 +2747,8 @@ app.post('/api/hubs/:id/sticker', contentWriteLimiter, (req, res) => {
     return res.status(403).json({ success: false, error: 'Bu Lobi\'a üye değilsin.' });
   }
 
+  if (slowModeBlocked(res, hubId, user.id)) return;
+
   try {
     const result = createHubSticker(hubId, user.id, user.username, req.body?.sticker_id);
 
@@ -2693,6 +2756,7 @@ app.post('/api/hubs/:id/sticker', contentWriteLimiter, (req, res) => {
       return res.status(400).json(result);
     }
 
+    markSlowModePost(hubId, user.id);
     emitHubMessage(hubId, result.message);
 
     return res.json(result);
@@ -4529,11 +4593,18 @@ io.on('connection', (socket) => {
         return;
       }
 
+      const slowWait = slowModeWait(hubId, socket.userId);
+      if (slowWait) {
+        socket.emit('slow_mode_wait', { hub_id: hubId, retry_after: slowWait, client_id: typeof data?.client_id === 'string' ? data.client_id.slice(0, 40) : null });
+        return;
+      }
+
       const replyToMessageId = data?.reply_to_message_id ? Number(data.reply_to_message_id) : null;
       const message = saveHubMessage(hubId, socket.userId, socket.username, content, replyToMessageId);
       // İstemcinin "gönderiliyor" diye hemen gösterdiği geçici mesajı gerçek mesajla eşleştirmesi için yalnızca geri yansıtılır.
       const clientId = typeof data?.client_id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(data.client_id) ? data.client_id : null;
 
+      markSlowModePost(hubId, socket.userId);
       emitHubMessage(hubId, clientId ? { ...message, client_id: clientId } : message);
       // Bildirim işleri mesajın yayınını geciktirmesin: soket yazımı önce boşalsın.
       setImmediate(() => notifyHubMentions(hubId, message));
