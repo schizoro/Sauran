@@ -3625,6 +3625,8 @@ const I18N = {
     'hub-bans-title': { tr: 'Yasaklılar', en: 'Banned Users' },
     'hub-bans-empty': { tr: 'Yasaklı kimse yok.', en: 'No one is banned.' },
     'hub-mutes-title': { tr: 'Susturulanlar', en: 'Muted users' },
+    'feed-older-loading': { tr: 'Daha eski mesajlar yükleniyor…', en: 'Loading older messages…' },
+    'feed-start': { tr: 'Sohbetin başı', en: 'Start of the conversation' },
     'hub-mutes-empty': { tr: 'Susturulan kimse yok.', en: 'No one is muted.' },
     'hub-mutes-unmute': { tr: 'Kaldır', en: 'Unmute' },
     'voice-mute-action': { tr: 'Sesli odada sustur', en: 'Mute in voice room' },
@@ -7447,6 +7449,7 @@ async function openDeletedDm(token) {
     setDmReadOnlyMode(true, thread && thread.expires_at);
     dmModalTitle.textContent = `💬 ${t('deleted-account-label')}`;
     dmFeed.innerHTML = '';
+    feedPaging.dm = { key: null, oldestId: null, hasMore: false, loading: false };
 
     try {
 
@@ -7513,11 +7516,13 @@ async function openDm(userId, username) {
 
     try {
 
+        feedPaging.dm = { key: null, oldestId: null, hasMore: false, loading: false };
         const response = await fetch(`/api/dm/${userId}/messages`, { credentials: 'include' });
         const data = await response.json();
 
-        if (data.success) {
-            data.messages.forEach(appendDmMessage);
+        if (data.success && activeDmUserId === userId) {
+            data.messages.forEach((m) => appendDmMessage(m));
+            resetFeedPaging('dm', userId, data.messages, data.has_more);
         }
 
     } catch (error) {
@@ -7545,7 +7550,7 @@ function formatCallLogDuration(totalSeconds) {
 }
 
 // Arama kaydı: konuşma balonu değil, ortalanmış sistem satırı (eylem menüsü/tepki yok).
-function appendDmCallLog(msg) {
+function appendDmCallLog(msg, opts) {
 
     const status = msg.payload && msg.payload.status;
     const iAmCaller = msg.user_id === currentUser.id;
@@ -7572,13 +7577,12 @@ function appendDmCallLog(msg) {
     row.dataset.userId = msg.user_id;
     row.innerHTML = `<span class="dm-call-log-pill"><span aria-hidden="true">${icon}</span><span class="dm-call-log-text">${escapeHtml(label)}</span><span class="dm-call-log-time">${escapeHtml(time)}</span></span>`;
 
-    dmFeed.appendChild(row);
-    dmFeed.scrollTop = dmFeed.scrollHeight;
+    placeFeedItem(dmFeed, row, opts);
 }
 
-function appendDmMessage(msg) {
+function appendDmMessage(msg, opts) {
 
-    if (msg.kind === 'dm_call') { appendDmCallLog(msg); return; }
+    if (msg.kind === 'dm_call') { appendDmCallLog(msg, opts); return; }
 
     const row = document.createElement('div');
 
@@ -7597,9 +7601,87 @@ function appendDmMessage(msg) {
     row.appendChild(wrap);
     wireMsgAvatars(row);
 
-    dmFeed.appendChild(row);
-    dmFeed.scrollTop = dmFeed.scrollHeight;
+    placeFeedItem(dmFeed, row, opts);
 
+}
+
+// Akışa öğe ekler: normalde en alta (ve en alta kaydırır); eski sayfa yüklenirken en üste (kaydırmaya dokunmadan).
+// opts bir forEach indeksi de olabilir; yalnızca { prepend: true } nesnesi "üste ekle" demektir.
+function placeFeedItem(feed, el, opts) {
+    if (opts && opts.prepend === true) {
+        const anchor = feed.querySelector(':scope > .feed-older-status')?.nextSibling || feed.firstChild;
+        feed.insertBefore(el, anchor);
+        return;
+    }
+    feed.appendChild(el);
+    feed.scrollTop = feed.scrollHeight;
+}
+
+// ─── Sohbet geçmişi sayfalama (yukarı kaydırınca daha eski mesajlar) ───
+const feedPaging = {
+    hub: { key: null, oldestId: null, hasMore: false, loading: false },
+    dm: { key: null, oldestId: null, hasMore: false, loading: false }
+};
+
+function resetFeedPaging(kind, key, messages, hasMore) {
+    feedPaging[kind] = { key, oldestId: messages.length ? messages[0].id : null, hasMore: Boolean(hasMore), loading: false };
+    const feed = kind === 'hub' ? hubFeed : dmFeed;
+    feed.querySelector(':scope > .feed-older-status')?.remove();
+    // İçerik kaydırma çubuğu oluşturmayacak kadar azsa (ilk sayfa ekranı doldurmadıysa) bir sonraki sayfayı hemen iste.
+    requestAnimationFrame(() => { if (feed.scrollHeight <= feed.clientHeight + 4) loadOlderMessages(kind); });
+}
+
+function setFeedOlderStatus(feed, text) {
+    let el = feed.querySelector(':scope > .feed-older-status');
+    if (!text) { el?.remove(); return; }
+    if (!el) {
+        el = document.createElement('div');
+        el.className = 'feed-older-status';
+        feed.insertBefore(el, feed.firstChild);
+    }
+    el.textContent = text;
+}
+
+async function loadOlderMessages(kind) {
+    const paging = feedPaging[kind];
+    if (!paging.hasMore || paging.loading || !paging.oldestId || !paging.key) return;
+
+    const feed = kind === 'hub' ? hubFeed : dmFeed;
+    const key = paging.key;
+    const url = kind === 'hub'
+        ? `/api/hubs/${key}/messages?before=${paging.oldestId}`
+        : `/api/dm/${key}/messages?before=${paging.oldestId}`;
+
+    paging.loading = true;
+    setFeedOlderStatus(feed, t('feed-older-loading'));
+
+    try {
+        const response = await fetch(url, { credentials: 'include' });
+        const data = await response.json();
+
+        // Bu arada başka sohbete geçildiyse sonuç atılır.
+        if (feedPaging[kind] !== paging || paging.key !== key) return;
+        if (!data.success) { setFeedOlderStatus(feed, null); return; }
+
+        const prevHeight = feed.scrollHeight;
+        const prevTop = feed.scrollTop;
+        const append = kind === 'hub' ? appendHubMessage : appendDmMessage;
+
+        // Gelen sayfa eskiden yeniye sıralı; üste eklerken en yeniden başlanır ki sıra korunsun.
+        for (let i = data.messages.length - 1; i >= 0; i -= 1) append(data.messages[i], { prepend: true });
+
+        if (data.messages.length) paging.oldestId = data.messages[0].id;
+        paging.hasMore = Boolean(data.has_more);
+        setFeedOlderStatus(feed, paging.hasMore ? null : t('feed-start'));
+
+        // Kullanıcının baktığı mesaj yerinde kalsın (yeni eklenenler üstte, görünür alan kaymaz).
+        feed.scrollTop = feed.scrollHeight - prevHeight + prevTop;
+    } catch (error) {
+        console.error('Eski mesajlar alınamadı:', error);
+        setFeedOlderStatus(feed, null);
+    } finally {
+        paging.loading = false;
+    }
 }
 
 
@@ -8845,6 +8927,8 @@ const hubDetailIcon = document.getElementById('hub-detail-icon');
 const hubDetailName = document.getElementById('hub-detail-name');
 const hubDetailCount = document.getElementById('hub-detail-count');
 const hubFeed = document.getElementById('hub-feed');
+hubFeed.addEventListener('scroll', () => { if (hubFeed.scrollTop < 120) loadOlderMessages('hub'); }, { passive: true });
+dmFeed.addEventListener('scroll', () => { if (dmFeed.scrollTop < 120) loadOlderMessages('dm'); }, { passive: true });
 
 // ─── Sayfanın en altına in butonu ─────────────────────────────────────────
 const hubScrollBottomBtn = document.getElementById('hub-scroll-bottom-btn');
@@ -13667,13 +13751,15 @@ async function loadHubMessages(hubId) {
         if (!data.success) return;
 
         hubFeed.innerHTML = '';
+        feedPaging.hub = { key: null, oldestId: null, hasMore: false, loading: false };
 
         if (data.messages.length === 0) {
             hubFeed.innerHTML = `<div class="hub-feed-empty">${t('hub-feed-empty')}</div>`;
             return;
         }
 
-        data.messages.forEach(appendHubMessage);
+        data.messages.forEach((m) => appendHubMessage(m));
+        resetFeedPaging('hub', hubId, data.messages, data.has_more);
 
     } catch (error) {
 
@@ -13684,7 +13770,7 @@ async function loadHubMessages(hubId) {
 }
 
 
-function appendHubMessage(msg) {
+function appendHubMessage(msg, opts) {
 
     const empty = hubFeed.querySelector('.hub-feed-empty');
     if (empty) empty.remove();
@@ -13696,8 +13782,7 @@ function appendHubMessage(msg) {
 
     renderHubMessageIntoWrap(wrap, msg);
 
-    hubFeed.appendChild(wrap);
-    hubFeed.scrollTop = hubFeed.scrollHeight;
+    placeFeedItem(hubFeed, wrap, opts);
 
 }
 

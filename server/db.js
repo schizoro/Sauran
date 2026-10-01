@@ -3495,7 +3495,35 @@ function listHubBans(hubId, viewerId = null) {
   `).all(hubId).map((b) => { const { avatar_visibility, ...rest } = b; return maskAvatarFor(viewerId, b.id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']); });
 }
 
-function getHubMessages(hubId, limit = 50, viewerId = null) {
+// Sohbet geçmişi sayfalama: beforeId verilirse yalnızca o mesajdan ESKİ olanlar gelir (yukarı kaydırınca "daha eski mesajlar").
+// Sayfa sonunun anlaşılması için limit+1 satır okunur; fazlası atılır ve has_more ile bildirilir.
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_messages_hub_id ON messages(hub_id, id);
+  CREATE INDEX IF NOT EXISTS idx_messages_room_id ON messages(room, id);
+`);
+
+const MESSAGE_PAGE_MAX = 50;
+
+function clampPage(limit) {
+  const n = Math.floor(Number(limit) || MESSAGE_PAGE_MAX);
+  return Math.min(Math.max(n, 1), MESSAGE_PAGE_MAX);
+}
+
+function getHubMessagesPage(hubId, viewerId, { before, limit } = {}) {
+  const size = clampPage(limit);
+  const messages = getHubMessages(hubId, size + 1, viewerId, before);
+  const hasMore = messages.length > size;
+  return { messages: hasMore ? messages.slice(1) : messages, has_more: hasMore };
+}
+
+function getDmMessagesPage(userId, otherUserId, { before, limit } = {}) {
+  const size = clampPage(limit);
+  const messages = getDmMessages(userId, otherUserId, size + 1, before);
+  const hasMore = messages.length > size;
+  return { messages: hasMore ? messages.slice(1) : messages, has_more: hasMore };
+}
+
+function getHubMessages(hubId, limit = 50, viewerId = null, beforeId = null) {
   const rows = db.prepare(`
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.kind,
            messages.payload, messages.edited, messages.created_at, users.avatar_data,
@@ -3503,9 +3531,9 @@ function getHubMessages(hubId, limit = 50, viewerId = null) {
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
-    WHERE hub_id = ?
+    WHERE hub_id = ? AND (? IS NULL OR messages.id < ?)
     ORDER BY messages.id DESC LIMIT ?
-  `).all(hubId, limit);
+  `).all(hubId, beforeId ? Number(beforeId) : null, beforeId ? Number(beforeId) : null, limit);
 
   return rows.reverse().map((row) => hydrateMessage(row, viewerId));
 }
@@ -5558,7 +5586,7 @@ function createDmFileMessage(fromId, fromUsername, toId, file) {
   return { success: true, message: getMessageById(info.lastInsertRowid) };
 }
 
-function getDmMessages(userId, otherUserId, limit = 50) {
+function getDmMessages(userId, otherUserId, limit = 50, beforeId = null) {
   const rows = db.prepare(`
     SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
@@ -5566,9 +5594,9 @@ function getDmMessages(userId, otherUserId, limit = 50) {
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
-    WHERE room = ?
+    WHERE room = ? AND (? IS NULL OR messages.id < ?)
     ORDER BY messages.id DESC LIMIT ?
-  `).all(dmRoom(userId, otherUserId), limit);
+  `).all(dmRoom(userId, otherUserId), beforeId ? Number(beforeId) : null, beforeId ? Number(beforeId) : null, limit);
 
   // Silinmiş (mezar taşı) satırlarda user_id yoktur; to_user_id sohbetin alıcı tarafını verir, gönderen ise diğer taraftır (yalnızca arayüzde hizalama için).
   return rows.reverse().map((row) => {
@@ -7033,6 +7061,8 @@ module.exports = {
   listVoiceMutes,
   takeExpiredVoiceMutes,
   listMyVoiceMutes,
+  getHubMessagesPage,
+  getDmMessagesPage,
   getActiveVoiceBlock,
   kickFromVoiceRoomRecord,
   unblockFromVoiceRoom,

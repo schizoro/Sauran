@@ -206,6 +206,8 @@ const {
   listVoiceMutes,
   takeExpiredVoiceMutes,
   listMyVoiceMutes,
+  getHubMessagesPage,
+  getDmMessagesPage,
   getActiveVoiceBlock,
   kickFromVoiceRoomRecord,
   unblockFromVoiceRoom,
@@ -2360,7 +2362,9 @@ app.get('/api/hubs/:id/messages', (req, res) => {
   }
 
   try {
-    res.json({ success: true, messages: getHubMessages(hubId, 50, user.id) });
+    // ?before=<mesaj id> ile daha eski sayfa; ilk açılışta en yeni 50 mesaj.
+    const before = /^[0-9]{1,15}$/.test(String(req.query.before || '')) ? Number(req.query.before) : null;
+    res.json({ success: true, ...getHubMessagesPage(hubId, user.id, { before, limit: req.query.limit }) });
   } catch (error) {
     console.error('Lobi mesaj hatası:', error);
     res.status(500).json({ success: false, error: 'Mesajlar alınamadı.' });
@@ -3933,7 +3937,8 @@ app.get('/api/dm/:userId/messages', (req, res) => {
   }
 
   try {
-    return res.json({ success: true, messages: getDmMessages(user.id, otherId, 50) });
+    const before = /^[0-9]{1,15}$/.test(String(req.query.before || '')) ? Number(req.query.before) : null;
+    return res.json({ success: true, ...getDmMessagesPage(user.id, otherId, { before, limit: req.query.limit }) });
   } catch (error) {
     console.error('DM mesaj hatası:', error);
     res.status(500).json({ success: false, error: 'Mesajlar alınamadı.' });
