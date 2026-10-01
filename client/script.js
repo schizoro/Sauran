@@ -3651,6 +3651,10 @@ const I18N = {
     'conn-measuring': { tr: 'Ölçülüyor…', en: 'Measuring…' },
     'conn-polling': { tr: 'Yedek bağlantı (yavaş)', en: 'Fallback (slow)' },
     'conn-offline': { tr: 'Bağlı değil', en: 'Not connected' },
+    'typing-one': { tr: 'yazıyor…', en: 'is typing…' },
+    'typing-and': { tr: 've', en: 'and' },
+    'typing-many': { tr: 'yazıyor…', en: 'are typing…' },
+    'typing-several': { tr: 'Birkaç kişi yazıyor…', en: 'Several people are typing…' },
     'msg-send-failed': { tr: 'Gönderilemedi', en: 'Not sent' },
     'mention-toast': { tr: 'senden bahsetti', en: 'mentioned you' },
     'mention-everyone-hint': { tr: 'Lobideki herkese bildirim', en: 'Notify everyone in the lobby' },
@@ -4689,6 +4693,7 @@ function connectToChat() {
         (msg) => {
 
             if (!resolvePendingSend(msg)) appendHubMessage(msg);
+            typingDoneBy('hub', msg.user_id);
 
             if (currentHub && document.visibilityState === 'visible') markReadSoon('hub', currentHub.id, msg.id);
 
@@ -4697,6 +4702,8 @@ function connectToChat() {
         }
     );
 
+
+    socket.on('typing', handleTypingSignal);
 
     socket.on('hub_unread_ping', (data) => {
         const hubId = Number(data?.hub_id);
@@ -4842,6 +4849,7 @@ function connectToChat() {
             if (otherId === activeDmUserId) {
 
                 if (!resolvePendingSend(msg)) appendDmMessage(msg);
+                typingDoneBy('dm', msg.user_id);
                 if (document.visibilityState === 'visible') markReadSoon('dm', otherId, msg.id);
 
             } else if (msg.kind === 'dm_call') {
@@ -7712,6 +7720,7 @@ async function openDm(userId, username) {
     }
 
     setDmReadOnlyMode(false);
+    clearTyping('dm');
     activeDmUserId = userId;
     activeDmUsername = username;
     renderDmTitle(userId, username);
@@ -9162,6 +9171,7 @@ dmForm.addEventListener(
 
         const clientId = newClientId();
         appendDmMessage(optimisticMessage(content, 'dm', { to_user_id: activeDmUserId, reply_to_message_id: dmReplyTarget }), { forceScroll: true, clientId });
+        typingSendStop('dm');
         socket.emit('dm_message', { to_user_id: activeDmUserId, content, reply_to_message_id: dmReplyTarget, client_id: clientId });
 
         dmMessageInput.value = '';
@@ -9241,6 +9251,92 @@ hubFeed.addEventListener('scroll', () => { if (hubFeed.scrollTop < 120) loadOlde
 dmFeed.addEventListener('scroll', () => { if (dmFeed.scrollTop < 120) loadOlderMessages('dm'); }, { passive: true });
 keepFeedPinned(hubFeed);
 keepFeedPinned(dmFeed);
+
+// ─── "Yazıyor…" göstergesi ───
+const TYPING_TTL_MS = 5000;     // son sinyalden bu kadar sonra kişi listeden düşer
+const TYPING_SEND_MS = 2500;    // yazarken en sık bu aralıkla sinyal gönderilir
+const typingState = { hub: new Map(), dm: new Map() }; // kapsam -> Map(user_id -> { username, timer })
+const typingSent = { hub: { key: null, at: 0 }, dm: { key: null, at: 0 } };
+
+function makeTypingIndicator(form) {
+    const el = document.createElement('div');
+    el.className = 'typing-indicator';
+    el.setAttribute('aria-live', 'polite');
+    el.innerHTML = '<span class="typing-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="typing-text"></span>';
+    form.parentElement.insertBefore(el, form);
+    return el;
+}
+const typingEls = { hub: makeTypingIndicator(document.getElementById('hub-chat-form')), dm: makeTypingIndicator(dmForm) };
+
+function currentTypingKey(scope) {
+    return scope === 'hub' ? (currentHub?.id || null) : (activeDmUserId || null);
+}
+
+function renderTyping(scope) {
+    const el = typingEls[scope];
+    const names = [...typingState[scope].values()].map((v) => v.username);
+    let text = '';
+    if (names.length === 1) text = `${names[0]} ${t('typing-one')}`;
+    else if (names.length === 2) text = `${names[0]} ${t('typing-and')} ${names[1]} ${t('typing-many')}`;
+    else if (names.length > 2) text = t('typing-several');
+    el.querySelector('.typing-text').textContent = text;
+    el.classList.toggle('active', names.length > 0);
+}
+
+function clearTyping(scope) {
+    typingState[scope].forEach((v) => clearTimeout(v.timer));
+    typingState[scope].clear();
+    renderTyping(scope);
+}
+
+function handleTypingSignal(data) {
+    const scope = data?.scope === 'dm' ? 'dm' : data?.scope === 'hub' ? 'hub' : null;
+    if (!scope || data.user_id === currentUser?.id) return;
+    if (Number(data.id) !== currentTypingKey(scope)) return; // yalnızca açık sohbet için gösterilir
+    const map = typingState[scope];
+    const prev = map.get(data.user_id);
+    if (prev) clearTimeout(prev.timer);
+    if (data.stop) {
+        map.delete(data.user_id);
+    } else {
+        const timer = setTimeout(() => { map.delete(data.user_id); renderTyping(scope); }, TYPING_TTL_MS);
+        map.set(data.user_id, { username: data.username, timer });
+    }
+    renderTyping(scope);
+}
+
+// Mesajı gelen kişi artık yazmıyordur.
+function typingDoneBy(scope, userId) {
+    const entry = typingState[scope].get(userId);
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    typingState[scope].delete(userId);
+    renderTyping(scope);
+}
+
+function emitTyping(scope, input) {
+    const id = currentTypingKey(scope);
+    if (!socket || !id) return;
+    const sent = typingSent[scope];
+    if (!input.value.trim()) {
+        if (sent.key === id && sent.at) { socket.emit('typing_stop', { scope, id }); sent.at = 0; }
+        return;
+    }
+    const now = Date.now();
+    if (sent.key === id && now - sent.at < TYPING_SEND_MS) return;
+    sent.key = id;
+    sent.at = now;
+    socket.emit('typing', { scope, id });
+}
+
+function typingSendStop(scope) {
+    const id = currentTypingKey(scope);
+    if (socket && id && typingSent[scope].at) socket.emit('typing_stop', { scope, id });
+    typingSent[scope].at = 0;
+}
+
+document.getElementById('hub-message-input').addEventListener('input', (e) => emitTyping('hub', e.target));
+dmMessageInput.addEventListener('input', () => emitTyping('dm', dmMessageInput));
 keepComposerFocus(document.getElementById('hub-send-btn'), document.getElementById('hub-message-input'));
 keepComposerFocus(document.querySelector('#dm-form .composer-send-btn, form .composer-send-btn:not(#hub-send-btn)'), dmMessageInput);
 
@@ -12102,6 +12198,7 @@ hubCreateModal.addEventListener(
 async function openHub(hubId) {
 
     nativeNotifyCancel(`hub-${hubId}`);
+    clearTyping('hub');
     unreadHubCounts.delete(hubId);
     renderHubUnreadBadges();
 
@@ -14019,6 +14116,7 @@ hubChatForm.addEventListener(
         if (content.length <= 500) {
             appendHubMessage(optimisticMessage(content, 'text', { reply_to_message_id: hubReplyTarget }), { forceScroll: true, clientId });
         }
+        typingSendStop('hub');
         socket.emit('hub_chat_message', { hub_id: currentHub.id, content, reply_to_message_id: hubReplyTarget, client_id: clientId });
 
         hubMessageInput.value = '';

@@ -8,8 +8,8 @@ Durum: `[ ]` sırada · `[~]` yapılıyor · `[x]` tamamlandı
 - [x] **Eski mesajları yükleme** — Lobi sohbeti ve DM'de yukarı kaydırınca 50'şer mesajlık eski sayfalar gelir; mesaj tablosuna dizin eklendi.
 - [x] **Kalıcı okunmamış göstergesi** — DM ve lobi okunmamış sayıları sunucuda tutulur; yenileme ve cihazlar arası doğru, bir cihazda okununca diğerinde de sıfırlanır.
 - [x] **@bahsetme** — `@` ile üye önerisi, vurgulama, bahsedilene bildirim (lobi sessizde olsa da), lobi listesinde "@" rozeti. `@everyone`'ı kimin kullanabileceğini Lobi kurucusu ayarlardan seçer.
-- [ ] **"Yazıyor…" göstergesi** ← sıradaki
-- [ ] **Mesaj arama**
+- [x] **"Yazıyor…" göstergesi** — Lobi ve DM'de; 1 kişi / 2 kişi / "Birkaç kişi yazıyor…". Sinyal kesilince 5 sn'de, mesaj gönderilince ya da alan silinince hemen kalkar.
+- [ ] **Mesaj arama** ← sıradaki
 - [ ] **Lobide çoklu metin kanalı** (#genel, #oyun …)
 
 ## 2. Hesap güvenliği
@@ -34,6 +34,8 @@ Durum: `[ ]` sırada · `[~]` yapılıyor · `[x]` tamamlandı
 - [ ] Ödeme sistemi *(bilinçli olarak kapalı beta + hukuki inceleme sonrasına bırakıldı; bkz. `ucretlendirme-hazirlik.md`)*
 
 ## Tamamlananlar (Ekim 2026)
+- [x] Mesaj iletimi: anında görünen "gönderiliyor" mesajı, iPhone'da klavye/ekran zıplaması, doğrudan WebSocket, mesaj saatlerinin 3 saat geri görünmesi, Ayarlar'da bağlantı gecikmesi ölçer
+- [ ] *Karar bekliyor:* sunucu bölgesinin (Render) Frankfurt'a taşınması
 - [x] Lobi ayarları tam ekran ve bölümlü yeni tasarım (Genel, Görünürlük ve Katılım, Bahsetmeler, Davet, Moderasyon, Diğer)
 - [x] iPhone'da ekran paylaşımı tam ekran düzeltmesi
 - [x] Güvenlik denetimi ve düzeltmeleri (XSS, IDOR, güvenlik başlıkları, gövde sınırı, hız sınırları, Daily token)

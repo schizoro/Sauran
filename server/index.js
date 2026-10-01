@@ -4459,6 +4459,30 @@ io.on('connection', (socket) => {
     broadcastVoiceRoom(entry.hubId, roomId, { type: 'mute', user_id: socket.userId, muted });
   });
 
+  // "Yazıyor…" göstergesi. İçerik taşımaz; yalnızca kim, nerede. Lobi: soket o lobinin odasına (join_hub'da üyelik doğrulanarak)
+  // katılmış olmalı. DM: yalnızca arkadaşa. Soket başına sınırlı (spam/yük olmasın).
+  const relayTyping = (data, stop) => {
+    if (!socket.userId) return;
+    const now = Date.now();
+    if (!stop) {
+      if (now - (socket.data.lastTypingAt || 0) < 1500) return;
+      socket.data.lastTypingAt = now;
+    }
+    const scope = data?.scope;
+    const id = Number(data?.id);
+    if (!id) return;
+    const payload = { user_id: socket.userId, username: socket.username, stop: Boolean(stop) };
+    if (scope === 'hub') {
+      if (!socket.rooms.has(`hub:${id}`)) return;
+      socket.to(`hub:${id}`).emit('typing', { ...payload, scope: 'hub', id });
+    } else if (scope === 'dm') {
+      if (id === socket.userId || !areFriends(socket.userId, id)) return;
+      io.to(`user:${id}`).emit('typing', { ...payload, scope: 'dm', id: socket.userId });
+    }
+  };
+  socket.on('typing', (data) => relayTyping(data, false));
+  socket.on('typing_stop', (data) => relayTyping(data, true));
+
   // Gecikme ölçümü (Ayarlar > Genel): yalnızca hemen yanıt verir.
   socket.on('latency_ping', (ack) => { if (typeof ack === 'function') ack(); });
 
