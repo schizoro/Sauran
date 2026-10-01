@@ -7464,7 +7464,96 @@ function applyHubWordFilter(hubId, userId, text) {
   return { blocked: false, text: result.masked, masked: true };
 }
 
+// =====================================================
+// LOBİ MODERASYON KAYDI
+// =====================================================
+// Kim, kime, ne yaptı. Kullanıcı adları SAKLANMAZ; okurken users tablosundan çözülür (hesabı silinen kişi "silinmiş hesap"
+// görünür, kimlik ON DELETE SET NULL ile düşer). Mesaj içeriği hiçbir zaman yazılmaz. Kayıtlar 180 gün tutulur.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS hub_mod_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hub_id INTEGER NOT NULL,
+    actor_id INTEGER,
+    action TEXT NOT NULL,
+    target_id INTEGER,
+    details TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (hub_id) REFERENCES hubs(id) ON DELETE CASCADE,
+    FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (target_id) REFERENCES users(id) ON DELETE SET NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_hub_mod_log_hub ON hub_mod_log(hub_id, id DESC);
+`);
+const MOD_LOG_RETENTION_DAYS = 180;
+const MOD_LOG_CATEGORIES = {
+  members: ['member_kick', 'member_ban', 'member_unban', 'mod_add', 'mod_remove', 'join_approve', 'join_reject'],
+  voice: ['voice_mute', 'voice_unmute', 'voice_kick', 'voice_unblock', 'voice_room_create', 'voice_room_delete'],
+  chat: ['chat_clear', 'slow_mode', 'word_filter'],
+  settings: ['hub_update']
+};
+
+function logModAction(hubId, actorId, action, targetId = null, details = null) {
+  try {
+    db.prepare(`INSERT INTO hub_mod_log (hub_id, actor_id, action, target_id, details) VALUES (?, ?, ?, ?, ?)`)
+      .run(hubId, actorId || null, String(action), targetId || null, (details || targetId) ? JSON.stringify({ ...(details || {}), ...(targetId ? { had_target: true } : {}) }) : null);
+    if (Math.random() < 0.05) {
+      db.prepare(`DELETE FROM hub_mod_log WHERE created_at < datetime('now', ?)`).run(`-${MOD_LOG_RETENTION_DAYS} days`);
+    }
+  } catch (error) {
+    console.error('Moderasyon kaydı yazılamadı:', error.message); // kayıt hatası asıl işlemi bozmaz
+  }
+}
+
+// Kurucu ve moderatörler görür. category: members|voice|chat|settings; q: işlemi yapan ya da hedef kullanıcı adında arama.
+function listModLog(hubId, viewerId, { category, q, before, limit } = {}) {
+  const tier = getMemberTier(hubId, viewerId);
+  if (tier !== 'owner' && tier !== 'moderator') return { success: false, status: 403, error: 'Bu kaydı yalnızca kurucu ve moderatörler görebilir.' };
+  const where = ['l.hub_id = ?'];
+  const params = [hubId];
+  const actions = MOD_LOG_CATEGORIES[String(category || '')];
+  if (actions) {
+    where.push(`l.action IN (${actions.map(() => '?').join(',')})`);
+    params.push(...actions);
+  }
+  const term = String(q || '').trim().slice(0, 40);
+  if (term) {
+    where.push(`(LOWER(a.username) LIKE ? ESCAPE '\\' OR LOWER(t.username) LIKE ? ESCAPE '\\')`);
+    const like = `%${term.toLocaleLowerCase('tr').replace(/[\\%_]/g, (c) => '\\' + c)}%`;
+    params.push(like, like);
+  }
+  if (Number(before) > 0) { where.push('l.id < ?'); params.push(Number(before)); }
+  where.push(`l.created_at >= datetime('now', ?)`);
+  params.push(`-${MOD_LOG_RETENTION_DAYS} days`);
+  const pageSize = Math.min(Math.max(Number(limit) || 40, 1), 100);
+  const rows = db.prepare(`
+    SELECT l.id, l.action, l.details, l.created_at, l.actor_id, l.target_id,
+           a.username AS actor_name, a.avatar_data AS actor_avatar, t.username AS target_name
+    FROM hub_mod_log l
+    LEFT JOIN users a ON a.id = l.actor_id
+    LEFT JOIN users t ON t.id = l.target_id
+    WHERE ${where.join(' AND ')}
+    ORDER BY l.id DESC
+    LIMIT ?
+  `).all(...params, pageSize + 1);
+  const hasMore = rows.length > pageSize;
+  return {
+    success: true,
+    has_more: hasMore,
+    entries: rows.slice(0, pageSize).map((r) => {
+      let details = null;
+      try { details = r.details ? JSON.parse(r.details) : null; } catch (_) { details = null; }
+      return {
+        id: r.id, action: r.action, details, created_at: r.created_at,
+        actor: r.actor_id ? { id: r.actor_id, username: r.actor_name, avatar_data: r.actor_avatar || null } : null,
+        target: r.target_id ? { id: r.target_id, username: r.target_name } : (details && details.had_target ? { id: null, username: null } : null)
+      };
+    })
+  };
+}
+
 module.exports = {
+  logModAction,
+  listModLog,
   getHubWordFilter,
   setHubWordFilter,
   applyHubWordFilter,

@@ -19,8 +19,8 @@ Durum: `[ ]` sırada · `[~]` yapılıyor · `[x]` tamamlandı
 ## 3. Moderasyon
 - [x] **Yavaş mod** — Lobi ayarları → Moderasyon; 5 sn – 1 saat. Kurucu ve moderatörler açıp kapatır ve muaftır. Üye yazma alanının üstünde geri sayım görür; metin, dosya, anket, çıkartma hepsi sunucuda da sınırlanır, yenilemede sayaç korunur.
 - [x] **Kelime filtresi** — Lobi ayarları → Moderasyon; "kelimeyi gizle (***)" ya da "mesajı engelle", hazır Türkçe+İngilizce küfür listesi + lobinin kendi listesi (kök* desteği). Harf/aksan, rakam hileleri (0→o), harf uzatma, araya nokta koyma yakalanır; masum kelimeler (sıkıntı, sikke) takılmaz. Mesaj, düzenleme, anket, paylaşımda uygulanır; kurucu/moderatör muaf, liste üyelere gösterilmez.
-- [ ] Lobi içi moderasyon kaydı (kim kimi attı/banladı/susturdu) ← sıradaki
-- [ ] Davet kodlarına süre ve kullanım sınırı
+- [x] **Moderasyon kaydı** — Lobi ayarları → Moderasyon → 📜 Kayıt; atma, yasak, yetki, katılma istekleri, sesli oda susturma/atma/engel, sohbet temizleme, yavaş mod, kelime filtresi, lobi ayarları. Kategori süzgeci, kullanıcı adı araması, sayfalama. Yalnızca kurucu/moderatör görür; 180 gün saklanır, mesaj içeriği yazılmaz.
+- [ ] Davet kodlarına süre ve kullanım sınırı ← sıradaki
 
 ## 4. Ses ve medya
 - [ ] Bas-konuş (push-to-talk)

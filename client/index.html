@@ -880,6 +880,7 @@
                             <button id="hub-bans-open-btn" class="hubset-tab" type="button" data-hubset-tab="bans">⛔ <span data-i18n="hub-bans-title">Yasaklılar</span></button>
                             <button id="hub-mutes-open-btn" class="hubset-tab" type="button" data-hubset-tab="mutes">🔇 <span data-i18n="hub-mutes-title">Susturulanlar</span></button>
                             <button id="hub-blocks-open-btn" class="hubset-tab" type="button" data-hubset-tab="blocks">🚪 <span data-i18n="hub-blocks-title-short">Oda Engelleri</span></button>
+                            <button id="hub-modlog-open-btn" class="hubset-tab" type="button" data-hubset-tab="modlog">📜 <span data-i18n="modlog-title">Kayıt</span></button>
                             <button id="hub-ban-member-btn" class="hubset-tab hubset-tab-danger" type="button" data-hubset-tab="pick" style="display:none;">🚫 <span data-i18n="hub-ban-member">Katılımcı Yasakla</span></button>
                         </div>
 
@@ -898,6 +899,22 @@
                             <button id="hub-blocks-back-btn" class="hub-settings-back-btn" type="button">← <span data-i18n="bans-back">Geri</span></button>
                             <input type="text" id="hub-blocks-search-input" class="hub-name-input" data-i18n-placeholder="hub-ban-search-placeholder" placeholder="Kullanıcı adı ara..." autocomplete="off">
                             <div id="hub-settings-blocks-list" class="settings-blocked-list settings-blocked-list-tall"></div>
+                        </div>
+
+                        <div class="hubset-card hub-settings-body" id="hub-settings-modlog-view" style="display:none;">
+                            <div class="modlog-filters">
+                                <select id="hub-modlog-category" class="discover-select">
+                                    <option value="" data-i18n="modlog-cat-all">Tüm işlemler</option>
+                                    <option value="members" data-i18n="modlog-cat-members">Üyeler (atma, yasak, yetki, istek)</option>
+                                    <option value="voice" data-i18n="modlog-cat-voice">Sesli odalar</option>
+                                    <option value="chat" data-i18n="modlog-cat-chat">Sohbet (temizleme, yavaş mod, filtre)</option>
+                                    <option value="settings" data-i18n="modlog-cat-settings">Lobi ayarları</option>
+                                </select>
+                                <input type="text" id="hub-modlog-search" class="hub-name-input" data-i18n-placeholder="modlog-search" placeholder="Kullanıcı adı ara (yapan ya da etkilenen)" autocomplete="off">
+                            </div>
+                            <div id="hub-modlog-list" class="modlog-list"></div>
+                            <button id="hub-modlog-more" class="hub-settings-action-btn" type="button" style="display:none;" data-i18n="modlog-more">Daha eski kayıtlar</button>
+                            <p class="hubset-hint" data-i18n="modlog-hint">Kayıtları yalnızca kurucu ve moderatörler görür. 180 gün saklanır; mesaj içerikleri kaydedilmez.</p>
                         </div>
 
                         <div class="hubset-card hub-settings-body" id="hub-settings-pick-view" style="display:none;">

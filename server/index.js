@@ -215,6 +215,8 @@ const {
   verifyTwoFactorCode,
   requestEmailChange,
   getHubSlowMode,
+  logModAction,
+  listModLog,
   getHubWordFilter,
   setHubWordFilter,
   applyHubWordFilter,
@@ -2124,6 +2126,14 @@ app.patch('/api/hubs/:id', (req, res) => {
       return res.status(400).json(result);
     }
 
+    {
+      const LOG_FIELDS = { name: 'name', image_data: 'image', theme: 'theme', bg_image: 'background', mention_everyone: 'mention_everyone',
+        visibility: 'visibility', join_policy: 'visibility', capacity: 'visibility', category: 'discover', topic: 'discover', description: 'discover', rules: 'discover', language: 'discover', mic_requirement: 'discover' };
+      const body = req.body || {};
+      const fields = [...new Set(Object.keys(body).map((k) => LOG_FIELDS[k]).filter(Boolean))];
+      if (fields.length) logModAction(hubId, user.id, 'hub_update', null, { fields, ...(body.name !== undefined ? { name: String(body.name).trim().slice(0, 40) } : {}), ...(body.mention_everyone !== undefined ? { mention_everyone: String(body.mention_everyone) } : {}) });
+    }
+
     return res.json(result);
 
   } catch (error) {
@@ -2140,6 +2150,7 @@ app.put('/api/hubs/:id/slow-mode', contentWriteLimiter, (req, res) => {
     const result = setHubSlowMode(hubId, user.id, req.body?.seconds);
     if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
     io.to(`hub:${hubId}`).emit('hub_slow_mode', { hub_id: hubId, seconds: result.seconds, by: user.username });
+    logModAction(hubId, user.id, 'slow_mode', null, { seconds: result.seconds });
     return res.json(result);
   } catch (error) {
     console.error('Yavaş mod hatası:', error);
@@ -2154,10 +2165,24 @@ app.put('/api/hubs/:id/word-filter', contentWriteLimiter, (req, res) => {
     const hubId = Number(req.params.id);
     const result = setHubWordFilter(hubId, user.id, req.body || {});
     if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    logModAction(hubId, user.id, 'word_filter', null, { action: result.filter.action, use_preset: result.filter.use_preset, count: result.filter.terms.length });
     return res.json(result);
   } catch (error) {
     console.error('Kelime filtresi hatası:', error);
     return res.status(500).json({ success: false, error: 'Kelime filtresi kaydedilemedi.' });
+  }
+});
+
+app.get('/api/hubs/:id/mod-log', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const result = listModLog(Number(req.params.id), user.id, { category: req.query.category, q: req.query.q, before: req.query.before });
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    return res.json(result);
+  } catch (error) {
+    console.error('Moderasyon kaydı okuma hatası:', error);
+    return res.status(500).json({ success: false, error: 'Kayıt alınamadı.' });
   }
 });
 
@@ -2513,6 +2538,7 @@ app.post('/api/hubs/:id/join-requests/:requestId/:decision', (req, res) => {
   const hubId = Number(req.params.id);
   const result = decideHubJoinRequest(hubId, Number(req.params.requestId), user.id, decision === 'approve');
   if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+  logModAction(hubId, user.id, result.approved ? 'join_approve' : 'join_reject', result.user_id);
 
   io.to(`user:${result.user_id}`).emit('hub_join_decision', { hub_id: hubId, approved: result.approved });
   if (result.approved) io.to(`hub:${hubId}`).emit('hub_members_changed', { hub_id: hubId });
@@ -2857,6 +2883,7 @@ app.post('/api/hubs/:id/voice-rooms', (req, res) => {
   }
 
   io.to(`hub:${hubId}`).emit('voice_room_created', result.room);
+  logModAction(hubId, user.id, 'voice_room_create', null, { room_name: result.room.name });
 
   return res.json(result);
 });
@@ -2867,6 +2894,7 @@ app.delete('/api/hubs/:id/voice-rooms/:roomId', (req, res) => {
 
   const hubId = Number(req.params.id);
   const roomId = Number(req.params.roomId);
+  const roomNameForLog = (db.prepare(`SELECT name FROM hub_voice_rooms WHERE id = ? AND hub_id = ?`).get(roomId, hubId) || {}).name || null;
   const result = deleteVoiceRoom(hubId, user.id, roomId);
 
   if (!result.success) {
@@ -2877,6 +2905,7 @@ app.delete('/api/hubs/:id/voice-rooms/:roomId', (req, res) => {
   clearVoiceRoom(roomId);
 
   // Daily odası, DB transaction'ı içinde kuyruğa yazıldı; silme DB işlemi bittikten sonra (yanıtı geciktirmeden) denenir, başarısızsa kuyruk yeniden dener.
+  logModAction(hubId, user.id, 'voice_room_delete', null, { room_name: roomNameForLog });
   finalizeHubPurge({ daily_room_names: result.daily_room_names });
 
   return res.json({ success: true });
@@ -3594,6 +3623,7 @@ app.delete('/api/hubs/:id/messages', (req, res) => {
     }
 
     io.to(`hub:${hubId}`).emit('hub_chat_cleared', { hub_id: hubId });
+    logModAction(hubId, user.id, 'chat_clear');
 
     return res.json(result);
 
@@ -3663,6 +3693,7 @@ app.post('/api/hubs/:id/members/:userId/moderator', (req, res) => {
   const result = setModerator(hubId, user.id, targetId, Boolean(req.body?.moderator));
 
   if (!result.success) return res.status(400).json(result);
+  logModAction(hubId, user.id, req.body?.moderator ? 'mod_add' : 'mod_remove', targetId);
 
   io.to(`hub:${hubId}`).emit('hub_members_changed', { hub_id: hubId });
   return res.json(result);
@@ -3677,6 +3708,7 @@ app.post('/api/hubs/:id/members/:userId/kick', (req, res) => {
   const result = kickMember(hubId, user.id, targetId);
 
   if (!result.success) return res.status(400).json(result);
+  logModAction(hubId, user.id, 'member_kick', targetId);
 
   kickUserFromHubSockets(hubId, targetId, 'hub_kicked');
   io.to(`hub:${hubId}`).emit('hub_members_changed', { hub_id: hubId });
@@ -3692,6 +3724,7 @@ app.post('/api/hubs/:id/members/:userId/ban', (req, res) => {
   const result = banMember(hubId, user.id, targetId);
 
   if (!result.success) return res.status(400).json(result);
+  logModAction(hubId, user.id, 'member_ban', targetId);
 
   kickUserFromHubSockets(hubId, targetId, 'hub_banned');
   io.to(`hub:${hubId}`).emit('hub_members_changed', { hub_id: hubId });
@@ -3704,6 +3737,7 @@ app.post('/api/hubs/:id/members/:userId/unban', (req, res) => {
 
   const result = unbanMember(Number(req.params.id), user.id, Number(req.params.userId));
   if (!result.success) return res.status(400).json(result);
+  logModAction(Number(req.params.id), user.id, 'member_unban', Number(req.params.userId));
   return res.json(result);
 });
 
@@ -3754,6 +3788,7 @@ app.post('/api/hubs/:id/voice-rooms/:roomId/mutes', (req, res) => {
   if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
 
   applyVoiceMuteChange(result.mute, { lifted: false });
+  logModAction(hubId, user.id, 'voice_mute', targetId, { room_name: result.mute.room_name || null, duration: String(req.body?.duration || '') });
   return res.json({ success: true, mute: result.mute });
 });
 
@@ -3770,6 +3805,7 @@ app.delete('/api/hubs/:id/voice-rooms/:roomId/mutes/:userId', (req, res) => {
   if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
 
   applyVoiceMuteChange(existing || { hub_id: hubId, room_id: roomId, user_id: targetId, room_name: null }, { lifted: true, reason: 'lifted', actorTier: getMemberTier(hubId, user.id) });
+  logModAction(hubId, user.id, 'voice_unmute', targetId, { room_name: existing ? existing.room_name : null });
   return res.json({ success: true });
 });
 
@@ -3802,6 +3838,7 @@ app.post('/api/hubs/:id/voice-rooms/:roomId/kick', (req, res) => {
 
   const result = kickFromVoiceRoomRecord(hubId, roomId, user.id, targetId, duration);
   if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+  logModAction(hubId, user.id, 'voice_kick', targetId, { room_name: result.room.name, duration });
 
   const payload = {
     hub_id: hubId, room_id: roomId, room_name: result.room.name, by_tier: result.actorTier,
@@ -3832,6 +3869,7 @@ app.delete('/api/hubs/:id/voice-rooms/:roomId/blocks/:userId', (req, res) => {
   if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
 
   notifyVoiceUnblocked(result.block, 'lifted');
+  logModAction(hubId, user.id, 'voice_unblock', targetId, { room_name: result.block.room_name || null });
   return res.json({ success: true });
 });
 

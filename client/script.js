@@ -3949,6 +3949,16 @@ const I18N = {
     'hub-bans-empty': { tr: 'Yasaklı kimse yok.', en: 'No one is banned.' },
     'hub-mutes-title': { tr: 'Susturulanlar', en: 'Muted users' },
     'slowmode-label': { tr: '🐢 Yavaş mod', en: '🐢 Slow mode' },
+    'modlog-title': { tr: 'Kayıt', en: 'Log' },
+    'modlog-cat-all': { tr: 'Tüm işlemler', en: 'All actions' },
+    'modlog-cat-members': { tr: 'Üyeler (atma, yasak, yetki, istek)', en: 'Members (kick, ban, roles, requests)' },
+    'modlog-cat-voice': { tr: 'Sesli odalar', en: 'Voice rooms' },
+    'modlog-cat-chat': { tr: 'Sohbet (temizleme, yavaş mod, filtre)', en: 'Chat (clear, slow mode, filter)' },
+    'modlog-cat-settings': { tr: 'Lobi ayarları', en: 'Lobby settings' },
+    'modlog-search': { tr: 'Kullanıcı adı ara (yapan ya da etkilenen)', en: 'Search username (actor or target)' },
+    'modlog-more': { tr: 'Daha eski kayıtlar', en: 'Older entries' },
+    'modlog-hint': { tr: 'Kayıtları yalnızca kurucu ve moderatörler görür. 180 gün saklanır; mesaj içerikleri kaydedilmez.', en: 'Only the founder and moderators can see this log. Kept for 180 days; message contents are never stored.' },
+    'modlog-empty': { tr: 'Henüz kayıt yok.', en: 'No entries yet.' },
     'wf-label': { tr: '🚫 Kelime filtresi', en: '🚫 Word filter' },
     'wf-off': { tr: 'Kapalı', en: 'Off' },
     'wf-mask': { tr: 'Kelimeyi gizle (*** ile)', en: 'Hide the word (with ***)' },
@@ -11326,7 +11336,7 @@ function showHubSettingsView(view) {
         hubsetCurrent = 'moderation';
         showHubsetSection('moderation');
     }
-    ['pick', 'bans', 'mutes', 'blocks'].forEach((v) => {
+    ['pick', 'bans', 'mutes', 'blocks', 'modlog'].forEach((v) => {
         document.getElementById(`hub-settings-${v}-view`).style.display = v === view ? 'flex' : 'none';
     });
     document.querySelectorAll('#hub-settings-bans-section [data-hubset-tab]').forEach((tab) => {
@@ -11374,6 +11384,130 @@ document.getElementById('hub-clear-chat-btn').addEventListener('click', async ()
     }
 
 });
+
+
+// =====================================================
+// MODERASYON KAYDI (lobi ayarları → Moderasyon → Kayıt)
+// =====================================================
+const MODLOG_ACTIONS = {
+    member_kick: ['👢', 'Lobiden atıldı', 'Kicked from lobby'],
+    member_ban: ['⛔', 'Lobiden yasaklandı', 'Banned from lobby'],
+    member_unban: ['✅', 'Yasak kaldırıldı', 'Ban lifted'],
+    mod_add: ['🛡️', 'Moderatör yapıldı', 'Made moderator'],
+    mod_remove: ['🔻', 'Moderatörlük alındı', 'Moderator removed'],
+    join_approve: ['🟢', 'Katılma isteği onaylandı', 'Join request approved'],
+    join_reject: ['🔴', 'Katılma isteği reddedildi', 'Join request declined'],
+    voice_mute: ['🔇', 'Sesli odada susturuldu', 'Muted in voice room'],
+    voice_unmute: ['🔈', 'Susturma kaldırıldı', 'Mute lifted'],
+    voice_kick: ['🚪', 'Sesli odadan atıldı', 'Kicked from voice room'],
+    voice_unblock: ['🔓', 'Oda engeli kaldırıldı', 'Room block lifted'],
+    voice_room_create: ['➕', 'Sesli oda açıldı', 'Voice room created'],
+    voice_room_delete: ['🗑️', 'Sesli oda silindi', 'Voice room deleted'],
+    chat_clear: ['🧹', 'Sohbet temizlendi', 'Chat cleared'],
+    slow_mode: ['🐢', 'Yavaş mod değişti', 'Slow mode changed'],
+    word_filter: ['🚫', 'Kelime filtresi güncellendi', 'Word filter updated'],
+    hub_update: ['⚙️', 'Lobi ayarları değişti', 'Lobby settings changed']
+};
+var modlogBefore = null;
+var modlogSearchTimer = null;
+
+function modlogIsEn() {
+    try { return localStorage.getItem('sauran_lang') === 'en'; } catch (_) { return false; }
+}
+
+function modlogDuration(d) {
+    const en = modlogIsEn();
+    if (d === 'now') return en ? 'instant (can rejoin)' : 'anlık (geri girebilir)';
+    if (d === 'until_lifted') return en ? 'until lifted' : 'kaldırılana kadar';
+    if (/^\d+$/.test(String(d || ''))) return en ? `${d} min` : `${d} dk`;
+    return '';
+}
+
+function modlogTime(value) {
+    const date = serverDate(value);
+    const diff = (Date.now() - date.getTime()) / 1000;
+    const en = modlogIsEn();
+    if (diff < 60) return en ? 'just now' : 'az önce';
+    if (diff < 3600) return en ? `${Math.floor(diff / 60)} min ago` : `${Math.floor(diff / 60)} dk önce`;
+    if (diff < 86400) return en ? `${Math.floor(diff / 3600)} h ago` : `${Math.floor(diff / 3600)} sa önce`;
+    return date.toLocaleString(en ? 'en-GB' : 'tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+function modlogDetails(entry) {
+    const d = entry.details || {};
+    const en = modlogIsEn();
+    const parts = [];
+    if (d.room_name) parts.push(`${en ? 'Room' : 'Oda'}: ${escapeHtml(d.room_name)}`);
+    if (d.duration) parts.push(escapeHtml(modlogDuration(d.duration)));
+    if (entry.action === 'slow_mode') parts.push(Number(d.seconds) ? escapeHtml(formatSlowDuration(d.seconds)) : (en ? 'off' : 'kapatıldı'));
+    if (entry.action === 'word_filter') {
+        const mode = { off: en ? 'off' : 'kapalı', mask: en ? 'hide words' : 'kelimeyi gizle', block: en ? 'block message' : 'mesajı engelle' }[d.action] || '';
+        parts.push(escapeHtml(mode));
+        if (d.use_preset) parts.push(en ? 'built-in list' : 'hazır liste');
+        if (d.count) parts.push(en ? `${Number(d.count)} words` : `${Number(d.count)} kelime`);
+    }
+    if (entry.action === 'hub_update' && Array.isArray(d.fields)) {
+        const names = { name: en ? 'name' : 'ad', image: en ? 'image' : 'görsel', theme: en ? 'theme' : 'tema', background: en ? 'background' : 'arka plan', mention_everyone: '@everyone', visibility: en ? 'visibility & joining' : 'görünürlük ve katılım', discover: en ? 'discover info' : 'keşfet bilgileri' };
+        parts.push(d.fields.map((f) => escapeHtml(names[f] || f)).join(', '));
+        if (d.name) parts.push(`“${escapeHtml(d.name)}”`);
+    }
+    return parts;
+}
+
+function renderModlogEntry(entry) {
+    const def = MODLOG_ACTIONS[entry.action] || ['•', entry.action, entry.action];
+    const en = modlogIsEn();
+    const deleted = en ? 'deleted account' : 'silinmiş hesap';
+    const actor = entry.actor ? `<b>${escapeHtml(entry.actor.username || deleted)}</b>` : `<b>${deleted}</b>`;
+    const target = entry.target ? ` → <b>${escapeHtml(entry.target.username || deleted)}</b>` : '';
+    const extra = modlogDetails(entry);
+    return `
+        <div class="modlog-row">
+            <span class="modlog-icon" aria-hidden="true">${def[0]}</span>
+            <div class="modlog-body">
+                <div class="modlog-title">${escapeHtml(en ? def[2] : def[1])}</div>
+                <div class="modlog-meta">${actor}${target}${extra.length ? ' · ' + extra.join(' · ') : ''}</div>
+            </div>
+            <span class="modlog-time" title="${escapeAttr(serverDate(entry.created_at).toLocaleString())}">${escapeHtml(modlogTime(entry.created_at))}</span>
+        </div>`;
+}
+
+async function loadModLog(append = false) {
+    if (!currentHub) return;
+    const list = document.getElementById('hub-modlog-list');
+    const more = document.getElementById('hub-modlog-more');
+    if (!append) modlogBefore = null;
+    const params = new URLSearchParams({
+        category: document.getElementById('hub-modlog-category').value,
+        q: document.getElementById('hub-modlog-search').value.trim()
+    });
+    if (append && modlogBefore) params.set('before', String(modlogBefore));
+    try {
+        const response = await fetch(`/api/hubs/${currentHub.id}/mod-log?${params}`, { credentials: 'include' });
+        const data = await response.json();
+        if (!data.success) { list.innerHTML = `<div class="settings-blocked-empty">${escapeHtml(data.error || '')}</div>`; more.style.display = 'none'; return; }
+        const html = data.entries.map(renderModlogEntry).join('');
+        if (append) list.insertAdjacentHTML('beforeend', html);
+        else list.innerHTML = html || `<div class="settings-blocked-empty">${t('modlog-empty')}</div>`;
+        if (data.entries.length) modlogBefore = data.entries[data.entries.length - 1].id;
+        more.style.display = data.has_more ? 'flex' : 'none';
+    } catch (error) {
+        console.error('Moderasyon kaydı alınamadı:', error);
+    }
+}
+
+document.getElementById('hub-modlog-open-btn').addEventListener('click', () => {
+    document.getElementById('hub-modlog-search').value = '';
+    document.getElementById('hub-modlog-category').value = '';
+    showHubSettingsView('modlog');
+    loadModLog();
+});
+document.getElementById('hub-modlog-category').addEventListener('change', () => loadModLog());
+document.getElementById('hub-modlog-search').addEventListener('input', () => {
+    clearTimeout(modlogSearchTimer);
+    modlogSearchTimer = setTimeout(() => loadModLog(), 250);
+});
+document.getElementById('hub-modlog-more').addEventListener('click', () => loadModLog(true));
 
 document.getElementById('hub-bans-open-btn').addEventListener('click', () => showHubSettingsView('bans'));
 
