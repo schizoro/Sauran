@@ -3651,6 +3651,12 @@ const I18N = {
     'conn-measuring': { tr: 'Ölçülüyor…', en: 'Measuring…' },
     'conn-polling': { tr: 'Yedek bağlantı (yavaş)', en: 'Fallback (slow)' },
     'conn-offline': { tr: 'Bağlı değil', en: 'Not connected' },
+    'search-eyebrow': { tr: 'Mesajlarda ara', en: 'Search messages' },
+    'search-placeholder': { tr: 'Kelime ara…', en: 'Search words…' },
+    'search-hint': { tr: 'İpucu: "kimden:kullanıcıadı" ile yalnızca bir kişinin mesajlarında ara.', en: 'Tip: use "from:username" to search one person\'s messages.' },
+    'search-no-results': { tr: 'Sonuç bulunamadı.', en: 'No results.' },
+    'search-more': { tr: 'Daha fazla sonuç', en: 'More results' },
+    'search-jump-latest': { tr: 'En yeni mesajlara dön', en: 'Jump to latest' },
     'typing-one': { tr: 'yazıyor…', en: 'is typing…' },
     'typing-and': { tr: 've', en: 'and' },
     'typing-many': { tr: 'yazıyor…', en: 'are typing…' },
@@ -4692,7 +4698,7 @@ function connectToChat() {
         'hub_message',
         (msg) => {
 
-            if (!resolvePendingSend(msg)) appendHubMessage(msg);
+            if (!resolvePendingSend(msg) && !feedPaging.hub.hasNewer) appendHubMessage(msg);
             typingDoneBy('hub', msg.user_id);
 
             if (currentHub && document.visibilityState === 'visible') markReadSoon('hub', currentHub.id, msg.id);
@@ -4848,7 +4854,7 @@ function connectToChat() {
 
             if (otherId === activeDmUserId) {
 
-                if (!resolvePendingSend(msg)) appendDmMessage(msg);
+                if (!resolvePendingSend(msg) && !feedPaging.dm.hasNewer) appendDmMessage(msg);
                 typingDoneBy('dm', msg.user_id);
                 if (document.visibilityState === 'visible') markReadSoon('dm', otherId, msg.id);
 
@@ -7642,6 +7648,7 @@ function setDmReadOnlyMode(on, expiresAt) {
     dmReadOnly = on;
     dmForm.style.display = on ? 'none' : '';
     dmCallBtn.style.display = on ? 'none' : '';
+    document.getElementById('dm-search-btn').style.display = on ? 'none' : '';
     document.getElementById('dm-reply-preview').style.display = 'none';
 
     let note = document.getElementById('dm-readonly-note');
@@ -7721,6 +7728,7 @@ async function openDm(userId, username) {
 
     setDmReadOnlyMode(false);
     clearTyping('dm');
+    if (msgSearchPanel?.dataset.kind === 'dm') closeMessageSearch();
     activeDmUserId = userId;
     activeDmUsername = username;
     renderDmTitle(userId, username);
@@ -7848,6 +7856,7 @@ function placeFeedItem(feed, el, opts) {
     }
     feed.appendChild(el);
     // Kullanıcı yukarıda eski mesajları okuyorsa yeni mesaj onu aşağı çekmez; kendi gönderdiği ya da en alttaysa kaydırılır.
+    if (opts && opts.noScroll === true) return;
     if ((opts && opts.forceScroll === true) || feed._stickBottom !== false) feed.scrollTop = feed.scrollHeight;
 }
 
@@ -7936,12 +7945,17 @@ function keepComposerFocus(button, input) {
 
 // ─── Sohbet geçmişi sayfalama (yukarı kaydırınca daha eski mesajlar) ───
 const feedPaging = {
-    hub: { key: null, oldestId: null, hasMore: false, loading: false },
-    dm: { key: null, oldestId: null, hasMore: false, loading: false }
+    hub: { key: null, oldestId: null, hasMore: false, loading: false, newestId: null, hasNewer: false },
+    dm: { key: null, oldestId: null, hasMore: false, loading: false, newestId: null, hasNewer: false }
 };
 
-function resetFeedPaging(kind, key, messages, hasMore) {
-    feedPaging[kind] = { key, oldestId: messages.length ? messages[0].id : null, hasMore: Boolean(hasMore), loading: false };
+// hasNewer: aramadan eski bir mesaja gidildiğinde akış "geçmişte" durur; en yeni mesajlar ileri kaydırınca yüklenir.
+function resetFeedPaging(kind, key, messages, hasMore, hasNewer = false) {
+    feedPaging[kind] = {
+        key, oldestId: messages.length ? messages[0].id : null, hasMore: Boolean(hasMore), loading: false,
+        newestId: messages.length ? messages[messages.length - 1].id : null, hasNewer: Boolean(hasNewer)
+    };
+    renderJumpToLatest(kind);
     const feed = kind === 'hub' ? hubFeed : dmFeed;
     feed.querySelector(':scope > .feed-older-status')?.remove();
     // İçerik kaydırma çubuğu oluşturmayacak kadar azsa (ilk sayfa ekranı doldurmadıysa) bir sonraki sayfayı hemen iste.
@@ -7962,6 +7976,7 @@ function setFeedOlderStatus(feed, text) {
 async function loadOlderMessages(kind) {
     const paging = feedPaging[kind];
     if (!paging.hasMore || paging.loading || !paging.oldestId || !paging.key) return;
+    if (paging.quietUntil && Date.now() < paging.quietUntil) return;
 
     const feed = kind === 'hub' ? hubFeed : dmFeed;
     const key = paging.key;
@@ -9168,6 +9183,7 @@ dmForm.addEventListener(
 
         const content = dmMessageInput.value.trim();
         if (!content || !activeDmUserId || !socket) return;
+        if (feedPaging.dm.hasNewer) returnToLatest('dm');
 
         const clientId = newClientId();
         appendDmMessage(optimisticMessage(content, 'dm', { to_user_id: activeDmUserId, reply_to_message_id: dmReplyTarget }), { forceScroll: true, clientId });
@@ -9337,6 +9353,215 @@ function typingSendStop(scope) {
 
 document.getElementById('hub-message-input').addEventListener('input', (e) => emitTyping('hub', e.target));
 dmMessageInput.addEventListener('input', () => emitTyping('dm', dmMessageInput));
+
+// ─── Mesaj arama ───
+// İstemcideki katlama sunucudakiyle aynıdır (vurgulamada eşleşen kelimeyi bulmak için).
+function searchFold(text) {
+    return String(text || '').toLocaleLowerCase('tr').replace(/ı/g, 'i').normalize('NFKD').replace(/\p{M}+/gu, '');
+}
+
+function highlightSearchWords(content, words) {
+    const parts = String(content || '').split(/([\p{L}\p{N}]+)/u);
+    return parts.map((part, i) => {
+        if (i % 2 === 0 || !words.length) return escapeHtml(part);
+        const folded = searchFold(part);
+        return words.some((w) => folded.startsWith(w)) ? `<mark>${escapeHtml(part)}</mark>` : escapeHtml(part);
+    }).join('');
+}
+
+const msgSearch = { kind: null, key: null, query: '', results: [], hasMore: false, words: [], loading: false, timer: null };
+const msgSearchPanel = document.getElementById('msg-search-panel');
+const msgSearchInput = document.getElementById('msg-search-input');
+const msgSearchResults = document.getElementById('msg-search-results');
+
+function openMessageSearch(kind) {
+    const key = kind === 'hub' ? currentHub?.id : activeDmUserId;
+    if (!key) return;
+    if (msgSearch.kind !== kind || msgSearch.key !== key) {
+        Object.assign(msgSearch, { kind, key, query: '', results: [], hasMore: false, words: [] });
+        msgSearchInput.value = '';
+        msgSearchResults.innerHTML = '';
+    }
+    document.getElementById('msg-search-title').textContent = kind === 'hub' ? (currentHub?.name || '') : (activeDmUsername || '');
+    msgSearchPanel.dataset.kind = kind;
+    msgSearchPanel.style.display = 'flex';
+    setTimeout(() => msgSearchInput.focus(), 30);
+}
+
+function closeMessageSearch() {
+    msgSearchPanel.style.display = 'none';
+}
+
+async function runMessageSearch(more = false) {
+    const q = msgSearchInput.value.trim();
+    if (!more) { msgSearch.results = []; msgSearch.hasMore = false; }
+    msgSearch.query = q;
+    if (!q) { msgSearchResults.innerHTML = ''; return; }
+    if (msgSearch.loading) return;
+    msgSearch.loading = true;
+    const before = more && msgSearch.results.length ? `&before=${msgSearch.results[msgSearch.results.length - 1].id}` : '';
+    const url = msgSearch.kind === 'hub'
+        ? `/api/hubs/${msgSearch.key}/search?q=${encodeURIComponent(q)}${before}`
+        : `/api/dm/${msgSearch.key}/search?q=${encodeURIComponent(q)}${before}`;
+    try {
+        const response = await fetch(url, { credentials: 'include' });
+        const data = await response.json();
+        if (q !== msgSearchInput.value.trim()) return; // bu arada yeni bir şey yazıldı
+        if (!data.success) { msgSearchResults.innerHTML = `<div class="msg-search-empty">${escapeHtml(data.error || '')}</div>`; return; }
+        msgSearch.results = more ? msgSearch.results.concat(data.results) : data.results;
+        msgSearch.hasMore = Boolean(data.has_more);
+        msgSearch.words = (data.words || []).map(searchFold);
+        renderMessageSearchResults();
+    } catch (error) {
+        console.error('Arama yapılamadı:', error);
+    } finally {
+        msgSearch.loading = false;
+    }
+}
+
+function renderMessageSearchResults() {
+    if (!msgSearch.results.length) {
+        msgSearchResults.innerHTML = `<div class="msg-search-empty">${t('search-no-results')}</div>`;
+        return;
+    }
+    msgSearchResults.innerHTML = msgSearch.results.map((r) => {
+        const when = serverDate(r.created_at);
+        const date = when.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
+        const time = when.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+        const name = r.username || t('deleted-account-label');
+        const avatar = r.avatar_data ? `<img src="${escapeAttr(r.avatar_data)}" alt="">` : escapeHtml(name.charAt(0).toUpperCase());
+        return `
+            <button type="button" class="msg-search-item" role="listitem" data-jump="${Number(r.id)}">
+                <span class="msg-search-avatar" style="--user-color:${getUserColor(name)};">${avatar}</span>
+                <span class="msg-search-body">
+                    <span class="msg-search-meta"><strong>${escapeHtml(name)}</strong> · ${escapeHtml(date)} ${escapeHtml(time)}</span>
+                    <span class="msg-search-text">${highlightSearchWords(r.content, msgSearch.words)}</span>
+                </span>
+            </button>
+        `;
+    }).join('') + (msgSearch.hasMore ? `<button type="button" class="msg-search-more" data-search-more>${t('search-more')}</button>` : '');
+}
+
+msgSearchInput.addEventListener('input', () => {
+    clearTimeout(msgSearch.timer);
+    msgSearch.timer = setTimeout(() => runMessageSearch(false), 300);
+});
+msgSearchInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') { clearTimeout(msgSearch.timer); runMessageSearch(false); }
+    if (event.key === 'Escape') closeMessageSearch();
+});
+msgSearchResults.addEventListener('click', (event) => {
+    if (event.target.closest('[data-search-more]')) { runMessageSearch(true); return; }
+    const item = event.target.closest('[data-jump]');
+    if (!item) return;
+    if (window.innerWidth <= 768) closeMessageSearch();
+    jumpToMessage(msgSearch.kind, Number(item.dataset.jump));
+});
+document.getElementById('msg-search-close').addEventListener('click', closeMessageSearch);
+document.getElementById('hub-search-btn').addEventListener('click', () => openMessageSearch('hub'));
+document.getElementById('dm-search-btn').addEventListener('click', () => openMessageSearch('dm'));
+
+function flashMessage(el, instant) {
+    el.scrollIntoView({ block: 'center', behavior: instant ? 'auto' : 'smooth' });
+    el.classList.remove('msg-flash');
+    void el.offsetWidth;
+    el.classList.add('msg-flash');
+    setTimeout(() => el.classList.remove('msg-flash'), 2200);
+}
+
+// Sonuca git: mesaj akışta zaten varsa oraya kaydırılır; yoksa çevresi (öncesi + sonrası) yüklenir, akış o noktadan devam eder.
+async function jumpToMessage(kind, messageId) {
+    const feed = kind === 'hub' ? hubFeed : dmFeed;
+    const existing = feed.querySelector(`[data-message-id="${messageId}"]`);
+    if (existing) { flashMessage(existing.closest('.dm-msg-row') || existing); return; }
+
+    const key = kind === 'hub' ? currentHub?.id : activeDmUserId;
+    if (!key) return;
+    const url = kind === 'hub' ? `/api/hubs/${key}/messages?around=${messageId}` : `/api/dm/${key}/messages?around=${messageId}`;
+    try {
+        const response = await fetch(url, { credentials: 'include' });
+        const data = await response.json();
+        if (!data.success || (kind === 'hub' ? currentHub?.id : activeDmUserId) !== key) return;
+        feed.innerHTML = '';
+        feed._stickBottom = false;
+        const append = kind === 'hub' ? appendHubMessage : appendDmMessage;
+        data.messages.forEach((m) => append(m, { noScroll: true }));
+        resetFeedPaging(kind, key, data.messages, data.has_more, data.has_newer);
+        // Atlama sırasında kaydırma olayları otomatik eski/yeni sayfa yüklemesini tetiklemesin (hedef yerinden kaymasın).
+        feedPaging[kind].quietUntil = Date.now() + 900;
+        const target = feed.querySelector(`[data-message-id="${messageId}"]`);
+        if (target) flashMessage(target.closest('.dm-msg-row') || target, true);
+    } catch (error) {
+        console.error('Mesaja gidilemedi:', error);
+    }
+}
+
+// "En yeni mesajlara dön" düğmesi (akış geçmişte dururken).
+function renderJumpToLatest(kind) {
+    const feed = kind === 'hub' ? hubFeed : dmFeed;
+    let btn = feed.parentElement.querySelector(`:scope > .jump-latest-btn[data-kind="${kind}"]`);
+    const show = Boolean(feedPaging[kind]?.hasNewer);
+    if (kind === 'hub' && typeof hubScrollBottomBtn !== 'undefined') updateHubScrollBottomBtn();
+    if (!show) { btn?.remove(); return; }
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'jump-latest-btn';
+        btn.dataset.kind = kind;
+        btn.textContent = `↓ ${t('search-jump-latest')}`;
+        btn.addEventListener('click', () => returnToLatest(kind));
+        feed.insertAdjacentElement('afterend', btn);
+    }
+}
+
+async function returnToLatest(kind) {
+    feedPaging[kind].hasNewer = false;
+    renderJumpToLatest(kind);
+    dmFeed._stickBottom = true;
+    hubFeed._stickBottom = true;
+    if (kind === 'hub' && currentHub) await loadHubMessages(currentHub.id);
+    if (kind === 'dm' && activeDmUserId) await reloadDmMessages(activeDmUserId);
+}
+
+async function reloadDmMessages(userId) {
+    try {
+        const response = await fetch(`/api/dm/${userId}/messages`, { credentials: 'include' });
+        const data = await response.json();
+        if (!data.success || activeDmUserId !== userId) return;
+        dmFeed.innerHTML = '';
+        data.messages.forEach((m) => appendDmMessage(m));
+        resetFeedPaging('dm', userId, data.messages, data.has_more);
+    } catch (error) {
+        console.error('DM mesajları alınamadı:', error);
+    }
+}
+
+async function loadNewerMessages(kind) {
+    const paging = feedPaging[kind];
+    if (!paging.hasNewer || paging.loadingNewer || !paging.newestId) return;
+    if (paging.quietUntil && Date.now() < paging.quietUntil) return;
+    const feed = kind === 'hub' ? hubFeed : dmFeed;
+    const key = paging.key;
+    paging.loadingNewer = true;
+    try {
+        const url = kind === 'hub' ? `/api/hubs/${key}/messages?after=${paging.newestId}` : `/api/dm/${key}/messages?after=${paging.newestId}`;
+        const data = await (await fetch(url, { credentials: 'include' })).json();
+        if (feedPaging[kind] !== paging || !data.success) return;
+        const append = kind === 'hub' ? appendHubMessage : appendDmMessage;
+        data.messages.forEach((m) => append(m, { noScroll: true }));
+        if (data.messages.length) paging.newestId = data.messages[data.messages.length - 1].id;
+        paging.hasNewer = Boolean(data.has_newer);
+        renderJumpToLatest(kind);
+        if (!paging.hasNewer) feed._stickBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
+    } catch (error) {
+        console.error('Yeni mesajlar alınamadı:', error);
+    } finally {
+        paging.loadingNewer = false;
+    }
+}
+
+hubFeed.addEventListener('scroll', () => { if (hubFeed.scrollHeight - hubFeed.scrollTop - hubFeed.clientHeight < 160) loadNewerMessages('hub'); }, { passive: true });
+dmFeed.addEventListener('scroll', () => { if (dmFeed.scrollHeight - dmFeed.scrollTop - dmFeed.clientHeight < 160) loadNewerMessages('dm'); }, { passive: true });
 keepComposerFocus(document.getElementById('hub-send-btn'), document.getElementById('hub-message-input'));
 keepComposerFocus(document.querySelector('#dm-form .composer-send-btn, form .composer-send-btn:not(#hub-send-btn)'), dmMessageInput);
 
@@ -9348,7 +9573,8 @@ function isHubFeedNearBottom() {
 }
 
 function updateHubScrollBottomBtn() {
-    hubScrollBottomBtn.style.display = isHubFeedNearBottom() ? 'none' : 'flex';
+    // Akış geçmişteyken (aramadan gidilmiş) yuvarlak düğme yerine "En yeni mesajlara dön" düğmesi görünür.
+    hubScrollBottomBtn.style.display = isHubFeedNearBottom() || feedPaging.hub.hasNewer ? 'none' : 'flex';
 }
 
 hubFeed.addEventListener('scroll', updateHubScrollBottomBtn);
@@ -12199,6 +12425,7 @@ async function openHub(hubId) {
 
     nativeNotifyCancel(`hub-${hubId}`);
     clearTyping('hub');
+    if (msgSearchPanel?.dataset.kind === 'hub') closeMessageSearch();
     unreadHubCounts.delete(hubId);
     renderHubUnreadBadges();
 
@@ -14111,6 +14338,7 @@ hubChatForm.addEventListener(
 
         const content = hubMessageInput.value.trim();
         if (!content || !currentHub || !socket) return;
+        if (feedPaging.hub.hasNewer) returnToLatest('hub');
 
         const clientId = newClientId();
         if (content.length <= 500) {

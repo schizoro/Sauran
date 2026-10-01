@@ -3933,6 +3933,144 @@ function editMessage(messageId, userId, newContent) {
   `);
 }
 
+// =====================================================
+// MESAJ ARAMA (SQLite FTS5)
+// =====================================================
+// Dizinde mesajın kendisi değil, aramaya uygun "katlanmış" hâli tutulur: Türkçe küçük harf + aksan/şapka/kuyruk atılır
+// (I/ı/İ/i, ş/s, ğ/g, ü/u, ö/o, ç/c aynı sayılır). Böylece "isik" araması "IŞIK"ı, "ışık" araması "Işık"ı bulur.
+// Senkron: yalnızca bu bağlantıda geçerli GEÇİCİ tetikleyiciler (JS normalleştirme işlevi her bağlantıda kayıtlı olmayabilir);
+// başka araçların yazdıklarını açılıştaki eşitleme yakalar. Silinen mesaj dizinden de iz bırakmadan silinir (secure-delete).
+const SEARCHABLE_KINDS_SQL = "'text', 'dm', 'share', 'poll'";
+
+function searchNormalize(text) {
+  return String(text || '')
+    .toLocaleLowerCase('tr')
+    .replace(/ı/g, 'i')
+    .normalize('NFKD')
+    .replace(/\p{M}+/gu, '')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
+db.function('sauran_norm', { deterministic: true }, (text) => searchNormalize(text));
+db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS message_search USING fts5(norm, tokenize = 'unicode61 remove_diacritics 2')`);
+try { db.prepare(`INSERT INTO message_search (message_search, rank) VALUES ('secure-delete', 1)`).run(); } catch (_) { /* eski SQLite: yoksay */ }
+db.exec(`
+  CREATE TEMP TRIGGER IF NOT EXISTS message_search_ai AFTER INSERT ON main.messages
+  WHEN NEW.kind IN (${SEARCHABLE_KINDS_SQL}) AND COALESCE(NEW.content, '') != ''
+  BEGIN INSERT INTO main.message_search (rowid, norm) VALUES (NEW.id, sauran_norm(NEW.content)); END;
+
+  CREATE TEMP TRIGGER IF NOT EXISTS message_search_au AFTER UPDATE OF content, kind ON main.messages
+  BEGIN
+    DELETE FROM main.message_search WHERE rowid = OLD.id;
+    INSERT INTO main.message_search (rowid, norm)
+      SELECT NEW.id, sauran_norm(NEW.content) WHERE NEW.kind IN (${SEARCHABLE_KINDS_SQL}) AND COALESCE(NEW.content, '') != '';
+  END;
+
+  CREATE TEMP TRIGGER IF NOT EXISTS message_search_ad AFTER DELETE ON main.messages
+  BEGIN DELETE FROM main.message_search WHERE rowid = OLD.id; END;
+`);
+// Açılış eşitlemesi: dizinde olmayan aranabilir mesajlar eklenir, artık olmayanlar çıkarılır (ilk kurulumda tüm geçmiş dizinlenir).
+db.transaction(() => {
+  db.prepare(`
+    INSERT INTO message_search (rowid, norm)
+    SELECT id, sauran_norm(content) FROM messages
+    WHERE kind IN (${SEARCHABLE_KINDS_SQL}) AND COALESCE(content, '') != ''
+      AND id > COALESCE((SELECT MAX(rowid) FROM message_search), 0)
+  `).run();
+  db.prepare(`DELETE FROM message_search WHERE rowid NOT IN (SELECT id FROM messages WHERE kind IN (${SEARCHABLE_KINDS_SQL}))`).run();
+})();
+
+// "kimden:ad" / "from:ad" süzgeci + kelimeler (her kelime önek olarak, hepsi birlikte aranır).
+function parseSearchQuery(raw) {
+  const parts = String(raw || '').slice(0, 200).split(/\s+/).filter(Boolean);
+  let from = null;
+  const words = [];
+  for (const part of parts) {
+    const m = /^(?:kimden|from):(.+)$/i.exec(part);
+    if (m) from = m[1].replace(/^@/, '');
+    else words.push(...searchNormalize(part).split(' ').filter(Boolean));
+  }
+  const fts = words.slice(0, 8).map((w) => `"${w.replace(/"/g, '')}"*`).join(' ');
+  return { fts, from, words: words.slice(0, 8) };
+}
+
+function searchScopeMessages({ viewerId, hubId = null, room = null, query, before = null, limit = 25 }) {
+  const { fts, from, words } = parseSearchQuery(query);
+  if (!fts && !from) return { success: false, status: 400, error: 'Aranacak bir kelime yaz.' };
+
+  let fromId = null;
+  if (from) {
+    const u = db.prepare(`SELECT id FROM users WHERE LOWER(username) = LOWER(?)`).get(from);
+    if (!u) return { success: true, results: [], words, from };
+    fromId = u.id;
+  }
+
+  const where = [hubId ? 'messages.hub_id = ?' : 'messages.room = ? AND messages.hub_id IS NULL'];
+  const params = [hubId || room];
+  if (fromId) { where.push('messages.user_id = ?'); params.push(fromId); }
+  if (before) { where.push('messages.id < ?'); params.push(Number(before)); }
+  where.push(`messages.kind IN (${SEARCHABLE_KINDS_SQL})`);
+  const size = Math.min(Math.max(Number(limit) || 25, 1), 50);
+
+  const rows = fts
+    ? db.prepare(`
+        SELECT messages.id, messages.user_id, messages.username, messages.content, messages.kind, messages.created_at, users.avatar_data
+        FROM message_search JOIN messages ON messages.id = message_search.rowid LEFT JOIN users ON users.id = messages.user_id
+        WHERE message_search MATCH ? AND ${where.join(' AND ')}
+        ORDER BY messages.id DESC LIMIT ?
+      `).all(fts, ...params, size + 1)
+    : db.prepare(`
+        SELECT messages.id, messages.user_id, messages.username, messages.content, messages.kind, messages.created_at, users.avatar_data
+        FROM messages LEFT JOIN users ON users.id = messages.user_id
+        WHERE ${where.join(' AND ')}
+        ORDER BY messages.id DESC LIMIT ?
+      `).all(...params, size + 1);
+
+  const hasMore = rows.length > size;
+  return { success: true, results: rows.slice(0, size), has_more: hasMore, words, from };
+}
+
+function searchHubMessages(hubId, viewerId, query, before) {
+  if (!isHubMember(hubId, viewerId)) return { success: false, status: 403, error: 'Bu Lobi\'a üye değilsin.' };
+  return searchScopeMessages({ viewerId, hubId, query, before });
+}
+
+function searchDmMessages(userId, otherId, query, before) {
+  if (!areFriends(userId, otherId)) return { success: false, status: 403, error: 'Sadece arkadaşlarınla mesajlaşabilirsin.' };
+  return searchScopeMessages({ viewerId: userId, room: dmRoom(userId, otherId), query, before });
+}
+
+// Aramadan bir mesaja gitmek için: hedef mesaj + öncesi (eski) ve sonrası (yeni) sayfalar. İleri sayfalama için de kullanılır.
+function getScopeMessagesAfter({ hubId = null, room = null, afterId, viewerId, limit = 25 }) {
+  const size = Math.min(Math.max(Number(limit) || 25, 1), 50);
+  const ids = hubId
+    ? db.prepare(`SELECT id FROM messages WHERE hub_id = ? AND id > ? ORDER BY id ASC LIMIT ?`).all(hubId, afterId, size + 1)
+    : db.prepare(`SELECT id FROM messages WHERE room = ? AND hub_id IS NULL AND id > ? ORDER BY id ASC LIMIT ?`).all(room, afterId, size + 1);
+  const hasNewer = ids.length > size;
+  return { messages: ids.slice(0, size).map((r) => getMessageById(r.id, viewerId)).filter(Boolean), has_newer: hasNewer };
+}
+
+function getHubMessagesAround(hubId, viewerId, messageId) {
+  const older = getHubMessagesPage(hubId, viewerId, { before: Number(messageId) + 1, limit: 25 });
+  const newer = getScopeMessagesAfter({ hubId, afterId: Number(messageId), viewerId });
+  return { messages: [...older.messages, ...newer.messages], has_more: older.has_more, has_newer: newer.has_newer };
+}
+
+function getHubMessagesAfter(hubId, viewerId, afterId) {
+  return getScopeMessagesAfter({ hubId, afterId: Number(afterId), viewerId });
+}
+
+function getDmMessagesAround(userId, otherId, messageId) {
+  const older = getDmMessagesPage(userId, otherId, { before: Number(messageId) + 1, limit: 25 });
+  const newer = getScopeMessagesAfter({ room: dmRoom(userId, otherId), afterId: Number(messageId), viewerId: userId });
+  return { messages: [...older.messages, ...newer.messages], has_more: older.has_more, has_newer: newer.has_newer };
+}
+
+function getDmMessagesAfter(userId, otherId, afterId) {
+  return getScopeMessagesAfter({ room: dmRoom(userId, otherId), afterId: Number(afterId), viewerId: userId });
+}
+
 const MENTION_EVERYONE_MODES = ['owner', 'moderators', 'everyone', 'nobody'];
 
 function canMentionEveryone(hubId, userId) {
@@ -7256,6 +7394,12 @@ module.exports = {
   getUnreadCounts,
   markScopeRead,
   canMentionEveryone,
+  searchHubMessages,
+  searchDmMessages,
+  getHubMessagesAround,
+  getHubMessagesAfter,
+  getDmMessagesAround,
+  getDmMessagesAfter,
   listHubMemberIds,
   getActiveVoiceBlock,
   kickFromVoiceRoomRecord,

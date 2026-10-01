@@ -212,6 +212,12 @@ const {
   markScopeRead,
   canMentionEveryone,
   listHubMemberIds,
+  searchHubMessages,
+  searchDmMessages,
+  getHubMessagesAround,
+  getHubMessagesAfter,
+  getDmMessagesAround,
+  getDmMessagesAfter,
   getActiveVoiceBlock,
   kickFromVoiceRoomRecord,
   unblockFromVoiceRoom,
@@ -2368,9 +2374,11 @@ app.get('/api/hubs/:id/messages', (req, res) => {
   }
 
   try {
-    // ?before=<mesaj id> ile daha eski sayfa; ilk açılışta en yeni 50 mesaj.
-    const before = /^[0-9]{1,15}$/.test(String(req.query.before || '')) ? Number(req.query.before) : null;
-    res.json({ success: true, ...getHubMessagesPage(hubId, user.id, { before, limit: req.query.limit }) });
+    // ?before=<id>: daha eski sayfa · ?after=<id>: daha yeni sayfa · ?around=<id>: aramadan gidilen mesajın çevresi.
+    const num = (v) => (/^[0-9]{1,15}$/.test(String(v || '')) ? Number(v) : null);
+    if (num(req.query.around)) return res.json({ success: true, ...getHubMessagesAround(hubId, user.id, num(req.query.around)) });
+    if (num(req.query.after)) return res.json({ success: true, ...getHubMessagesAfter(hubId, user.id, num(req.query.after)) });
+    res.json({ success: true, ...getHubMessagesPage(hubId, user.id, { before: num(req.query.before), limit: req.query.limit }) });
   } catch (error) {
     console.error('Lobi mesaj hatası:', error);
     res.status(500).json({ success: false, error: 'Mesajlar alınamadı.' });
@@ -3994,12 +4002,38 @@ app.get('/api/dm/:userId/messages', (req, res) => {
   }
 
   try {
-    const before = /^[0-9]{1,15}$/.test(String(req.query.before || '')) ? Number(req.query.before) : null;
-    return res.json({ success: true, ...getDmMessagesPage(user.id, otherId, { before, limit: req.query.limit }) });
+    const num = (v) => (/^[0-9]{1,15}$/.test(String(v || '')) ? Number(v) : null);
+    if (num(req.query.around)) return res.json({ success: true, ...getDmMessagesAround(user.id, otherId, num(req.query.around)) });
+    if (num(req.query.after)) return res.json({ success: true, ...getDmMessagesAfter(user.id, otherId, num(req.query.after)) });
+    return res.json({ success: true, ...getDmMessagesPage(user.id, otherId, { before: num(req.query.before), limit: req.query.limit }) });
   } catch (error) {
     console.error('DM mesaj hatası:', error);
     res.status(500).json({ success: false, error: 'Mesajlar alınamadı.' });
   }
+});
+
+// =====================================================
+// MESAJ ARAMA (?q=kelimeler kimden:ad · ?before=<id> sonraki sayfa)
+// =====================================================
+
+const searchLimiter = rateLimit({ windowMs: 60 * 1000, max: 40, keyFn: byIp, message: 'Çok fazla arama yapıldı. Biraz sonra tekrar dene.' });
+
+app.get('/api/hubs/:id/search', searchLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const before = /^[0-9]{1,15}$/.test(String(req.query.before || '')) ? Number(req.query.before) : null;
+  const result = searchHubMessages(Number(req.params.id), user.id, req.query.q, before);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+  return res.json(result);
+});
+
+app.get('/api/dm/:userId/search', searchLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const before = /^[0-9]{1,15}$/.test(String(req.query.before || '')) ? Number(req.query.before) : null;
+  const result = searchDmMessages(user.id, Number(req.params.userId), req.query.q, before);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+  return res.json(result);
 });
 
 // =====================================================

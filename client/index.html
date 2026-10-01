@@ -456,6 +456,7 @@
                             <span id="hub-in-room-count" class="hub-in-room-count"></span>
                         </button>
 
+                        <button id="hub-search-btn" class="hub-icon-btn" type="button" title="Mesajlarda ara" aria-label="Mesajlarda ara" data-lbl="Ara">🔍</button>
                         <button id="hub-settings-open-btn" class="hub-icon-btn" type="button" title="Lobi Ayarları" data-lbl="Lobi Ayarları">⚙️</button>
 
                         <div class="hub-member-options-wrap" id="hub-member-options-wrap" style="display:none;">
@@ -1041,6 +1042,22 @@
         </div>
     </div>
 
+    <aside id="msg-search-panel" class="msg-search-panel" style="display:none;" role="dialog" aria-labelledby="msg-search-title">
+        <header class="msg-search-head">
+            <div class="msg-search-head-text">
+                <span class="hubset-eyebrow" data-i18n="search-eyebrow">Mesajlarda ara</span>
+                <h3 id="msg-search-title" class="msg-search-title"></h3>
+            </div>
+            <button id="msg-search-close" class="hubset-close" type="button" aria-label="Kapat">✕</button>
+        </header>
+        <div class="msg-search-box">
+            <span aria-hidden="true">🔍</span>
+            <input type="search" id="msg-search-input" autocomplete="off" enterkeyhint="search" data-i18n-placeholder="search-placeholder" placeholder="Kelime ara…">
+        </div>
+        <p class="msg-search-hint" data-i18n="search-hint">İpucu: "kimden:kullanıcıadı" ile yalnızca bir kişinin mesajlarında ara.</p>
+        <div id="msg-search-results" class="msg-search-results" role="list"></div>
+    </aside>
+
     <div id="voice-mute-modal" class="modal-overlay" style="display:none;">
         <div class="modal-box market-modal-box share-fps-box">
             <div class="modal-header">
@@ -1388,6 +1405,7 @@
 
             <div class="modal-header">
                 <span id="dm-modal-title"></span>
+                <button id="dm-search-btn" class="dm-call-btn" type="button" title="Mesajlarda ara" aria-label="Mesajlarda ara">🔍</button>
                 <button id="dm-call-btn" class="dm-call-btn" type="button" title="Sesli ara">📞</button>
                 <button id="dm-close-btn">✕</button>
             </div>

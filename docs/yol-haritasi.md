@@ -9,8 +9,8 @@ Durum: `[ ]` sırada · `[~]` yapılıyor · `[x]` tamamlandı
 - [x] **Kalıcı okunmamış göstergesi** — DM ve lobi okunmamış sayıları sunucuda tutulur; yenileme ve cihazlar arası doğru, bir cihazda okununca diğerinde de sıfırlanır.
 - [x] **@bahsetme** — `@` ile üye önerisi, vurgulama, bahsedilene bildirim (lobi sessizde olsa da), lobi listesinde "@" rozeti. `@everyone`'ı kimin kullanabileceğini Lobi kurucusu ayarlardan seçer.
 - [x] **"Yazıyor…" göstergesi** — Lobi ve DM'de; 1 kişi / 2 kişi / "Birkaç kişi yazıyor…". Sinyal kesilince 5 sn'de, mesaj gönderilince ya da alan silinince hemen kalkar.
-- [ ] **Mesaj arama** ← sıradaki
-- [ ] **Lobide çoklu metin kanalı** (#genel, #oyun …)
+- [x] **Mesaj arama** — Lobi ve DM'de 🔍 paneli; Türkçe harf/aksan duyarsız ("isik" → "IŞIK"), önek ve çoklu kelime, `kimden:ad` süzgeci, sonuçta vurgulama. Sonuca dokununca o mesaja gidilir (çevresi yüklenir, "En yeni mesajlara dön").
+- [ ] **Lobide çoklu metin kanalı** (#genel, #oyun …) ← sıradaki
 
 ## 2. Hesap güvenliği
 - [ ] İki adımlı doğrulama (2FA)

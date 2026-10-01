@@ -1946,3 +1946,47 @@ body.hubset-open { overflow: hidden; }
 .typing-dots i:nth-child(3) { animation-delay: 0.3s; }
 @keyframes typing-bounce { 0%, 60%, 100% { opacity: 0.35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { .typing-dots i { animation: none; opacity: 0.8; } }
+
+/* ── Mesaj arama paneli ── */
+.msg-search-panel {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 420px; max-width: 100%; z-index: 850; flex-direction: column;
+  background: var(--bg-surface); border-left: 1px solid var(--border-soft); box-shadow: var(--shadow-focus);
+  padding-top: env(safe-area-inset-top);
+}
+.msg-search-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border-soft); }
+.msg-search-head-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.msg-search-title { font-size: 16px; font-weight: 650; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg-search-box {
+  display: flex; align-items: center; gap: 10px; margin: 14px 16px 6px; padding: 0 12px; height: 44px;
+  border-radius: 12px; background: var(--bg-app); border: 1px solid var(--border-soft-strong);
+}
+.msg-search-box:focus-within { border-color: var(--accent-line); }
+.msg-search-box input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: var(--text-primary); font-size: 15px; }
+.msg-search-hint { margin: 0 16px 8px; font-size: 12px; color: var(--text-tertiary); }
+.msg-search-results { flex: 1; overflow-y: auto; padding: 4px 8px 24px; display: flex; flex-direction: column; gap: 2px; }
+.msg-search-item {
+  display: flex; gap: 10px; width: 100%; padding: 10px; border: 0; border-radius: 12px; background: transparent;
+  text-align: left; cursor: pointer; color: var(--text-primary);
+}
+.msg-search-item:hover, .msg-search-item:focus-visible { background: var(--glass-1); }
+.msg-search-avatar {
+  width: 32px; height: 32px; border-radius: 50%; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  background: var(--user-color, var(--bg-surface-3)); color: #fff; font-weight: 700; font-size: 13px;
+}
+.msg-search-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.msg-search-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.msg-search-meta { font-size: 12px; color: var(--text-tertiary); }
+.msg-search-meta strong { color: var(--text-secondary); }
+.msg-search-text { font-size: 14px; line-height: 1.45; word-break: break-word; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.msg-search-text mark { background: rgba(240, 195, 107, 0.28); color: #ffe2a8; border-radius: 4px; padding: 0 2px; }
+.msg-search-empty { text-align: center; color: var(--text-tertiary); font-size: 13px; padding: 28px 0; }
+.msg-search-more { margin: 8px auto; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--border-soft-strong); background: transparent; color: var(--text-secondary); cursor: pointer; }
+.msg-flash { animation: msg-flash 2s var(--ease); }
+@keyframes msg-flash { 0%, 30% { background: rgba(92, 200, 255, 0.22); box-shadow: inset 3px 0 0 var(--accent); } 100% { background: transparent; } }
+.jump-latest-btn {
+  position: sticky; bottom: 8px; align-self: center; margin: -44px auto 8px; z-index: 5; padding: 8px 16px; border-radius: 999px;
+  border: 0; background: var(--accent); color: #04202e; font-weight: 650; font-size: 13px; cursor: pointer; box-shadow: var(--shadow-focus);
+}
+@media (max-width: 768px) {
+  .msg-search-panel { width: 100%; border-left: 0; }
+}
