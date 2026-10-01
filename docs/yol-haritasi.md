@@ -6,8 +6,8 @@ Durum: `[ ]` sırada · `[~]` yapılıyor · `[x]` tamamlandı
 
 ## 1. Sohbetin temel eksikleri
 - [x] **Eski mesajları yükleme** — Lobi sohbeti ve DM'de yukarı kaydırınca 50'şer mesajlık eski sayfalar gelir; mesaj tablosuna dizin eklendi.
-- [~] **Kalıcı okunmamış göstergesi** — DM ve lobiler için; sayfa yenilense de kaybolmasın.
-- [ ] **@bahsetme** — Birini etiketleyince ona özel bildirim.
+- [x] **Kalıcı okunmamış göstergesi** — DM ve lobi okunmamış sayıları sunucuda tutulur; yenileme ve cihazlar arası doğru, bir cihazda okununca diğerinde de sıfırlanır.
+- [~] **@bahsetme** — Birini etiketleyince ona özel bildirim.
 - [ ] **"Yazıyor…" göstergesi**
 - [ ] **Mesaj arama**
 - [ ] **Lobide çoklu metin kanalı** (#genel, #oyun …)

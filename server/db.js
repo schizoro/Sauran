@@ -4512,6 +4512,111 @@ function takeExpiredVoiceBlocks() {
   })();
 }
 
+// =====================================================
+// OKUNMAMIŞ MESAJ TAKİBİ (kalıcı, cihazlar arası)
+// =====================================================
+// Her kullanıcı için her lobi/DM sohbetinde "son okunan mesaj id"si tutulur. Okunmamış = bundan yeni, başkasının yazdığı,
+// silinmemiş mesajlar (DM arama kayıtları sayılmaz). Kayıt yoksa: lobide katılma anından, DM'de arkadaşlığın kabulünden sonrası sayılır.
+// İlk kurulumda mevcut tüm üyelik/arkadaşlıklar "şu ana kadar okundu" sayılır (geçmiş mesajlar birden okunmamış görünmesin).
+const readStatesExisted = Boolean(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'read_states'`).get());
+db.exec(`
+  CREATE TABLE IF NOT EXISTS read_states (
+    user_id INTEGER NOT NULL,
+    scope TEXT NOT NULL CHECK (scope IN ('hub', 'dm')),
+    scope_id INTEGER NOT NULL,
+    last_read_id INTEGER NOT NULL DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, scope, scope_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+`);
+if (!readStatesExisted) {
+  db.transaction(() => {
+    db.prepare(`
+      INSERT OR IGNORE INTO read_states (user_id, scope, scope_id, last_read_id)
+      SELECT hub_members.user_id, 'hub', hub_members.hub_id, COALESCE((SELECT MAX(id) FROM messages WHERE messages.hub_id = hub_members.hub_id), 0)
+      FROM hub_members
+    `).run();
+    const pairs = db.prepare(`SELECT user_low, user_high FROM friendships WHERE status = 'accepted'`).all();
+    const ins = db.prepare(`INSERT OR IGNORE INTO read_states (user_id, scope, scope_id, last_read_id) VALUES (?, 'dm', ?, ?)`);
+    for (const { user_low: a, user_high: b } of pairs) {
+      const max = db.prepare(`SELECT COALESCE(MAX(id), 0) AS m FROM messages WHERE room = ?`).get(dmRoom(a, b)).m;
+      ins.run(a, b, max);
+      ins.run(b, a, max);
+    }
+  })();
+}
+
+const UNREAD_CAP = 100; // 99+ göstermek için yeterli; daha fazlası sayılmaz (hız)
+
+function unreadHubCount(userId, hubId) {
+  const state = db.prepare(`SELECT last_read_id FROM read_states WHERE user_id = ? AND scope = 'hub' AND scope_id = ?`).get(userId, hubId);
+  const since = state ? state.last_read_id : (db.prepare(`
+    SELECT COALESCE(MAX(messages.id), 0) AS m FROM messages, hub_members
+    WHERE messages.hub_id = ? AND hub_members.hub_id = ? AND hub_members.user_id = ? AND messages.created_at < hub_members.joined_at
+  `).get(hubId, hubId, userId).m);
+  return db.prepare(`
+    SELECT COUNT(*) AS c FROM (
+      SELECT 1 FROM messages WHERE hub_id = ? AND id > ? AND kind != 'deleted' AND (user_id IS NULL OR user_id != ?) LIMIT ${UNREAD_CAP}
+    )
+  `).get(hubId, since, userId).c;
+}
+
+function unreadDmCount(userId, otherId) {
+  const room = dmRoom(userId, otherId);
+  const state = db.prepare(`SELECT last_read_id FROM read_states WHERE user_id = ? AND scope = 'dm' AND scope_id = ?`).get(userId, otherId);
+  const since = state ? state.last_read_id : 0;
+  return db.prepare(`
+    SELECT COUNT(*) AS c FROM (
+      SELECT 1 FROM messages WHERE room = ? AND id > ? AND user_id = ? AND kind NOT IN ('deleted', 'dm_call') LIMIT ${UNREAD_CAP}
+    )
+  `).get(room, since, otherId).c;
+}
+
+function getUnreadCounts(userId) {
+  const hubs = {};
+  for (const h of db.prepare(`SELECT hub_id, muted FROM hub_members WHERE user_id = ?`).all(userId)) {
+    const count = unreadHubCount(userId, h.hub_id);
+    if (count) hubs[h.hub_id] = { count, muted: Boolean(h.muted) };
+  }
+  const dms = {};
+  const friends = db.prepare(`
+    SELECT CASE WHEN user_low = ? THEN user_high ELSE user_low END AS other
+    FROM friendships WHERE status = 'accepted' AND (user_low = ? OR user_high = ?)
+  `).all(userId, userId, userId);
+  for (const { other } of friends) {
+    const count = unreadDmCount(userId, other);
+    if (count) dms[other] = count;
+  }
+  return { hubs, dms };
+}
+
+// Okundu işareti: yalnızca üyesi olunan lobi / arkadaş olunan DM için; asla geri gitmez (eski bir cihaz yeni okumayı ezmez).
+function markScopeRead(userId, scope, scopeId, messageId) {
+  if (scope === 'hub') {
+    if (!isHubMember(scopeId, userId)) return { success: false, status: 403, error: 'Bu Lobi\'a üye değilsin.' };
+  } else if (scope === 'dm') {
+    if (!areFriends(userId, scopeId)) return { success: false, status: 403, error: 'Sadece arkadaşlarınla mesajlaşabilirsin.' };
+  } else {
+    return { success: false, status: 400, error: 'Geçersiz tür.' };
+  }
+  const upTo = Number(messageId) || Number.MAX_SAFE_INTEGER;
+  const lastId = scope === 'hub'
+    ? db.prepare(`SELECT COALESCE(MAX(id), 0) AS m FROM messages WHERE hub_id = ? AND id <= ?`).get(scopeId, upTo).m
+    : db.prepare(`SELECT COALESCE(MAX(id), 0) AS m FROM messages WHERE room = ? AND id <= ?`).get(dmRoom(userId, scopeId), upTo).m;
+  db.prepare(`
+    INSERT INTO read_states (user_id, scope, scope_id, last_read_id) VALUES (?, ?, ?, ?)
+    ON CONFLICT(user_id, scope, scope_id) DO UPDATE SET
+      last_read_id = MAX(read_states.last_read_id, excluded.last_read_id), updated_at = CURRENT_TIMESTAMP
+  `).run(userId, scope, scopeId, lastId);
+  const stored = db.prepare(`SELECT last_read_id FROM read_states WHERE user_id = ? AND scope = ? AND scope_id = ?`).get(userId, scope, scopeId).last_read_id;
+  return { success: true, last_read_id: stored };
+}
+
+function listHubMemberIds(hubId) {
+  return db.prepare(`SELECT user_id FROM hub_members WHERE hub_id = ?`).all(hubId).map((r) => r.user_id);
+}
+
 // Kullanıcının bu Lobi'deki etkin susturmaları (oda listesinde kilit göstermek için).
 function listMyVoiceMutes(hubId, userId) {
   return db.prepare(`
@@ -7063,6 +7168,9 @@ module.exports = {
   listMyVoiceMutes,
   getHubMessagesPage,
   getDmMessagesPage,
+  getUnreadCounts,
+  markScopeRead,
+  listHubMemberIds,
   getActiveVoiceBlock,
   kickFromVoiceRoomRecord,
   unblockFromVoiceRoom,

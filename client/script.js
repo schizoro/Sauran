@@ -4652,11 +4652,38 @@ function connectToChat() {
 
             appendHubMessage(msg);
 
+            if (currentHub && document.visibilityState === 'visible') markReadSoon('hub', currentHub.id, msg.id);
+
             if (msg.user_id !== currentUser.id) maybeNotifyIncomingHubMessage(msg);
 
         }
     );
 
+
+    socket.on('hub_unread_ping', (data) => {
+        const hubId = Number(data?.hub_id);
+        if (!hubId) return;
+        // Şu an bu lobiye bakıyorsa mesaj zaten akışa gelir ve okundu sayılır.
+        if (currentHub?.id === hubId && document.body.dataset.view === 'hub-detail' && document.visibilityState === 'visible') return;
+        const info = unreadHubCounts.get(hubId) || { count: 0, muted: false };
+        unreadHubCounts.set(hubId, { ...info, count: Math.min(info.count + 1, 100) });
+        renderHubUnreadBadges();
+    });
+
+    // Başka cihazda okundu: buradaki sayaç da sıfırlanır.
+    socket.on('read_state_updated', (data) => {
+        const id = Number(data?.id);
+        if (data?.type === 'dm') {
+            unreadDmCounts.delete(id);
+            updateFriendsToggleBadge();
+            refreshFriendsSidebar();
+        } else if (data?.type === 'hub') {
+            unreadHubCounts.delete(id);
+            renderHubUnreadBadges();
+        }
+    });
+
+    socket.on('connect', refreshUnreadCounts);
 
     socket.on(
         'hub_message_update',
@@ -4757,6 +4784,7 @@ function connectToChat() {
             if (otherId === activeDmUserId) {
 
                 appendDmMessage(msg);
+                if (document.visibilityState === 'visible') markReadSoon('dm', otherId, msg.id);
 
             } else if (msg.kind === 'dm_call') {
 
@@ -5030,6 +5058,7 @@ function connectToChat() {
 
     switchToView('hubs');
     loadHubList();
+    refreshUnreadCounts();
     refreshNotificationsBadge();
     loadNotificationPreferences();
     ensurePushSubscription();
@@ -5824,6 +5853,85 @@ const friendsSidebarToggleBtn2 = document.getElementById('friends-sidebar-toggle
 const friendsSidebar2 = document.getElementById('friends-sidebar');
 const friendsSidebarList = document.getElementById('friends-sidebar-list');
 const unreadDmCounts = new Map(); // userId -> count
+const unreadHubCounts = new Map(); // hubId -> { count, muted }
+
+// ─── Okunmamış mesajlar (sunucuda kalıcı; yenileme/başka cihaz sonrası da doğru) ───
+async function refreshUnreadCounts() {
+    try {
+        const response = await fetch('/api/unread', { credentials: 'include' });
+        const data = await response.json();
+        if (!data.success) return;
+
+        unreadDmCounts.clear();
+        Object.entries(data.dms || {}).forEach(([id, count]) => {
+            if (Number(id) !== activeDmUserId || document.visibilityState !== 'visible') unreadDmCounts.set(Number(id), count);
+        });
+
+        unreadHubCounts.clear();
+        Object.entries(data.hubs || {}).forEach(([id, info]) => {
+            if (Number(id) !== currentHub?.id || document.visibilityState !== 'visible') unreadHubCounts.set(Number(id), info);
+        });
+
+        updateFriendsToggleBadge();
+        refreshFriendsSidebar();
+        renderHubUnreadBadges();
+    } catch (error) {
+        console.error('Okunmamış sayıları alınamadı:', error);
+    }
+}
+
+function renderHubUnreadBadges() {
+    document.querySelectorAll('[data-hub-unread]').forEach((el) => {
+        const info = unreadHubCounts.get(Number(el.dataset.hubUnread));
+        const count = info?.count || 0;
+        el.textContent = count > 99 ? '99+' : String(count);
+        el.style.display = count > 0 ? 'inline-flex' : 'none';
+        el.classList.toggle('is-muted', Boolean(info?.muted));
+    });
+}
+
+const readMarkTimers = new Map();
+
+// Sohbet görülünce sunucuya "buraya kadar okundu" bildirilir (art arda gelenler birleştirilir).
+function markReadSoon(type, id, messageId) {
+    if (!id || !messageId) return;
+    const key = `${type}:${id}`;
+    const prev = readMarkTimers.get(key);
+    if (prev) clearTimeout(prev.timer);
+    const upTo = Math.max(Number(messageId), prev?.messageId || 0);
+    const timer = setTimeout(() => {
+        readMarkTimers.delete(key);
+        fetch('/api/read-state', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+            body: JSON.stringify({ type, id, message_id: upTo })
+        }).catch(() => { /* bir sonraki görüntülemede yeniden denenir */ });
+    }, 400);
+    readMarkTimers.set(key, { timer, messageId: upTo });
+}
+
+function latestFeedMessageId(feed) {
+    const items = feed.querySelectorAll('[data-message-id]');
+    return items.length ? Number(items[items.length - 1].dataset.messageId) : null;
+}
+
+// Açık sohbet görünür hâldeyse en son mesaja kadar okundu say.
+function markOpenChatsRead() {
+    if (document.visibilityState !== 'visible') return;
+    if (activeDmUserId && dmModal.style.display === 'flex') {
+        unreadDmCounts.delete(activeDmUserId);
+        markReadSoon('dm', activeDmUserId, latestFeedMessageId(dmFeed));
+    }
+    if (currentHub && document.body.dataset.view === 'hub-detail') {
+        unreadHubCounts.delete(currentHub.id);
+        markReadSoon('hub', currentHub.id, latestFeedMessageId(hubFeed));
+    }
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    markOpenChatsRead();
+    refreshUnreadCounts();
+});
 
 // Sağdaki "Arkadaşlar" düğmesinin üstünde toplam okunmamış özel mesaj sayısını göster.
 function updateFriendsToggleBadge() {
@@ -7523,6 +7631,7 @@ async function openDm(userId, username) {
         if (data.success && activeDmUserId === userId) {
             data.messages.forEach((m) => appendDmMessage(m));
             resetFeedPaging('dm', userId, data.messages, data.has_more);
+            if (data.messages.length) markReadSoon('dm', userId, data.messages[data.messages.length - 1].id);
         }
 
     } catch (error) {
@@ -11266,6 +11375,7 @@ function renderHubCard(hub) {
             <span class="hub-card-name">${escapeHtml(hub.name)}</span>
             <span class="hub-card-meta">👥 ${hub.member_count} ${t('member-count')}</span>
         </span>
+        <span class="hub-card-unread" data-hub-unread="${Number(hub.id)}" style="display:none;"></span>
     `;
 
     card.addEventListener('click', () => openHub(hub.id));
@@ -11305,6 +11415,7 @@ async function loadHubList() {
 
         });
 
+        renderHubUnreadBadges();
         hubListGridOwned.parentElement.style.display = hubListGridOwned.children.length ? 'block' : 'none';
         hubListGridJoined.parentElement.style.display = hubListGridJoined.children.length ? 'block' : 'none';
 
@@ -11720,6 +11831,8 @@ hubCreateModal.addEventListener(
 async function openHub(hubId) {
 
     nativeNotifyCancel(`hub-${hubId}`);
+    unreadHubCounts.delete(hubId);
+    renderHubUnreadBadges();
 
     try {
 
@@ -13760,6 +13873,7 @@ async function loadHubMessages(hubId) {
 
         data.messages.forEach((m) => appendHubMessage(m));
         resetFeedPaging('hub', hubId, data.messages, data.has_more);
+        if (currentHub?.id === hubId) markReadSoon('hub', hubId, data.messages[data.messages.length - 1].id);
 
     } catch (error) {
 

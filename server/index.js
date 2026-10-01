@@ -208,6 +208,9 @@ const {
   listMyVoiceMutes,
   getHubMessagesPage,
   getDmMessagesPage,
+  getUnreadCounts,
+  markScopeRead,
+  listHubMemberIds,
   getActiveVoiceBlock,
   kickFromVoiceRoomRecord,
   unblockFromVoiceRoom,
@@ -384,6 +387,7 @@ const loginLimiterPerAccount = rateLimit({ windowMs: 5 * 60 * 1000, max: 8, keyF
 const loginLimiterPerIp = rateLimit({ windowMs: 15 * 60 * 1000, max: 40, keyFn: byIp, message: 'Çok fazla giriş denemesi. Biraz sonra tekrar dene.' });
 const loginLimiter = [loginLimiterPerIp, loginLimiterPerAccount];
 // Sık kullanılan ama spam'e açık yazma uçları (anket, oy, tepki, çıkartma, düzenleme) için kullanıcı başına genel sınır.
+const readStateLimiter = rateLimit({ windowMs: 60 * 1000, max: 300, keyFn: byIp, message: 'Çok hızlı istek.' });
 const contentWriteLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, keyFn: byIp, message: 'Çok hızlı işlem yapıyorsun, biraz yavaşla.' });
 // Kod doğrulama uçları: kod 6 haneli olduğundan tahmin edilmesi (kaba kuvvet) zorlaştırılır. Kayıt başına deneme sayısı ayrıca db.js'de sınırlıdır
 // (5 hatalı denemeden sonra kod yanar); bu limitler IP başına istek sayısını ve scrypt maliyetini sınırlar. Her uç kendi sayaçlarını kullanır.
@@ -3014,6 +3018,14 @@ function emitHubMessage(hubId, message) {
 
   io.to(`hub:${hubId}`).emit('hub_message', message);
 
+  // Lobiye o an bakmayan üyelerin okunmamış sayacı için hafif bir sinyal (mesaj içeriği taşımaz).
+  try {
+    const rooms = listHubMemberIds(hubId).filter((id) => id !== message?.user_id).map((id) => `user:${id}`);
+    if (rooms.length) io.to(rooms).emit('hub_unread_ping', { hub_id: hubId, message_id: message?.id || null });
+  } catch (error) {
+    console.error('Okunmamış sinyali gönderilemedi:', error && error.message);
+  }
+
   if (!push.isConfigured() || !message?.user_id) return;
 
   const info = getHubPushInfo(hubId);
@@ -3943,6 +3955,35 @@ app.get('/api/dm/:userId/messages', (req, res) => {
     console.error('DM mesaj hatası:', error);
     res.status(500).json({ success: false, error: 'Mesajlar alınamadı.' });
   }
+});
+
+// =====================================================
+// OKUNMAMIŞ MESAJLAR
+// =====================================================
+
+app.get('/api/unread', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    return res.json({ success: true, ...getUnreadCounts(user.id) });
+  } catch (error) {
+    console.error('Okunmamış sayıları alınamadı:', error);
+    return res.status(500).json({ success: false, error: 'Alınamadı.' });
+  }
+});
+
+// { type: 'hub'|'dm', id: lobi id ya da karşı kullanıcı id, message_id: okunan en yeni mesaj }
+app.post('/api/read-state', readStateLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const type = String(req.body?.type || '');
+  const id = Number(req.body?.id);
+  if (!id) return res.status(400).json({ success: false, error: 'Geçersiz istek.' });
+  const result = markScopeRead(user.id, type, id, req.body?.message_id);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+  // Kullanıcının diğer cihazlarındaki sayaç da sıfırlansın.
+  io.to(`user:${user.id}`).emit('read_state_updated', { type, id, last_read_id: result.last_read_id });
+  return res.json({ success: true, last_read_id: result.last_read_id });
 });
 
 // =====================================================
