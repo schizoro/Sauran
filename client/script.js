@@ -2637,6 +2637,7 @@ settingsBtn.addEventListener(
     () => {
 
         settingsModal.style.display = 'flex';
+        renderConnectionInfo();
 
         const savedTheme = localStorage.getItem('sauran_theme') || 'dark';
         const savedLang = localStorage.getItem('sauran_lang') || 'tr';
@@ -3646,6 +3647,10 @@ const I18N = {
     'hubset-everyone-nobody': { tr: 'Kimse (kapalı)', en: 'No one (off)' },
     'hubset-everyone-hint': { tr: 'Kişilere tek tek @ad ile bahsetmek her üyeye açıktır; bu ayar yalnızca @everyone içindir.', en: 'Mentioning people with @name is open to all members; this setting only covers @everyone.' },
     'hub-blocks-title-short': { tr: 'Oda Engelleri', en: 'Room blocks' },
+    'conn-label': { tr: 'Sunucu bağlantısı', en: 'Server connection' },
+    'conn-measuring': { tr: 'Ölçülüyor…', en: 'Measuring…' },
+    'conn-polling': { tr: 'Yedek bağlantı (yavaş)', en: 'Fallback (slow)' },
+    'conn-offline': { tr: 'Bağlı değil', en: 'Not connected' },
     'msg-send-failed': { tr: 'Gönderilemedi', en: 'Not sent' },
     'mention-toast': { tr: 'senden bahsetti', en: 'mentioned you' },
     'mention-everyone-hint': { tr: 'Lobideki herkese bildirim', en: 'Notify everyone in the lobby' },
@@ -4604,7 +4609,11 @@ function connectToChat() {
     // -------------------------------------------------
 
     socket = io({
-        withCredentials: true
+        withCredentials: true,
+        // Doğrudan WebSocket ile başla (önce HTTP uzun yoklama + yükseltme yerine): her mesajda ek HTTP gidiş-dönüşü olmaz.
+        // WebSocket engelli ağlarda otomatik olarak yoklamaya düşülür.
+        transports: ['websocket', 'polling'],
+        tryAllTransports: true
     });
 
 
@@ -5890,6 +5899,34 @@ function serverDate(value) {
         return new Date(value.replace(' ', 'T') + 'Z');
     }
     return new Date(value);
+}
+
+// Sunucuya gidiş-dönüş süresi (ms) ve kullanılan bağlantı türü: Ayarlar > Genel'de gösterilir (gecikmeyi tahmin değil ölçerek görmek için).
+async function measureSocketLatency(samples = 3) {
+    if (!socket || !socket.connected) return null;
+    const times = [];
+    for (let i = 0; i < samples; i += 1) {
+        const t0 = performance.now();
+        const ok = await new Promise((resolve) => {
+            const timer = setTimeout(() => resolve(false), 5000);
+            socket.emit('latency_ping', () => { clearTimeout(timer); resolve(true); });
+        });
+        if (ok) times.push(performance.now() - t0);
+    }
+    if (!times.length) return null;
+    times.sort((a, b) => a - b);
+    return { ms: Math.round(times[Math.floor(times.length / 2)]), transport: socket.io?.engine?.transport?.name || '?' };
+}
+
+document.getElementById('settings-connection-info')?.addEventListener('click', () => renderConnectionInfo());
+
+async function renderConnectionInfo() {
+    const el = document.getElementById('settings-connection-info');
+    if (!el) return;
+    el.textContent = t('conn-measuring');
+    const r = await measureSocketLatency();
+    el.textContent = r ? `${r.ms} ms · ${r.transport === 'websocket' ? 'WebSocket' : t('conn-polling')}` : t('conn-offline');
+    el.dataset.quality = !r ? 'bad' : r.ms < 150 ? 'good' : r.ms < 400 ? 'ok' : 'bad';
 }
 
 function escapeHtml(value) {

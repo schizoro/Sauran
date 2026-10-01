@@ -15,6 +15,9 @@ const dbPath = path.join(dataDir, 'sauran.db');
 const db = new Database(dbPath);
 
 db.pragma('journal_mode = WAL');
+// WAL kipinde NORMAL güvenlidir (bozulma olmaz; yalnızca ani elektrik kesintisinde son birkaç işlem kaybolabilir) ve her yazmada
+// diske zorunlu senkron beklemeyi kaldırır: ağ diskinde (Render) her mesaj kaydını belirgin biçimde hızlandırır.
+db.pragma('synchronous = NORMAL');
 // Silinen içerik (mesaj, medya, hesap verisi vb.) veritabanı dosyasında sayfa artığı olarak KALMASIN diye silinen alanlar sıfırlanır. Bu, bağlantı düzeyinde
 // açıktır; bakım fonksiyonlarındaki geçici aç/kapa çağrıları artık "ON"a döner (kapatılmaz).
 db.pragma('secure_delete = ON');

@@ -4459,6 +4459,9 @@ io.on('connection', (socket) => {
     broadcastVoiceRoom(entry.hubId, roomId, { type: 'mute', user_id: socket.userId, muted });
   });
 
+  // Gecikme ölçümü (Ayarlar > Genel): yalnızca hemen yanıt verir.
+  socket.on('latency_ping', (ack) => { if (typeof ack === 'function') ack(); });
+
   socket.on('app_visibility', (data) => {
     socket.data.visible = Boolean(data?.visible);
   });

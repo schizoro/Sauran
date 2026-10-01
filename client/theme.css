@@ -1925,3 +1925,10 @@ body.hubset-open { overflow: hidden; }
 .msg-pending { opacity: 0.55; pointer-events: none; transition: opacity 0.2s; }
 .msg-failed { opacity: 0.8; box-shadow: inset 3px 0 0 var(--danger); border-radius: 10px; }
 .msg-failed::after { content: 'Gönderilemedi'; display: block; font-size: 11px; color: var(--danger); padding: 2px 0 4px 8px; }
+
+.settings-connection-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.settings-connection-row .profile-field-label { margin: 0; }
+.settings-connection-info { border: 1px solid var(--border-soft-strong); background: transparent; color: var(--text-secondary); border-radius: 999px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
+.settings-connection-info[data-quality="good"] { color: var(--success); border-color: rgba(95, 214, 164, 0.4); }
+.settings-connection-info[data-quality="ok"] { color: var(--warning); border-color: rgba(240, 195, 107, 0.4); }
+.settings-connection-info[data-quality="bad"] { color: var(--danger); border-color: rgba(255, 122, 134, 0.4); }
