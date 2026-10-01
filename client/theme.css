@@ -2206,3 +2206,33 @@ body.hubset-open #group-pick-modal { z-index: 960; }
   .lobby-nav .friends-groups { margin: 12px 0 4px; padding-top: 12px; border-top: 1px solid var(--border-soft); flex: 0 1 auto; max-height: 28%; display: flex; flex-direction: column; min-height: 0; }
   .lobby-nav .friends-groups-list { overflow-y: auto; min-height: 0; }
 }
+
+/* ══ Telefon yan çevrilince (yatay) ══════════════════════════════════════════
+   iPhone'da yan çevirme sayfayı yakınlaştırıp öyle bırakıyordu (viewport'ta maximum-scale=1 ile önlendi) ve sol ray
+   kısa yüksekliğe sığmıyordu. Yatayda: yatay taşma yok; üst çubuk ince; ray yazısız, küçük düğmeli ve kaydırılabilir. */
+html, body { max-width: 100%; overflow-x: hidden; }
+@media (max-width: 950px) and (max-height: 500px) and (orientation: landscape) {
+  :root { --topbar-h: 44px; --rail-w: 62px; }
+  .topbar { min-height: var(--topbar-h) !important; padding-top: 2px !important; padding-bottom: 2px !important; padding-left: calc(14px + env(safe-area-inset-left)) !important; padding-right: calc(10px + env(safe-area-inset-right)); }
+  #topbar-context-title { font-size: 16px; }
+  .app-rail {
+    width: 50px; gap: 4px !important; padding: 8px 0; border-radius: 24px;
+    top: calc(env(safe-area-inset-top) + var(--topbar-h) + 4px) !important; bottom: calc(4px + env(safe-area-inset-bottom));
+    overflow-y: auto; overflow-x: hidden; scrollbar-width: none;
+  }
+  .app-rail::-webkit-scrollbar { display: none; }
+  .app-rail .rail-btn, .app-rail .rail-avatar { width: 38px !important; height: 38px !important; flex: none; }
+  .app-rail [data-lbl]::after { display: none; }
+  .app-rail .rail-spacer { flex: 1 0 4px; }
+  body:not([data-view="hub-detail"]):not([data-view="discover"]) .chat-area { margin-left: calc(var(--rail-w) + env(safe-area-inset-left)); }
+  .lobby-nav { top: calc(4px + env(safe-area-inset-top)) !important; bottom: calc(4px + env(safe-area-inset-bottom)) !important; width: min(320px, calc(100vw - var(--rail-w) - 20px)) !important; }
+}
+@media (max-width: 950px) and (max-height: 500px) and (orientation: landscape) {
+  /* Lobi içinde: geri düğmesi yalnızca ok (yazı lobi adının üstüne binmesin); ikinci satır ince */
+  body[data-view="hub-detail"] .hub-back-btn [data-i18n="back-to-hubs"] { display: none; }
+  body[data-view="hub-detail"] .topbar-left .hub-back-btn { width: 36px; min-width: 36px; height: 36px; padding: 0; justify-content: center; }
+  body[data-view="hub-detail"] .topbar-left { gap: 8px; }
+  body[data-view="hub-detail"] .hub-detail-header { padding-top: 0 !important; padding-bottom: 0 !important; min-height: 0; }
+  body[data-view="hub-detail"] .hub-detail-header .hub-icon-btn { height: 34px; }
+  body[data-view="hub-detail"] .hub-detail-header [data-lbl]::after { display: none; }
+}
