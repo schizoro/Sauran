@@ -2236,3 +2236,40 @@ html, body { max-width: 100%; overflow-x: hidden; }
   body[data-view="hub-detail"] .hub-detail-header .hub-icon-btn { height: 34px; }
   body[data-view="hub-detail"] .hub-detail-header [data-lbl]::after { display: none; }
 }
+
+/* ══ Balon efektleri: GPU (transform) ile — iPhone'da donmasın, ana iş parçacığını meşgul etmesin ══════
+   Eski sürüm background-position'ı canlandırıyordu: her karede yeniden boyama gerekir; çok balonda iPhone animasyonu
+   durduruyor ve dokunuşlar saniyelerce gecikiyordu. Şimdi katman hareket ettirilir (birleştirici/GPU), boyama yok. */
+.hub-msg-bubble.chat-theme-soft::before, .dm-msg.chat-theme-soft::before {
+  inset: 0 0 -52px 0;
+  background-size: 34px 52px, 46px 52px, 26px 52px, 58px 52px;
+  background-position: 14% 4px, 42% 30px, 68% 17px, 86% 43px;
+  background-repeat: repeat-y;
+  animation: softDustRiseGpu 4.2s linear infinite;
+  will-change: transform;
+}
+@keyframes softDustRiseGpu { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, -52px, 0); } }
+.hub-msg-bubble.chat-theme-contrast::before, .dm-msg.chat-theme-contrast::before {
+  inset: 0 auto 0 -100%; width: 300%;
+  background-image: linear-gradient(100deg, transparent 38%, rgba(120, 170, 255, .30) 47%, rgba(180, 140, 255, .40) 53%, transparent 62%);
+  background-size: 100% 100%;
+  animation: contrastShimmerGpu 3.4s ease-in-out infinite;
+  will-change: transform;
+}
+@keyframes contrastShimmerGpu { from { transform: translate3d(34%, 0, 0); } to { transform: translate3d(-34%, 0, 0); } }
+.hub-msg-bubble.chat-theme-contrast::after, .dm-msg.chat-theme-contrast::after {
+  box-shadow: 0 0 7px 1.5px rgba(130, 115, 240, .85);
+  animation: contrastEdgeGlowGpu 3.4s ease-in-out infinite;
+}
+@keyframes contrastEdgeGlowGpu { 0%, 100% { opacity: .65; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .hub-msg-bubble.chat-theme-soft::before, .dm-msg.chat-theme-soft::before,
+  .hub-msg-bubble.chat-theme-contrast::before, .dm-msg.chat-theme-contrast::before,
+  .hub-msg-bubble.chat-theme-contrast::after, .dm-msg.chat-theme-contrast::after { animation: none; }
+}
+/* Ekranda görünmeyen mesajların tüm efektleri (balon, çerçeve, isim efekti) duraklatılır */
+.msg-offscreen, .msg-offscreen *, .msg-offscreen::before, .msg-offscreen::after,
+.msg-offscreen *::before, .msg-offscreen *::after { animation-play-state: paused !important; }
+/* DM paneli zaten bulanık cam: içindeki her balonun ayrıca arka plan bulanıklaştırması (iPhone'da çok pahalı) kapalı */
+#dm-modal .dm-msg.bubble-glass { -webkit-backdrop-filter: none; backdrop-filter: none; background: linear-gradient(135deg, rgba(255,255,255,.13), rgba(255,255,255,.05)); }
+#dm-close-btn { touch-action: manipulation; }

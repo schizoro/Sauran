@@ -9837,13 +9837,41 @@ dmForm.addEventListener(
 );
 
 
-dmCloseBtn.addEventListener(
-    'click',
-    () => {
-        dmModal.style.display = 'none';
-        activeDmUserId = null;
-    }
-);
+function closeDmPanel() {
+    dmModal.style.display = 'none';
+    activeDmUserId = null;
+}
+
+// Dokunur dokunmaz kapanır (pointerup); 'click' yedek olarak kalır (klavye / erişilebilirlik).
+dmCloseBtn.addEventListener('pointerup', (event) => {
+    if (event.button !== undefined && event.button !== 0) return;
+    event.preventDefault();
+    closeDmPanel();
+});
+dmCloseBtn.addEventListener('click', closeDmPanel);
+
+// ── Görünmeyen mesajların efektlerini duraklat (iPhone'da akıcılık) ──
+(() => {
+    if (typeof IntersectionObserver !== 'function') return;
+    const io = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => entry.target.classList.toggle('msg-offscreen', !entry.isIntersecting));
+    }, { rootMargin: '150px 0px' });
+    const watch = (feed, selector) => {
+        if (!feed) return;
+        const observeAll = (root) => {
+            if (root.nodeType !== 1) return;
+            if (root.matches(selector)) io.observe(root);
+            root.querySelectorAll?.(selector).forEach((el) => io.observe(el));
+        };
+        observeAll(feed);
+        new MutationObserver((mutations) => mutations.forEach((m) => {
+            m.addedNodes.forEach(observeAll);
+            m.removedNodes.forEach((n) => { if (n.nodeType === 1) { if (n.matches(selector)) io.unobserve(n); n.querySelectorAll?.(selector).forEach((el) => io.unobserve(el)); } });
+        })).observe(feed, { childList: true, subtree: true });
+    };
+    watch(document.getElementById('dm-feed'), '.dm-msg-row');
+    watch(document.getElementById('hub-feed'), '.hub-msg');
+})();
 
 
 dmModal.addEventListener(
