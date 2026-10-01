@@ -3949,6 +3949,17 @@ const I18N = {
     'hub-bans-empty': { tr: 'Yasaklı kimse yok.', en: 'No one is banned.' },
     'hub-mutes-title': { tr: 'Susturulanlar', en: 'Muted users' },
     'slowmode-label': { tr: '🐢 Yavaş mod', en: '🐢 Slow mode' },
+    'wf-label': { tr: '🚫 Kelime filtresi', en: '🚫 Word filter' },
+    'wf-off': { tr: 'Kapalı', en: 'Off' },
+    'wf-mask': { tr: 'Kelimeyi gizle (*** ile)', en: 'Hide the word (with ***)' },
+    'wf-block': { tr: 'Mesajı engelle (gönderilmez)', en: 'Block the message' },
+    'wf-preset': { tr: 'Hazır küfür ve hakaret listesini kullan (Türkçe + İngilizce)', en: 'Use the built-in profanity list (Turkish + English)' },
+    'wf-terms-label': { tr: 'Ek yasaklı kelimeler', en: 'Extra blocked words' },
+    'wf-terms-placeholder': { tr: 'spamkelime, reklam*, …', en: 'spamword, promo*, …' },
+    'wf-hint': { tr: 'Virgül ya da yeni satırla ayır. Sonuna * koyarsan o kökle başlayan her kelime yakalanır (reklam* → reklamlar). Büyük/küçük harf, Türkçe karakter (ç/c, ş/s…), 0/o gibi rakam hileleri ve harf uzatma (amkkk) yakalanır; kelimenin içinde geçen parçalar yakalanmaz. Kurucu ve moderatörler muaftır. Liste üyelere gösterilmez.', en: 'Separate with commas or new lines. Add * at the end to catch every word starting with it (promo* → promotions). Case, accents, digit tricks (0/o) and stretched letters are handled; parts inside other words are not matched. The founder and moderators are exempt. Members can\'t see the list.' },
+    'wf-save': { tr: 'Filtreyi kaydet', en: 'Save filter' },
+    'wf-saved': { tr: 'Kaydedildi · {n} kelime', en: 'Saved · {n} words' },
+    'wf-blocked': { tr: 'Mesajın bu lobinin kelime filtresine takıldı ve gönderilmedi.', en: 'Your message was blocked by this lobby\'s word filter.' },
     'slowmode-off': { tr: 'Kapalı', en: 'Off' },
     'slowmode-hint': { tr: 'Üyeler sohbete bu aralıktan daha sık mesaj gönderemez. Kurucu ve moderatörler muaftır. Değişiklik hemen uygulanır.', en: 'Members can\'t send messages more often than this. The founder and moderators are exempt. Applies immediately.' },
     'slowmode-on-bar': { tr: '🐢 Yavaş mod açık: {d} aralıkla mesaj gönderilebilir.', en: '🐢 Slow mode is on: one message every {d}.' },
@@ -3966,7 +3977,7 @@ const I18N = {
     'hubset-sec-invite': { tr: 'Davet', en: 'Invite' },
     'hubset-sec-invite-desc': { tr: 'Arkadaşlarını davet et ya da paylaşılabilir bir davet kodu oluştur.', en: 'Invite friends or create a shareable invite code.' },
     'hubset-sec-moderation': { tr: 'Moderasyon', en: 'Moderation' },
-    'hubset-sec-moderation-desc': { tr: 'Yasaklar, sesli oda susturmaları ve oda giriş engelleri.', en: 'Bans, voice room mutes and room blocks.' },
+    'hubset-sec-moderation-desc': { tr: 'Yavaş mod, kelime filtresi, yasaklar, sesli oda susturmaları ve oda giriş engelleri.', en: 'Slow mode, word filter, bans, voice room mutes and room blocks.' },
     'hubset-sec-other': { tr: 'Diğer', en: 'Other' },
     'hubset-sec-other-desc': { tr: 'Bildirme ve geri alınamayan işlemler.', en: 'Reporting and irreversible actions.' },
     'hubset-danger-title': { tr: 'Tehlikeli bölge', en: 'Danger zone' },
@@ -5043,6 +5054,22 @@ function connectToChat() {
         slowModeUntil = Date.now() + Number(data.retry_after || 0) * 1000;
         renderSlowModeBar();
         showToast(t('slowmode-wait-toast').replace('{s}', formatSlowDuration(data.retry_after)));
+    });
+
+    socket.on('message_blocked', (data) => {
+        if (!currentHub || Number(data?.hub_id) !== currentHub.id) return;
+        const entry = data.client_id && pendingSends.get(data.client_id);
+        if (entry) {
+            clearTimeout(entry.timer);
+            pendingSends.delete(data.client_id);
+            const text = entry.content || '';
+            entry.el.remove();
+            if (text && !hubMessageInput.value) hubMessageInput.value = text;
+        }
+        // Gönderimde başlatılan yavaş mod geri sayımı geri alınır (mesaj gitmedi).
+        slowModeUntil = 0;
+        renderSlowModeBar();
+        showToast(t('wf-blocked'));
     });
 
     socket.on('hub_slow_mode', (data) => {
@@ -11236,6 +11263,7 @@ hubSettingsOpenBtn.addEventListener('click', () => {
     hubSettingsImageBtn.disabled = !isOwner;
     document.getElementById('hubset-everyone').value = currentHub.mention_everyone || 'owner';
     document.getElementById('hubset-slowmode').value = String(currentHub.slow_mode_seconds || 0);
+    fillWordFilterCard();
 
     const canModerate = currentHub.my_permission_tier === 'owner' || currentHub.my_permission_tier === 'moderator';
     document.getElementById('hub-settings-bans-section').style.display = canModerate ? 'flex' : 'none';
@@ -14788,6 +14816,48 @@ document.getElementById('hubset-slowmode').addEventListener('change', async (eve
         renderSlowModeBar();
     } catch (_) {
         select.value = previous;
+    }
+});
+
+
+// =====================================================
+// KELİME FİLTRESİ (lobi ayarları → Moderasyon)
+// =====================================================
+function fillWordFilterCard() {
+    const card = document.getElementById('hubset-wordfilter-card');
+    if (!card || !currentHub) return;
+    const wf = currentHub.word_filter;
+    card.style.display = wf ? '' : 'none';
+    if (!wf) return;
+    document.getElementById('hubset-wordfilter-action').value = wf.action || 'off';
+    document.getElementById('hubset-wordfilter-preset').checked = Boolean(wf.use_preset);
+    document.getElementById('hubset-wordfilter-terms').value = (wf.terms || []).join(', ');
+    document.getElementById('hubset-wordfilter-status').textContent = '';
+}
+
+document.getElementById('hubset-wordfilter-save').addEventListener('click', async () => {
+    if (!currentHub) return;
+    const btn = document.getElementById('hubset-wordfilter-save');
+    const status = document.getElementById('hubset-wordfilter-status');
+    btn.disabled = true;
+    try {
+        const response = await fetch(`/api/hubs/${currentHub.id}/word-filter`, {
+            method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: document.getElementById('hubset-wordfilter-action').value,
+                use_preset: document.getElementById('hubset-wordfilter-preset').checked,
+                terms: document.getElementById('hubset-wordfilter-terms').value
+            })
+        });
+        const data = await response.json();
+        if (!data.success) { status.textContent = data.error || 'Olmadı.'; return; }
+        currentHub.word_filter = data.filter;
+        fillWordFilterCard();
+        status.textContent = t('wf-saved').replace('{n}', String(data.filter.terms.length));
+    } catch (_) {
+        status.textContent = 'Bağlantı hatası.';
+    } finally {
+        btn.disabled = false;
     }
 });
 

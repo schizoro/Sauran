@@ -215,6 +215,9 @@ const {
   verifyTwoFactorCode,
   requestEmailChange,
   getHubSlowMode,
+  getHubWordFilter,
+  setHubWordFilter,
+  applyHubWordFilter,
   setHubSlowMode,
   isSlowModeExempt,
   lastHubPostAt,
@@ -2144,6 +2147,20 @@ app.put('/api/hubs/:id/slow-mode', contentWriteLimiter, (req, res) => {
   }
 });
 
+app.put('/api/hubs/:id/word-filter', contentWriteLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const hubId = Number(req.params.id);
+    const result = setHubWordFilter(hubId, user.id, req.body || {});
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    return res.json(result);
+  } catch (error) {
+    console.error('Kelime filtresi hatası:', error);
+    return res.status(500).json({ success: false, error: 'Kelime filtresi kaydedilemedi.' });
+  }
+});
+
 app.get('/api/hubs/:id', (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
@@ -2164,6 +2181,9 @@ app.get('/api/hubs/:id', (req, res) => {
     hub.members = hub.members.map(m => ({ ...m, online: isVisiblyOnline(m.user_id, m.status) }));
     hub.can_mention_everyone = canMentionEveryone(hubId, user.id);
     hub.slow_mode_exempt = isSlowModeExempt(hubId, user.id);
+    // Filtre listesi yalnızca kurucu/moderatörlere gider (üyeler hangi kelimelerin yasak olduğunu görmez).
+    delete hub.word_filter_terms; delete hub.word_filter_action; delete hub.word_filter_preset;
+    if (hub.slow_mode_exempt) hub.word_filter = getHubWordFilter(hubId);
     hub.slow_mode_retry_after = slowModeWait(hubId, user.id);
     if (canDecideJoinRequests(hubId, user.id)) hub.pending_join_requests = countPendingHubJoinRequests(hubId);
 
@@ -4599,8 +4619,14 @@ io.on('connection', (socket) => {
         return;
       }
 
+      const filtered = applyHubWordFilter(hubId, socket.userId, content);
+      if (filtered.blocked) {
+        socket.emit('message_blocked', { hub_id: hubId, reason: 'word_filter', client_id: typeof data?.client_id === 'string' ? data.client_id.slice(0, 40) : null });
+        return;
+      }
+
       const replyToMessageId = data?.reply_to_message_id ? Number(data.reply_to_message_id) : null;
-      const message = saveHubMessage(hubId, socket.userId, socket.username, content, replyToMessageId);
+      const message = saveHubMessage(hubId, socket.userId, socket.username, filtered.text, replyToMessageId);
       // İstemcinin "gönderiliyor" diye hemen gösterdiği geçici mesajı gerçek mesajla eşleştirmesi için yalnızca geri yansıtılır.
       const clientId = typeof data?.client_id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(data.client_id) ? data.client_id : null;
 

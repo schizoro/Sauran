@@ -840,7 +840,7 @@
                     <section class="hubset-panel" data-hubset-panel="moderation" style="display:none;">
                         <div class="hubset-panel-head">
                             <h3 data-i18n="hubset-sec-moderation">Moderasyon</h3>
-                            <p data-i18n="hubset-sec-moderation-desc">Yasaklar, sesli oda susturmaları ve oda giriş engelleri.</p>
+                            <p data-i18n="hubset-sec-moderation-desc">Yavaş mod, kelime filtresi, yasaklar, sesli oda susturmaları ve oda giriş engelleri.</p>
                         </div>
 
                         <div class="hubset-card" id="hubset-slowmode-card">
@@ -860,6 +860,20 @@
                                 <option value="3600">1 saat</option>
                             </select>
                             <p class="hubset-hint" data-i18n="slowmode-hint">Üyeler sohbete bu aralıktan daha sık mesaj gönderemez. Kurucu ve moderatörler muaftır. Değişiklik hemen uygulanır.</p>
+                        </div>
+
+                        <div class="hubset-card" id="hubset-wordfilter-card">
+                            <label class="profile-field-label" for="hubset-wordfilter-action" data-i18n="wf-label">🚫 Kelime filtresi</label>
+                            <select id="hubset-wordfilter-action" class="discover-select">
+                                <option value="off" data-i18n="wf-off">Kapalı</option>
+                                <option value="mask" data-i18n="wf-mask">Kelimeyi gizle (*** ile)</option>
+                                <option value="block" data-i18n="wf-block">Mesajı engelle (gönderilmez)</option>
+                            </select>
+                            <label class="wf-check"><input type="checkbox" id="hubset-wordfilter-preset"> <span data-i18n="wf-preset">Hazır küfür ve hakaret listesini kullan (Türkçe + İngilizce)</span></label>
+                            <label class="profile-field-label" for="hubset-wordfilter-terms" data-i18n="wf-terms-label">Ek yasaklı kelimeler</label>
+                            <textarea id="hubset-wordfilter-terms" class="hub-name-input wf-terms" rows="4" maxlength="9000" placeholder="spamkelime, reklam*, …" data-i18n-placeholder="wf-terms-placeholder"></textarea>
+                            <p class="hubset-hint" data-i18n="wf-hint">Virgül ya da yeni satırla ayır. Sonuna * koyarsan o kökle başlayan her kelime yakalanır (reklam* → reklamlar). Büyük/küçük harf, Türkçe karakter (ç/c, ş/s…), 0/o gibi rakam hileleri ve harf uzatma (amkkk) yakalanır; kelimenin içinde geçen parçalar yakalanmaz. Kurucu ve moderatörler muaftır. Liste üyelere gösterilmez.</p>
+                            <div class="wf-actions"><span id="hubset-wordfilter-status" class="hubset-hint"></span><button type="button" class="hubset-save-btn" id="hubset-wordfilter-save" data-i18n="wf-save">Filtreyi kaydet</button></div>
                         </div>
 
                         <div id="hub-settings-bans-section" class="hubset-tabs" role="tablist" style="display:none;">

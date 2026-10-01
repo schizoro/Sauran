@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const authcodes = require('./authcodes');
+const wordfilter = require('./wordfilter');
 const { stripImageMetadata } = require('./imagemeta'); // görsel üstverisi (EXIF/GPS vb.) temizliği
 
 // DATA_DIR verilirse (örn. Render'da bağlı kalıcı disk) oraya, verilmezse
@@ -3900,6 +3901,12 @@ function editMessage(messageId, userId, newContent) {
   newContent = String(newContent || '').trim().slice(0, 500);
   if (!newContent) return { success: false, error: 'Boş mesaj gönderilemez.' };
 
+  if (msg.hub_id) {
+    const filtered = applyHubWordFilter(msg.hub_id, userId, newContent);
+    if (filtered.blocked) return { success: false, error: 'Mesajın bu lobinin kelime filtresine takıldı ve kaydedilmedi.', word_filter: true };
+    newContent = filtered.text;
+  }
+
   db.prepare(`UPDATE messages SET content = ?, edited = 1 WHERE id = ?`).run(newContent, messageId);
 
   return {
@@ -4146,6 +4153,12 @@ function createHubPoll(hubId, userId, username, question, options) {
     return { success: false, error: 'Bir soru ve en az 2 seçenek girmelisin.' };
   }
 
+  {
+    const parts = [question, ...cleanOptions].map((t) => applyHubWordFilter(hubId, userId, t));
+    if (parts.some((r) => r.blocked)) return { success: false, error: 'Mesajın bu lobinin kelime filtresine takıldı ve gönderilmedi.', word_filter: true };
+    question = parts[0].text;
+    cleanOptions.splice(0, cleanOptions.length, ...parts.slice(1).map((r) => r.text));
+  }
   const payload = JSON.stringify({ question, options: cleanOptions });
 
   const info = db.prepare(`
@@ -4178,6 +4191,12 @@ function voteHubPoll(messageId, userId, optionIndex, hubId) {
 function createHubShare(hubId, userId, username, content, url) {
   content = String(content || '').trim().slice(0, 300);
   url = String(url || '').trim().slice(0, 500);
+
+  if (content) {
+    const filtered = applyHubWordFilter(hubId, userId, content);
+    if (filtered.blocked) return { success: false, error: 'Mesajın bu lobinin kelime filtresine takıldı ve gönderilmedi.', word_filter: true };
+    content = filtered.text;
+  }
 
   if (!content && !url) {
     return { success: false, error: 'Bir metin veya bağlantı paylaşmalısın.' };
@@ -7402,7 +7421,53 @@ function lastHubPostAt(hubId, userId) {
   return Number.isFinite(ms) ? ms : 0;
 }
 
+// =====================================================
+// KELİME FİLTRESİ (otomatik moderasyon) — eşleştirme: wordfilter.js
+// =====================================================
+{
+  const cols = db.prepare(`PRAGMA table_info(hubs)`).all().map((c) => c.name);
+  if (!cols.includes('word_filter_action')) db.exec(`ALTER TABLE hubs ADD COLUMN word_filter_action TEXT NOT NULL DEFAULT 'off'`);
+  if (!cols.includes('word_filter_preset')) db.exec(`ALTER TABLE hubs ADD COLUMN word_filter_preset INTEGER NOT NULL DEFAULT 0`);
+  if (!cols.includes('word_filter_terms')) db.exec(`ALTER TABLE hubs ADD COLUMN word_filter_terms TEXT NOT NULL DEFAULT '[]'`);
+}
+const WORD_FILTER_ACTIONS = ['off', 'block', 'mask'];
+
+function getHubWordFilter(hubId) {
+  const row = db.prepare(`SELECT word_filter_action, word_filter_preset, word_filter_terms FROM hubs WHERE id = ?`).get(hubId);
+  if (!row) return { action: 'off', use_preset: false, terms: [] };
+  let terms = [];
+  try { terms = JSON.parse(row.word_filter_terms || '[]'); } catch (_) { terms = []; }
+  return { action: WORD_FILTER_ACTIONS.includes(row.word_filter_action) ? row.word_filter_action : 'off', use_preset: Boolean(row.word_filter_preset), terms: Array.isArray(terms) ? terms : [] };
+}
+
+function setHubWordFilter(hubId, userId, { action, use_preset, terms }) {
+  const tier = getMemberTier(hubId, userId);
+  if (tier !== 'owner' && tier !== 'moderator') return { success: false, status: 403, error: 'Kelime filtresini yalnızca kurucu ve moderatörler değiştirebilir.' };
+  action = String(action || 'off');
+  if (!WORD_FILTER_ACTIONS.includes(action)) return { success: false, status: 400, error: 'Geçersiz filtre işlemi.' };
+  const cleanTerms = wordfilter.parseTerms(terms);
+  db.prepare(`UPDATE hubs SET word_filter_action = ?, word_filter_preset = ?, word_filter_terms = ? WHERE id = ?`)
+    .run(action, use_preset ? 1 : 0, JSON.stringify(cleanTerms), hubId);
+  return { success: true, filter: getHubWordFilter(hubId) };
+}
+
+// Mesaj metnini lobinin filtresinden geçirir. Kurucu ve moderatörler muaftır.
+// Dönüş: { blocked: true } | { text: <gerekirse yıldızlanmış metin>, masked: bool }
+function applyHubWordFilter(hubId, userId, text) {
+  const filter = getHubWordFilter(hubId);
+  if (filter.action === 'off' || (!filter.use_preset && !filter.terms.length)) return { blocked: false, text, masked: false };
+  const tier = getMemberTier(hubId, userId);
+  if (tier === 'owner' || tier === 'moderator') return { blocked: false, text, masked: false };
+  const result = wordfilter.scan(text, { terms: filter.terms, usePreset: filter.use_preset });
+  if (!result.hit) return { blocked: false, text, masked: false };
+  if (filter.action === 'block') return { blocked: true, hits: result.hits.length };
+  return { blocked: false, text: result.masked, masked: true };
+}
+
 module.exports = {
+  getHubWordFilter,
+  setHubWordFilter,
+  applyHubWordFilter,
   SLOW_MODE_OPTIONS,
   getHubSlowMode,
   setHubSlowMode,
