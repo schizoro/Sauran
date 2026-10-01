@@ -4278,6 +4278,16 @@ const I18N = {
     'hint-call-controls-room': { tr: 'Mikrofon, gürültü engelleme ve diğer ses ayarları için yeşil oda etiketine dokun.', en: 'For microphone, noise suppression and other audio controls, tap the green room label.' },
     'hint-call-controls-dm': { tr: 'Mikrofon ve gürültü engelleme için küçük görüşme çubuğundaki genişlet düğmesine dokun.', en: 'For microphone and noise suppression, tap the expand button on the small call bar.' },
     'nc-label': { tr: 'Gürültü engelleme (yalnızca konuşma)', en: 'Noise suppression (voice only)' },
+    'ptt-label': { tr: 'Bas-konuş', en: 'Push to talk' },
+    'ptt-desc': { tr: 'Mikrofonun yalnızca bir tuşu (ya da ekrandaki 🎙 düğmesini) basılı tuttuğun sürece açılır. Sesli oda ve özel aramada geçerlidir.', en: 'Your mic is live only while you hold a key (or the 🎙 button on screen). Applies to voice rooms and private calls.' },
+    'ptt-key': { tr: 'Tuş:', en: 'Key:' },
+    'ptt-change': { tr: 'Değiştir', en: 'Change' },
+    'ptt-press-key': { tr: 'Bir tuşa bas…', en: 'Press a key…' },
+    'ptt-key-hint': { tr: 'Harf ya da rakam tuşu seçersen, sohbete yazı yazarken bas-konuş çalışmaz. F tuşları, Ctrl, Alt, CapsLock ya da farenin yan tuşları her zaman çalışır. Telefonda ekrandaki düğmeyi kullan.', en: 'If you pick a letter or digit, push to talk won\'t fire while you\'re typing in chat. F-keys, Ctrl, Alt, CapsLock or side mouse buttons always work. On phones, use the on-screen button.' },
+    'ptt-hold': { tr: 'Konuşmak için basılı tut', en: 'Hold to talk' },
+    'ptt-hold-key': { tr: 'Konuşmak için basılı tut · {k}', en: 'Hold to talk · {k}' },
+    'ptt-talking': { tr: 'Konuşuyorsun…', en: 'Talking…' },
+    'ptt-mute-hint': { tr: 'Bas-konuş açık: konuşmak için {k} tuşunu ya da 🎙 düğmesini basılı tut.', en: 'Push to talk is on: hold {k} or the 🎙 button to talk.' },
     'nc-failed': { tr: 'Gürültü engelleme bu cihazda çalışmadı; kapatıldı.', en: 'Noise suppression did not work on this device; turned off.' },
     'voice-recovering': { tr: 'Ses bağlantısı yeniden kuruluyor...', en: 'Restoring audio connection...' },
     'voice-recover-failed': { tr: 'Mikrofon geri açılamadı. Mikrofon iznini kontrol et; sorun sürerse odadan çıkıp tekrar gir.', en: 'Could not restore the microphone. Check the microphone permission; if it persists, leave and rejoin.' },
@@ -10507,8 +10517,205 @@ function syncLocalMuteState(muted) {
 
 }
 
+
+// =====================================================
+// BAS-KONUŞ (push-to-talk) — cihaz tercihi, localStorage'da
+// =====================================================
+const PTT_RELEASE_DELAY_MS = 250; // bırakınca son hece kesilmesin
+var pttPressed = false;
+var pttReleaseTimer = null;
+var pttListening = false;
+
+function pttSettings() {
+    try {
+        const v = JSON.parse(localStorage.getItem('sauran_ptt') || 'null');
+        if (v && typeof v === 'object') return { enabled: Boolean(v.enabled), code: String(v.code || 'KeyV'), label: String(v.label || 'V'), printable: v.printable !== false };
+    } catch (_) { /* yoksay */ }
+    return { enabled: false, code: 'KeyV', label: 'V', printable: true };
+}
+
+function savePttSettings(next) {
+    try { localStorage.setItem('sauran_ptt', JSON.stringify({ ...pttSettings(), ...next })); } catch (_) { /* yoksay */ }
+}
+
+function pttActiveInCall() {
+    return pttSettings().enabled && Boolean(callFrame) && (callMode === 'hub-room' || callMode === 'dm');
+}
+
+function pttKeyLabelFor(event) {
+    const special = { Space: 'Space', CapsLock: 'CapsLock', ControlLeft: 'Ctrl (sol)', ControlRight: 'Ctrl (sağ)', AltLeft: 'Alt (sol)', AltRight: 'AltGr', ShiftLeft: 'Shift (sol)', ShiftRight: 'Shift (sağ)', Backquote: '"', Tab: 'Tab' };
+    if (special[event.code]) return special[event.code];
+    if (/^F\d+$/.test(event.code)) return event.code;
+    if (event.key && event.key.length === 1) return event.key.toLocaleUpperCase('tr');
+    return event.code;
+}
+
+function renderPttCallButton() {
+    const btn = document.getElementById('call-ptt-btn');
+    if (!btn) return;
+    const on = pttActiveInCall();
+    btn.style.display = on ? 'flex' : 'none';
+    if (!on) return;
+    // Arama kontrolleri altta duruyorsa düğme onların hemen üstüne yerleşir (üstüne binmesin).
+    const header = document.querySelector('#call-overlay .call-header');
+    const overlay = document.getElementById('call-overlay');
+    if (header && overlay) {
+        const h = header.getBoundingClientRect();
+        const o = overlay.getBoundingClientRect();
+        btn.style.bottom = h.top > o.top + o.height / 2 ? `${Math.round(o.bottom - h.top + 14)}px` : '';
+    }
+    const s = pttSettings();
+    const coarse = window.matchMedia('(pointer: coarse)').matches;
+    btn.classList.toggle('active', pttPressed);
+    btn.classList.toggle('locked', Boolean(voiceForceMute) && callMode === 'hub-room');
+    document.getElementById('call-ptt-label').textContent = pttPressed ? t('ptt-talking') : (coarse ? t('ptt-hold') : t('ptt-hold-key').replace('{k}', s.label));
+}
+
+function pttPress() {
+    if (!pttActiveInCall()) return;
+    clearTimeout(pttReleaseTimer);
+    pttReleaseTimer = null;
+    if (pttPressed) return;
+    if (voiceForceMute && callMode === 'hub-room') { showToast(t('voice-muted-locked')); return; }
+    pttPressed = true;
+    voiceUserMuted = false;
+    try { callFrame.setLocalAudio(true); } catch (_) { /* yoksay */ }
+    callMicEverLive = true;
+    syncLocalMuteState(false);
+    renderPttCallButton();
+}
+
+function pttRelease(immediate = false) {
+    if (!pttPressed && !immediate) return;
+    clearTimeout(pttReleaseTimer);
+    const doRelease = () => {
+        pttReleaseTimer = null;
+        pttPressed = false;
+        if (!callFrame) { renderPttCallButton(); return; }
+        voiceUserMuted = true;
+        try { callFrame.setLocalAudio(false); } catch (_) { /* yoksay */ }
+        syncLocalMuteState(true);
+        renderPttCallButton();
+    };
+    if (immediate) doRelease(); else pttReleaseTimer = setTimeout(doRelease, PTT_RELEASE_DELAY_MS);
+}
+
+// Aramaya girince (ya da bas-konuş arama sırasında açılınca) mikrofon kapalı başlar.
+function pttOnCallStart() {
+    pttPressed = false;
+    if (pttActiveInCall()) pttRelease(true);
+    renderPttCallButton();
+}
+
+function isTypingTarget(el) {
+    return Boolean(el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)));
+}
+
+function pttMatches(event) {
+    const s = pttSettings();
+    if (event.code !== s.code) return false;
+    // Harf/rakam tuşu, yazı yazılırken bas-konuşa dönüşmez.
+    if (s.printable && isTypingTarget(event.target)) return false;
+    return true;
+}
+
+document.addEventListener('keydown', (event) => {
+    if (pttListening || !pttActiveInCall() || !pttMatches(event)) return;
+    event.preventDefault();
+    if (!event.repeat) pttPress();
+}, true);
+
+document.addEventListener('keyup', (event) => {
+    if (pttListening || !pttActiveInCall() || event.code !== pttSettings().code) return;
+    pttRelease();
+}, true);
+
+// Fare yan tuşları (Mouse4/Mouse5)
+document.addEventListener('mousedown', (event) => {
+    if (pttListening || !pttActiveInCall() || (event.button !== 3 && event.button !== 4)) return;
+    if (pttSettings().code !== `Mouse${event.button + 1}`) return;
+    event.preventDefault();
+    pttPress();
+}, true);
+document.addEventListener('mouseup', (event) => {
+    if (pttListening || !pttActiveInCall() || pttSettings().code !== `Mouse${event.button + 1}`) return;
+    pttRelease();
+}, true);
+
+// Pencere odağı giderse tuş bırakılmış sayılır (keyup hiç gelmeyebilir).
+window.addEventListener('blur', () => { if (pttPressed) pttRelease(true); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible' && pttPressed) pttRelease(true); });
+
+{
+    const btn = document.getElementById('call-ptt-btn');
+    btn.addEventListener('pointerdown', (event) => { event.preventDefault(); try { btn.setPointerCapture(event.pointerId); } catch (_) { /* yoksay */ } pttPress(); });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((type) => btn.addEventListener(type, () => pttRelease()));
+    btn.addEventListener('contextmenu', (event) => event.preventDefault());
+}
+
+function renderPttSettings() {
+    const s = pttSettings();
+    const toggle = document.getElementById('settings-ptt-toggle');
+    if (!toggle) return;
+    toggle.checked = s.enabled;
+    document.getElementById('settings-ptt-key-row').style.display = s.enabled ? 'flex' : 'none';
+    document.getElementById('settings-ptt-key-hint').style.display = s.enabled ? 'block' : 'none';
+    const kbd = document.getElementById('settings-ptt-key');
+    kbd.textContent = pttListening ? t('ptt-press-key') : s.label;
+    kbd.classList.toggle('listening', pttListening);
+}
+
+document.getElementById('settings-ptt-toggle').addEventListener('change', (event) => {
+    savePttSettings({ enabled: event.target.checked });
+    renderPttSettings();
+    if (callFrame && (callMode === 'hub-room' || callMode === 'dm')) {
+        if (event.target.checked) {
+            pttRelease(true);
+        } else {
+            // Kapatınca mikrofon kendiliğinden AÇILMAZ; kullanıcı mikrofon düğmesiyle açar.
+            pttPressed = false;
+            clearTimeout(pttReleaseTimer);
+        }
+        renderPttCallButton();
+    }
+});
+
+document.getElementById('settings-ptt-change').addEventListener('click', () => {
+    pttListening = true;
+    renderPttSettings();
+    const finish = (code, label, printable) => {
+        pttListening = false;
+        document.removeEventListener('keydown', onKey, true);
+        document.removeEventListener('mousedown', onMouse, true);
+        if (code) savePttSettings({ code, label, printable });
+        renderPttSettings();
+        renderPttCallButton();
+    };
+    const onKey = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.code === 'Escape') { finish(null); return; }
+        finish(event.code, pttKeyLabelFor(event), Boolean(event.key && event.key.length === 1 && event.code !== 'Space') || event.code === 'Space');
+    };
+    const onMouse = (event) => {
+        if (event.button !== 3 && event.button !== 4) return;
+        event.preventDefault();
+        finish(`Mouse${event.button + 1}`, event.button === 3 ? 'Fare 4' : 'Fare 5', false);
+    };
+    setTimeout(() => {
+        document.addEventListener('keydown', onKey, true);
+        document.addEventListener('mousedown', onMouse, true);
+    }, 0);
+});
+
+renderPttSettings();
+
 function toggleLocalMute() {
     if (!callFrame || (callMode !== 'hub-room' && callMode !== 'dm')) return;
+    if (pttSettings().enabled) {
+        showToast(t('ptt-mute-hint').replace('{k}', pttSettings().label));
+        return;
+    }
     const nextMuted = !voiceLocalMuted;
     if (!nextMuted && voiceForceMute && callMode === 'hub-room') {
         showToast(t('voice-muted-locked'));
@@ -13609,7 +13816,7 @@ async function joinCallFrame(roomUrl, token) {
             // Bu uygulamada görüntülü görüşme yok — kamerayı hiç istemiyoruz ki
             // tarayıcı kamera izni bile sormasın (sadece mikrofon).
             startVideoOff: true,
-            startAudioOff: voiceJoinStartMuted,
+            startAudioOff: voiceJoinStartMuted || pttSettings().enabled,
             userMediaVideoConstraints: false
         });
 
@@ -13627,6 +13834,7 @@ async function joinCallFrame(roomUrl, token) {
         startCallTimer();
 
         callMicEverLive = callMicEverLive || Boolean(callFrame.localAudio());
+        pttOnCallStart();
         startCallBackgroundKeepAlive();
         startCallHealthMonitor();
         refreshAudioDevices();
@@ -14625,6 +14833,10 @@ function leaveCall() {
     voiceUserMuted = false;
     voiceJoinStartMuted = false;
     if (voiceForceMute) clearVoiceForceMute();
+    pttPressed = false;
+    clearTimeout(pttReleaseTimer);
+    pttReleaseTimer = null;
+    document.getElementById('call-ptt-btn').style.display = 'none';
     callMicEverLive = false;
     voiceDeafened = false;
     voiceLocalSpeaking = false;
@@ -15727,3 +15939,4 @@ imageLightboxClose.addEventListener('click', (event) => {
 
 
 checkExistingSession();
+window.addEventListener('resize', () => { if (typeof renderPttCallButton === 'function' && pttActiveInCall()) renderPttCallButton(); });

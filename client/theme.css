@@ -2074,3 +2074,20 @@ body.hubset-open .toast-container { z-index: 1000; }
 /* Telefonda QR gizli (aynı telefonla taranamaz); bilgisayarda "uygulamada aç" gizli */
 .twofa-box[data-device="phone"] .twofa-qr-wrap { display: none; }
 .twofa-box[data-device="desktop"] .twofa-open-app { display: none; }
+
+/* Bas-konuş */
+.ptt-key-row { display: flex; align-items: center; gap: 10px; margin: 2px 0 4px 30px; font-size: 13.5px; }
+.ptt-kbd { min-width: 34px; padding: 4px 10px; border-radius: 8px; text-align: center; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; background: var(--bg-app); border: 1px solid var(--border-soft-strong); border-bottom-width: 3px; color: var(--text-primary); }
+.ptt-kbd.listening { border-color: var(--accent, #5cc8ff); color: var(--accent, #5cc8ff); animation: ptt-blink 1s infinite; }
+@keyframes ptt-blink { 50% { opacity: 0.5; } }
+#settings-ptt-key-hint { margin-left: 30px; }
+.call-ptt-btn {
+  position: absolute; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 260;
+  display: flex; align-items: center; gap: 10px; padding: 14px 26px; border-radius: 999px;
+  background: rgba(20, 26, 33, 0.92); border: 2px solid rgba(92, 200, 255, 0.45); color: var(--text-primary, #e6e6e6);
+  font-size: 15px; font-weight: 650; white-space: nowrap; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4); transition: transform 0.08s, background 0.12s, border-color 0.12s;
+}
+.call-ptt-btn .call-ptt-icon { font-size: 20px; }
+.call-ptt-btn.active { background: #1f8f4e; border-color: #57f287; transform: translateX(-50%) scale(1.05); }
+.call-ptt-btn.locked { opacity: 0.55; }

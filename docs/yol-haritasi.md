@@ -23,8 +23,8 @@ Durum: `[ ]` sırada · `[~]` yapılıyor · `[x]` tamamlandı
 - [x] **Davet kodlarına süre ve kullanım sınırı** — 30 dk / 1 / 6 / 12 sa / 1 / 7 gün / süresiz; sınırsız ya da 1–100 kişi (varsayılan 7 gün, sınırsız). Davet bölümünde etkin kodlar listesi ve iptal: üye kendi kodlarını, kurucu/moderatör hepsini yönetir; başkasının kodunu iptal etmek kayda düşer. Son kullanım hakkı atomik.
 
 ## 4. Ses ve medya
-- [ ] Bas-konuş (push-to-talk) ← sıradaki
-- [ ] GIF arama
+- [x] **Bas-konuş** — Ayarlar → Ses; tuş atanabilir (klavye, F tuşları, Ctrl/Alt/CapsLock, farenin yan tuşları). Aramada ekranda "basılı tut" düğmesi (telefonda asıl yol). Bırakınca 250 ms sonra kapanır; harf tuşu sohbete yazarken tetiklenmez; pencere odağı gidince kapanır; moderatör susturması aşılmaz. Sesli oda ve özel aramada.
+- [ ] GIF arama ← sıradaki
 - [ ] Link önizlemesi
 - [ ] Kamera / görüntülü görüşme *(şu an bilinçli olarak yok; karar gerekli)*
 

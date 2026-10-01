@@ -1920,6 +1920,20 @@
                     </label>
                     <p id="settings-nc-note" class="settings-voice-hint" style="display:none;" data-i18n="nc-unsupported">Bu cihazda gürültü engelleme desteklenmiyor.</p>
 
+                    <label class="notif-pref-row">
+                        <input type="checkbox" id="settings-ptt-toggle">
+                        <span>
+                            <span data-i18n="ptt-label">Bas-konuş</span>
+                            <span class="settings-voice-hint" data-i18n="ptt-desc">Mikrofonun yalnızca bir tuşu (ya da ekrandaki 🎙 düğmesini) basılı tuttuğun sürece açılır. Sesli oda ve özel aramada geçerlidir.</span>
+                        </span>
+                    </label>
+                    <div id="settings-ptt-key-row" class="ptt-key-row" style="display:none;">
+                        <span data-i18n="ptt-key">Tuş:</span>
+                        <kbd id="settings-ptt-key" class="ptt-kbd">V</kbd>
+                        <button id="settings-ptt-change" type="button" class="settings-unblock-btn" data-i18n="ptt-change">Değiştir</button>
+                    </div>
+                    <p id="settings-ptt-key-hint" class="settings-voice-hint" style="display:none;" data-i18n="ptt-key-hint">Harf ya da rakam tuşu seçersen, sohbete yazı yazarken bas-konuş çalışmaz. F tuşları, Ctrl, Alt, CapsLock ya da farenin yan tuşları her zaman çalışır. Telefonda ekrandaki düğmeyi kullan.</p>
+
                 </div>
 
                 <div class="settings-panel" data-settings-panel="security" style="display:none;">
@@ -2017,6 +2031,11 @@
         </div>
 
         <div id="call-device-menu" class="call-device-menu liquid-glass" role="menu" style="display:none;"></div>
+
+        <button id="call-ptt-btn" class="call-ptt-btn" type="button" style="display:none;" aria-label="Bas-konuş">
+            <span class="call-ptt-icon" aria-hidden="true">🎙</span>
+            <span id="call-ptt-label">Konuşmak için basılı tut</span>
+        </button>
 
         <div id="call-frame-container" class="call-frame-container"></div>
 
