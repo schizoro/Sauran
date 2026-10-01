@@ -216,6 +216,13 @@ const {
   verifyTwoFactorCode,
   requestEmailChange,
   getHubSlowMode,
+  isGroupHub,
+  createGroupDm,
+  listGroups,
+  renameGroup,
+  addGroupMembers,
+  removeGroupMember,
+  groupMemberIds,
   getLinkPreviewCache,
   putLinkPreviewCache,
   getLinkPreviewImage,
@@ -2242,6 +2249,108 @@ app.get('/api/hubs/:id/mod-log', (req, res) => {
     console.error('Moderasyon kaydı okuma hatası:', error);
     return res.status(500).json({ success: false, error: 'Kayıt alınamadı.' });
   }
+});
+
+// =====================================================
+// GRUP DM
+// =====================================================
+const groupCreateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 15, keyFn: byIp, message: 'Çok fazla grup oluşturdun. Biraz sonra tekrar dene.' });
+
+// Sistem satırı: odaya ve okunmamış sinyaline gider, push GÖNDERMEZ (eklenenlere ayrıca "seni ekledi" bildirimi gider).
+function emitGroupSystem(groupId, message, extraUserIds = []) {
+  if (!message) return;
+  io.to(`hub:${groupId}`).emit('hub_message', message);
+  const rooms = [...new Set([...groupMemberIds(groupId), ...extraUserIds])].filter((id) => id !== message.user_id).map((id) => `user:${id}`);
+  if (rooms.length) io.to(rooms).emit('hub_unread_ping', { hub_id: groupId, message_id: message.id });
+}
+
+function notifyGroupsChanged(userIds, payload) {
+  const rooms = [...new Set(userIds)].map((id) => `user:${id}`);
+  if (rooms.length) io.to(rooms).emit('groups_changed', payload);
+}
+
+function pushGroupAdded(groupId, actorName, userIds) {
+  if (!push.isConfigured()) return;
+  userIds.forEach((id) => dispatchWebPush(id, 'hub_message', {
+    title: 'Sauran',
+    body: `${actorName} seni bir gruba ekledi`,
+    url: `/?open_hub=${groupId}`,
+    tag: `hub-${groupId}`
+  }).catch(() => {}));
+}
+
+app.get('/api/groups', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    return res.json({ success: true, groups: listGroups(user.id) });
+  } catch (error) {
+    console.error('Grup listesi hatası:', error);
+    return res.status(500).json({ success: false, error: 'Gruplar alınamadı.' });
+  }
+});
+
+app.post('/api/groups', groupCreateLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const result = createGroupDm(user.id, user.username, { name: req.body?.name, member_ids: req.body?.member_ids });
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    notifyGroupsChanged(result.member_ids, { group_id: result.group_id, reason: 'created' });
+    pushGroupAdded(result.group_id, user.username, result.member_ids.filter((id) => id !== user.id));
+    return res.json({ success: true, group_id: result.group_id });
+  } catch (error) {
+    console.error('Grup oluşturma hatası:', error);
+    return res.status(500).json({ success: false, error: 'Grup oluşturulamadı.' });
+  }
+});
+
+app.patch('/api/groups/:id', contentWriteLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const groupId = Number(req.params.id);
+  const result = renameGroup(groupId, user.id, user.username, req.body?.name);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+  if (!result.unchanged) {
+    emitGroupSystem(groupId, result.message);
+    notifyGroupsChanged(groupMemberIds(groupId), { group_id: groupId, reason: 'renamed' });
+  }
+  return res.json({ success: true, name: result.name });
+});
+
+app.post('/api/groups/:id/members', contentWriteLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const groupId = Number(req.params.id);
+  const result = addGroupMembers(groupId, user.id, user.username, req.body?.user_ids);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+  emitGroupSystem(groupId, result.message);
+  notifyGroupsChanged(groupMemberIds(groupId), { group_id: groupId, reason: 'members' });
+  io.to(`hub:${groupId}`).emit('hub_members_changed', { hub_id: groupId });
+  pushGroupAdded(groupId, user.username, result.added);
+  return res.json({ success: true, added: result.added });
+});
+
+app.delete('/api/groups/:id/members/:userId', contentWriteLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const groupId = Number(req.params.id);
+  const targetId = Number(req.params.userId);
+  const before = groupMemberIds(groupId);
+  const result = removeGroupMember(groupId, user.id, user.username, targetId);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+
+  removeUserFromHubVoiceRooms(groupId, targetId);
+  io.in(`user:${targetId}`).socketsLeave(`hub:${groupId}`);
+  io.to(`user:${targetId}`).emit('group_removed', { group_id: groupId, by_self: targetId === user.id });
+  if (result.deleted) {
+    finalizeHubPurge({ voice_room_ids: result.purge.voiceRoomIds, daily_room_names: result.purge.dailyRoomNames });
+  } else {
+    emitGroupSystem(groupId, result.message);
+    io.to(`hub:${groupId}`).emit('hub_members_changed', { hub_id: groupId });
+  }
+  notifyGroupsChanged(before, { group_id: groupId, reason: 'members' });
+  return res.json({ success: true, deleted: result.deleted });
 });
 
 app.get('/api/hubs/:id', (req, res) => {

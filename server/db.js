@@ -2721,6 +2721,7 @@ const HUB_THEMES = ['default', 'aurora', 'ember', 'forest'];
 const HUB_BG_MAX_CHARS = 900_000;
 
 function updateHub(hubId, userId, { name, image_data, theme, bg_image, mention_everyone, ...discovery }) {
+  if (isGroupHub(hubId)) return { success: false, status: 400, error: 'Bu işlem gruplarda kullanılamaz.' };
   const hub = db.prepare(`SELECT * FROM hubs WHERE id = ?`).get(hubId);
   if (!hub) return { success: false, error: 'Lobi bulunamadı.' };
   if (hub.created_by !== userId) return { success: false, error: 'Sadece Lobi sahibi düzenleyebilir.' };
@@ -3257,6 +3258,7 @@ function listHubs(userId) {
       (SELECT COUNT(*) FROM hub_members WHERE hub_members.hub_id = hubs.id) AS member_count
     FROM hubs
     INNER JOIN hub_members ON hub_members.hub_id = hubs.id AND hub_members.user_id = ?
+    WHERE hubs.type != 'group'
     ORDER BY hubs.created_at DESC
   `).all(userId).map(h => ({ ...h, is_owner: h.created_by === userId }));
 }
@@ -3283,6 +3285,7 @@ function inviteIsActive(invite, now = new Date()) {
 }
 
 function createHubInvite(hubId, userId, { expires_in_minutes, max_uses } = {}) {
+  if (isGroupHub(hubId)) return { success: false, status: 400, error: 'Bu işlem gruplarda kullanılamaz.' };
   if (!isHubMember(hubId, userId)) {
     return { success: false, error: 'Bu Lobi\'a üye değilsin.' };
   }
@@ -3448,6 +3451,7 @@ function setHubRole(hubId, userId, roleId) {
 }
 
 function leaveHub(hubId, userId) {
+  if (isGroupHub(hubId)) return { success: false, status: 400, error: 'Bu işlem gruplarda kullanılamaz.' };
   db.prepare(`DELETE FROM hub_members WHERE hub_id = ? AND user_id = ?`).run(hubId, userId);
   return { success: true };
 }
@@ -3461,6 +3465,7 @@ function setHubMuted(hubId, userId, muted) {
 }
 
 function addHubRole(hubId, userId, { name, icon, slot_limit }) {
+  if (isGroupHub(hubId)) return { success: false, status: 400, error: 'Bu işlem gruplarda kullanılamaz.' };
   const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
   if (!hub) return { success: false, error: 'Lobi bulunamadı.' };
   if (hub.created_by !== userId) return { success: false, error: 'Yalnızca Lobi sahibi rol ekleyebilir.' };
@@ -3501,6 +3506,7 @@ function hasAtLeastTier(hubId, userId, minTier) {
 }
 
 function setModerator(hubId, actorId, targetId, isModerator) {
+  if (isGroupHub(hubId)) return { success: false, status: 400, error: 'Bu işlem gruplarda kullanılamaz.' };
   if (!hasAtLeastTier(hubId, actorId, 'owner')) {
     return { success: false, error: 'Yalnızca Lobi sahibi moderatör atayabilir.' };
   }
@@ -3516,6 +3522,7 @@ function setModerator(hubId, actorId, targetId, isModerator) {
 }
 
 function kickMember(hubId, actorId, targetId) {
+  if (isGroupHub(hubId)) return { success: false, status: 400, error: 'Bu işlem gruplarda kullanılamaz.' };
   if (actorId === targetId) return { success: false, error: 'Kendini atamazsın.' };
   if (!hasAtLeastTier(hubId, actorId, 'moderator')) {
     return { success: false, error: 'Bu işlem için yetkin yok.' };
@@ -3535,6 +3542,7 @@ function kickMember(hubId, actorId, targetId) {
 }
 
 function banMember(hubId, actorId, targetId) {
+  if (isGroupHub(hubId)) return { success: false, status: 400, error: 'Bu işlem gruplarda kullanılamaz.' };
   const result = kickMember(hubId, actorId, targetId);
   if (!result.success) return result;
 
@@ -4523,6 +4531,7 @@ const MAX_VOICE_ROOM_PARTICIPANTS = 25;
 const MAX_VOICE_ROOMS_PER_HUB = 5;
 
 function createVoiceRoom(hubId, userId, name) {
+  if (isGroupHub(hubId)) return { success: false, status: 400, error: 'Bu işlem gruplarda kullanılamaz.' };
   const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
   if (!hub) return { success: false, error: 'Lobi bulunamadı.' };
   if (hub.created_by !== userId) return { success: false, error: 'Yalnızca Lobi sahibi sesli oda açabilir.' };
@@ -4541,6 +4550,7 @@ function createVoiceRoom(hubId, userId, name) {
 }
 
 function deleteVoiceRoom(hubId, userId, roomId) {
+  if (isGroupHub(hubId)) return { success: false, status: 400, error: 'Bu işlem gruplarda kullanılamaz.' };
   const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
   if (!hub) return { success: false, error: 'Lobi bulunamadı.' };
   if (hub.created_by !== userId) return { success: false, error: 'Yalnızca Lobi sahibi sesli odayı silebilir.' };
@@ -5016,6 +5026,7 @@ function purgeHubData(hubId) {
 }
 
 function deleteHub(hubId, userId) {
+  if (isGroupHub(hubId)) return { success: false, status: 400, error: 'Bu işlem gruplarda kullanılamaz.' };
   const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
   if (!hub) return { success: false, error: 'Lobi bulunamadı.' };
   if (hub.created_by !== userId) return { success: false, error: 'Yalnızca Lobi sahibi silebilir.' };
@@ -5060,8 +5071,15 @@ function deleteAccount(userId) {
     unlinkReportDataForDeletedUser(userId);
     anonymizeAuditLogForDeletedUser(userId);
 
-    const owned = db.prepare(`SELECT id FROM hubs WHERE created_by = ?`).all(userId);
-    const purgedHubs = owned.map(h => purgeHubData(h.id));
+    // Gruplar silinmez: hesap gruptan çıkar, sahiplik en eski üyeye geçer (son kişiyse grup silinir).
+    const groupPurges = [];
+    db.prepare(`SELECT hub_id FROM hub_members hm JOIN hubs h ON h.id = hm.hub_id WHERE hm.user_id = ? AND h.type = 'group'`).all(userId).forEach(({ hub_id }) => {
+      db.prepare(`DELETE FROM hub_members WHERE hub_id = ? AND user_id = ?`).run(hub_id, userId);
+      const settled = settleGroupAfterLeave(hub_id, userId);
+      if (settled.deleted) groupPurges.push(settled);
+    });
+    const owned = db.prepare(`SELECT id FROM hubs WHERE created_by = ? AND type != 'group'`).all(userId);
+    const purgedHubs = [...groupPurges, ...owned.map(h => purgeHubData(h.id))];
 
     // Keşfet katılma istekleri: bu hesabın kendi istekleri yabancı anahtar (CASCADE) ile silinir; başkalarının isteklerinde karar veren olarak geçen numarası temizlenir.
     db.prepare(`UPDATE hub_join_requests SET decided_by = NULL WHERE decided_by = ?`).run(userId);
@@ -6206,8 +6224,11 @@ db.exec(`
 const MAX_PUSH_SUBSCRIPTIONS_PER_USER = 10;
 
 function getHubPushInfo(hubId) {
-  const hub = db.prepare(`SELECT name FROM hubs WHERE id = ?`).get(hubId);
+  const hub = db.prepare(`SELECT name, type FROM hubs WHERE id = ?`).get(hubId);
   if (!hub) return null;
+  if (hub.type === 'group' && !hub.name) {
+    hub.name = usernamesOf(groupMemberIds(hubId)).map((u) => u.username).slice(0, 4).join(', ');
+  }
 
   // "Bildirimleri Sustur" diyen üyeler (muted = 1) push almaz.
   const memberIds = db.prepare(`SELECT user_id FROM hub_members WHERE hub_id = ? AND muted = 0`).all(hubId).map(row => row.user_id);
@@ -7683,7 +7704,176 @@ function purgeLinkPreviewCache() {
   return db.prepare(`DELETE FROM link_preview_cache WHERE fetched_at < ?`).run(Date.now() - LINK_PREVIEW_KEEP_DAYS * 86400000).changes;
 }
 
+// =====================================================
+// GRUP DM — lobi altyapısı üzerinde, hubs.type = 'group'
+// =====================================================
+// Mesaj, okunmamış, bahsetme, dosya, arama, link önizlemesi ve sesli arama lobilerle aynı yoldan çalışır. Lobiye özgü
+// özellikler (davet kodu, keşfet, katılma isteği, rol, moderatör, yasak, oda ekleme) gruplarda kapalıdır.
+// Kurallar: en fazla 10 kişi; yalnızca kendi ARKADAŞLARINI ekleyebilirsin; aranızda engelleme varsa eklenemez.
+// Kurucu (sahip) üyeyi çıkarabilir; herkes grubu yeniden adlandırabilir, üye ekleyebilir ve ayrılabilir.
+// Sahip ayrılırsa (ya da hesabını silerse) sahiplik en eski üyeye geçer; son kişi ayrılınca grup silinir.
+const GROUP_MAX_MEMBERS = 10;
+const GROUP_MAX_PER_USER = 100;
+
+function isGroupHub(hubId) {
+  const row = db.prepare(`SELECT type FROM hubs WHERE id = ?`).get(hubId);
+  return Boolean(row && row.type === 'group');
+}
+
+function groupBlockedPair(a, b) {
+  return isBlocked(a, b) || isBlocked(b, a);
+}
+
+function groupMemberIds(groupId) {
+  return db.prepare(`SELECT user_id FROM hub_members WHERE hub_id = ? ORDER BY rowid`).all(groupId).map((r) => r.user_id);
+}
+
+function usernamesOf(ids) {
+  if (!ids.length) return [];
+  return db.prepare(`SELECT id, username FROM users WHERE id IN (SELECT value FROM json_each(?))`).all(JSON.stringify(ids));
+}
+
+// Grup içi sistem satırı ("alice, bob'u ekledi" vb.). Metin değil yapı saklanır; istemci kendi dilinde yazar.
+function addGroupSystemMessage(groupId, actorId, actorName, payload) {
+  const info = db.prepare(`
+    INSERT INTO messages (user_id, username, content, room, hub_id, kind, payload)
+    VALUES (?, ?, '', ?, ?, 'system', ?)
+  `).run(actorId, actorName, `hub_${groupId}`, groupId, JSON.stringify(payload));
+  return getMessageById(info.lastInsertRowid);
+}
+
+function validateGroupInvitees(actorId, ids, existing = []) {
+  const unique = [...new Set((Array.isArray(ids) ? ids : []).map(Number).filter((id) => Number.isInteger(id) && id > 0 && id !== actorId && !existing.includes(id)))];
+  if (!unique.length) return { error: 'En az bir arkadaşını seç.' };
+  for (const id of unique) {
+    if (!areFriends(actorId, id)) return { error: 'Gruba yalnızca arkadaşlarını ekleyebilirsin.' };
+    if (groupBlockedPair(actorId, id)) return { error: 'Engellediğin ya da seni engelleyen biri gruba eklenemez.' };
+    for (const other of existing) {
+      if (groupBlockedPair(other, id)) return { error: 'Seçtiğin kişilerden biri gruptaki biriyle engelli; eklenemez.' };
+    }
+  }
+  if (existing.length + unique.length > GROUP_MAX_MEMBERS) return { error: `Bir grupta en fazla ${GROUP_MAX_MEMBERS} kişi olabilir.` };
+  return { ids: unique };
+}
+
+function createGroupDm(userId, username, { name, member_ids } = {}) {
+  name = String(name || '').trim().slice(0, 40);
+  const owned = db.prepare(`SELECT COUNT(*) AS c FROM hub_members hm JOIN hubs h ON h.id = hm.hub_id WHERE hm.user_id = ? AND h.type = 'group'`).get(userId).c;
+  if (owned >= GROUP_MAX_PER_USER) return { success: false, status: 400, error: `En fazla ${GROUP_MAX_PER_USER} gruba üye olabilirsin.` };
+  const checked = validateGroupInvitees(userId, member_ids, [userId]);
+  if (checked.error) return { success: false, status: 400, error: checked.error };
+  // Seçilenler kendi aralarında da engelli olmamalı.
+  for (let i = 0; i < checked.ids.length; i += 1) {
+    for (let j = i + 1; j < checked.ids.length; j += 1) {
+      if (groupBlockedPair(checked.ids[i], checked.ids[j])) return { success: false, status: 400, error: 'Seçtiğin kişilerden ikisi birbirini engellemiş; aynı gruba eklenemezler.' };
+    }
+  }
+  return db.transaction(() => {
+    const info = db.prepare(`INSERT INTO hubs (name, type, icon, created_by, mention_everyone) VALUES (?, 'group', '👥', ?, 'everyone')`).run(name, userId);
+    const groupId = Number(info.lastInsertRowid);
+    db.prepare(`INSERT INTO hub_members (hub_id, user_id, permission_tier) VALUES (?, ?, 'owner')`).run(groupId, userId);
+    const add = db.prepare(`INSERT INTO hub_members (hub_id, user_id) VALUES (?, ?)`);
+    checked.ids.forEach((id) => add.run(groupId, id));
+    db.prepare(`INSERT INTO hub_voice_rooms (hub_id, name, created_by) VALUES (?, 'Grup araması', ?)`).run(groupId, userId);
+    addGroupSystemMessage(groupId, userId, username, { type: 'create', users: usernamesOf(checked.ids) });
+    return { success: true, group_id: groupId, member_ids: [userId, ...checked.ids] };
+  })();
+}
+
+function listGroups(userId) {
+  const rows = db.prepare(`
+    SELECT h.id, h.name, h.image_data, h.created_by, hm.muted,
+           (SELECT MAX(id) FROM messages m WHERE m.hub_id = h.id) AS last_message_id,
+           (SELECT created_at FROM messages m WHERE m.hub_id = h.id ORDER BY id DESC LIMIT 1) AS last_message_at
+    FROM hubs h JOIN hub_members hm ON hm.hub_id = h.id AND hm.user_id = ?
+    WHERE h.type = 'group'
+    ORDER BY COALESCE(last_message_id, 0) DESC
+  `).all(userId);
+  const members = db.prepare(`
+    SELECT hm.user_id AS id, u.username, u.avatar_data, u.avatar_visibility, u.minor_until
+    FROM hub_members hm JOIN users u ON u.id = hm.user_id WHERE hm.hub_id = ? ORDER BY hm.rowid
+  `);
+  return rows.map((g) => ({
+    id: g.id, name: g.name || '', image_data: g.image_data || null, owner_id: g.created_by, muted: Boolean(g.muted),
+    last_message_at: g.last_message_at,
+    members: members.all(g.id).map((m) => {
+      const visible = m.id === userId || areFriends(userId, m.id) || (m.avatar_visibility === 'public' && !m.minor_until);
+      return { id: m.id, username: m.username, avatar_data: visible ? m.avatar_data || null : null };
+    })
+  }));
+}
+
+function renameGroup(groupId, userId, username, name) {
+  if (!isGroupHub(groupId) || !isHubMember(groupId, userId)) return { success: false, status: 403, error: 'Bu grubun üyesi değilsin.' };
+  name = String(name || '').trim().slice(0, 40);
+  const old = db.prepare(`SELECT name FROM hubs WHERE id = ?`).get(groupId).name || '';
+  if (old === name) return { success: true, unchanged: true };
+  db.prepare(`UPDATE hubs SET name = ? WHERE id = ?`).run(name, groupId);
+  const message = addGroupSystemMessage(groupId, userId, username, { type: 'rename', name });
+  return { success: true, name, message };
+}
+
+function addGroupMembers(groupId, userId, username, memberIds) {
+  if (!isGroupHub(groupId) || !isHubMember(groupId, userId)) return { success: false, status: 403, error: 'Bu grubun üyesi değilsin.' };
+  const existing = groupMemberIds(groupId);
+  const checked = validateGroupInvitees(userId, memberIds, existing);
+  if (checked.error) return { success: false, status: 400, error: checked.error };
+  return db.transaction(() => {
+    const add = db.prepare(`INSERT OR IGNORE INTO hub_members (hub_id, user_id) VALUES (?, ?)`);
+    checked.ids.forEach((id) => add.run(groupId, id));
+    const message = addGroupSystemMessage(groupId, userId, username, { type: 'add', users: usernamesOf(checked.ids) });
+    return { success: true, added: checked.ids, message };
+  })();
+}
+
+// Sahipliği en eski kalan üyeye devreder; kimse kalmadıysa grubu siler. TRANSACTION İÇİNDE çağrılır.
+function settleGroupAfterLeave(groupId, leftUserId) {
+  const remaining = groupMemberIds(groupId);
+  if (!remaining.length) return { deleted: true, ...purgeHubData(groupId) };
+  const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(groupId);
+  if (hub && hub.created_by === leftUserId) {
+    const next = remaining[0];
+    db.prepare(`UPDATE hubs SET created_by = ? WHERE id = ?`).run(next, groupId);
+    db.prepare(`UPDATE hub_members SET permission_tier = 'owner' WHERE hub_id = ? AND user_id = ?`).run(groupId, next);
+    db.prepare(`UPDATE hub_voice_rooms SET created_by = ? WHERE hub_id = ? AND created_by = ?`).run(next, groupId, leftUserId);
+    return { deleted: false, new_owner_id: next };
+  }
+  return { deleted: false };
+}
+
+// targetId === actorId → ayrılma; değilse yalnızca sahip çıkarabilir.
+function removeGroupMember(groupId, actorId, actorName, targetId) {
+  if (!isGroupHub(groupId) || !isHubMember(groupId, actorId)) return { success: false, status: 403, error: 'Bu grubun üyesi değilsin.' };
+  const leaving = actorId === targetId;
+  if (!leaving) {
+    const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(groupId);
+    if (hub.created_by !== actorId) return { success: false, status: 403, error: 'Gruptan yalnızca grubun kurucusu çıkarabilir.' };
+    if (!isHubMember(groupId, targetId)) return { success: false, status: 404, error: 'Bu kişi grupta değil.' };
+  }
+  return db.transaction(() => {
+    const target = db.prepare(`SELECT id, username FROM users WHERE id = ?`).get(targetId);
+    db.prepare(`DELETE FROM hub_members WHERE hub_id = ? AND user_id = ?`).run(groupId, targetId);
+    db.prepare(`DELETE FROM read_states WHERE user_id = ? AND scope = 'hub' AND scope_id = ?`).run(targetId, groupId);
+    const settled = settleGroupAfterLeave(groupId, targetId);
+    let message = null;
+    if (!settled.deleted) {
+      message = addGroupSystemMessage(groupId, actorId, actorName, leaving
+        ? { type: 'leave', ...(settled.new_owner_id ? { new_owner: usernamesOf([settled.new_owner_id])[0] || null } : {}) }
+        : { type: 'remove', users: target ? [{ id: target.id, username: target.username }] : [] });
+    }
+    return { success: true, deleted: Boolean(settled.deleted), message, purge: settled.deleted ? settled : null, new_owner_id: settled.new_owner_id || null };
+  })();
+}
+
 module.exports = {
+  isGroupHub,
+  createGroupDm,
+  listGroups,
+  renameGroup,
+  addGroupMembers,
+  removeGroupMember,
+  settleGroupAfterLeave,
+  groupMemberIds,
   getLinkPreviewCache,
   putLinkPreviewCache,
   getLinkPreviewImage,

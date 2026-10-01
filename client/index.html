@@ -440,6 +440,14 @@
                     <div id="friends-favorites-row" class="friends-favorites-row"></div>
                 </div>
 
+                <div id="friends-groups" class="friends-groups">
+                    <div class="friends-groups-head">
+                        <span class="friends-favorites-title" data-i18n="groups-title">Gruplar</span>
+                        <button id="group-create-open-btn" class="friends-groups-add" type="button" title="Grup oluştur" aria-label="Grup oluştur">＋</button>
+                    </div>
+                    <div id="friends-groups-list" class="friends-groups-list"></div>
+                </div>
+
                 <div id="friends-sidebar-list" class="friends-sidebar-list"></div>
 
             </div>
@@ -471,6 +479,8 @@
 
                         <button id="hub-search-btn" class="hub-icon-btn" type="button" title="Mesajlarda ara" aria-label="Mesajlarda ara" data-lbl="Ara">🔍</button>
                         <button id="hub-settings-open-btn" class="hub-icon-btn" type="button" title="Lobi Ayarları" data-lbl="Lobi Ayarları">⚙️</button>
+                        <button id="group-call-btn" class="hub-icon-btn group-only" type="button" title="Grup araması" data-lbl="Sesli" style="display:none;">📞</button>
+                        <button id="group-settings-btn" class="hub-icon-btn group-only" type="button" title="Grup ayarları" data-lbl="Grup" style="display:none;">⚙️</button>
 
                         <div class="hub-member-options-wrap" id="hub-member-options-wrap" style="display:none;">
                             <button id="hub-member-options-btn" class="hub-icon-btn" type="button" title="Lobi Seçenekleri" aria-label="Lobi Seçenekleri">⋯</button>
@@ -1205,6 +1215,52 @@
                 </div>
 
                 <div id="email-change-error" class="hub-create-error"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GRUP OLUŞTUR / ÜYE EKLE -->
+    <div id="group-pick-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="group-pick-title">
+        <div class="modal-box market-modal-box twofa-box">
+            <div class="modal-header">
+                <span id="group-pick-title">👥 Grup oluştur</span>
+                <button id="group-pick-close-btn" type="button" aria-label="Kapat">✕</button>
+            </div>
+            <div class="market-modal-body twofa-body">
+                <input type="text" id="group-pick-name" class="hub-name-input" maxlength="40" placeholder="Grup adı (isteğe bağlı)" autocomplete="off">
+                <input type="text" id="group-pick-search" class="hub-name-input" placeholder="Arkadaş ara…" autocomplete="off">
+                <div id="group-pick-count" class="group-pick-count"></div>
+                <div id="group-pick-list" class="group-pick-list"></div>
+                <div id="group-pick-error" class="hub-create-error"></div>
+                <button type="button" class="hubset-save-btn" id="group-pick-submit">Grubu oluştur</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GRUP AYARLARI -->
+    <div id="group-settings-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="group-settings-title">
+        <div class="modal-box market-modal-box twofa-box">
+            <div class="modal-header">
+                <span id="group-settings-title">⚙️ Grup ayarları</span>
+                <button id="group-settings-close-btn" type="button" aria-label="Kapat">✕</button>
+            </div>
+            <div class="market-modal-body twofa-body">
+                <label class="profile-field-label" for="group-settings-name">Grup adı</label>
+                <div class="group-rename-row">
+                    <input type="text" id="group-settings-name" class="hub-name-input" maxlength="40" placeholder="Adsız grup" autocomplete="off">
+                    <button type="button" class="settings-unblock-btn" id="group-settings-rename">Kaydet</button>
+                </div>
+                <label class="notif-pref-row group-mute-row">
+                    <input type="checkbox" id="group-settings-notify">
+                    <span>Bildirimler</span>
+                </label>
+                <div class="group-members-head">
+                    <span class="profile-field-label" id="group-settings-count">Üyeler</span>
+                    <button type="button" class="settings-unblock-btn" id="group-settings-add">＋ Kişi ekle</button>
+                </div>
+                <div id="group-settings-members" class="settings-blocked-list"></div>
+                <div id="group-settings-error" class="hub-create-error"></div>
+                <button type="button" class="hub-settings-action-btn hub-settings-danger" id="group-settings-leave">🚪 Gruptan ayrıl</button>
             </div>
         </div>
     </div>

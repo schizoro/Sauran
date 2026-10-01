@@ -29,8 +29,8 @@ Durum: `[ ]` sırada · `[~]` yapılıyor · `[x]` tamamlandı
 - [ ] Kamera / görüntülü görüşme *(şu an bilinçli olarak yok; karar gerekli — en sona bırakıldı)*
 
 ## 5. Platform ve ticari
-- [ ] Grup DM ← sıradaki
-- [ ] iOS yerel uygulama *(şu an PWA)*
+- [x] **Grup DM** — Arkadaşlar panelinde "Gruplar"; en fazla 10 kişi, yalnızca arkadaşlar eklenir (aralarında engel varsa eklenemez). İsteğe bağlı ad (yoksa üye adları), kişi ekleme, kurucunun çıkarması, ayrılma (sahiplik en eski üyeye geçer; son kişi çıkınca grup silinir), bildirim aç/kapa, 📞 grup araması. Mesajlar, dosya, bahsetme, arama, link önizlemesi lobi altyapısından gelir; sistem satırları (ekledi/çıkardı/ayrıldı/adı değişti).
+- [ ] iOS yerel uygulama *(şu an PWA)* ← sıradaki
 - [ ] Ödeme sistemi *(bilinçli olarak kapalı beta + hukuki inceleme sonrasına bırakıldı; bkz. `ucretlendirme-hazirlik.md`)*
 
 ## Tamamlananlar (Ekim 2026)

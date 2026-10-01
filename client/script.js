@@ -3993,6 +3993,35 @@ const I18N = {
     'modlog-hint': { tr: 'Kayıtları yalnızca kurucu ve moderatörler görür. 180 gün saklanır; mesaj içerikleri kaydedilmez.', en: 'Only the founder and moderators can see this log. Kept for 180 days; message contents are never stored.' },
     'modlog-empty': { tr: 'Henüz kayıt yok.', en: 'No entries yet.' },
     'wf-label': { tr: '🚫 Kelime filtresi', en: '🚫 Word filter' },
+    'groups-title': { tr: 'Gruplar', en: 'Groups' },
+    'groups-empty': { tr: 'Henüz grubun yok. ＋ ile arkadaşlarınla bir grup kur.', en: 'No groups yet. Tap ＋ to start one with friends.' },
+    'group-empty-name': { tr: 'Adsız grup', en: 'Unnamed group' },
+    'group-member-count': { tr: '{n} kişi', en: '{n} members' },
+    'group-create-title': { tr: '👥 Grup oluştur', en: '👥 New group' },
+    'group-add-title': { tr: '👥 Kişi ekle', en: '👥 Add people' },
+    'group-create-btn': { tr: 'Grubu oluştur', en: 'Create group' },
+    'group-add-btn': { tr: 'Ekle', en: 'Add' },
+    'group-already': { tr: 'grupta', en: 'in group' },
+    'group-pick-count': { tr: '{n} kişi seçildi · en fazla {max}', en: '{n} selected · up to {max}' },
+    'group-pick-nomatch': { tr: 'Eşleşen arkadaş yok.', en: 'No matching friends.' },
+    'group-pick-nofriends': { tr: 'Gruba yalnızca arkadaşlarını ekleyebilirsin; henüz arkadaşın yok.', en: 'You can only add friends, and you have none yet.' },
+    'group-members-title': { tr: 'Üyeler ({n}/{max})', en: 'Members ({n}/{max})' },
+    'group-you': { tr: '(sen)', en: '(you)' },
+    'group-owner': { tr: 'Kurucu', en: 'Owner' },
+    'group-remove': { tr: 'Çıkar', en: 'Remove' },
+    'group-remove-confirm': { tr: '{u} gruptan çıkarılsın mı?', en: 'Remove {u} from the group?' },
+    'group-leave-confirm': { tr: 'Gruptan ayrılmak istiyor musun? Mesajlarını artık göremezsin.', en: 'Leave this group? You will no longer see its messages.' },
+    'group-leave-last-confirm': { tr: 'Gruptaki son kişisin. Ayrılırsan grup ve tüm mesajları silinir.', en: 'You are the last member. Leaving deletes the group and all its messages.' },
+    'group-renamed': { tr: 'Grup adı güncellendi.', en: 'Group renamed.' },
+    'group-removed-toast': { tr: 'Gruptan çıkarıldın.', en: 'You were removed from the group.' },
+    'deleted-account-short': { tr: 'Silinmiş hesap', en: 'Deleted account' },
+    'group-sys-create': { tr: '{a} grubu kurdu · {u}', en: '{a} created the group · {u}' },
+    'group-sys-add': { tr: '{a} gruba ekledi: {u}', en: '{a} added {u}' },
+    'group-sys-remove': { tr: '{a} gruptan çıkardı: {u}', en: '{a} removed {u}' },
+    'group-sys-leave': { tr: '{a} gruptan ayrıldı', en: '{a} left the group' },
+    'group-sys-new-owner': { tr: 'Yeni kurucu: {u}', en: 'New owner: {u}' },
+    'group-sys-rename': { tr: '{a} grubun adını {n} yaptı', en: '{a} renamed the group to {n}' },
+    'group-sys-rename-clear': { tr: '{a} grubun adını kaldırdı', en: '{a} removed the group name' },
     'link-preview-remove': { tr: 'Önizlemeyi kaldır', en: 'Remove preview' },
     'wf-off': { tr: 'Kapalı', en: 'Off' },
     'wf-mask': { tr: 'Kelimeyi gizle (*** ile)', en: 'Hide the word (with ***)' },
@@ -5432,6 +5461,18 @@ function connectToChat() {
     // Sesli oda değişiklikleri
     // -------------------------------------------------
 
+    socket.on('groups_changed', (data) => {
+        loadGroups();
+        if (data?.reason === 'created' || data?.reason === 'members') refreshUnreadCounts();
+        if (currentHub && Number(data?.group_id) === currentHub.id && data?.reason === 'renamed') refreshGroupSettings();
+    });
+    socket.on('group_removed', (data) => {
+        const id = Number(data?.group_id);
+        if (!id) return;
+        if (!data.by_self && currentHub && currentHub.id === id) showToast(t('group-removed-toast'));
+        leaveGroupView(id);
+    });
+
     socket.on('hub_members_changed', (data) => {
         if (currentHub && data.hub_id === currentHub.id) {
             openHub(currentHub.id);
@@ -6536,6 +6577,7 @@ async function loadFriendsSidebar() {
 
         renderFriendsSidebar(data.friends);
         loadFriendFavorites();
+        loadGroups();
 
     } catch (error) {
         console.error('Arkadaş listesi alınamadı:', error);
@@ -13326,6 +13368,278 @@ hubCreateModal.addEventListener(
 // HUB DETAY
 // =====================================================
 
+
+// =====================================================
+// GRUP DM (sunucuda lobi altyapısı, type = 'group')
+// =====================================================
+const GROUP_MAX_MEMBERS = 10;
+var groupsCache = [];
+var groupPickMode = 'create'; // create | add
+var groupPickSelected = new Set();
+var groupPickFriends = [];
+
+function isGroupHub(hub) {
+    return Boolean(hub && hub.type === 'group');
+}
+
+function groupDisplayName(group) {
+    if (group && group.name) return group.name;
+    const others = (group?.members || []).filter((m) => (m.user_id ?? m.id) !== currentUser?.id).map((m) => m.username);
+    if (!others.length) return t('group-empty-name');
+    return others.slice(0, 3).join(', ') + (others.length > 3 ? ` +${others.length - 3}` : '');
+}
+
+function groupAvatarHtml(group) {
+    const others = (group.members || []).filter((m) => m.id !== currentUser?.id).slice(0, 2);
+    const list = others.length ? others : (group.members || []).slice(0, 1);
+    return `<span class="group-avatar" aria-hidden="true">${list.map((m) => `<span style="--user-color:${getUserColor(m.username || '?')};">${m.avatar_data ? `<img src="${escapeAttr(m.avatar_data)}" alt="">` : escapeHtml((m.username || '?').charAt(0).toUpperCase())}</span>`).join('')}</span>`;
+}
+
+async function loadGroups() {
+    try {
+        const data = await (await fetch('/api/groups', { credentials: 'include' })).json();
+        if (!data.success) return;
+        groupsCache = data.groups;
+        renderGroupsList();
+    } catch (error) {
+        console.error('Gruplar alınamadı:', error);
+    }
+}
+
+function renderGroupsList() {
+    const list = document.getElementById('friends-groups-list');
+    if (!list) return;
+    if (!groupsCache.length) {
+        list.innerHTML = `<div class="friends-groups-empty">${t('groups-empty')}</div>`;
+        return;
+    }
+    list.innerHTML = groupsCache.map((g) => `
+        <button type="button" class="group-row${currentHub && currentHub.id === g.id ? ' active' : ''}" data-group-id="${g.id}">
+            ${groupAvatarHtml(g)}
+            <span class="group-row-text">
+                <span class="group-row-name">${escapeHtml(groupDisplayName(g))}</span>
+                <span class="group-row-sub">${t('group-member-count').replace('{n}', String(g.members.length))}</span>
+            </span>
+            <span class="hub-card-unread" data-hub-unread="${g.id}" style="display:none;"></span>
+        </button>`).join('');
+    renderHubUnreadBadges();
+}
+
+document.getElementById('friends-groups-list').addEventListener('click', (event) => {
+    const row = event.target.closest('[data-group-id]');
+    if (!row) return;
+    openHub(Number(row.dataset.groupId));
+    if (window.matchMedia('(max-width: 900px)').matches) document.getElementById('friends-sidebar')?.classList.remove('open');
+});
+
+// ── Grup oluştur / kişi ekle penceresi ──
+const groupPickModal = document.getElementById('group-pick-modal');
+
+async function openGroupPick(mode) {
+    groupPickMode = mode;
+    groupPickSelected = new Set();
+    document.getElementById('group-pick-title').textContent = mode === 'create' ? t('group-create-title') : t('group-add-title');
+    document.getElementById('group-pick-submit').textContent = mode === 'create' ? t('group-create-btn') : t('group-add-btn');
+    document.getElementById('group-pick-name').style.display = mode === 'create' ? '' : 'none';
+    document.getElementById('group-pick-name').value = '';
+    document.getElementById('group-pick-search').value = '';
+    document.getElementById('group-pick-error').textContent = '';
+    try {
+        const data = await (await fetch('/api/friends', { credentials: 'include' })).json();
+        groupPickFriends = data.success ? data.friends : [];
+    } catch (_) { groupPickFriends = []; }
+    renderGroupPick();
+    groupPickModal.style.display = 'flex';
+    setTimeout(() => document.getElementById(mode === 'create' ? 'group-pick-name' : 'group-pick-search').focus(), 30);
+}
+
+function groupPickCapacity() {
+    const existing = groupPickMode === 'add' && currentHub ? currentHub.members.length : 1;
+    return GROUP_MAX_MEMBERS - existing;
+}
+
+function renderGroupPick() {
+    const q = document.getElementById('group-pick-search').value.trim().toLocaleLowerCase('tr');
+    const inGroup = new Set(groupPickMode === 'add' && currentHub ? currentHub.members.map((m) => m.user_id) : []);
+    const capacity = groupPickCapacity();
+    const friends = groupPickFriends.filter((f) => !q || f.username.toLocaleLowerCase('tr').includes(q));
+    const list = document.getElementById('group-pick-list');
+    list.innerHTML = friends.length ? friends.map((f) => {
+        const already = inGroup.has(f.id);
+        const checked = already || groupPickSelected.has(f.id);
+        const disabled = already || (!checked && groupPickSelected.size >= capacity);
+        return `<label class="group-pick-item${disabled ? ' disabled' : ''}">
+            <input type="checkbox" data-pick-id="${f.id}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
+            <span class="settings-blocked-avatar" style="--user-color:${getUserColor(f.username)};">${f.avatar_data ? `<img src="${escapeAttr(f.avatar_data)}" alt="">` : escapeHtml(f.username.charAt(0).toUpperCase())}</span>
+            <span>${escapeHtml(f.username)}${already ? ` <span class="group-pick-count">· ${t('group-already')}</span>` : ''}</span>
+        </label>`;
+    }).join('') : `<div class="friends-groups-empty">${t(groupPickFriends.length ? 'group-pick-nomatch' : 'group-pick-nofriends')}</div>`;
+    document.getElementById('group-pick-count').textContent = t('group-pick-count').replace('{n}', String(groupPickSelected.size)).replace('{max}', String(capacity));
+    document.getElementById('group-pick-submit').disabled = groupPickSelected.size === 0;
+}
+
+document.getElementById('group-pick-list').addEventListener('change', (event) => {
+    const box = event.target.closest('[data-pick-id]');
+    if (!box) return;
+    const id = Number(box.dataset.pickId);
+    if (box.checked) groupPickSelected.add(id); else groupPickSelected.delete(id);
+    renderGroupPick();
+});
+document.getElementById('group-pick-search').addEventListener('input', renderGroupPick);
+document.getElementById('group-pick-close-btn').addEventListener('click', () => { groupPickModal.style.display = 'none'; });
+groupPickModal.addEventListener('click', (event) => { if (event.target === groupPickModal) groupPickModal.style.display = 'none'; });
+document.getElementById('group-create-open-btn').addEventListener('click', () => openGroupPick('create'));
+
+document.getElementById('group-pick-submit').addEventListener('click', async () => {
+    const btn = document.getElementById('group-pick-submit');
+    const error = document.getElementById('group-pick-error');
+    btn.disabled = true;
+    error.textContent = '';
+    try {
+        const ids = [...groupPickSelected];
+        const response = groupPickMode === 'create'
+            ? await fetch('/api/groups', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: document.getElementById('group-pick-name').value.trim(), member_ids: ids }) })
+            : await fetch(`/api/groups/${currentHub.id}/members`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_ids: ids }) });
+        const data = await response.json();
+        if (!data.success) { error.textContent = data.error || 'Olmadı.'; return; }
+        groupPickModal.style.display = 'none';
+        if (groupPickMode === 'create') {
+            await loadGroups();
+            openHub(data.group_id);
+        } else {
+            refreshGroupSettings();
+        }
+    } catch (_) {
+        error.textContent = 'Bağlantı hatası.';
+    } finally {
+        btn.disabled = groupPickSelected.size === 0;
+    }
+});
+
+// ── Grup ayarları ──
+const groupSettingsModal = document.getElementById('group-settings-modal');
+
+function renderGroupSettings() {
+    if (!currentHub || !isGroupHub(currentHub)) return;
+    document.getElementById('group-settings-name').value = currentHub.name || '';
+    document.getElementById('group-settings-name').placeholder = groupDisplayName(currentHub);
+    document.getElementById('group-settings-notify').checked = !currentHub.my_muted;
+    document.getElementById('group-settings-count').textContent = t('group-members-title').replace('{n}', String(currentHub.members.length)).replace('{max}', String(GROUP_MAX_MEMBERS));
+    document.getElementById('group-settings-add').style.display = currentHub.members.length >= GROUP_MAX_MEMBERS ? 'none' : '';
+    document.getElementById('group-settings-error').textContent = '';
+    document.getElementById('group-settings-members').innerHTML = currentHub.members.map((m) => {
+        const isOwner = m.permission_tier === 'owner';
+        const me = m.user_id === currentUser?.id;
+        return `<div class="settings-blocked-row">
+            <span class="settings-blocked-avatar" style="--user-color:${getUserColor(m.username)};">${m.avatar_data ? `<img src="${escapeAttr(m.avatar_data)}" alt="">` : escapeHtml(m.username.charAt(0).toUpperCase())}</span>
+            <span class="settings-blocked-name">${escapeHtml(m.username)}${me ? ` <span class="voice-mute-row-meta">${t('group-you')}</span>` : ''}${isOwner ? ` <span class="voice-mute-row-meta">👑 ${t('group-owner')}</span>` : ''}</span>
+            ${currentHub.is_owner && !me ? `<button class="settings-unblock-btn" type="button" data-group-remove="${m.user_id}" data-group-remove-name="${escapeAttr(m.username)}">${t('group-remove')}</button>` : ''}
+        </div>`;
+    }).join('');
+}
+
+async function refreshGroupSettings() {
+    if (!currentHub) return;
+    try {
+        const data = await (await fetch(`/api/hubs/${currentHub.id}`, { credentials: 'include' })).json();
+        if (!data.success) return;
+        currentHub = data.hub;
+        renderHubDetail();
+        renderGroupSettings();
+    } catch (_) { /* yoksay */ }
+}
+
+document.getElementById('group-settings-btn').addEventListener('click', () => {
+    renderGroupSettings();
+    groupSettingsModal.style.display = 'flex';
+});
+document.getElementById('group-settings-close-btn').addEventListener('click', () => { groupSettingsModal.style.display = 'none'; });
+groupSettingsModal.addEventListener('click', (event) => { if (event.target === groupSettingsModal) groupSettingsModal.style.display = 'none'; });
+document.getElementById('group-settings-add').addEventListener('click', () => openGroupPick('add'));
+
+async function groupSettingsCall(url, options, okToast) {
+    const error = document.getElementById('group-settings-error');
+    error.textContent = '';
+    try {
+        const data = await (await fetch(url, { credentials: 'include', headers: { 'Content-Type': 'application/json' }, ...options })).json();
+        if (!data.success) { error.textContent = data.error || 'Olmadı.'; return null; }
+        if (okToast) showToast(okToast);
+        return data;
+    } catch (_) {
+        error.textContent = 'Bağlantı hatası.';
+        return null;
+    }
+}
+
+document.getElementById('group-settings-rename').addEventListener('click', async () => {
+    if (!currentHub) return;
+    const data = await groupSettingsCall(`/api/groups/${currentHub.id}`, { method: 'PATCH', body: JSON.stringify({ name: document.getElementById('group-settings-name').value.trim() }) }, t('group-renamed'));
+    if (data) refreshGroupSettings();
+});
+
+document.getElementById('group-settings-notify').addEventListener('change', async (event) => {
+    if (!currentHub) return;
+    const muted = !event.target.checked;
+    try {
+        await fetch(`/api/hubs/${currentHub.id}/mute`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ muted }) });
+        currentHub.my_muted = muted;
+    } catch (_) { event.target.checked = !muted; }
+});
+
+document.getElementById('group-settings-members').addEventListener('click', async (event) => {
+    const btn = event.target.closest('[data-group-remove]');
+    if (!btn || !currentHub) return;
+    if (!confirm(t('group-remove-confirm').replace('{u}', btn.dataset.groupRemoveName))) return;
+    const data = await groupSettingsCall(`/api/groups/${currentHub.id}/members/${Number(btn.dataset.groupRemove)}`, { method: 'DELETE' });
+    if (data) refreshGroupSettings();
+});
+
+document.getElementById('group-settings-leave').addEventListener('click', async () => {
+    if (!currentHub) return;
+    const last = currentHub.members.length <= 1;
+    if (!confirm(t(last ? 'group-leave-last-confirm' : 'group-leave-confirm'))) return;
+    const groupId = currentHub.id;
+    const data = await groupSettingsCall(`/api/groups/${groupId}/members/${currentUser.id}`, { method: 'DELETE' });
+    if (!data) return;
+    groupSettingsModal.style.display = 'none';
+    leaveGroupView(groupId);
+});
+
+function leaveGroupView(groupId) {
+    if (callMode === 'hub-room' && currentVoiceRoomHubId === groupId) leaveCall();
+    if (currentHub && currentHub.id === groupId) {
+        socket?.emit('leave_hub', groupId);
+        currentHub = null;
+        switchToView('hubs');
+        loadHubList();
+    }
+    groupsCache = groupsCache.filter((g) => g.id !== groupId);
+    unreadHubCounts.delete(groupId);
+    renderGroupsList();
+}
+
+// Grup araması: grubun tek sesli odasına katılır.
+document.getElementById('group-call-btn').addEventListener('click', async () => {
+    if (!currentHub || !isGroupHub(currentHub)) return;
+    if (!voiceRoomsCache || !voiceRoomsCache.length || voiceRoomsCache[0].hub_id !== currentHub.id) await loadVoiceRooms(currentHub.id);
+    const room = (voiceRoomsCache || []).find((r) => r.hub_id === currentHub.id) || (voiceRoomsCache || [])[0];
+    if (room) joinVoiceRoom(room);
+});
+
+function groupSystemText(msg) {
+    const p = msg.payload || {};
+    const actor = `<b>${escapeHtml(msg.username || t('deleted-account-short'))}</b>`;
+    const users = (p.users || []).map((u) => `<b>${escapeHtml(u.username || '?')}</b>`).join(', ');
+    switch (p.type) {
+        case 'create': return t('group-sys-create').replace('{a}', actor).replace('{u}', users);
+        case 'add': return t('group-sys-add').replace('{a}', actor).replace('{u}', users);
+        case 'remove': return t('group-sys-remove').replace('{a}', actor).replace('{u}', users);
+        case 'leave': return t('group-sys-leave').replace('{a}', actor) + (p.new_owner ? ' · ' + t('group-sys-new-owner').replace('{u}', `<b>${escapeHtml(p.new_owner.username)}</b>`) : '');
+        case 'rename': return p.name ? t('group-sys-rename').replace('{a}', actor).replace('{n}', `<b>${escapeHtml(p.name)}</b>`) : t('group-sys-rename-clear').replace('{a}', actor);
+        default: return '';
+    }
+}
+
 async function openHub(hubId) {
 
     nativeNotifyCancel(`hub-${hubId}`);
@@ -13388,8 +13702,14 @@ function renderHubDetail() {
         hubDetailIcon.innerHTML = hubInitialHtml(currentHub.name);
     }
 
-    hubDetailName.textContent = currentHub.name;
+    const group = isGroupHub(currentHub);
+    hubDetailView.classList.toggle('is-group', group);
+    document.getElementById('group-call-btn').style.display = group ? '' : 'none';
+    document.getElementById('group-settings-btn').style.display = group ? '' : 'none';
+    hubDetailName.textContent = group ? groupDisplayName(currentHub) : currentHub.name;
     hubDetailCount.textContent = `${currentHub.members.length} ${t('member-count')}`;
+    if (group && !currentHub.image_data) hubDetailIcon.innerHTML = '👥';
+    if (group) document.querySelectorAll('.group-row').forEach((r) => r.classList.toggle('active', Number(r.dataset.groupId) === currentHub.id));
 
     hubDeleteBtn.style.display = currentHub.is_owner ? 'block' : 'none';
     if (hubSettingsOpenBtn) {
@@ -15663,6 +15983,11 @@ function renderMentionText(content, mentions) {
 
 function renderHubMessageIntoWrap(wrap, msg) {
     wrap.dataset.authorId = msg.user_id != null ? String(msg.user_id) : '';
+    if (msg.kind === 'system') {
+        wrap.classList.add('is-system');
+        wrap.innerHTML = `<div class="hub-msg-system">${groupSystemText(msg)}</div>`;
+        return;
+    }
 
     wrap.classList.toggle('hub-msg-mentions-me', messageMentionsMe(msg));
 
