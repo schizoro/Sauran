@@ -3338,6 +3338,8 @@ async function loadTwoFactorStatus() {
     try {
         const data = await (await fetch('/api/2fa/status', { credentials: 'include' })).json();
         if (!data.success) return;
+        twofaEnabledCache = Boolean(data.enabled);
+        renderSettingsEmail();
         status.innerHTML = data.enabled
             ? `<span class="twofa-badge on">● Açık</span> <span class="twofa-meta">Kalan kurtarma kodu: ${Number(data.recovery_remaining)}</span>`
             : `<span class="twofa-badge off">● Kapalı</span> <span class="twofa-meta">Girişte şifreye ek olarak telefonundaki koddan da sorulur.</span>`;
@@ -3451,6 +3453,118 @@ document.getElementById('twofa-close-btn').addEventListener('click', () => {
     if (twofaCodes.length && !confirm('Kurtarma kodlarını kaydettin mi? Bu pencereyi kapatınca bir daha gösterilmeyecek.')) return;
     closeTwofaModal();
 });
+
+// ── E-posta adresini değiştirme ──
+var emailRevealed = false;
+var twofaEnabledCache = false;
+
+function maskEmailClient(email) {
+    const [local, domain] = String(email || '').split('@');
+    if (!domain) return '';
+    const head = local.slice(0, Math.min(2, Math.max(1, local.length - 1)));
+    return `${head}${'•'.repeat(Math.max(3, local.length - head.length))}@${domain}`;
+}
+
+function renderSettingsEmail() {
+    const el = document.getElementById('settings-email-display');
+    if (!el) return;
+    const email = currentUser && currentUser.email ? currentUser.email : '';
+    el.textContent = email ? (emailRevealed ? email : maskEmailClient(email)) : '—';
+    document.getElementById('settings-email-reveal').textContent = emailRevealed ? 'Gizle' : 'Göster';
+}
+
+document.getElementById('settings-email-reveal').addEventListener('click', () => {
+    emailRevealed = !emailRevealed;
+    renderSettingsEmail();
+});
+
+const emailChangeModal = document.getElementById('email-change-modal');
+
+function showEmailChangeStep(step) {
+    emailChangeModal.querySelectorAll('[data-email-step]').forEach((el) => { el.style.display = el.dataset.emailStep === step ? 'flex' : 'none'; });
+    document.getElementById('email-change-error').textContent = '';
+}
+
+function openEmailChangeModal() {
+    document.getElementById('email-change-new').value = '';
+    document.getElementById('email-change-password').value = '';
+    document.getElementById('email-change-2fa').value = '';
+    document.getElementById('email-change-code').value = '';
+    document.getElementById('email-change-2fa').style.display = twofaEnabledCache ? '' : 'none';
+    showEmailChangeStep('form');
+    emailChangeModal.style.display = 'flex';
+    setTimeout(() => document.getElementById('email-change-new').focus(), 30);
+}
+
+function closeEmailChangeModal() {
+    emailChangeModal.style.display = 'none';
+    document.getElementById('email-change-password').value = '';
+    document.getElementById('email-change-2fa').value = '';
+}
+
+document.getElementById('email-change-btn').addEventListener('click', openEmailChangeModal);
+document.getElementById('email-change-close-btn').addEventListener('click', closeEmailChangeModal);
+emailChangeModal.addEventListener('click', (e) => { if (e.target === emailChangeModal) closeEmailChangeModal(); });
+
+async function emailChangeSend() {
+    const error = document.getElementById('email-change-error');
+    const btn = document.getElementById('email-change-send');
+    const newEmail = document.getElementById('email-change-new').value.trim();
+    const password = document.getElementById('email-change-password').value;
+    const code = document.getElementById('email-change-2fa').value.trim();
+    error.textContent = '';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) { error.textContent = 'Geçerli bir e-posta adresi gir.'; return; }
+    if (!password) { error.textContent = 'Mevcut şifreni gir.'; return; }
+    if (twofaEnabledCache && !code) { error.textContent = 'Doğrulayıcı uygulamadaki kodu gir.'; return; }
+    btn.disabled = true;
+    try {
+        const data = await twofaPost('/api/email-change/request', { new_email: newEmail, password, code });
+        if (!data.success) { error.textContent = data.error || 'Gönderilemedi.'; return; }
+        document.getElementById('email-change-target').textContent = data.new_email;
+        document.getElementById('email-change-code').value = '';
+        document.getElementById('email-change-password').value = '';
+        document.getElementById('email-change-2fa').value = '';
+        showEmailChangeStep('code');
+        setTimeout(() => document.getElementById('email-change-code').focus(), 30);
+    } catch (_) {
+        error.textContent = 'Bağlantı hatası. Tekrar dene.';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function emailChangeConfirm() {
+    const error = document.getElementById('email-change-error');
+    const btn = document.getElementById('email-change-confirm');
+    const code = document.getElementById('email-change-code').value.trim();
+    if (!/^\d{6}$/.test(code)) { error.textContent = '6 haneli kodu gir.'; return; }
+    btn.disabled = true;
+    try {
+        const data = await twofaPost('/api/email-change/confirm', { code });
+        if (!data.success) { error.textContent = data.error || 'Olmadı.'; return; }
+        if (currentUser) currentUser.email = data.email;
+        renderSettingsEmail();
+        closeEmailChangeModal();
+        showToast('E-posta adresin değiştirildi.');
+    } catch (_) {
+        error.textContent = 'Bağlantı hatası. Tekrar dene.';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+document.getElementById('email-change-send').addEventListener('click', emailChangeSend);
+document.getElementById('email-change-confirm').addEventListener('click', emailChangeConfirm);
+document.getElementById('email-change-back').addEventListener('click', () => showEmailChangeStep('form'));
+['email-change-new', 'email-change-password', 'email-change-2fa'].forEach((id) => {
+    document.getElementById(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); emailChangeSend(); } });
+});
+document.getElementById('email-change-code').addEventListener('input', (e) => {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
+    if (e.target.value.length === 6) emailChangeConfirm();
+});
+document.getElementById('email-change-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); emailChangeConfirm(); } });
+
 document.getElementById('twofa-enable-btn').addEventListener('click', () => openTwofaModal('enable'));
 document.getElementById('twofa-disable-btn').addEventListener('click', () => openTwofaModal('disable'));
 document.getElementById('twofa-codes-btn').addEventListener('click', () => openTwofaModal('codes'));
@@ -4860,6 +4974,10 @@ function connectToChat() {
     // -------------------------------------------------
     // Socket authentication başarılı
     // -------------------------------------------------
+
+    socket.on('account_email_changed', (data) => {
+        if (currentUser && data && data.email) { currentUser.email = data.email; renderSettingsEmail(); }
+    });
 
     socket.on('account_suspended', (data) => {
         handleAccountSuspended(data);

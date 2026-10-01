@@ -212,4 +212,39 @@ async function sendInactivityWarningEmail(toEmail, deleteOnDate) {
   });
 }
 
-module.exports = { sendInactivityWarningEmail, sendAccountExistsEmail, sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail };
+// E-posta değişikliği: YENİ adrese doğrulama kodu.
+async function sendEmailChangeCodeEmail(toEmail, code) {
+  await transporter.sendMail({
+    to: toEmail,
+    from: MAIL_FROM,
+    subject: 'Sauran — Yeni E-posta Adresini Doğrula',
+    html: `
+      <div style="font-family: 'Segoe UI', sans-serif; background: #0b0c10; color: #c5c6c7; padding: 40px; max-width: 480px; margin: auto; border-radius: 12px;">
+        <h2 style="color: #66fcf1; letter-spacing: 2px; text-transform: uppercase;">Sauran</h2>
+        <p style="margin-top: 20px;">Sauran hesabının e-posta adresini bu adresle değiştirmek için doğrulama kodun:</p>
+        <div style="font-size: 36px; font-weight: bold; color: #66fcf1; letter-spacing: 8px; margin: 20px 0;">
+          ${escapeHtml(code)}
+        </div>
+        <p style="color: #45a29e; font-size: 13px;">Bu kod 10 dakika geçerlidir. Bu isteği sen yapmadıysan bu e-postayı görmezden gelebilirsin; adres değişmez.</p>
+      </div>
+    `
+  });
+}
+
+// E-posta değişikliği tamamlandı: ESKİ adrese bilgi (yeni adres maskeli gösterilir).
+async function sendEmailChangedNoticeEmail(toEmail, maskedNewEmail) {
+  await transporter.sendMail({
+    to: toEmail,
+    from: MAIL_FROM,
+    subject: 'Sauran — Hesabının e-posta adresi değişti',
+    html: `
+      <div style="font-family: 'Segoe UI', sans-serif; background: #0b0c10; color: #c5c6c7; padding: 40px; max-width: 480px; margin: auto; border-radius: 12px;">
+        <h2 style="color: #66fcf1; letter-spacing: 2px; text-transform: uppercase;">Sauran</h2>
+        <p style="margin-top: 20px;">Sauran hesabının e-posta adresi <strong>${escapeHtml(maskedNewEmail)}</strong> olarak değiştirildi. Bu adrese artık hesapla ilgili e-posta gönderilmeyecek.</p>
+        <p>Bu değişikliği sen yapmadıysan hemen <a href="mailto:destek@sauran.online" style="color:#66fcf1;">destek@sauran.online</a> adresine yaz.</p>
+      </div>
+    `
+  });
+}
+
+module.exports = { sendEmailChangeCodeEmail, sendEmailChangedNoticeEmail, sendInactivityWarningEmail, sendAccountExistsEmail, sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail };

@@ -1111,6 +1111,34 @@
         </div>
     </div>
 
+    <div id="email-change-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="email-change-title">
+        <div class="modal-box market-modal-box twofa-box">
+            <div class="modal-header">
+                <span id="email-change-title">✉️ E-posta adresini değiştir</span>
+                <button id="email-change-close-btn" type="button" aria-label="Kapat">✕</button>
+            </div>
+            <div class="market-modal-body twofa-body">
+
+                <div class="twofa-step" data-email-step="form">
+                    <p class="mk-sub">Yeni adresine 6 haneli bir doğrulama kodu göndereceğiz. Kodu girene kadar mevcut adresin değişmez.</p>
+                    <input type="email" id="email-change-new" class="hub-name-input" autocomplete="email" maxlength="254" placeholder="Yeni e-posta adresi">
+                    <input type="password" id="email-change-password" class="hub-name-input" autocomplete="current-password" placeholder="Mevcut şifren">
+                    <input type="text" id="email-change-2fa" class="hub-name-input" inputmode="numeric" autocomplete="one-time-code" placeholder="Doğrulayıcı uygulamadaki kod ya da kurtarma kodu" style="display:none;">
+                    <button type="button" class="hubset-save-btn" id="email-change-send">Kod gönder</button>
+                </div>
+
+                <div class="twofa-step" data-email-step="code" style="display:none;">
+                    <p class="mk-sub"><strong id="email-change-target"></strong> adresine gönderilen 6 haneli kodu gir. Kod 10 dakika geçerli. Gelen kutunda yoksa istenmeyen (spam) klasörüne de bak.</p>
+                    <input type="text" id="email-change-code" class="hub-name-input twofa-code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456">
+                    <button type="button" class="hubset-save-btn" id="email-change-confirm">Onayla ve değiştir</button>
+                    <button type="button" class="email-reveal-btn" id="email-change-back">← Adresi düzelt / yeni kod iste</button>
+                </div>
+
+                <div id="email-change-error" class="hub-create-error"></div>
+            </div>
+        </div>
+    </div>
+
     <div id="voice-mute-modal" class="modal-overlay" style="display:none;">
         <div class="modal-box market-modal-box share-fps-box">
             <div class="modal-header">
@@ -1796,6 +1824,15 @@
                 </div>
 
                 <div class="settings-panel" data-settings-panel="security" style="display:none;">
+
+                    <span class="profile-field-label">E-posta Adresi</span>
+                    <div class="email-current-row">
+                        <span id="settings-email-display" class="email-current"></span>
+                        <button id="settings-email-reveal" type="button" class="email-reveal-btn">Göster</button>
+                    </div>
+                    <button id="email-change-btn" class="hub-settings-action-btn" type="button">✉️ E-posta adresini değiştir</button>
+
+                    <div class="hub-settings-divider"></div>
 
                     <span class="profile-field-label" data-i18n="label-change-password">Şifre Değiştir</span>
                     <input type="password" id="settings-current-password" placeholder="Mevcut şifren">

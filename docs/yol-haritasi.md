@@ -14,10 +14,10 @@ Durum: `[ ]` sırada · `[~]` yapılıyor · `[x]` tamamlandı
 
 ## 2. Hesap güvenliği
 - [x] **İki adımlı doğrulama (2FA)** — Ayarlar → Güvenlik'ten açılır; QR ile doğrulayıcı uygulama (Google/Microsoft Authenticator, 1Password…), 10 tek kullanımlık kurtarma kodu, girişte ikinci adım. Gizli anahtarlar şifreli saklanır; aynı kod iki kez kullanılamaz.
-- [ ] **E-posta adresini değiştirme** ← sıradaki
+- [x] **E-posta adresini değiştirme** — Ayarlar → Güvenlik; şifre (2FA açıksa ayrıca kod) ister, yeni adrese 6 haneli kod gider, kod girilince değişir ve eski adrese bilgi e-postası gider. Adres ayarlarda maskeli görünür.
 
 ## 3. Moderasyon
-- [ ] Yavaş mod (mesajlar arası zorunlu bekleme)
+- [ ] Yavaş mod (mesajlar arası zorunlu bekleme) ← sıradaki
 - [ ] Kelime filtresi / otomatik moderasyon
 - [ ] Lobi içi moderasyon kaydı (kim kimi attı/banladı/susturdu)
 - [ ] Davet kodlarına süre ve kullanım sınırı

@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { purgeOldBackups } = require('./backup');
-const { sendInactivityWarningEmail, sendAccountExistsEmail, sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail } = require('./mailer');
+const { sendEmailChangeCodeEmail, sendEmailChangedNoticeEmail, sendInactivityWarningEmail, sendAccountExistsEmail, sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail } = require('./mailer');
 const push = require('./push');
 const fcm = require('./fcm');
 const daily = require('./daily');
@@ -213,6 +213,10 @@ const {
   startTwoFactorSetup,
   enableTwoFactor,
   verifyTwoFactorCode,
+  requestEmailChange,
+  confirmEmailChange,
+  cancelEmailChange,
+  maskEmail,
   disableTwoFactor,
   regenerateRecoveryCodes,
   getUnreadCounts,
@@ -411,6 +415,8 @@ const makeCodeLimiters = () => [
 ];
 const verifyLimiters = makeCodeLimiters();
 const resetConfirmLimiters = makeCodeLimiters();
+const emailChangeConfirmLimiters = makeCodeLimiters();
+const emailChangeRequestLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 6, keyFn: byIp, message: 'Çok fazla istek. Biraz sonra tekrar dene.' });
 
 const registerLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyFn: byIp, message: 'Çok fazla kayıt denemesi. Biraz sonra tekrar dene.' });
 const passwordChangeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, keyFn: byIp, message: 'Çok fazla şifre değiştirme denemesi. Biraz sonra tekrar dene.' });
@@ -1077,6 +1083,58 @@ app.delete('/api/account', accountDeleteLimiter, (req, res) => {
     console.error('Hesap silme hatası:', error);
     return res.status(500).json({ success: false, error: 'Hesap silinemedi.' });
   }
+});
+
+// =====================================================
+// E-POSTA ADRESİNİ DEĞİŞTİRME
+// =====================================================
+
+app.post('/api/email-change/request', emailChangeRequestLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    if (!verifyAccountPassword(user.id, req.body?.password)) {
+      return res.status(403).json({ success: false, error: 'Şifre doğru değil.' });
+    }
+    if (isTwoFactorEnabled(user.id) && !verifyTwoFactorCode(user.id, req.body?.code).ok) {
+      return res.status(401).json({ success: false, error: 'Doğrulama kodu doğru değil.' });
+    }
+    const result = requestEmailChange(user.id, req.body?.new_email);
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+
+    // Yanıt e-postayı beklemez ve adres başka hesapta kayıtlı olsa da aynıdır (numaralandırma yok).
+    const mailJob = result.code ? sendEmailChangeCodeEmail(result.new_email, result.code) : sendAccountExistsEmail(result.new_email);
+    mailJob.catch((error) => console.error('E-posta değişikliği kodu gönderilemedi:', error && error.code ? error.code : 'hata'));
+    return res.json({ success: true, new_email: result.new_email });
+  } catch (error) {
+    console.error('E-posta değişikliği isteği hatası:', error);
+    return res.status(500).json({ success: false, error: 'İstek gönderilemedi.' });
+  }
+});
+
+app.post('/api/email-change/confirm', ...emailChangeConfirmLimiters, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const result = confirmEmailChange(user.id, req.body?.code);
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+
+    if (result.old_email) {
+      sendEmailChangedNoticeEmail(result.old_email, maskEmail(result.new_email))
+        .catch((error) => console.error('E-posta değişikliği bildirimi gönderilemedi:', error && error.code ? error.code : 'hata'));
+    }
+    io.to(`user:${user.id}`).emit('account_email_changed', { email: result.new_email });
+    return res.json({ success: true, email: result.new_email });
+  } catch (error) {
+    console.error('E-posta değişikliği onay hatası:', error);
+    return res.status(500).json({ success: false, error: 'E-posta değiştirilemedi.' });
+  }
+});
+
+app.post('/api/email-change/cancel', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  return res.json(cancelEmailChange(user.id));
 });
 
 // =====================================================

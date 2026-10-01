@@ -7263,7 +7263,113 @@ function regenerateRecoveryCodes(userId) {
   return { success: true, recovery_codes: replaceRecoveryCodes(userId) };
 }
 
+// =====================================================
+// E-POSTA ADRESİNİ DEĞİŞTİRME
+// =====================================================
+// Akış: oturum açık kullanıcı şifresini (2FA açıksa ayrıca kodu) girer → YENİ adrese 6 haneli kod gider → kod girilince adres
+// değişir ve ESKİ adrese bilgi e-postası gider. Kod düz metin saklanmaz (authcodes, kullanıcı + yeni adrese bağlı), 10 dk geçerli,
+// en fazla CODE_MAX_ATTEMPTS deneme. Yeni adres başka bir hesapta kayıtlıysa istemciye AYNI yanıt döner (adres numaralandırma yok);
+// o adrese kod yerine "bu adresle bir hesap zaten var" e-postası gider ve onay hiçbir zaman başarılı olmaz.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS email_changes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL UNIQUE,
+    new_email TEXT NOT NULL,
+    code TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+`);
+AUTH_EXPIRY_TABLES.email_changes = 'email_changes';
+
+const emailChangeCodeContext = (userId, email) => `email-change:${userId}:${String(email || '').trim().toLowerCase()}`;
+const EMAIL_CHANGE_TTL_MS = 10 * 60 * 1000;
+
+function maskEmail(email) {
+  const [local, domain] = String(email || '').split('@');
+  if (!domain) return '';
+  const head = local.slice(0, Math.min(2, Math.max(1, local.length - 1)));
+  return `${head}${'•'.repeat(Math.max(3, local.length - head.length))}@${domain}`;
+}
+
+function requestEmailChange(userId, newEmail) {
+  newEmail = String(newEmail || '').trim().toLowerCase();
+  if (!newEmail || newEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+    return { success: false, status: 400, error: 'Geçerli bir e-posta adresi gir.' };
+  }
+  const user = db.prepare(`SELECT email FROM users WHERE id = ?`).get(userId);
+  if (!user) return { success: false, status: 404, error: 'Hesap bulunamadı.' };
+  if (String(user.email || '').toLowerCase() === newEmail) {
+    return { success: false, status: 400, error: 'Bu zaten şu anki e-posta adresin.' };
+  }
+
+  db.prepare(`DELETE FROM email_changes WHERE user_id = ?`).run(userId);
+  const taken = db.prepare(`SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND id != ?`).get(newEmail, userId);
+  if (taken) {
+    authcodes.hashCode(authcodes.generateNumericCode(), emailChangeCodeContext(userId, newEmail)); // aynı maliyet
+    return { success: true, taken: true, new_email: newEmail };
+  }
+
+  const code = authcodes.generateNumericCode();
+  db.prepare(`INSERT INTO email_changes (user_id, new_email, code, expires_at) VALUES (?, ?, ?, ?)`)
+    .run(userId, newEmail, authcodes.hashCode(code, emailChangeCodeContext(userId, newEmail)), new Date(Date.now() + EMAIL_CHANGE_TTL_MS).toISOString());
+  return { success: true, code, new_email: newEmail };
+}
+
+function confirmEmailChange(userId, code) {
+  const GENERIC = 'Kod geçersiz ya da süresi dolmuş. Yeni kod iste.';
+  code = String(code || '').trim();
+  const row = db.prepare(`SELECT * FROM email_changes WHERE user_id = ?`).get(userId);
+  if (!row) {
+    authcodes.verifyCode(code, authcodes.hashCode('000000', emailChangeCodeContext(userId, '')), emailChangeCodeContext(userId, ''));
+    return { success: false, status: 400, error: GENERIC };
+  }
+
+  const attempts = row.attempts + 1;
+  if (attempts > authcodes.CODE_MAX_ATTEMPTS) {
+    db.prepare(`DELETE FROM email_changes WHERE id = ?`).run(row.id);
+    return { success: false, status: 400, error: GENERIC };
+  }
+  db.prepare(`UPDATE email_changes SET attempts = ? WHERE id = ?`).run(attempts, row.id);
+
+  if (!authcodes.verifyCode(code, row.code, emailChangeCodeContext(userId, row.new_email))) {
+    if (attempts >= authcodes.CODE_MAX_ATTEMPTS) {
+      db.prepare(`DELETE FROM email_changes WHERE id = ?`).run(row.id);
+      return { success: false, status: 400, error: GENERIC };
+    }
+    return { success: false, status: 400, error: 'Kod doğru değil.' };
+  }
+
+  if (new Date(row.expires_at).getTime() <= Date.now()) {
+    db.prepare(`DELETE FROM email_changes WHERE id = ?`).run(row.id);
+    return { success: false, status: 400, error: GENERIC };
+  }
+
+  return db.transaction(() => {
+    // Kod gönderildikten sonra adres başka bir hesaba geçmiş olabilir (yarış): yeniden denetlenir.
+    const taken = db.prepare(`SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND id != ?`).get(row.new_email, userId);
+    db.prepare(`DELETE FROM email_changes WHERE id = ?`).run(row.id);
+    if (taken) return { success: false, status: 409, error: 'Bu e-posta adresi kullanılamıyor.' };
+    const old = db.prepare(`SELECT email FROM users WHERE id = ?`).get(userId);
+    db.prepare(`UPDATE users SET email = ? WHERE id = ?`).run(row.new_email, userId);
+    // Eski adrese gönderilmiş bir şifre sıfırlama kodu varsa geçersiz olur.
+    db.prepare(`DELETE FROM password_resets WHERE user_id = ?`).run(userId);
+    return { success: true, old_email: old ? old.email : null, new_email: row.new_email };
+  })();
+}
+
+function cancelEmailChange(userId) {
+  db.prepare(`DELETE FROM email_changes WHERE user_id = ?`).run(userId);
+  return { success: true };
+}
+
 module.exports = {
+  requestEmailChange,
+  confirmEmailChange,
+  cancelEmailChange,
+  maskEmail,
   INDEFINITE_RETENTION,
   touchUserActivity,
   listInactiveAccountCandidates,
