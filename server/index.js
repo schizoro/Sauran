@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { purgeOldBackups } = require('./backup');
+const linkpreview = require('./linkpreview');
 const { sendEmailChangeCodeEmail, sendEmailChangedNoticeEmail, sendInactivityWarningEmail, sendAccountExistsEmail, sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail } = require('./mailer');
 const push = require('./push');
 const fcm = require('./fcm');
@@ -215,6 +216,12 @@ const {
   verifyTwoFactorCode,
   requestEmailChange,
   getHubSlowMode,
+  getLinkPreviewCache,
+  putLinkPreviewCache,
+  getLinkPreviewImage,
+  setMessageLinkPreview,
+  clearMessageLinkPreview,
+  purgeLinkPreviewCache,
   listHubInvites,
   revokeHubInvite,
   logModAction,
@@ -475,6 +482,55 @@ function slowModeBlocked(res, hubId, userId) {
   res.status(429).json({ success: false, error: `Yavaş mod açık: ${wait} sn sonra tekrar gönderebilirsin.`, retry_after: wait });
   return true;
 }
+
+// ── Link önizlemesi ── Mesaj önce yayınlanır; önizleme arka planda çekilip ayrıca gönderilir (mesaj gecikmez).
+const linkPreviewInflight = new Map(); // key -> Promise<{data, has_image}>
+let linkPreviewActive = 0;
+const LINK_PREVIEW_MAX_CONCURRENT = 6;
+
+async function resolveLinkPreview(url) {
+  const key = linkpreview.urlKey(url);
+  const cached = getLinkPreviewCache(key);
+  if (cached && cached.fresh) return { key, ...cached };
+  if (linkPreviewInflight.has(key)) return linkPreviewInflight.get(key);
+  if (linkPreviewActive >= LINK_PREVIEW_MAX_CONCURRENT) return cached ? { key, ...cached } : null;
+  const job = (async () => {
+    linkPreviewActive += 1;
+    try {
+      let data = null;
+      let image = null;
+      try { data = await linkpreview.fetchPreview(url); } catch (_) { data = null; }
+      if (data && data.image_url) {
+        try { image = await linkpreview.fetchImage(data.image_url); } catch (_) { image = null; }
+      }
+      if (data) delete data.image_url;
+      putLinkPreviewCache(key, url, data, image);
+      return { key, data, has_image: Boolean(image) };
+    } finally {
+      linkPreviewActive -= 1;
+      linkPreviewInflight.delete(key);
+    }
+  })();
+  linkPreviewInflight.set(key, job);
+  return job;
+}
+
+function attachLinkPreview(message) {
+  if (!message || !message.id || !['text', 'dm'].includes(message.kind)) return;
+  const url = linkpreview.firstUrl(message.content);
+  if (!url) return;
+  resolveLinkPreview(url).then((result) => {
+    if (!result || !result.data) return;
+    const preview = { ...result.data, image: result.has_image ? result.key : null };
+    const msg = setMessageLinkPreview(message.id, url, preview);
+    if (!msg) return;
+    const payload = { id: message.id, link_preview: preview };
+    if (msg.hub_id) io.to(`hub:${msg.hub_id}`).emit('message_link_preview', payload);
+    else if (msg.to_user_id) io.to(`user:${msg.user_id}`).to(`user:${msg.to_user_id}`).emit('message_link_preview', payload);
+  }).catch((error) => console.error('Link önizlemesi hatası:', error && error.message));
+}
+
+setInterval(() => { try { purgeLinkPreviewCache(); } catch (_) { /* yoksay */ } }, 12 * 3600 * 1000).unref();
 
 function isSocketMessageRateLimited(socket) {
   const now = Date.now();
@@ -3045,6 +3101,32 @@ app.delete('/api/messages/:id', (req, res) => {
   }
 });
 
+app.get('/api/link-preview/image/:key', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const key = String(req.params.key || '');
+  if (!/^[0-9a-f]{32}$/.test(key)) return res.status(404).end();
+  const img = getLinkPreviewImage(key);
+  if (!img) return res.status(404).end();
+  res.setHeader('Content-Type', img.mime);
+  res.setHeader('Cache-Control', 'private, max-age=86400');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'");
+  return res.end(img.data);
+});
+
+app.delete('/api/messages/:id/link-preview', contentWriteLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const id = Number(req.params.id);
+  const result = clearMessageLinkPreview(id, user.id);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+  const payload = { id, link_preview: null };
+  if (result.hub_id) io.to(`hub:${result.hub_id}`).emit('message_link_preview', payload);
+  else if (result.to_user_id) io.to(`user:${result.user_id}`).to(`user:${result.to_user_id}`).emit('message_link_preview', payload);
+  return res.json({ success: true });
+});
+
 app.patch('/api/messages/:id', contentWriteLimiter, (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
@@ -3061,6 +3143,8 @@ app.patch('/api/messages/:id', contentWriteLimiter, (req, res) => {
     } else if (result.to_user_id) {
       io.to(`user:${user.id}`).to(`user:${result.to_user_id}`).emit('dm_message_update', result.message);
     }
+
+    setImmediate(() => attachLinkPreview(result.message));
 
     return res.json(result);
 
@@ -4448,6 +4532,7 @@ io.on('connection', (socket) => {
       }
 
       emitDmMessage(clientId ? { ...result.message, client_id: clientId } : result.message);
+      setImmediate(() => attachLinkPreview(result.message));
 
     } catch (error) {
       console.error('DM kaydedilirken hata:', error);
@@ -4692,6 +4777,7 @@ io.on('connection', (socket) => {
       emitHubMessage(hubId, clientId ? { ...message, client_id: clientId } : message);
       // Bildirim işleri mesajın yayınını geciktirmesin: soket yazımı önce boşalsın.
       setImmediate(() => notifyHubMentions(hubId, message));
+      setImmediate(() => attachLinkPreview(message));
 
     } catch (error) {
       console.error('Lobi mesajı kaydedilirken hata:', error);

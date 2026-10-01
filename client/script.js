@@ -3993,6 +3993,7 @@ const I18N = {
     'modlog-hint': { tr: 'Kayıtları yalnızca kurucu ve moderatörler görür. 180 gün saklanır; mesaj içerikleri kaydedilmez.', en: 'Only the founder and moderators can see this log. Kept for 180 days; message contents are never stored.' },
     'modlog-empty': { tr: 'Henüz kayıt yok.', en: 'No entries yet.' },
     'wf-label': { tr: '🚫 Kelime filtresi', en: '🚫 Word filter' },
+    'link-preview-remove': { tr: 'Önizlemeyi kaldır', en: 'Remove preview' },
     'wf-off': { tr: 'Kapalı', en: 'Off' },
     'wf-mask': { tr: 'Kelimeyi gizle (*** ile)', en: 'Hide the word (with ***)' },
     'wf-block': { tr: 'Mesajı engelle (gönderilmez)', en: 'Block the message' },
@@ -5092,6 +5093,15 @@ function connectToChat() {
     // -------------------------------------------------
     // Lobi mesajları
     // -------------------------------------------------
+
+    socket.on('message_link_preview', (data) => {
+        const id = Number(data?.id);
+        if (!id) return;
+        document.querySelectorAll(`[data-message-id="${id}"]`).forEach((wrap) => {
+            if (!wrap.querySelector('.hub-msg-bubble, .dm-msg-line')) return;
+            placeLinkPreview(wrap, { id, user_id: wrap.dataset.authorId ? Number(wrap.dataset.authorId) : null, link_preview: data.link_preview });
+        });
+    });
 
     socket.on('slow_mode_wait', (data) => {
         if (!currentHub || Number(data?.hub_id) !== currentHub.id) return;
@@ -8464,7 +8474,65 @@ async function loadOlderMessages(kind) {
 }
 
 
+
+// ─── Link önizlemesi kartı ── (görsel sunucudan gelir; tarayıcı üçüncü taraf siteye bağlanmaz)
+function linkPreviewHtml(msg) {
+    const lp = msg && msg.link_preview;
+    if (!lp || !lp.url || !/^https?:\/\//i.test(lp.url)) return '';
+    const mine = currentUser && msg.user_id === currentUser.id && msg.id;
+    const image = lp.image && /^[0-9a-f]{32}$/.test(lp.image)
+        ? `<img class="link-preview-img" src="/api/link-preview/image/${lp.image}" alt="" loading="lazy" onerror="this.remove()">` : '';
+    return `
+        <div class="link-preview" data-link-preview="${Number(msg.id) || ''}">
+            <a class="link-preview-main" href="${escapeAttr(lp.url)}" target="_blank" rel="noopener noreferrer nofollow">
+                <span class="link-preview-site">${escapeHtml(lp.site_name || '')}</span>
+                ${lp.title ? `<span class="link-preview-title">${escapeHtml(lp.title)}</span>` : ''}
+                ${lp.description ? `<span class="link-preview-desc">${escapeHtml(lp.description)}</span>` : ''}
+                ${image}
+            </a>
+            ${mine ? `<button type="button" class="link-preview-remove" data-remove-preview="${Number(msg.id)}" title="${escapeAttr(t('link-preview-remove'))}" aria-label="${escapeAttr(t('link-preview-remove'))}">✕</button>` : ''}
+        </div>`;
+}
+
+function scrollParentOf(el) {
+    for (let node = el?.parentElement; node; node = node.parentElement) {
+        const oy = getComputedStyle(node).overflowY;
+        if ((oy === 'auto' || oy === 'scroll') && node.scrollHeight > node.clientHeight) return node;
+    }
+    return null;
+}
+
+// Kart mesajdan SONRA gelir: sohbet en alttaysa kart (ve görseli) yüklenince de en altta kalınır.
+function placeLinkPreview(wrap, msg) {
+    if (!wrap) return;
+    const feed = scrollParentOf(wrap);
+    const pinned = feed ? feed.scrollHeight - feed.scrollTop - feed.clientHeight < 120 : false;
+    wrap.querySelector('.link-preview')?.remove();
+    const html = linkPreviewHtml(msg);
+    if (html) {
+        const hubBubble = wrap.querySelector('.hub-msg-bubble');
+        if (hubBubble) hubBubble.insertAdjacentHTML('beforeend', html);
+        else wrap.querySelector('.dm-msg-line')?.insertAdjacentHTML('afterend', html);
+    }
+    if (feed && pinned) {
+        const stick = () => { feed.scrollTop = feed.scrollHeight; };
+        stick();
+        wrap.querySelector('.link-preview-img')?.addEventListener('load', stick, { once: true });
+    }
+}
+
+document.addEventListener('click', async (event) => {
+    const btn = event.target.closest('[data-remove-preview]');
+    if (!btn) return;
+    event.preventDefault();
+    try {
+        const data = await (await fetch(`/api/messages/${Number(btn.dataset.removePreview)}/link-preview`, { method: 'DELETE', credentials: 'include' })).json();
+        if (!data.success) showToast(data.error || 'Kaldırılamadı.');
+    } catch (_) { /* yoksay */ }
+});
+
 function renderDmMessageIntoWrap(wrap, msg, isMine) {
+    wrap.dataset.authorId = msg.user_id != null ? String(msg.user_id) : (isMine && currentUser ? String(currentUser.id) : '');
 
     applyChatTheme(wrap, msg.user_id, msg.chat_theme, msg.bubble_style);
 
@@ -8503,7 +8571,7 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
 
     }
 
-    wrap.innerHTML = `${actions}${forwardedTag}${replyQuote}<div class="dm-msg-line">${body}<span class="dm-msg-time">${time}${editedTag}</span></div>${reactionsRow}`;
+    wrap.innerHTML = `${actions}${forwardedTag}${replyQuote}<div class="dm-msg-line">${body}<span class="dm-msg-time">${time}${editedTag}</span></div>${linkPreviewHtml(msg)}${reactionsRow}`;
 
     wireVoiceCards(wrap);
     enableLongPress(wrap);
@@ -15594,6 +15662,7 @@ function renderMentionText(content, mentions) {
 }
 
 function renderHubMessageIntoWrap(wrap, msg) {
+    wrap.dataset.authorId = msg.user_id != null ? String(msg.user_id) : '';
 
     wrap.classList.toggle('hub-msg-mentions-me', messageMentionsMe(msg));
 
@@ -15659,7 +15728,7 @@ function renderHubMessageIntoWrap(wrap, msg) {
 
     }
 
-    wrap.innerHTML = `${avatar}<div class="hub-msg-body">${header}${actions}<div class="hub-msg-bubble">${replyQuote}${body}</div>${reactionsRow}</div>`;
+    wrap.innerHTML = `${avatar}<div class="hub-msg-body">${header}${actions}<div class="hub-msg-bubble">${replyQuote}${body}${linkPreviewHtml(msg)}</div>${reactionsRow}</div>`;
 
     // Sohbet teması/balon stili yalnızca .hub-msg-bubble'a uygulanır — kullanıcı adı ve avatar kutunun dışında kalır.
     applyChatTheme(wrap, msg.user_id, msg.chat_theme, msg.bubble_style, wrap.querySelector('.hub-msg-bubble'));

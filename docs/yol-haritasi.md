@@ -24,12 +24,12 @@ Durum: `[ ]` sırada · `[~]` yapılıyor · `[x]` tamamlandı
 
 ## 4. Ses ve medya
 - [x] **Bas-konuş** — Ayarlar → Ses; tuş atanabilir (klavye, F tuşları, Ctrl/Alt/CapsLock, farenin yan tuşları). Aramada ekranda "basılı tut" düğmesi (telefonda asıl yol). Bırakınca 250 ms sonra kapanır; harf tuşu sohbete yazarken tetiklenmez; pencere odağı gidince kapanır; moderatör susturması aşılmaz. Sesli oda ve özel aramada.
-- [ ] GIF arama ← sıradaki
-- [ ] Link önizlemesi
-- [ ] Kamera / görüntülü görüşme *(şu an bilinçli olarak yok; karar gerekli)*
+- [ ] GIF arama *(atlandı — Tenor ya da GIPHY anahtarı gerekiyor; tüm maddeler bitince hatırlatılacak)*
+- [x] **Link önizlemesi** — Lobi ve DM'de mesajdaki ilk bağlantı için başlık, açıklama, site adı ve görsel. Görsel sunucumuzdan servis edilir (okuyanın IP'si üçüncü tarafa gitmez). İç ağ adreslerine istek engelli (SSRF), 5 sn / 512 KB sınırı, 24 sa önbellek. Gönderen ✕ ile kaldırabilir; `<adres>` yazılırsa önizleme çıkmaz.
+- [ ] Kamera / görüntülü görüşme *(şu an bilinçli olarak yok; karar gerekli — en sona bırakıldı)*
 
 ## 5. Platform ve ticari
-- [ ] Grup DM
+- [ ] Grup DM ← sıradaki
 - [ ] iOS yerel uygulama *(şu an PWA)*
 - [ ] Ödeme sistemi *(bilinçli olarak kapalı beta + hukuki inceleme sonrasına bırakıldı; bkz. `ucretlendirme-hazirlik.md`)*
 
@@ -43,3 +43,10 @@ Durum: `[ ]` sırada · `[~]` yapılıyor · `[x]` tamamlandı
 - [x] Sesli odada kalıcı, süreli susturma (30 / 60 dk / kaldırılana kadar) + Susturulanlar listesi
 - [x] Ekran sesinin yalnızca "İzle" diyene çalınması
 - [x] Sesli odadan atma (anlık / 30 / 60 dk / kaldırılana kadar) + Odaya Girişi Engellenenler listesi
+
+## Hatırlatılacaklar (tüm maddeler bitince)
+- GIF arama: Tenor (Google Cloud anahtarı) mı GIPHY (developers.giphy.com anahtarı) mı? Anahtar alınınca yapılacak.
+- Karar: Render sunucu bölgesinin Frankfurt'a taşınması.
+- Karar: Kamera / görüntülü görüşme.
+- Render'a `TOTP_ENCRYPTION_KEY` eklenmesi (2FA için) ve kopyasının saklanması.
+- Canlı sitede e-posta değiştirme ve 2FA "Doğrulayıcı uygulamada aç" düğmesinin telefonda denenmesi.

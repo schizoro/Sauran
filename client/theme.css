@@ -2091,3 +2091,16 @@ body.hubset-open .toast-container { z-index: 1000; }
 .call-ptt-btn .call-ptt-icon { font-size: 20px; }
 .call-ptt-btn.active { background: #1f8f4e; border-color: #57f287; transform: translateX(-50%) scale(1.05); }
 .call-ptt-btn.locked { opacity: 0.55; }
+
+/* Link önizlemesi */
+.link-preview { position: relative; margin-top: 6px; max-width: 420px; border-left: 3px solid var(--accent, #5cc8ff); border-radius: 8px; background: rgba(255,255,255,0.04); overflow: hidden; }
+.link-preview-main { display: flex; flex-direction: column; gap: 3px; padding: 9px 30px 10px 12px; text-decoration: none; color: inherit; }
+.link-preview-site { font-size: 11.5px; color: var(--text-tertiary, #8a949e); }
+.link-preview-title { font-size: 14px; font-weight: 650; color: var(--accent, #5cc8ff); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.link-preview-main:hover .link-preview-title { text-decoration: underline; }
+.link-preview-desc { font-size: 12.5px; color: var(--text-secondary, #aab4be); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.link-preview-img { margin-top: 6px; width: 100%; max-height: 220px; object-fit: cover; border-radius: 6px; background: rgba(0,0,0,0.2); }
+.link-preview-remove { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; border: none; background: rgba(0,0,0,0.35); color: var(--text-secondary, #aab4be); font-size: 11px; cursor: pointer; opacity: 0; transition: opacity 0.15s; }
+.link-preview:hover .link-preview-remove, .link-preview-remove:focus-visible { opacity: 1; }
+@media (hover: none) { .link-preview-remove { opacity: 0.8; } }
+.dm-msg .link-preview { margin-bottom: 4px; }

@@ -1383,7 +1383,7 @@ function getDeletedDmMessages(userId, token, limit = 50) {
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
-           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions
+           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions, messages.link_preview
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE messages.room = ? AND messages.hub_id IS NULL
     ORDER BY messages.id DESC LIMIT ?
@@ -3605,7 +3605,7 @@ function getHubMessages(hubId, limit = 50, viewerId = null, beforeId = null) {
            messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
-           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions
+           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions, messages.link_preview
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE hub_id = ? AND (? IS NULL OR messages.id < ?)
     ORDER BY messages.id DESC LIMIT ?
@@ -3620,7 +3620,7 @@ function getMessageById(id, viewerId = null) {
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
-           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions
+           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions, messages.link_preview
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE messages.id = ?
   `).get(id), viewerId);
@@ -3661,6 +3661,10 @@ function hydrateMessage(row, viewerId = null) {
   if (typeof row.mentions === 'string') {
     try { row.mentions = JSON.parse(row.mentions); } catch (_) { row.mentions = null; }
   }
+  if (typeof row.link_preview === 'string') {
+    try { row.link_preview = JSON.parse(row.link_preview); } catch (_) { row.link_preview = null; }
+    if (row.link_preview && row.link_preview.suppressed) row.link_preview = null;
+  }
 
   let result = row;
 
@@ -3699,7 +3703,7 @@ function hydrateMessage(row, viewerId = null) {
 // FORWARD: iletme, içeriği bağımsız bir satıra kopyalar (forwarded_from_message_id ile). Kaynağı (kök) silinince ya da kök mesajın sahibi hesabını silince
 // bu kopyaların içeriği de yaşamamalı: kopyalar (zincir halinde iletilenler dahil) içeriksiz mezar taşına çevrilir; kopyanın kendisi başka bir kullanıcıya ait
 // olsa da içeriği o kaynağa aittir. Bir KOPYA silinirse yalnızca o silinir; ondan iletilenler kaynağa yeniden bağlanır (zincir korunur).
-const TOMBSTONE_SET = `kind = 'deleted', content = '', payload = NULL, user_id = NULL, username = '', edited = 0,
+const TOMBSTONE_SET = `kind = 'deleted', content = '', payload = NULL, link_preview = NULL, user_id = NULL, username = '', edited = 0,
   reply_to_message_id = NULL, forwarded_from_message_id = NULL, pinned_at = NULL, pinned_by = NULL`;
 
 // Transaction İÇİNDE çağrılır.
@@ -3974,7 +3978,7 @@ function editMessage(messageId, userId, newContent) {
     newContent = filtered.text;
   }
 
-  db.prepare(`UPDATE messages SET content = ?, edited = 1 WHERE id = ?`).run(newContent, messageId);
+  db.prepare(`UPDATE messages SET content = ?, edited = 1, link_preview = CASE WHEN link_preview LIKE '%"suppressed":true%' THEN link_preview ELSE NULL END WHERE id = ?`).run(newContent, messageId);
 
   return {
     success: true,
@@ -6006,7 +6010,7 @@ function getDmMessages(userId, otherUserId, limit = 50, beforeId = null) {
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
-           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions
+           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions, messages.link_preview
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE room = ? AND (? IS NULL OR messages.id < ?)
     ORDER BY messages.id DESC LIMIT ?
@@ -7619,7 +7623,73 @@ function listModLog(hubId, viewerId, { category, q, before, limit } = {}) {
   };
 }
 
+// =====================================================
+// LİNK ÖNİZLEMESİ — çekme/denetim: linkpreview.js
+// =====================================================
+{
+  const cols = db.prepare(`PRAGMA table_info(messages)`).all().map((c) => c.name);
+  if (!cols.includes('link_preview')) db.exec(`ALTER TABLE messages ADD COLUMN link_preview TEXT`);
+}
+db.exec(`
+  CREATE TABLE IF NOT EXISTS link_preview_cache (
+    key TEXT PRIMARY KEY,
+    url TEXT NOT NULL,
+    data TEXT,
+    image_mime TEXT,
+    image_data BLOB,
+    fetched_at INTEGER NOT NULL
+  );
+`);
+const LINK_PREVIEW_CACHE_MS = 24 * 3600 * 1000;
+const LINK_PREVIEW_KEEP_DAYS = 90;
+
+function getLinkPreviewCache(key) {
+  const row = db.prepare(`SELECT key, url, data, image_mime IS NOT NULL AS has_image, fetched_at FROM link_preview_cache WHERE key = ?`).get(key);
+  if (!row) return null;
+  let data = null;
+  try { data = row.data ? JSON.parse(row.data) : null; } catch (_) { data = null; }
+  return { data, has_image: Boolean(row.has_image), fresh: Date.now() - row.fetched_at < LINK_PREVIEW_CACHE_MS };
+}
+
+function putLinkPreviewCache(key, url, data, image) {
+  db.prepare(`
+    INSERT INTO link_preview_cache (key, url, data, image_mime, image_data, fetched_at) VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET url = excluded.url, data = excluded.data, image_mime = excluded.image_mime, image_data = excluded.image_data, fetched_at = excluded.fetched_at
+  `).run(key, url, data ? JSON.stringify(data) : null, image ? image.mime : null, image ? image.data : null, Date.now());
+}
+
+function getLinkPreviewImage(key) {
+  return db.prepare(`SELECT image_mime AS mime, image_data AS data FROM link_preview_cache WHERE key = ? AND image_data IS NOT NULL`).get(String(key || ''));
+}
+
+// Önizleme, mesaj hâlâ o bağlantıyı içeriyorsa yazılır (arada düzenlenmiş/silinmiş olabilir).
+function setMessageLinkPreview(messageId, url, preview) {
+  const msg = db.prepare(`SELECT content, kind, hub_id, to_user_id, user_id, link_preview FROM messages WHERE id = ?`).get(messageId);
+  if (!msg || msg.kind === 'deleted' || !String(msg.content || '').includes(url)) return null;
+  if (String(msg.link_preview || '').includes('"suppressed":true')) return null; // gönderen kaldırmış
+  db.prepare(`UPDATE messages SET link_preview = ? WHERE id = ?`).run(preview ? JSON.stringify(preview) : null, messageId);
+  return msg;
+}
+
+function clearMessageLinkPreview(messageId, userId) {
+  const msg = db.prepare(`SELECT user_id, hub_id, to_user_id FROM messages WHERE id = ?`).get(messageId);
+  if (!msg) return { success: false, status: 404, error: 'Mesaj bulunamadı.' };
+  if (msg.user_id !== userId) return { success: false, status: 403, error: 'Yalnızca kendi mesajının önizlemesini kaldırabilirsin.' };
+  db.prepare(`UPDATE messages SET link_preview = ? WHERE id = ?`).run(JSON.stringify({ suppressed: true }), messageId);
+  return { success: true, hub_id: msg.hub_id, to_user_id: msg.to_user_id, user_id: msg.user_id };
+}
+
+function purgeLinkPreviewCache() {
+  return db.prepare(`DELETE FROM link_preview_cache WHERE fetched_at < ?`).run(Date.now() - LINK_PREVIEW_KEEP_DAYS * 86400000).changes;
+}
+
 module.exports = {
+  getLinkPreviewCache,
+  putLinkPreviewCache,
+  getLinkPreviewImage,
+  setMessageLinkPreview,
+  clearMessageLinkPreview,
+  purgeLinkPreviewCache,
   listHubInvites,
   revokeHubInvite,
   logModAction,
