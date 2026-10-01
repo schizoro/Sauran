@@ -210,6 +210,7 @@ const {
   getDmMessagesPage,
   getUnreadCounts,
   markScopeRead,
+  canMentionEveryone,
   listHubMemberIds,
   getActiveVoiceBlock,
   kickFromVoiceRoomRecord,
@@ -1952,6 +1953,7 @@ app.get('/api/hubs/:id', (req, res) => {
     }
 
     hub.members = hub.members.map(m => ({ ...m, online: isVisiblyOnline(m.user_id, m.status) }));
+    hub.can_mention_everyone = canMentionEveryone(hubId, user.id);
     if (canDecideJoinRequests(hubId, user.id)) hub.pending_join_requests = countPendingHubJoinRequests(hubId);
 
     return res.json({ success: true, hub });
@@ -3033,8 +3035,10 @@ function emitHubMessage(hubId, message) {
 
   const body = `${message.username}: ${messagePushPreview(message)}`;
 
+  const mentioned = new Set((message.mentions?.users || []).map((u) => u.id));
   for (const memberId of info.member_ids) {
     if (memberId === message.user_id) continue;
+    if (mentioned.has(memberId) || message.mentions?.everyone) continue; // bahsedilene ayrıca "seni bahsetti" bildirimi gider
 
     dispatchWebPush(memberId, 'hub_message', {
       title: info.name,
@@ -3044,6 +3048,42 @@ function emitHubMessage(hubId, message) {
     }).catch(error => console.error('Web push gönderilemedi:', error));
   }
 
+}
+
+// @bahsetme bildirimi. Doğrudan bahsedilen kişi lobiyi sessize almış olsa da bildirim alır (bildirim listesine de yazılır);
+// @everyone ise lobiyi sessize alanlara gitmez ve kalabalık lobilerde liste şişmesin diye yalnızca anlık bildirimdir.
+function notifyHubMentions(hubId, message) {
+  const mentions = message?.mentions;
+  if (!mentions) return;
+  try {
+    const info = getHubPushInfo(hubId); // sessize almayan üyeler
+    if (!info) return;
+    const unmuted = new Set(info.member_ids);
+    const direct = new Set(mentions.users.map((u) => u.id));
+    const preview = String(message.content || '').slice(0, 120);
+    const payload = { hub_id: hubId, hub_name: info.name, message_id: message.id, from_username: message.username, preview };
+
+    const send = (userId, everyone) => {
+      if (userId === message.user_id) return;
+      io.to(`user:${userId}`).emit('hub_mention', { ...payload, everyone });
+      dispatchWebPush(userId, 'hub_mention', {
+        title: info.name,
+        body: everyone ? `${message.username} @everyone: ${preview}` : `${message.username} senden bahsetti: ${preview}`,
+        url: `/?open_hub=${hubId}`,
+        tag: `mention-${hubId}`
+      }).catch((error) => console.error('Bahsetme bildirimi gönderilemedi:', error && error.message));
+    };
+
+    direct.forEach((userId) => {
+      send(userId, false);
+      createNotification(userId, 'hub_mention', payload);
+    });
+    if (mentions.everyone) {
+      listHubMemberIds(hubId).forEach((userId) => { if (!direct.has(userId) && unmuted.has(userId)) send(userId, true); });
+    }
+  } catch (error) {
+    console.error('Bahsetme bildirimi hatası:', error && error.message);
+  }
 }
 
 // =====================================================
@@ -4297,6 +4337,7 @@ io.on('connection', (socket) => {
       const message = saveHubMessage(hubId, socket.userId, socket.username, content, replyToMessageId);
 
       emitHubMessage(hubId, message);
+      notifyHubMentions(hubId, message);
 
     } catch (error) {
       console.error('Lobi mesajı kaydedilirken hata:', error);

@@ -7,8 +7,8 @@ Durum: `[ ]` sırada · `[~]` yapılıyor · `[x]` tamamlandı
 ## 1. Sohbetin temel eksikleri
 - [x] **Eski mesajları yükleme** — Lobi sohbeti ve DM'de yukarı kaydırınca 50'şer mesajlık eski sayfalar gelir; mesaj tablosuna dizin eklendi.
 - [x] **Kalıcı okunmamış göstergesi** — DM ve lobi okunmamış sayıları sunucuda tutulur; yenileme ve cihazlar arası doğru, bir cihazda okununca diğerinde de sıfırlanır.
-- [~] **@bahsetme** — Birini etiketleyince ona özel bildirim.
-- [ ] **"Yazıyor…" göstergesi**
+- [x] **@bahsetme** — `@` ile üye önerisi, vurgulama, bahsedilene bildirim (lobi sessizde olsa da), lobi listesinde "@" rozeti. `@everyone`'ı kimin kullanabileceğini Lobi kurucusu ayarlardan seçer.
+- [ ] **"Yazıyor…" göstergesi** ← sıradaki
 - [ ] **Mesaj arama**
 - [ ] **Lobide çoklu metin kanalı** (#genel, #oyun …)
 
@@ -34,6 +34,7 @@ Durum: `[ ]` sırada · `[~]` yapılıyor · `[x]` tamamlandı
 - [ ] Ödeme sistemi *(bilinçli olarak kapalı beta + hukuki inceleme sonrasına bırakıldı; bkz. `ucretlendirme-hazirlik.md`)*
 
 ## Tamamlananlar (Ekim 2026)
+- [x] Lobi ayarları tam ekran ve bölümlü yeni tasarım (Genel, Görünürlük ve Katılım, Bahsetmeler, Davet, Moderasyon, Diğer)
 - [x] iPhone'da ekran paylaşımı tam ekran düzeltmesi
 - [x] Güvenlik denetimi ve düzeltmeleri (XSS, IDOR, güvenlik başlıkları, gövde sınırı, hız sınırları, Daily token)
 - [x] Sesli odada kalıcı, süreli susturma (30 / 60 dk / kaldırılana kadar) + Susturulanlar listesi

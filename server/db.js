@@ -1379,7 +1379,7 @@ function getDeletedDmMessages(userId, token, limit = 50) {
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
-           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
+           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE messages.room = ? AND messages.hub_id IS NULL
     ORDER BY messages.id DESC LIMIT ?
@@ -2716,10 +2716,14 @@ const HUB_THEMES = ['default', 'aurora', 'ember', 'forest'];
 
 const HUB_BG_MAX_CHARS = 900_000;
 
-function updateHub(hubId, userId, { name, image_data, theme, bg_image, ...discovery }) {
+function updateHub(hubId, userId, { name, image_data, theme, bg_image, mention_everyone, ...discovery }) {
   const hub = db.prepare(`SELECT * FROM hubs WHERE id = ?`).get(hubId);
   if (!hub) return { success: false, error: 'Lobi bulunamadı.' };
   if (hub.created_by !== userId) return { success: false, error: 'Sadece Lobi sahibi düzenleyebilir.' };
+
+  if (mention_everyone !== undefined && !MENTION_EVERYONE_MODES.includes(String(mention_everyone))) {
+    return { success: false, error: 'Geçersiz @everyone ayarı.' };
+  }
 
   if (theme !== undefined) {
     theme = String(theme || 'default');
@@ -2755,6 +2759,7 @@ function updateHub(hubId, userId, { name, image_data, theme, bg_image, ...discov
   }
 
   if (theme !== undefined) db.prepare(`UPDATE hubs SET theme = ? WHERE id = ?`).run(theme, hubId);
+  if (mention_everyone !== undefined) db.prepare(`UPDATE hubs SET mention_everyone = ? WHERE id = ?`).run(String(mention_everyone), hubId);
   if (bg_image !== undefined) db.prepare(`UPDATE hubs SET bg_image = ? WHERE id = ?`).run(bg_image ? (stripImageMetadata(bg_image) || null) : null, hubId);
 
   for (const [key, value] of Object.entries(checked.fields)) {
@@ -3529,7 +3534,7 @@ function getHubMessages(hubId, limit = 50, viewerId = null, beforeId = null) {
            messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
-           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
+           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE hub_id = ? AND (? IS NULL OR messages.id < ?)
     ORDER BY messages.id DESC LIMIT ?
@@ -3544,7 +3549,7 @@ function getMessageById(id, viewerId = null) {
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
-           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
+           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE messages.id = ?
   `).get(id), viewerId);
@@ -3580,6 +3585,10 @@ function hydrateMessage(row, viewerId = null) {
     row.plus_active = Boolean(senderIsPlus);
     row.bubble_style = senderIsPlus ? (row.bubble_style || 'default') : 'default';
     row.name_effect = row.user_id && hasFeature(row.user_id, 'name_effect') ? (row.name_effect || 'none') : 'none';
+  }
+
+  if (typeof row.mentions === 'string') {
+    try { row.mentions = JSON.parse(row.mentions); } catch (_) { row.mentions = null; }
   }
 
   let result = row;
@@ -3898,6 +3907,65 @@ function editMessage(messageId, userId, newContent) {
   };
 }
 
+// =====================================================
+// @BAHSETME (lobi mesajlarında)
+// =====================================================
+// Mesaj metni değişmez; "@kullanıcıadı" ve "@everyone" sunucuda çözülür. Bahsedilenler messages.mentions'a (görüntüleme için)
+// ve message_mentions'a (okunmamış bahsetme sayısı için) yazılır. @everyone'ı kimin kullanabileceğini Lobi kurucusu seçer.
+{
+  const messageCols = db.prepare(`PRAGMA table_info(messages)`).all().map((c) => c.name);
+  if (!messageCols.includes('mentions')) db.exec(`ALTER TABLE messages ADD COLUMN mentions TEXT`);
+  const hubCols = db.prepare(`PRAGMA table_info(hubs)`).all().map((c) => c.name);
+  if (!hubCols.includes('mention_everyone')) db.exec(`ALTER TABLE hubs ADD COLUMN mention_everyone TEXT NOT NULL DEFAULT 'owner'`);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS message_mentions (
+      message_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      hub_id INTEGER NOT NULL,
+      PRIMARY KEY (message_id, user_id),
+      FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_message_mentions_user_hub ON message_mentions(user_id, hub_id, message_id);
+  `);
+}
+
+const MENTION_EVERYONE_MODES = ['owner', 'moderators', 'everyone', 'nobody'];
+
+function canMentionEveryone(hubId, userId) {
+  const hub = db.prepare(`SELECT mention_everyone FROM hubs WHERE id = ?`).get(hubId);
+  const mode = hub?.mention_everyone || 'owner';
+  const tier = getMemberTier(hubId, userId);
+  if (!tier || mode === 'nobody') return false;
+  if (mode === 'everyone') return true;
+  if (mode === 'moderators') return tier === 'owner' || tier === 'moderator';
+  return tier === 'owner';
+}
+
+function escapeRegExp(text) {
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Metindeki @ad'ları lobi üyeleriyle eşleştirir (büyük/küçük harf duyarsız, ad bitişinde harf/rakam devam etmemeli).
+function resolveHubMentions(hubId, authorId, content) {
+  const text = String(content || '');
+  if (!text.includes('@')) return null;
+  const members = db.prepare(`
+    SELECT users.id, users.username FROM hub_members JOIN users ON users.id = hub_members.user_id WHERE hub_members.hub_id = ?
+  `).all(hubId);
+  const lower = text.toLocaleLowerCase('tr');
+  const users = [];
+  for (const m of members.sort((a, b) => b.username.length - a.username.length)) {
+    if (m.id === authorId) continue;
+    const re = new RegExp(`(^|[^\\p{L}\\p{N}_])@${escapeRegExp(m.username.toLocaleLowerCase('tr'))}(?![\\p{L}\\p{N}_])`, 'u');
+    if (re.test(lower)) users.push({ id: m.id, username: m.username });
+  }
+  const everyoneWanted = /(^|[^\p{L}\p{N}_])@everyone(?![\p{L}\p{N}_])/u.test(lower);
+  const everyone = everyoneWanted && canMentionEveryone(hubId, authorId);
+  if (!users.length && !everyone) return null;
+  return { users: users.slice(0, 20), everyone };
+}
+
 function saveHubMessage(hubId, userId, username, content, replyToMessageId = null) {
   // Yanıtlanan mesaj aynı Lobi'a ait değilse (ör. silinmiş/başka Lobi) sessizce
   // yok sayılır — mesaj yine de gönderilir, sadece yanıt bağlantısı kurulmaz.
@@ -3907,12 +3975,23 @@ function saveHubMessage(hubId, userId, username, content, replyToMessageId = nul
     if (parent) validReplyId = parent.id;
   }
 
-  const info = db.prepare(`
-    INSERT INTO messages (user_id, username, content, room, hub_id, kind, reply_to_message_id)
-    VALUES (?, ?, ?, ?, ?, 'text', ?)
-  `).run(userId, username, content, `hub_${hubId}`, hubId, validReplyId);
+  const mentions = resolveHubMentions(hubId, userId, content);
 
-  return getMessageById(info.lastInsertRowid);
+  const messageId = db.transaction(() => {
+    const info = db.prepare(`
+      INSERT INTO messages (user_id, username, content, room, hub_id, kind, reply_to_message_id, mentions)
+      VALUES (?, ?, ?, ?, ?, 'text', ?, ?)
+    `).run(userId, username, content, `hub_${hubId}`, hubId, validReplyId, mentions ? JSON.stringify(mentions) : null);
+    if (mentions) {
+      const targets = new Set(mentions.users.map((u) => u.id));
+      if (mentions.everyone) listHubMemberIds(hubId).forEach((id) => { if (id !== userId) targets.add(id); });
+      const ins = db.prepare(`INSERT OR IGNORE INTO message_mentions (message_id, user_id, hub_id) VALUES (?, ?, ?)`);
+      targets.forEach((id) => ins.run(info.lastInsertRowid, id, hubId));
+    }
+    return info.lastInsertRowid;
+  })();
+
+  return getMessageById(messageId);
 }
 
 function createHubPoll(hubId, userId, username, question, options) {
@@ -4577,7 +4656,10 @@ function getUnreadCounts(userId) {
   const hubs = {};
   for (const h of db.prepare(`SELECT hub_id, muted FROM hub_members WHERE user_id = ?`).all(userId)) {
     const count = unreadHubCount(userId, h.hub_id);
-    if (count) hubs[h.hub_id] = { count, muted: Boolean(h.muted) };
+    if (!count) continue;
+    const state = db.prepare(`SELECT last_read_id FROM read_states WHERE user_id = ? AND scope = 'hub' AND scope_id = ?`).get(userId, h.hub_id);
+    const mentions = db.prepare(`SELECT COUNT(*) AS c FROM message_mentions WHERE user_id = ? AND hub_id = ? AND message_id > ?`).get(userId, h.hub_id, state ? state.last_read_id : 0).c;
+    hubs[h.hub_id] = { count, muted: Boolean(h.muted), mentions };
   }
   const dms = {};
   const friends = db.prepare(`
@@ -5697,7 +5779,7 @@ function getDmMessages(userId, otherUserId, limit = 50, beforeId = null) {
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
-           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id
+           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE room = ? AND (? IS NULL OR messages.id < ?)
     ORDER BY messages.id DESC LIMIT ?
@@ -7170,6 +7252,7 @@ module.exports = {
   getDmMessagesPage,
   getUnreadCounts,
   markScopeRead,
+  canMentionEveryone,
   listHubMemberIds,
   getActiveVoiceBlock,
   kickFromVoiceRoomRecord,

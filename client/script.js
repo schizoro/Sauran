@@ -3625,6 +3625,32 @@ const I18N = {
     'hub-bans-title': { tr: 'Yasaklılar', en: 'Banned Users' },
     'hub-bans-empty': { tr: 'Yasaklı kimse yok.', en: 'No one is banned.' },
     'hub-mutes-title': { tr: 'Susturulanlar', en: 'Muted users' },
+    'hubset-sec-general': { tr: 'Genel', en: 'General' },
+    'hubset-sec-general-desc': { tr: 'Lobinin adı, görseli ve görünümü.', en: 'Name, image and look of the lobby.' },
+    'hubset-sec-visibility': { tr: 'Görünürlük ve Katılım', en: 'Visibility & joining' },
+    'hubset-sec-visibility-desc': { tr: 'Lobinin Keşfet\'te görünüp görünmeyeceği ve insanların nasıl katılacağı.', en: 'Whether the lobby appears in Discover and how people join.' },
+    'hubset-sec-permissions': { tr: 'Bahsetmeler', en: 'Mentions' },
+    'hubset-sec-permissions-desc': { tr: '@everyone ile lobideki herkese bildirim gönderebilecek kişiler.', en: 'Who can notify everyone in the lobby with @everyone.' },
+    'hubset-sec-invite': { tr: 'Davet', en: 'Invite' },
+    'hubset-sec-invite-desc': { tr: 'Arkadaşlarını davet et ya da paylaşılabilir bir davet kodu oluştur.', en: 'Invite friends or create a shareable invite code.' },
+    'hubset-sec-moderation': { tr: 'Moderasyon', en: 'Moderation' },
+    'hubset-sec-moderation-desc': { tr: 'Yasaklar, sesli oda susturmaları ve oda giriş engelleri.', en: 'Bans, voice room mutes and room blocks.' },
+    'hubset-sec-other': { tr: 'Diğer', en: 'Other' },
+    'hubset-sec-other-desc': { tr: 'Bildirme ve geri alınamayan işlemler.', en: 'Reporting and irreversible actions.' },
+    'hubset-danger-title': { tr: 'Tehlikeli bölge', en: 'Danger zone' },
+    'hubset-name-label': { tr: 'Lobi adı', en: 'Lobby name' },
+    'hubset-everyone-label': { tr: '@everyone kullanabilecekler', en: 'Who can use @everyone' },
+    'hubset-everyone-owner': { tr: 'Yalnızca Lobi kurucusu', en: 'Lobby founder only' },
+    'hubset-everyone-moderators': { tr: 'Kurucu ve moderatörler', en: 'Founder and moderators' },
+    'hubset-everyone-everyone': { tr: 'Herkes', en: 'Everyone' },
+    'hubset-everyone-nobody': { tr: 'Kimse (kapalı)', en: 'No one (off)' },
+    'hubset-everyone-hint': { tr: 'Kişilere tek tek @ad ile bahsetmek her üyeye açıktır; bu ayar yalnızca @everyone içindir.', en: 'Mentioning people with @name is open to all members; this setting only covers @everyone.' },
+    'hub-blocks-title-short': { tr: 'Oda Engelleri', en: 'Room blocks' },
+    'mention-toast': { tr: 'senden bahsetti', en: 'mentioned you' },
+    'mention-everyone-hint': { tr: 'Lobideki herkese bildirim', en: 'Notify everyone in the lobby' },
+    'mention-badge-title': { tr: 'Senden bahsedildi', en: 'You were mentioned' },
+    'hubset-eyebrow': { tr: 'Lobi Ayarları', en: 'Lobby settings' },
+    'hubset-saved': { tr: 'Lobi ayarları kaydedildi.', en: 'Lobby settings saved.' },
     'feed-older-loading': { tr: 'Daha eski mesajlar yükleniyor…', en: 'Loading older messages…' },
     'feed-start': { tr: 'Sohbetin başı', en: 'Start of the conversation' },
     'hub-mutes-empty': { tr: 'Susturulan kimse yok.', en: 'No one is muted.' },
@@ -4670,6 +4696,26 @@ function connectToChat() {
         renderHubUnreadBadges();
     });
 
+    // Biri senden (ya da @everyone ile) bahsetti. Doğrudan bahsetme lobi sessizde olsa da bildirilir; @everyone sunucuda zaten süzülür.
+    socket.on('hub_mention', (data) => {
+        const hubId = Number(data?.hub_id);
+        const viewing = currentHub?.id === hubId && document.body.dataset.view === 'hub-detail' && document.visibilityState === 'visible';
+        if (viewing) return;
+        const info = unreadHubCounts.get(hubId) || { count: 1, muted: false };
+        unreadHubCounts.set(hubId, { ...info, mentions: (info.mentions || 0) + 1 });
+        renderHubUnreadBadges();
+        const label = data.everyone
+            ? `📣 ${data.from_username} @everyone · ${data.hub_name}`
+            : `@ ${data.from_username} ${t('mention-toast')} · ${data.hub_name}`;
+        showCenterToast(label);
+        playNotifSound();
+        if (notifDesktopEnabled && (getBrowserNotifState() === 'granted' || getNativeNotify()) && shouldShowSystemNotification()) {
+            showSystemNotification(data.hub_name, `${data.from_username}: ${data.preview || ''}`, {
+                tag: `mention-${hubId}`, renotify: true, data: { url: `/?open_hub=${hubId}` }
+            }).catch(() => {});
+        }
+    });
+
     // Başka cihazda okundu: buradaki sayaç da sıfırlanır.
     socket.on('read_state_updated', (data) => {
         const id = Number(data?.id);
@@ -4822,6 +4868,7 @@ function connectToChat() {
                 gift: '🎁 Bir hediye aldın!',
                 voice_muted: payload?.data ? voiceMuteNoticeText(payload.data) : t('voice-muted-title'),
                 voice_unmuted: t('voice-unmuted-toast'),
+                hub_mention: `@ ${payload?.data?.from_username || ''} ${t('mention-toast')}`,
                 voice_kicked: `👢 ${voiceMuteByLabel(payload?.data?.by_tier)} ${t('voice-kicked-text')}`,
                 voice_unblocked: `🚪 ${payload?.data?.room_name || ''} ${t('voice-unblocked-toast')}`
             };
@@ -5884,9 +5931,12 @@ function renderHubUnreadBadges() {
     document.querySelectorAll('[data-hub-unread]').forEach((el) => {
         const info = unreadHubCounts.get(Number(el.dataset.hubUnread));
         const count = info?.count || 0;
-        el.textContent = count > 99 ? '99+' : String(count);
-        el.style.display = count > 0 ? 'inline-flex' : 'none';
-        el.classList.toggle('is-muted', Boolean(info?.muted));
+        const mentions = info?.mentions || 0;
+        el.textContent = mentions ? `@ ${mentions > 99 ? '99+' : mentions}` : (count > 99 ? '99+' : String(count));
+        el.style.display = count > 0 || mentions > 0 ? 'inline-flex' : 'none';
+        el.classList.toggle('is-muted', Boolean(info?.muted) && !mentions);
+        el.classList.toggle('has-mention', mentions > 0);
+        el.title = mentions ? t('mention-badge-title') : '';
     });
 }
 
@@ -6576,6 +6626,21 @@ function renderNotifications(notifications) {
                     <div class="notification-text">
                         🔇 <strong>${escapeHtml(voiceMuteByLabel(d.by_tier))}</strong> seni <strong>${escapeHtml(d.room_name || '')}</strong> sesli odasında susturdu (${escapeHtml(duration)}).
                         ${escapeHtml(t('voice-muted-share-note'))}
+                    </div>
+                    ${infoActions(n, t('ok-got-it'))}
+                </div>
+            `;
+
+        }
+
+        if (n.type === 'hub_mention') {
+
+            const d = n.data || {};
+            return `
+                <div class="notification-card${seenClass(n)}" data-notif-id="${n.id}" data-notif-type="hub_mention">
+                    <div class="notification-text">
+                        @ <strong>${escapeHtml(d.from_username || '')}</strong> ${escapeHtml(t('mention-toast'))} · <strong>${escapeHtml(d.hub_name || '')}</strong>
+                        ${d.preview ? `<div class="notification-preview">“${escapeHtml(d.preview)}”</div>` : ''}
                     </div>
                     ${infoActions(n, t('ok-got-it'))}
                 </div>
@@ -10336,30 +10401,97 @@ hubSettingsOpenBtn.addEventListener('click', () => {
         hubSettingsImagePreview.innerHTML = hubInitialHtml(currentHub.name);
     }
 
-    hubSettingsModal.style.display = 'flex';
-
     const isOwner = !!currentHub.is_owner;
     populateHubDiscoverSettings(isOwner);
     hubSettingsNameInput.disabled = !isOwner;
     hubSettingsImageBtn.disabled = !isOwner;
-    hubSettingsSaveBtn.style.display = isOwner ? '' : 'none';
+    document.getElementById('hubset-everyone').value = currentHub.mention_everyone || 'owner';
 
     const canModerate = currentHub.my_permission_tier === 'owner' || currentHub.my_permission_tier === 'moderator';
-    const bansSection = document.getElementById('hub-settings-bans-section');
-    bansSection.style.display = canModerate ? 'block' : 'none';
+    document.getElementById('hub-settings-bans-section').style.display = canModerate ? 'flex' : 'none';
     document.getElementById('hub-clear-chat-btn').style.display = canModerate ? 'flex' : 'none';
+    document.getElementById('hub-delete-btn').style.display = isOwner ? 'flex' : 'none';
+    document.getElementById('hubset-danger-zone').style.display = canModerate ? 'flex' : 'none';
+    document.getElementById('hub-ban-member-btn').style.display = canModerate ? 'inline-flex' : 'none';
 
+    // Bölümler role göre: kurucu hepsini görür; moderatör moderasyon/davet/diğer (+ istekler); üye davet/diğer.
+    const hasRequests = typeof currentHub.pending_join_requests === 'number';
+    hubsetAllowed = {
+        general: isOwner,
+        visibility: isOwner || hasRequests,
+        permissions: isOwner,
+        invite: true,
+        moderation: canModerate,
+        other: true
+    };
+    document.querySelectorAll('#hubset-nav [data-hubset-section]').forEach((btn) => {
+        btn.style.display = hubsetAllowed[btn.dataset.hubsetSection] ? '' : 'none';
+    });
+    document.getElementById('hubset-title').textContent = currentHub.name || '';
+    const icon = document.getElementById('hubset-topbar-icon');
+    icon.innerHTML = currentHub.image_data ? `<img src="${escapeAttr(currentHub.image_data)}" alt="">` : hubInitialHtml(currentHub.name);
 
-    document.getElementById('hub-ban-member-btn').style.display = canModerate ? 'flex' : 'none';
-    showHubSettingsView('main');
+    hubSettingsModal.style.display = 'flex';
+    document.body.classList.add('hubset-open');
+    showHubsetSection(isOwner ? 'general' : canModerate ? 'moderation' : 'invite');
 
 });
 
+// ─── Lobi ayarları: tam ekran, bölümlü pencere ───
+let hubsetAllowed = {};
+let hubsetCurrent = 'general';
+const HUBSET_SAVE_SECTIONS = ['general', 'visibility', 'permissions'];
+
+function showHubsetSection(section) {
+    if (!hubsetAllowed[section]) section = Object.keys(hubsetAllowed).find((k) => hubsetAllowed[k]) || 'invite';
+    hubsetCurrent = section;
+    document.querySelectorAll('#hub-settings-modal [data-hubset-panel]').forEach((panel) => {
+        panel.style.display = panel.dataset.hubsetPanel === section ? 'flex' : 'none';
+    });
+    document.querySelectorAll('#hubset-nav [data-hubset-section]').forEach((btn) => {
+        const active = btn.dataset.hubsetSection === section;
+        btn.classList.toggle('active', active);
+        btn.setAttribute('aria-current', active ? 'page' : 'false');
+        if (active) btn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+    // Kaydet çubuğu yalnızca kurucunun düzenleyebildiği bölümlerde görünür.
+    const saveVisible = Boolean(currentHub?.is_owner) && HUBSET_SAVE_SECTIONS.includes(section);
+    document.getElementById('hubset-savebar').style.display = saveVisible ? 'flex' : 'none';
+    document.getElementById('hubset-content').scrollTop = 0;
+    if (section === 'moderation') showHubSettingsView('bans');
+}
+
+// Moderasyon alt sekmeleri (eski "görünüm" adlarıyla uyumlu): pick | bans | mutes | blocks. 'main' genel bölüme döner.
 function showHubSettingsView(view) {
-    ['main', 'pick', 'bans', 'mutes', 'blocks'].forEach((v) => {
+    if (view === 'main') { showHubsetSection(Object.keys(hubsetAllowed).find((k) => hubsetAllowed[k]) || 'invite'); return; }
+    if (hubsetCurrent !== 'moderation') {
+        hubsetCurrent = 'moderation';
+        showHubsetSection('moderation');
+    }
+    ['pick', 'bans', 'mutes', 'blocks'].forEach((v) => {
         document.getElementById(`hub-settings-${v}-view`).style.display = v === view ? 'flex' : 'none';
     });
+    document.querySelectorAll('#hub-settings-bans-section [data-hubset-tab]').forEach((tab) => {
+        const active = tab.dataset.hubsetTab === view;
+        tab.classList.toggle('active', active);
+        tab.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    if (view === 'bans') loadHubBans();
 }
+
+function closeHubSettings() {
+    hubSettingsModal.style.display = 'none';
+    document.body.classList.remove('hubset-open');
+}
+
+document.getElementById('hubset-nav').addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-hubset-section]');
+    if (btn) showHubsetSection(btn.dataset.hubsetSection);
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && hubSettingsModal.style.display === 'flex') closeHubSettings();
+});
 
 document.getElementById('hub-clear-chat-btn').addEventListener('click', async () => {
 
@@ -10385,10 +10517,7 @@ document.getElementById('hub-clear-chat-btn').addEventListener('click', async ()
 
 });
 
-document.getElementById('hub-bans-open-btn').addEventListener('click', () => {
-    showHubSettingsView('bans');
-    loadHubBans();
-});
+document.getElementById('hub-bans-open-btn').addEventListener('click', () => showHubSettingsView('bans'));
 
 document.getElementById('hub-bans-back-btn').addEventListener('click', () => showHubSettingsView('main'));
 
@@ -10508,10 +10637,7 @@ async function loadHubBans() {
 
 }
 
-hubSettingsCloseBtn.addEventListener('click', () => hubSettingsModal.style.display = 'none');
-hubSettingsModal.addEventListener('click', (event) => {
-    if (event.target === hubSettingsModal) hubSettingsModal.style.display = 'none';
-});
+hubSettingsCloseBtn.addEventListener('click', closeHubSettings);
 
 hubSettingsImageBtn.addEventListener('click', () => hubSettingsImageInput.click());
 
@@ -11023,13 +11149,15 @@ function syncHubsetVisibilityUi() {
 function populateHubDiscoverSettings(isOwner) {
     const box = document.getElementById('hub-discover-settings');
     const reqBtn = document.getElementById('hub-requests-open-btn');
-    document.getElementById('hub-settings-main-view').style.display = '';
     document.getElementById('hub-settings-requests-view').style.display = 'none';
 
     // Katılma istekleri: sunucu yalnızca yetkili kullanıcıya sayıyı gönderir.
     const pending = currentHub && currentHub.pending_join_requests;
     reqBtn.style.display = typeof pending === 'number' ? 'flex' : 'none';
     document.getElementById('hub-requests-count').textContent = pending ? String(pending) : '';
+    const navBadge = document.getElementById('hubset-nav-requests');
+    navBadge.textContent = pending ? String(pending) : '';
+    navBadge.style.display = pending ? 'inline-flex' : 'none';
 
     if (!box) return;
     box.style.display = isOwner ? 'flex' : 'none';
@@ -11111,13 +11239,13 @@ async function loadHubJoinRequests() {
 }
 
 document.getElementById('hub-requests-open-btn')?.addEventListener('click', () => {
-    document.getElementById('hub-settings-main-view').style.display = 'none';
-    document.getElementById('hub-settings-requests-view').style.display = '';
-    loadHubJoinRequests();
+    const view = document.getElementById('hub-settings-requests-view');
+    const open = view.style.display === 'none';
+    view.style.display = open ? 'flex' : 'none';
+    if (open) loadHubJoinRequests();
 });
 document.getElementById('hub-requests-back-btn')?.addEventListener('click', () => {
     document.getElementById('hub-settings-requests-view').style.display = 'none';
-    document.getElementById('hub-settings-main-view').style.display = '';
 });
 
 hubSettingsSaveBtn.addEventListener('click', async () => {
@@ -11137,6 +11265,8 @@ hubSettingsSaveBtn.addEventListener('click', async () => {
         Object.assign(body, collectHubDiscoverSettings());
         if (hubSettingsTheme !== (currentHub.theme || 'default')) body.theme = hubSettingsTheme;
         if (hubSettingsBgImage !== undefined) body.bg_image = hubSettingsBgImage;
+        const everyone = document.getElementById('hubset-everyone').value;
+        if (everyone !== (currentHub.mention_everyone || 'owner')) body.mention_everyone = everyone;
     }
 
     try {
@@ -11155,7 +11285,8 @@ hubSettingsSaveBtn.addEventListener('click', async () => {
             return;
         }
 
-        hubSettingsModal.style.display = 'none';
+        closeHubSettings();
+        showToast(t('hubset-saved'));
         openHub(currentHub.id);
 
     } catch (error) {
@@ -13648,11 +13779,98 @@ hubStartMenu.querySelectorAll('button').forEach((btn) => {
 // HUB — SOHBET
 // =====================================================
 
+// ─── @ önerisi (yazarken lobi üyeleri) ───
+const mentionSuggest = (() => {
+    const box = document.createElement('div');
+    box.id = 'hub-mention-suggest';
+    box.className = 'mention-suggest liquid-glass';
+    box.setAttribute('role', 'listbox');
+    box.hidden = true;
+    hubChatForm.querySelector('.composer-input-box')?.appendChild(box);
+    return box;
+})();
+let mentionItems = [];
+let mentionIndex = 0;
+
+function mentionQueryAtCaret() {
+    const caret = hubMessageInput.selectionStart ?? hubMessageInput.value.length;
+    const before = hubMessageInput.value.slice(0, caret);
+    const m = /(^|\s)@([^\s@]{0,20})$/.exec(before);
+    return m ? { query: m[2], start: caret - m[2].length - 1, end: caret } : null;
+}
+
+function closeMentionSuggest() {
+    mentionSuggest.hidden = true;
+    mentionItems = [];
+}
+
+function renderMentionSuggest() {
+    const q = mentionQueryAtCaret();
+    if (!q || !currentHub) { closeMentionSuggest(); return; }
+    const query = q.query.toLocaleLowerCase('tr');
+    const members = (currentHub.members || [])
+        .filter((m) => m.user_id !== currentUser?.id && m.username.toLocaleLowerCase('tr').includes(query))
+        .sort((a, b) => Number(!a.username.toLocaleLowerCase('tr').startsWith(query)) - Number(!b.username.toLocaleLowerCase('tr').startsWith(query)))
+        .slice(0, 8)
+        .map((m) => ({ value: m.username, label: m.username, avatar: m.avatar_data, user_id: m.user_id }));
+    if (currentHub.can_mention_everyone && 'everyone'.startsWith(query)) {
+        members.unshift({ value: 'everyone', label: '@everyone', hint: t('mention-everyone-hint') });
+    }
+    mentionItems = members;
+    if (!mentionItems.length) { closeMentionSuggest(); return; }
+    mentionIndex = Math.min(mentionIndex, mentionItems.length - 1);
+    mentionSuggest.innerHTML = mentionItems.map((item, i) => `
+        <button type="button" class="mention-suggest-item${i === mentionIndex ? ' active' : ''}" role="option" aria-selected="${i === mentionIndex}" data-mention-index="${i}">
+            <span class="mention-suggest-avatar" style="--user-color:${getUserColor(item.value)};">${item.avatar ? `<img src="${escapeAttr(item.avatar)}" alt="">` : (item.user_id ? escapeHtml(item.value.charAt(0).toUpperCase()) : '@')}</span>
+            <span class="mention-suggest-name">${escapeHtml(item.label)}</span>
+            ${item.hint ? `<span class="mention-suggest-hint">${escapeHtml(item.hint)}</span>` : ''}
+        </button>
+    `).join('');
+    mentionSuggest.hidden = false;
+}
+
+function applyMention(index) {
+    const item = mentionItems[index];
+    const q = mentionQueryAtCaret();
+    if (!item || !q) return;
+    const value = hubMessageInput.value;
+    const insert = `@${item.value} `;
+    hubMessageInput.value = value.slice(0, q.start) + insert + value.slice(q.end);
+    const caret = q.start + insert.length;
+    hubMessageInput.setSelectionRange(caret, caret);
+    closeMentionSuggest();
+    hubMessageInput.focus();
+}
+
+hubMessageInput.addEventListener('input', () => { mentionIndex = 0; renderMentionSuggest(); });
+hubMessageInput.addEventListener('blur', () => setTimeout(closeMentionSuggest, 150));
+hubMessageInput.addEventListener('keydown', (event) => {
+    if (mentionSuggest.hidden || !mentionItems.length) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        mentionIndex = (mentionIndex + (event.key === 'ArrowDown' ? 1 : -1) + mentionItems.length) % mentionItems.length;
+        renderMentionSuggest();
+    } else if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault();
+        applyMention(mentionIndex);
+    } else if (event.key === 'Escape') {
+        event.preventDefault();
+        closeMentionSuggest();
+    }
+});
+mentionSuggest.addEventListener('mousedown', (event) => {
+    const btn = event.target.closest('[data-mention-index]');
+    if (!btn) return;
+    event.preventDefault();
+    applyMention(Number(btn.dataset.mentionIndex));
+});
+
 hubChatForm.addEventListener(
     'submit',
     (event) => {
 
         event.preventDefault();
+        closeMentionSuggest();
 
         const content = hubMessageInput.value.trim();
         if (!content || !currentHub || !socket) return;
@@ -13901,7 +14119,31 @@ function appendHubMessage(msg, opts) {
 }
 
 
+// ─── @bahsetme ───
+function messageMentionsMe(msg) {
+    const m = msg?.mentions;
+    if (!m || !currentUser || msg.user_id === currentUser.id) return false;
+    return Boolean(m.everyone) || (m.users || []).some((u) => u.id === currentUser.id);
+}
+
+// Metin önce kaçışlanır; ardından YALNIZCA sunucunun çözdüğü bahsetmeler vurgulanır (rastgele @kelime vurgulanmaz).
+function renderMentionText(content, mentions) {
+    let html = escapeHtml(content || '');
+    if (!mentions) return html;
+    const names = (mentions.users || []).map((u) => ({ name: u.username, me: u.id === currentUser?.id }));
+    if (mentions.everyone) names.push({ name: 'everyone', me: true, everyone: true });
+    names.sort((a, b) => b.name.length - a.name.length);
+    for (const n of names) {
+        const escapedName = escapeHtml(n.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const re = new RegExp(`(?<![\\p{L}\\p{N}_>])@${escapedName}(?![\\p{L}\\p{N}_])`, 'giu');
+        html = html.replace(re, (match) => `<span class="mention${n.me ? ' mention-me' : ''}${n.everyone ? ' mention-everyone' : ''}">${match}</span>`);
+    }
+    return html;
+}
+
 function renderHubMessageIntoWrap(wrap, msg) {
+
+    wrap.classList.toggle('hub-msg-mentions-me', messageMentionsMe(msg));
 
     const time = msg.created_at
         ? new Date(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
@@ -13961,7 +14203,7 @@ function renderHubMessageIntoWrap(wrap, msg) {
 
     } else {
 
-        body = `<div class="hub-msg-text">${escapeHtml(msg.content)}</div>`;
+        body = `<div class="hub-msg-text">${renderMentionText(msg.content, msg.mentions)}</div>`;
 
     }
 

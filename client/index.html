@@ -670,26 +670,51 @@
     </div>
 
 
-    <div id="hub-settings-modal" class="modal-overlay" style="display:none;">
+    <div id="hub-settings-modal" class="hubset-screen" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="hubset-title">
 
-        <div class="modal-box hub-settings-box hub-settings-panel">
+        <div class="hubset-shell">
 
-            <div class="modal-header">
-                <span data-i18n="modal-hub-settings">⚙️ Lobi Ayarları</span>
-                <button id="hub-settings-close-btn">✕</button>
-            </div>
-
-            <div class="hub-settings-body" id="hub-settings-main-view">
-
-                <div class="hub-create-image-wrap">
-                    <span id="hub-settings-image-preview" class="hub-create-image-preview">🧩</span>
-                    <button id="hub-settings-image-btn" class="hub-create-image-btn" type="button"><span data-i18n="change-image">Görseli Değiştir</span></button>
-                    <input type="file" id="hub-settings-image-input" accept="image/png,image/jpeg,image/webp" hidden>
+            <header class="hubset-topbar">
+                <span id="hubset-topbar-icon" class="hubset-topbar-icon" aria-hidden="true"></span>
+                <div class="hubset-topbar-text">
+                    <span class="hubset-eyebrow" data-i18n="hubset-eyebrow">Lobi Ayarları</span>
+                    <h2 id="hubset-title" class="hubset-title"></h2>
                 </div>
+                <button id="hub-settings-close-btn" class="hubset-close" type="button" aria-label="Kapat" title="Kapat (Esc)">✕</button>
+            </header>
 
-                <input type="text" id="hub-settings-name-input" class="hub-name-input" placeholder="Lobi adı" maxlength="40">
+            <div class="hubset-layout">
 
-                <div id="hubset-theme-block" style="display:none;">
+                <nav id="hubset-nav" class="hubset-nav" aria-label="Ayar bölümleri">
+                    <button type="button" class="hubset-nav-btn" data-hubset-section="general"><span aria-hidden="true">🧩</span><span data-i18n="hubset-sec-general">Genel</span></button>
+                    <button type="button" class="hubset-nav-btn" data-hubset-section="visibility"><span aria-hidden="true">🌍</span><span data-i18n="hubset-sec-visibility">Görünürlük ve Katılım</span><span id="hubset-nav-requests" class="hubset-nav-badge" style="display:none;"></span></button>
+                    <button type="button" class="hubset-nav-btn" data-hubset-section="permissions"><span aria-hidden="true">📣</span><span data-i18n="hubset-sec-permissions">Bahsetmeler</span></button>
+                    <button type="button" class="hubset-nav-btn" data-hubset-section="invite"><span aria-hidden="true">✉️</span><span data-i18n="hubset-sec-invite">Davet</span></button>
+                    <button type="button" class="hubset-nav-btn" data-hubset-section="moderation"><span aria-hidden="true">🛡️</span><span data-i18n="hubset-sec-moderation">Moderasyon</span></button>
+                    <button type="button" class="hubset-nav-btn" data-hubset-section="other"><span aria-hidden="true">⚙️</span><span data-i18n="hubset-sec-other">Diğer</span></button>
+                </nav>
+
+                <main class="hubset-content" id="hubset-content">
+
+                    <!-- GENEL -->
+                    <section class="hubset-panel" data-hubset-panel="general" id="hub-settings-main-view">
+                        <div class="hubset-panel-head">
+                            <h3 data-i18n="hubset-sec-general">Genel</h3>
+                            <p data-i18n="hubset-sec-general-desc">Lobinin adı, görseli ve görünümü.</p>
+                        </div>
+
+                        <div class="hubset-card hubset-identity">
+                            <span id="hub-settings-image-preview" class="hub-create-image-preview hubset-avatar">🧩</span>
+                            <div class="hubset-identity-fields">
+                                <label class="profile-field-label" for="hub-settings-name-input" data-i18n="hubset-name-label">Lobi adı</label>
+                                <input type="text" id="hub-settings-name-input" class="hub-name-input" placeholder="Lobi adı" maxlength="40">
+                                <button id="hub-settings-image-btn" class="hub-create-image-btn hubset-inline-btn" type="button"><span data-i18n="change-image">Görseli Değiştir</span></button>
+                                <input type="file" id="hub-settings-image-input" accept="image/png,image/jpeg,image/webp" hidden>
+                            </div>
+                        </div>
+
+                        <div class="hubset-card">
+                            <div id="hubset-theme-block" style="display:none;">
                     <span class="profile-field-label">Lobi Teması <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
                     <div id="hubset-theme-picker" class="chat-theme-picker">
                         <button type="button" class="chat-theme-option" data-hub-theme="default"><span class="chat-theme-swatch"></span>Klasik</button>
@@ -708,8 +733,18 @@
                     </div>
                     <p id="hubset-bg-hint" class="hubset-hint"></p>
                 </div>
+                        </div>
+                    </section>
 
-                <div id="hub-discover-settings" class="hub-discover-settings" style="display:none;">
+                    <!-- GÖRÜNÜRLÜK VE KATILIM -->
+                    <section class="hubset-panel" data-hubset-panel="visibility" style="display:none;">
+                        <div class="hubset-panel-head">
+                            <h3 data-i18n="hubset-sec-visibility">Görünürlük ve Katılım</h3>
+                            <p data-i18n="hubset-sec-visibility-desc">Lobinin Keşfet'te görünüp görünmeyeceği ve insanların nasıl katılacağı.</p>
+                        </div>
+
+                        <div class="hubset-card" id="hubset-discover-card">
+                            <div id="hub-discover-settings" class="hub-discover-settings" style="display:none;">
 
                     <span class="profile-field-label" data-i18n="hubset-visibility">Görünürlük</span>
                     <select id="hubset-visibility" class="discover-select"></select>
@@ -744,66 +779,109 @@
                     </div>
 
                 </div>
+                        </div>
 
-                <button id="hub-requests-open-btn" class="hub-settings-action-btn" type="button" style="display:none;">📥 <span data-i18n="hubset-requests">Katılma İstekleri</span> <span id="hub-requests-count" class="hubset-count"></span></button>
+                        <button id="hub-requests-open-btn" class="hub-settings-action-btn" type="button" style="display:none;">📥 <span data-i18n="hubset-requests">Katılma İstekleri</span> <span id="hub-requests-count" class="hubset-count"></span></button>
 
+                        <div class="hubset-card hub-settings-body" id="hub-settings-requests-view" style="display:none;">
+                            <button id="hub-requests-back-btn" class="hub-settings-back-btn" type="button">← <span data-i18n="bans-back">Geri</span></button>
+                            <span class="profile-field-label" data-i18n="hubset-requests">Katılma İstekleri</span>
+                            <div id="hub-settings-requests-list" class="settings-blocked-list"></div>
+                        </div>
+                    </section>
+
+                    <!-- BAHSETMELER -->
+                    <section class="hubset-panel" data-hubset-panel="permissions" style="display:none;">
+                        <div class="hubset-panel-head">
+                            <h3 data-i18n="hubset-sec-permissions">Bahsetmeler</h3>
+                            <p data-i18n="hubset-sec-permissions-desc">@everyone ile lobideki herkese bildirim gönderebilecek kişiler.</p>
+                        </div>
+                        <div class="hubset-card">
+                            <label class="profile-field-label" for="hubset-everyone" data-i18n="hubset-everyone-label">@everyone kullanabilecekler</label>
+                            <select id="hubset-everyone" class="discover-select">
+                                <option value="owner" data-i18n="hubset-everyone-owner">Yalnızca Lobi kurucusu</option>
+                                <option value="moderators" data-i18n="hubset-everyone-moderators">Kurucu ve moderatörler</option>
+                                <option value="everyone" data-i18n="hubset-everyone-everyone">Herkes</option>
+                                <option value="nobody" data-i18n="hubset-everyone-nobody">Kimse (kapalı)</option>
+                            </select>
+                            <p class="hubset-hint" data-i18n="hubset-everyone-hint">Kişilere tek tek @ad ile bahsetmek her üyeye açıktır; bu ayar yalnızca @everyone içindir.</p>
+                        </div>
+                    </section>
+
+                    <!-- DAVET -->
+                    <section class="hubset-panel" data-hubset-panel="invite" style="display:none;">
+                        <div class="hubset-panel-head">
+                            <h3 data-i18n="hubset-sec-invite">Davet</h3>
+                            <p data-i18n="hubset-sec-invite-desc">Arkadaşlarını davet et ya da paylaşılabilir bir davet kodu oluştur.</p>
+                        </div>
+                        <div class="hubset-actions">
+                            <button id="hub-invite-friend-btn" class="hub-settings-action-btn" type="button">👥 <span data-i18n="hub-settings-invite-friend">Arkadaşını Davet Et</span></button>
+                            <button id="hub-invite-btn" class="hub-settings-action-btn" type="button">🔑 <span data-i18n="hub-settings-invite-code">Davet Kodu Oluştur</span></button>
+                        </div>
+                    </section>
+
+                    <!-- MODERASYON -->
+                    <section class="hubset-panel" data-hubset-panel="moderation" style="display:none;">
+                        <div class="hubset-panel-head">
+                            <h3 data-i18n="hubset-sec-moderation">Moderasyon</h3>
+                            <p data-i18n="hubset-sec-moderation-desc">Yasaklar, sesli oda susturmaları ve oda giriş engelleri.</p>
+                        </div>
+
+                        <div id="hub-settings-bans-section" class="hubset-tabs" role="tablist" style="display:none;">
+                            <button id="hub-bans-open-btn" class="hubset-tab" type="button" data-hubset-tab="bans">⛔ <span data-i18n="hub-bans-title">Yasaklılar</span></button>
+                            <button id="hub-mutes-open-btn" class="hubset-tab" type="button" data-hubset-tab="mutes">🔇 <span data-i18n="hub-mutes-title">Susturulanlar</span></button>
+                            <button id="hub-blocks-open-btn" class="hubset-tab" type="button" data-hubset-tab="blocks">🚪 <span data-i18n="hub-blocks-title-short">Oda Engelleri</span></button>
+                            <button id="hub-ban-member-btn" class="hubset-tab hubset-tab-danger" type="button" data-hubset-tab="pick" style="display:none;">🚫 <span data-i18n="hub-ban-member">Katılımcı Yasakla</span></button>
+                        </div>
+
+                        <div class="hubset-card hub-settings-body" id="hub-settings-bans-view" style="display:none;">
+                            <button id="hub-bans-back-btn" class="hub-settings-back-btn" type="button">← <span data-i18n="bans-back">Geri</span></button>
+                            <div id="hub-settings-bans-list" class="settings-blocked-list"></div>
+                        </div>
+
+                        <div class="hubset-card hub-settings-body" id="hub-settings-mutes-view" style="display:none;">
+                            <button id="hub-mutes-back-btn" class="hub-settings-back-btn" type="button">← <span data-i18n="bans-back">Geri</span></button>
+                            <input type="text" id="hub-mutes-search-input" class="hub-name-input" data-i18n-placeholder="hub-ban-search-placeholder" placeholder="Kullanıcı adı ara..." autocomplete="off">
+                            <div id="hub-settings-mutes-list" class="settings-blocked-list settings-blocked-list-tall"></div>
+                        </div>
+
+                        <div class="hubset-card hub-settings-body" id="hub-settings-blocks-view" style="display:none;">
+                            <button id="hub-blocks-back-btn" class="hub-settings-back-btn" type="button">← <span data-i18n="bans-back">Geri</span></button>
+                            <input type="text" id="hub-blocks-search-input" class="hub-name-input" data-i18n-placeholder="hub-ban-search-placeholder" placeholder="Kullanıcı adı ara..." autocomplete="off">
+                            <div id="hub-settings-blocks-list" class="settings-blocked-list settings-blocked-list-tall"></div>
+                        </div>
+
+                        <div class="hubset-card hub-settings-body" id="hub-settings-pick-view" style="display:none;">
+                            <button id="hub-pick-back-btn" class="hub-settings-back-btn" type="button">← <span data-i18n="bans-back">Geri</span></button>
+                            <input type="text" id="hub-ban-search-input" class="hub-name-input" data-i18n-placeholder="hub-ban-search-placeholder" placeholder="Kullanıcı adı ara..." autocomplete="off">
+                            <div id="hub-ban-picker" class="settings-blocked-list settings-blocked-list-tall"></div>
+                        </div>
+                    </section>
+
+                    <!-- DİĞER -->
+                    <section class="hubset-panel" data-hubset-panel="other" style="display:none;">
+                        <div class="hubset-panel-head">
+                            <h3 data-i18n="hubset-sec-other">Diğer</h3>
+                            <p data-i18n="hubset-sec-other-desc">Bildirme ve geri alınamayan işlemler.</p>
+                        </div>
+                        <div class="hubset-actions">
+                            <button id="hub-report-btn" class="hub-settings-action-btn" type="button">🚩 <span data-i18n="hub-settings-report">Lobi'ı Bildir</span></button>
+                        </div>
+                        <div class="hubset-danger-zone" id="hubset-danger-zone">
+                            <span class="hubset-danger-title" data-i18n="hubset-danger-title">Tehlikeli bölge</span>
+                            <button id="hub-clear-chat-btn" class="hub-settings-action-btn hub-settings-danger" type="button" style="display:none;">🧹 <span data-i18n="hub-settings-clear-chat">Lobi Sohbetini Temizle</span></button>
+                            <button id="hub-delete-btn" class="hub-settings-action-btn hub-settings-danger" type="button" style="display:none;">🗑 <span data-i18n="hub-settings-delete">Lobi'ı Sil</span></button>
+                        </div>
+                    </section>
+
+                </main>
+
+            </div>
+
+            <footer id="hubset-savebar" class="hubset-savebar" style="display:none;">
                 <div id="hub-settings-error" class="hub-create-error"></div>
-
-                <button id="hub-settings-save-btn" class="hub-create-submit" type="button" data-i18n="save">Kaydet</button>
-
-                <div class="hub-settings-divider"></div>
-
-                <button id="hub-invite-friend-btn" class="hub-settings-action-btn" type="button">👥 <span data-i18n="hub-settings-invite-friend">Arkadaşını Davet Et</span></button>
-                <button id="hub-invite-btn" class="hub-settings-action-btn" type="button">🔑 <span data-i18n="hub-settings-invite-code">Davet Kodu Oluştur</span></button>
-
-                <button id="hub-ban-member-btn" class="hub-settings-action-btn hub-settings-danger" type="button" style="display:none;">🚫 <span data-i18n="hub-ban-member">Katılımcı Yasakla</span></button>
-
-                <div id="hub-settings-bans-section" style="display:none;">
-                    <button id="hub-bans-open-btn" class="hub-settings-action-btn" type="button">⛔ <span data-i18n="hub-bans-title">Yasaklılar</span></button>
-                    <button id="hub-mutes-open-btn" class="hub-settings-action-btn" type="button">🔇 <span data-i18n="hub-mutes-title">Susturulanlar</span></button>
-                    <button id="hub-blocks-open-btn" class="hub-settings-action-btn" type="button">🚪 <span data-i18n="hub-blocks-title">Odaya Girişi Engellenenler</span></button>
-                </div>
-
-                <button id="hub-clear-chat-btn" class="hub-settings-action-btn hub-settings-danger" type="button" style="display:none;">🧹 <span data-i18n="hub-settings-clear-chat">Lobi Sohbetini Temizle</span></button>
-
-                <button id="hub-report-btn" class="hub-settings-action-btn hub-settings-danger" type="button">🚩 <span data-i18n="hub-settings-report">Lobi'ı Bildir</span></button>
-
-                <button id="hub-delete-btn" class="hub-settings-action-btn hub-settings-danger" type="button" style="display:none;">🗑 <span data-i18n="hub-settings-delete">Lobi'ı Sil</span></button>
-
-            </div>
-
-            <div class="hub-settings-body" id="hub-settings-pick-view" style="display:none;">
-                <button id="hub-pick-back-btn" class="hub-settings-back-btn" type="button">← <span data-i18n="bans-back">Geri</span></button>
-                <span class="profile-field-label" data-i18n="hub-ban-member">Katılımcı Yasakla</span>
-                <input type="text" id="hub-ban-search-input" class="hub-name-input" data-i18n-placeholder="hub-ban-search-placeholder" placeholder="Kullanıcı adı ara..." autocomplete="off">
-                <div id="hub-ban-picker" class="settings-blocked-list settings-blocked-list-tall"></div>
-            </div>
-
-            <div class="hub-settings-body" id="hub-settings-requests-view" style="display:none;">
-                <button id="hub-requests-back-btn" class="hub-settings-back-btn" type="button">← <span data-i18n="bans-back">Geri</span></button>
-                <span class="profile-field-label" data-i18n="hubset-requests">Katılma İstekleri</span>
-                <div id="hub-settings-requests-list" class="settings-blocked-list"></div>
-            </div>
-
-            <div class="hub-settings-body" id="hub-settings-mutes-view" style="display:none;">
-                <button id="hub-mutes-back-btn" class="hub-settings-back-btn" type="button">← <span data-i18n="bans-back">Geri</span></button>
-                <span class="profile-field-label" data-i18n="hub-mutes-title">Susturulanlar</span>
-                <input type="text" id="hub-mutes-search-input" class="hub-name-input" data-i18n-placeholder="hub-ban-search-placeholder" placeholder="Kullanıcı adı ara..." autocomplete="off">
-                <div id="hub-settings-mutes-list" class="settings-blocked-list settings-blocked-list-tall"></div>
-            </div>
-
-            <div class="hub-settings-body" id="hub-settings-blocks-view" style="display:none;">
-                <button id="hub-blocks-back-btn" class="hub-settings-back-btn" type="button">← <span data-i18n="bans-back">Geri</span></button>
-                <span class="profile-field-label" data-i18n="hub-blocks-title">Odaya Girişi Engellenenler</span>
-                <input type="text" id="hub-blocks-search-input" class="hub-name-input" data-i18n-placeholder="hub-ban-search-placeholder" placeholder="Kullanıcı adı ara..." autocomplete="off">
-                <div id="hub-settings-blocks-list" class="settings-blocked-list settings-blocked-list-tall"></div>
-            </div>
-
-            <div class="hub-settings-body" id="hub-settings-bans-view" style="display:none;">
-                <button id="hub-bans-back-btn" class="hub-settings-back-btn" type="button">← <span data-i18n="bans-back">Geri</span></button>
-                <span class="profile-field-label" data-i18n="hub-bans-title">Yasaklılar</span>
-                <div id="hub-settings-bans-list" class="settings-blocked-list"></div>
-            </div>
+                <button id="hub-settings-save-btn" class="hubset-save-btn" type="button" data-i18n="save">Kaydet</button>
+            </footer>
 
         </div>
 

@@ -75,7 +75,12 @@
             const n = document.createElement('span');
             n.className = 'lobby-count';
             n.textContent = String(hub.member_count == null ? '' : hub.member_count);
-            b.append(mark, name, n);
+            // Okunmamış / bahsetme rozeti (içeriğini script.js'teki renderHubUnreadBadges doldurur)
+            const unread = document.createElement('span');
+            unread.className = 'hub-card-unread lobby-unread';
+            unread.dataset.hubUnread = hub.id;
+            unread.style.display = 'none';
+            b.append(mark, name, unread, n);
             b.addEventListener('click', () => {
                 closeDrawer();
                 if (typeof openHub === 'function') openHub(hub.id);
@@ -92,6 +97,7 @@
             list.appendChild(sub);
             joined.forEach((h) => list.appendChild(item(h)));
         }
+        try { if (typeof renderHubUnreadBadges === 'function') renderHubUnreadBadges(); } catch (_) { /* yoksay */ }
     }
 
     async function fetchHubs() {
