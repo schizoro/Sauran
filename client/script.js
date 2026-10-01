@@ -9571,7 +9571,9 @@ function closeScreenshareViewer() {
     if (fpsMeterStop) fpsMeterStop();
     const viewer = document.getElementById('call-screenshare-viewer');
     const video = document.getElementById('call-screenshare-video');
-    if (document.fullscreenElement === viewer) document.exitFullscreen?.();
+    if (currentFullscreenElement() === viewer) (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+    if (video.webkitDisplayingFullscreen) video.webkitExitFullscreen?.();
+    viewer.classList.remove('fullscreen-mode', 'pseudo-fullscreen');
     viewer.style.display = 'none';
     video.srcObject = null;
 }
@@ -9581,23 +9583,70 @@ document.getElementById('call-screenshare-close-btn').addEventListener('click', 
 document.querySelectorAll('.call-screenshare-viewer-controls [data-corner]').forEach((btn) => {
     btn.addEventListener('click', () => {
         const viewer = document.getElementById('call-screenshare-viewer');
-        viewer.classList.remove('corner-tl', 'corner-tr', 'corner-bl', 'corner-br', 'fullscreen-mode');
+        viewer.classList.remove('corner-tl', 'corner-tr', 'corner-bl', 'corner-br', 'fullscreen-mode', 'pseudo-fullscreen');
         viewer.classList.add(`corner-${btn.dataset.corner}`);
     });
 });
 
-document.getElementById('call-screenshare-fullscreen-btn').addEventListener('click', () => {
-    const viewer = document.getElementById('call-screenshare-viewer');
-    if (document.fullscreenElement === viewer) {
-        document.exitFullscreen?.();
-    } else {
-        viewer.requestFullscreen?.().catch(() => {});
-    }
-});
+// Tam ekran: iPhone Safari'de Element.requestFullscreen yoktur; orada yalnızca <video>'nun
+// yerel oynatıcısı (webkitEnterFullscreen) tam ekran olabilir. Sırayla dener, hiçbiri yoksa
+// CSS ile sayfayı kaplayan "sahte tam ekran"a düşer.
+function currentFullscreenElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+}
 
-document.addEventListener('fullscreenchange', () => {
+function toggleScreenshareFullscreen() {
     const viewer = document.getElementById('call-screenshare-viewer');
-    viewer.classList.toggle('fullscreen-mode', document.fullscreenElement === viewer);
+    const video = document.getElementById('call-screenshare-video');
+
+    // Açıksa kapat (gerçek ya da CSS tam ekran)
+    if (currentFullscreenElement() === viewer) {
+        (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+        return;
+    }
+    if (viewer.classList.contains('fullscreen-mode')) {
+        viewer.classList.remove('fullscreen-mode', 'pseudo-fullscreen');
+        return;
+    }
+
+    // 1) Standart / WebKit öğe tam ekranı (masaüstü, Android, iPad)
+    const req = viewer.requestFullscreen || viewer.webkitRequestFullscreen;
+    if (req) {
+        try {
+            const p = req.call(viewer);
+            if (p && typeof p.catch === 'function') p.catch(() => enterVideoOrPseudoFullscreen(viewer, video));
+            return;
+        } catch (_) { /* aşağıdaki yedeklere geç */ }
+    }
+    enterVideoOrPseudoFullscreen(viewer, video);
+}
+
+function enterVideoOrPseudoFullscreen(viewer, video) {
+    // 2) iPhone: video'nun yerel tam ekran oynatıcısı
+    if (typeof video.webkitEnterFullscreen === 'function' && video.webkitSupportsFullscreen !== false) {
+        try {
+            video.webkitEnterFullscreen();
+            return;
+        } catch (_) { /* CSS yedeğine geç */ }
+    }
+    // 3) Son çare: CSS ile ekranı kapla
+    viewer.classList.add('fullscreen-mode', 'pseudo-fullscreen');
+}
+
+document.getElementById('call-screenshare-fullscreen-btn').addEventListener('click', toggleScreenshareFullscreen);
+
+function syncScreenshareFullscreenClass() {
+    const viewer = document.getElementById('call-screenshare-viewer');
+    if (viewer.classList.contains('pseudo-fullscreen')) return;
+    viewer.classList.toggle('fullscreen-mode', currentFullscreenElement() === viewer);
+}
+document.addEventListener('fullscreenchange', syncScreenshareFullscreenClass);
+document.addEventListener('webkitfullscreenchange', syncScreenshareFullscreenClass);
+
+// iOS yerel oynatıcıdan "Bitti" ile çıkınca videoyu duraklatır; canlı yayın donmasın diye yeniden oynat.
+document.getElementById('call-screenshare-video').addEventListener('webkitendfullscreen', (e) => {
+    const video = e.currentTarget;
+    if (video.srcObject) video.play?.().catch(() => {});
 });
 
 
