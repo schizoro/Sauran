@@ -3072,7 +3072,8 @@ function pushNotification(userId, type, data) {
     platform_role_revoked: 'Sauran Yönetim: Yönetim görevin hakkında bir bilgilendirme var.',
     gift: `Sana bir hediye geldi: ${data?.label || 'ödül'}.`,
     voice_muted: `${data?.room_name || 'Bir'} sesli odasında ${data?.by_tier === 'owner' ? 'Lobi kurucusu' : 'bir moderatör'} tarafından susturuldun.`,
-    voice_unmuted: `${data?.room_name || 'Bir'} sesli odasındaki susturman kaldırıldı.`
+    voice_unmuted: `${data?.room_name || 'Bir'} sesli odasındaki susturman kaldırıldı.`,
+    voice_kicked: `${data?.by_tier === 'owner' ? 'Lobi kurucusu' : 'Bir moderatör'} seni ${data?.room_name || 'bir'} sesli odasından attı.`
   }[type];
 
   if (webPushLabel) {
@@ -3451,6 +3452,45 @@ app.delete('/api/hubs/:id/voice-rooms/:roomId/mutes/:userId', (req, res) => {
   if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
 
   applyVoiceMuteChange(existing || { hub_id: hubId, room_id: roomId, user_id: targetId, room_name: null }, { lifted: true, reason: 'lifted', actorTier: getMemberTier(hubId, user.id) });
+  return res.json({ success: true });
+});
+
+// Sesli odadan atma: kişi odanın canlı listesinden ve Daily görüşmesinden anında çıkarılır (istemci iş birliği yapmasa da).
+// Yasak değildir; kişi isterse odaya yeniden girebilir. Yetki kuralları susturmayla aynıdır.
+app.post('/api/hubs/:id/voice-rooms/:roomId/kick', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const hubId = Number(req.params.id);
+  const roomId = Number(req.params.roomId);
+  const targetId = Number(req.body?.user_id);
+
+  const actorTier = getMemberTier(hubId, user.id);
+  if (actorTier !== 'owner' && actorTier !== 'moderator') return res.status(403).json({ success: false, error: 'Bu işlem için yetkin yok.' });
+  if (!targetId || targetId === user.id) return res.status(400).json({ success: false, error: 'Kendini odadan atamazsın.' });
+
+  const room = getVoiceRoom(roomId);
+  if (!room || room.hub_id !== hubId) return res.status(404).json({ success: false, error: 'Oda bulunamadı.' });
+
+  const targetTier = getMemberTier(hubId, targetId);
+  if (targetTier === 'owner') return res.status(403).json({ success: false, error: 'Lobi sahibi odadan atılamaz.' });
+  if (targetTier === 'moderator' && actorTier !== 'owner') return res.status(403).json({ success: false, error: 'Yalnızca Lobi sahibi bir moderatörü odadan atabilir.' });
+
+  if (!voiceRoomParticipants.get(roomId)?.has(targetId)) {
+    return res.status(404).json({ success: false, error: 'Bu kişi şu an bu odada değil.' });
+  }
+
+  // Önce kişiye bildirilir (istemci "atıldın" gösterip bağlantıyı kendisi kapatır), sonra sunucu listeden çıkarır.
+  const payload = { hub_id: hubId, room_id: roomId, room_name: room.name, by_tier: actorTier };
+  io.to(`user:${targetId}`).emit('voice_room_kicked', payload);
+  removeVoiceParticipant(targetId, roomId);
+
+  const dailyName = voiceRoomDailyName(roomId);
+  if (dailyName && daily.isConfigured()) daily.ejectUser(dailyName, targetId, { ban: false }).catch(() => {});
+
+  const notif = createNotification(targetId, 'voice_kicked', payload);
+  if (!notif.suppressed) pushNotification(targetId, 'voice_kicked', notif.data);
+
   return res.json({ success: true });
 });
 

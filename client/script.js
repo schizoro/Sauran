@@ -3648,6 +3648,10 @@ const I18N = {
     'voice-unmuted-toast': { tr: 'Susturman kaldırıldı. Mikrofonunu istersen açabilirsin.', en: 'Your mute was lifted. You can turn your microphone on.' },
     'voice-unmuted-expired-toast': { tr: 'Susturma süren doldu. Mikrofonunu istersen açabilirsin.', en: 'Your mute expired. You can turn your microphone on.' },
     'voice-force-muted-tag': { tr: 'Susturuldu', en: 'Muted' },
+    'voice-kick-action': { tr: 'Sesli odadan at', en: 'Remove from voice room' },
+    'voice-kick-confirm': { tr: 'Bu kişiyi sesli odadan atmak istediğine emin misin? (İsterse yeniden girebilir.)', en: 'Remove this person from the voice room? (They can rejoin.)' },
+    'voice-kick-done': { tr: 'Kişi sesli odadan atıldı.', en: 'Removed from the voice room.' },
+    'voice-kicked-text': { tr: 'seni bu sesli odadan attı', en: 'removed you from this voice room' },
     'hub-ban-search-placeholder': { tr: 'Kullanıcı adı ara...', en: 'Search username...' },
     'bans-back': { tr: 'Geri', en: 'Back' },
     'hub-ban-member': { tr: 'Katılımcı Yasakla', en: 'Ban a Member' },
@@ -4777,7 +4781,8 @@ function connectToChat() {
                 platform_role_revoked: t('notif-role-revoked'),
                 gift: '🎁 Bir hediye aldın!',
                 voice_muted: payload?.data ? voiceMuteNoticeText(payload.data) : t('voice-muted-title'),
-                voice_unmuted: t('voice-unmuted-toast')
+                voice_unmuted: t('voice-unmuted-toast'),
+                voice_kicked: `👢 ${voiceMuteByLabel(payload?.data?.by_tier)} ${t('voice-kicked-text')}`
             };
             const label = labelByType[payload?.type] || t('notif-hub-invite');
             const channels = payload?.channels || {};
@@ -4910,6 +4915,13 @@ function connectToChat() {
         if (!mute) return;
         if (callMode === 'hub-room' && currentVoiceRoomId === mute.room_id) {
             applyVoiceForceMute(mute, { announce: true });
+        }
+    });
+
+    socket.on('voice_room_kicked', (data) => {
+        if (callMode === 'hub-room' && currentVoiceRoomId === data?.room_id) {
+            leaveCall();
+            alert(`👢 ${voiceMuteByLabel(data.by_tier)} ${t('voice-kicked-text')}: ${data.room_name || ''}`);
         }
     });
 
@@ -6436,6 +6448,20 @@ function renderNotifications(notifications) {
                     <div class="notification-text">
                         🔇 <strong>${escapeHtml(voiceMuteByLabel(d.by_tier))}</strong> seni <strong>${escapeHtml(d.room_name || '')}</strong> sesli odasında susturdu (${escapeHtml(duration)}).
                         ${escapeHtml(t('voice-muted-share-note'))}
+                    </div>
+                    ${infoActions(n, t('ok-got-it'))}
+                </div>
+            `;
+
+        }
+
+        if (n.type === 'voice_kicked') {
+
+            const d = n.data || {};
+            return `
+                <div class="notification-card${seenClass(n)}" data-notif-id="${n.id}" data-notif-type="voice_kicked">
+                    <div class="notification-text">
+                        👢 <strong>${escapeHtml(voiceMuteByLabel(d.by_tier))}</strong> seni <strong>${escapeHtml(d.room_name || '')}</strong> sesli odasından attı.
                     </div>
                     ${infoActions(n, t('ok-got-it'))}
                 </div>
@@ -9152,6 +9178,20 @@ function openVoiceMuteModal(targetId, targetName, presetRoomId) {
     modal.style.display = 'flex';
 }
 
+async function kickFromVoiceRoom(roomId, userId) {
+    if (!currentHub || !confirm(t('voice-kick-confirm'))) return;
+    try {
+        const response = await fetch(`/api/hubs/${currentHub.id}/voice-rooms/${roomId}/kick`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+            body: JSON.stringify({ user_id: userId })
+        });
+        const data = await response.json();
+        showToast(data.success ? t('voice-kick-done') : (data.error || 'İşlem başarısız.'));
+    } catch (_) {
+        showToast('İşlem başarısız.');
+    }
+}
+
 async function liftVoiceMute(roomId, userId) {
     if (!currentHub) return false;
     try {
@@ -9443,7 +9483,7 @@ function voiceRoomMembersHtml(room) {
                 <span class="hub-voice-member-avatar${voiceFrameParts(p.user_id).cls}" style="--user-color:${resolveUserColor(p.user_id, p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}${voiceFrameParts(p.user_id).overlay}</span>
                 <span class="hub-voice-member-name">${usernameCardHtml(p.username, isVoicePlus(p.user_id), nameFxOf(p.user_id))}${voiceSelfTagHtml(p.user_id)}</span>
                 ${voiceStatusIconsHtml(p, true)}
-                ${canModerateVoiceTarget(p.user_id) ? `<button class="voice-mod-mute-btn" type="button" data-mod-mute-user="${p.user_id}" data-mod-mute-room="${room.id}" data-mod-mute-name="${escapeAttr(p.username)}" data-mod-mute-active="${p.force_muted ? '1' : '0'}" title="${escapeAttr(p.force_muted ? t('hub-mutes-unmute') : t('voice-mute-action'))}">${p.force_muted ? '🔈' : '🔇'}</button>` : ''}
+                ${canModerateVoiceTarget(p.user_id) ? `<button class="voice-mod-mute-btn" type="button" data-mod-mute-user="${p.user_id}" data-mod-mute-room="${room.id}" data-mod-mute-name="${escapeAttr(p.username)}" data-mod-mute-active="${p.force_muted ? '1' : '0'}" title="${escapeAttr(p.force_muted ? t('hub-mutes-unmute') : t('voice-mute-action'))}">${p.force_muted ? '🔈' : '🔇'}</button><button class="voice-mod-mute-btn" type="button" data-mod-kick-user="${p.user_id}" data-mod-kick-room="${room.id}" title="${escapeAttr(t('voice-kick-action'))}">👢</button>` : ''}
             </div>
         `).join('');
 
@@ -9558,6 +9598,13 @@ function renderVoiceRoomsList() {
                 return;
             }
             openVoiceMuteModal(userId, btn.dataset.modMuteName, roomId);
+        });
+    });
+
+    hubVoiceRoomsList.querySelectorAll('[data-mod-kick-user]').forEach((btn) => {
+        btn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            kickFromVoiceRoom(Number(btn.dataset.modKickRoom), Number(btn.dataset.modKickUser));
         });
     });
 
@@ -13133,6 +13180,7 @@ function renderHubMembers() {
                         <div class="hub-member-menu liquid-glass" style="display:none;">
                             ${myTier === 'owner' ? `<button data-action="moderator">${m.permission_tier === 'moderator' ? t('remove-moderator') : t('make-moderator')}</button>` : ''}
                             <button data-action="mute">🔇 ${t('voice-mute-action')}</button>
+                            ${voiceRoomsCache.some((r) => (r.participants || []).some((p) => p.user_id === m.user_id)) ? `<button data-action="voice-kick">👢 ${t('voice-kick-action')}</button>` : ''}
                             <button data-action="kick">👢 ${t('kick')}</button>
                             <button data-action="ban" class="hub-member-menu-danger">🚫 ${t('ban')}</button>
                         </div>
@@ -13236,6 +13284,12 @@ async function handleMemberModerationAction(action, targetId, targetTier) {
         if (!data.success) showToast(data.error || 'İşlem başarısız.');
         return;
 
+    }
+
+    if (action === 'voice-kick') {
+        const room = voiceRoomsCache.find((r) => (r.participants || []).some((p) => p.user_id === targetId));
+        if (room) await kickFromVoiceRoom(room.id, targetId);
+        return;
     }
 
     if (action === 'mute') {
