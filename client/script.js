@@ -3873,6 +3873,30 @@ const I18N = {
     'modal-join-code': { tr: '🔑 Davet Koduyla Katıl', en: '🔑 Join with Invite Code' },
     'modal-invite-code': { tr: '🔑 Davet Kodu', en: '🔑 Invite Code' },
     'invite-expiry-note': { tr: 'Bu kod {days} gün boyunca hiç kullanılmazsa otomatik silinir.', en: 'This code is deleted automatically if it is not used for {days} days.' },
+    'invites-active': { tr: 'Etkin davet kodları', en: 'Active invite codes' },
+    'invites-mine': { tr: 'Etkin davet kodların', en: 'Your active invite codes' },
+    'invites-empty': { tr: 'Etkin davet kodu yok.', en: 'No active invite codes.' },
+    'invite-revoke': { tr: 'İptal et', en: 'Revoke' },
+    'invite-revoke-confirm': { tr: 'Bu davet kodu iptal edilsin mi? Kodla artık kimse katılamaz.', en: 'Revoke this invite code? Nobody will be able to join with it.' },
+    'invite-expiry-label': { tr: 'Geçerlilik süresi', en: 'Expires after' },
+    'invite-exp-30m': { tr: '30 dakika', en: '30 minutes' },
+    'invite-exp-1h': { tr: '1 saat', en: '1 hour' },
+    'invite-exp-6h': { tr: '6 saat', en: '6 hours' },
+    'invite-exp-12h': { tr: '12 saat', en: '12 hours' },
+    'invite-exp-1d': { tr: '1 gün', en: '1 day' },
+    'invite-exp-7d': { tr: '7 gün', en: '7 days' },
+    'invite-exp-never': { tr: 'Süresiz', en: 'Never' },
+    'invite-uses-label': { tr: 'Kullanım sınırı', en: 'Max uses' },
+    'invite-uses-unlimited': { tr: 'Sınırsız', en: 'No limit' },
+    'invite-uses-1': { tr: '1 kişi', en: '1 use' },
+    'invite-uses-5': { tr: '5 kişi', en: '5 uses' },
+    'invite-uses-10': { tr: '10 kişi', en: '10 uses' },
+    'invite-uses-25': { tr: '25 kişi', en: '25 uses' },
+    'invite-uses-50': { tr: '50 kişi', en: '50 uses' },
+    'invite-uses-100': { tr: '100 kişi', en: '100 uses' },
+    'invite-create': { tr: 'Kodu oluştur', en: 'Create code' },
+    'invite-share-info': { tr: 'Bu kodu arkadaşınla paylaş, lobiye katılabilsin.', en: 'Share this code so your friend can join the lobby.' },
+    'invite-copy': { tr: '📋 Kodu kopyala', en: '📋 Copy code' },
     'modal-poll': { tr: '📊 Oylama Başlat', en: '📊 Start a Poll' },
     'modal-share': { tr: '📌 Paylaşım Yap', en: '📌 Share Something' },
     'modal-add-friend': { tr: '👤＋ Arkadaş Ekle', en: '👤＋ Add Friend' },
@@ -11327,6 +11351,7 @@ function showHubsetSection(section) {
     document.getElementById('hubset-savebar').style.display = saveVisible ? 'flex' : 'none';
     document.getElementById('hubset-content').scrollTop = 0;
     if (section === 'moderation') showHubSettingsView('bans');
+    if (section === 'invite') loadHubInvites();
 }
 
 // Moderasyon alt sekmeleri (eski "görünüm" adlarıyla uyumlu): pick | bans | mutes | blocks. 'main' genel bölüme döner.
@@ -11406,7 +11431,8 @@ const MODLOG_ACTIONS = {
     chat_clear: ['🧹', 'Sohbet temizlendi', 'Chat cleared'],
     slow_mode: ['🐢', 'Yavaş mod değişti', 'Slow mode changed'],
     word_filter: ['🚫', 'Kelime filtresi güncellendi', 'Word filter updated'],
-    hub_update: ['⚙️', 'Lobi ayarları değişti', 'Lobby settings changed']
+    hub_update: ['⚙️', 'Lobi ayarları değişti', 'Lobby settings changed'],
+    invite_revoke: ['🔑', 'Davet kodu iptal edildi', 'Invite code revoked']
 };
 var modlogBefore = null;
 var modlogSearchTimer = null;
@@ -12793,36 +12819,101 @@ hubJoinSubmitBtn.addEventListener(
 );
 
 
-hubInviteBtn.addEventListener(
-    'click',
-    async () => {
+function inviteIsEn() {
+    try { return localStorage.getItem('sauran_lang') === 'en'; } catch (_) { return false; }
+}
 
-        if (!currentHub) return;
-
-        try {
-
-            const response = await fetch(`/api/hubs/${currentHub.id}/invite`, {
-                method: 'POST',
-                credentials: 'include'
-            });
-
-            const data = await response.json();
-
-            if (!data.success) return;
-
-            hubInviteCodeDisplay.textContent = data.code;
-            const expiryNote = document.getElementById('hub-invite-expiry-note');
-            if (expiryNote && data.expires_after_idle_days) expiryNote.textContent = t('invite-expiry-note').replace('{days}', data.expires_after_idle_days);
-            hubInviteModal.style.display = 'flex';
-
-        } catch (error) {
-
-            console.error('Davet oluşturulamadı:', error);
-
-        }
-
+// "2 sa 15 dk kaldı" / "süresiz" ve "3/10 kullanım" gibi kısa özet.
+function inviteSummaryText(inv) {
+    const en = inviteIsEn();
+    const parts = [];
+    if (inv.expires_at) {
+        const mins = Math.max(0, Math.round((new Date(inv.expires_at).getTime() - Date.now()) / 60000));
+        let left;
+        if (mins >= 1440) left = en ? `${Math.floor(mins / 1440)} d` : `${Math.floor(mins / 1440)} gün`;
+        else if (mins >= 60) left = en ? `${Math.floor(mins / 60)} h${mins % 60 ? ` ${mins % 60} min` : ''}` : `${Math.floor(mins / 60)} sa${mins % 60 ? ` ${mins % 60} dk` : ''}`;
+        else left = en ? `${mins} min` : `${mins} dk`;
+        parts.push(en ? `expires in ${left}` : `${left} kaldı`);
+    } else {
+        parts.push(en ? 'no expiry' : 'süresiz');
     }
-);
+    parts.push(inv.max_uses ? `${Number(inv.uses || 0)}/${Number(inv.max_uses)} ${en ? 'uses' : 'kullanım'}` : `${Number(inv.uses || 0)} ${en ? 'uses' : 'kullanım'} · ${en ? 'no limit' : 'sınırsız'}`);
+    return parts.join(' · ');
+}
+
+async function loadHubInvites() {
+    if (!currentHub) return;
+    const list = document.getElementById('hub-invites-list');
+    try {
+        const data = await (await fetch(`/api/hubs/${currentHub.id}/invites`, { credentials: 'include' })).json();
+        if (!data.success) { list.innerHTML = ''; return; }
+        document.getElementById('hub-invites-title').textContent = t(data.can_manage_all ? 'invites-active' : 'invites-mine');
+        if (!data.invites.length) { list.innerHTML = `<div class="settings-blocked-empty">${t('invites-empty')}</div>`; return; }
+        list.innerHTML = data.invites.map((inv) => `
+            <div class="settings-blocked-row">
+                <span class="settings-blocked-name"><span class="invite-row-code">${escapeHtml(inv.code)}</span>
+                    <span class="voice-mute-row-meta">${data.can_manage_all && !inv.mine ? `👤 ${escapeHtml(inv.creator?.username || '—')} · ` : ''}${escapeHtml(inviteSummaryText(inv))}</span>
+                </span>
+                <button class="settings-unblock-btn" type="button" data-revoke-invite="${escapeAttr(inv.code)}">${t('invite-revoke')}</button>
+            </div>`).join('');
+    } catch (error) {
+        console.error('Davet kodları alınamadı:', error);
+    }
+}
+
+document.getElementById('hub-invites-list').addEventListener('click', async (event) => {
+    const btn = event.target.closest('[data-revoke-invite]');
+    if (!btn || !currentHub) return;
+    if (!confirm(t('invite-revoke-confirm'))) return;
+    try {
+        const data = await (await fetch(`/api/hubs/${currentHub.id}/invites/${encodeURIComponent(btn.dataset.revokeInvite)}`, { method: 'DELETE', credentials: 'include' })).json();
+        if (!data.success) { showToast(data.error || 'İptal edilemedi.'); return; }
+        loadHubInvites();
+    } catch (_) { /* yoksay */ }
+});
+
+hubInviteBtn.addEventListener('click', () => {
+    if (!currentHub) return;
+    document.getElementById('hub-invite-options').style.display = 'flex';
+    document.getElementById('hub-invite-result').style.display = 'none';
+    document.getElementById('hub-invite-error').textContent = '';
+    hubInviteModal.style.display = 'flex';
+});
+
+document.getElementById('hub-invite-create-btn').addEventListener('click', async () => {
+    if (!currentHub) return;
+    const btn = document.getElementById('hub-invite-create-btn');
+    const error = document.getElementById('hub-invite-error');
+    const expiry = document.getElementById('hub-invite-expiry').value;
+    const uses = document.getElementById('hub-invite-uses').value;
+    btn.disabled = true;
+    error.textContent = '';
+    try {
+        const response = await fetch(`/api/hubs/${currentHub.id}/invite`, {
+            method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expires_in_minutes: expiry === 'never' ? 'never' : Number(expiry), max_uses: uses === 'unlimited' ? 'unlimited' : Number(uses) })
+        });
+        const data = await response.json();
+        if (!data.success) { error.textContent = data.error || 'Davet oluşturulamadı.'; return; }
+        hubInviteCodeDisplay.textContent = data.code;
+        document.getElementById('hub-invite-summary').textContent = inviteSummaryText({ expires_at: data.expires_at, max_uses: data.max_uses, uses: 0 });
+        const expiryNote = document.getElementById('hub-invite-expiry-note');
+        if (expiryNote) expiryNote.textContent = !data.expires_at && data.expires_after_idle_days ? t('invite-expiry-note').replace('{days}', data.expires_after_idle_days) : '';
+        document.getElementById('hub-invite-options').style.display = 'none';
+        document.getElementById('hub-invite-result').style.display = 'flex';
+        loadHubInvites();
+    } catch (err) {
+        console.error('Davet oluşturulamadı:', err);
+        error.textContent = 'Bağlantı hatası.';
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+document.getElementById('hub-invite-copy-btn').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(hubInviteCodeDisplay.textContent); showToast(inviteIsEn() ? 'Copied.' : 'Kopyalandı.'); }
+    catch (_) { showToast(inviteIsEn() ? 'Could not copy.' : 'Kopyalanamadı.'); }
+});
 
 
 hubInviteCloseBtn.addEventListener(

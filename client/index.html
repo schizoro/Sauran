@@ -834,6 +834,10 @@
                             <button id="hub-invite-friend-btn" class="hub-settings-action-btn" type="button">👥 <span data-i18n="hub-settings-invite-friend">Arkadaşını Davet Et</span></button>
                             <button id="hub-invite-btn" class="hub-settings-action-btn" type="button">🔑 <span data-i18n="hub-settings-invite-code">Davet Kodu Oluştur</span></button>
                         </div>
+                        <div class="hubset-card">
+                            <span class="profile-field-label" id="hub-invites-title" data-i18n="invites-active">Etkin davet kodları</span>
+                            <div id="hub-invites-list" class="settings-blocked-list"></div>
+                        </div>
                     </section>
 
                     <!-- MODERASYON -->
@@ -1337,11 +1341,40 @@
                 <button id="hub-invite-close-btn">✕</button>
             </div>
 
-            <div class="poll-create-body">
+            <div class="poll-create-body invite-create-body">
 
-                <p class="verify-info">Bu kodu arkadaşınla paylaş, lobiye katılabilsin.</p>
-                <div id="hub-invite-code-display" class="invite-code-display"></div>
-                <div id="hub-invite-expiry-note" class="hub-msg-deleted" style="margin-top:8px;font-size:12px;"></div>
+                <div id="hub-invite-options" class="invite-step">
+                    <label class="profile-field-label" for="hub-invite-expiry" data-i18n="invite-expiry-label">Geçerlilik süresi</label>
+                    <select id="hub-invite-expiry" class="discover-select">
+                        <option value="30" data-i18n="invite-exp-30m">30 dakika</option>
+                        <option value="60" data-i18n="invite-exp-1h">1 saat</option>
+                        <option value="360" data-i18n="invite-exp-6h">6 saat</option>
+                        <option value="720" data-i18n="invite-exp-12h">12 saat</option>
+                        <option value="1440" data-i18n="invite-exp-1d">1 gün</option>
+                        <option value="10080" selected data-i18n="invite-exp-7d">7 gün</option>
+                        <option value="never" data-i18n="invite-exp-never">Süresiz</option>
+                    </select>
+                    <label class="profile-field-label" for="hub-invite-uses" data-i18n="invite-uses-label">Kullanım sınırı</label>
+                    <select id="hub-invite-uses" class="discover-select">
+                        <option value="unlimited" selected data-i18n="invite-uses-unlimited">Sınırsız</option>
+                        <option value="1" data-i18n="invite-uses-1">1 kişi</option>
+                        <option value="5" data-i18n="invite-uses-5">5 kişi</option>
+                        <option value="10" data-i18n="invite-uses-10">10 kişi</option>
+                        <option value="25" data-i18n="invite-uses-25">25 kişi</option>
+                        <option value="50" data-i18n="invite-uses-50">50 kişi</option>
+                        <option value="100" data-i18n="invite-uses-100">100 kişi</option>
+                    </select>
+                    <div id="hub-invite-error" class="hub-create-error"></div>
+                    <button type="button" class="hubset-save-btn" id="hub-invite-create-btn" data-i18n="invite-create">Kodu oluştur</button>
+                </div>
+
+                <div id="hub-invite-result" class="invite-step" style="display:none;">
+                    <p class="verify-info" data-i18n="invite-share-info">Bu kodu arkadaşınla paylaş, lobiye katılabilsin.</p>
+                    <div id="hub-invite-code-display" class="invite-code-display"></div>
+                    <div id="hub-invite-summary" class="invite-summary"></div>
+                    <button type="button" class="hubset-save-btn" id="hub-invite-copy-btn" data-i18n="invite-copy">📋 Kodu kopyala</button>
+                    <div id="hub-invite-expiry-note" class="hub-msg-deleted" style="margin-top:8px;font-size:12px;"></div>
+                </div>
 
             </div>
 

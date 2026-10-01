@@ -3265,26 +3265,87 @@ function generateInviteCode() {
   return crypto.randomBytes(5).toString('hex');
 }
 
-function createHubInvite(hubId, userId) {
+// Davet kodu seçenekleri: süre (dakika; null = süresiz, ama hiç kullanılmazsa invite_idle_days sonra silinir) ve kullanım sınırı.
+const INVITE_EXPIRY_OPTIONS = [30, 60, 360, 720, 1440, 10080, null];
+const INVITE_MAX_USES_OPTIONS = [null, 1, 5, 10, 25, 50, 100];
+const MAX_ACTIVE_INVITES_PER_USER = 25;
+{
+  const cols = db.prepare(`PRAGMA table_info(hub_invites)`).all().map((c) => c.name);
+  if (!cols.includes('expires_at')) db.exec(`ALTER TABLE hub_invites ADD COLUMN expires_at DATETIME`);
+}
+
+function inviteIsActive(invite, now = new Date()) {
+  if (!invite) return false;
+  if (invite.expires_at && new Date(invite.expires_at).getTime() <= now.getTime()) return false;
+  if (invite.max_uses && invite.uses >= invite.max_uses) return false;
+  if ((invite.last_used_at || invite.created_at) < sqlTimeAgo(now, INDEFINITE_RETENTION.invite_idle_days)) return false;
+  return true;
+}
+
+function createHubInvite(hubId, userId, { expires_in_minutes, max_uses } = {}) {
   if (!isHubMember(hubId, userId)) {
     return { success: false, error: 'Bu Lobi\'a üye değilsin.' };
   }
 
+  // Eski istemciler seçenek göndermez: varsayılan 7 gün, sınırsız kullanım.
+  let minutes = expires_in_minutes === undefined ? 10080 : (expires_in_minutes === null || expires_in_minutes === '' || expires_in_minutes === 'never' ? null : Number(expires_in_minutes));
+  if (!INVITE_EXPIRY_OPTIONS.includes(minutes)) return { success: false, error: 'Geçersiz süre.' };
+  const uses = max_uses === undefined || max_uses === null || max_uses === '' || max_uses === 'unlimited' ? null : Number(max_uses);
+  if (!INVITE_MAX_USES_OPTIONS.includes(uses)) return { success: false, error: 'Geçersiz kullanım sınırı.' };
+
+  const mine = db.prepare(`SELECT * FROM hub_invites WHERE hub_id = ? AND created_by = ?`).all(hubId, userId).filter((i) => inviteIsActive(i));
+  if (mine.length >= MAX_ACTIVE_INVITES_PER_USER) {
+    return { success: false, error: `En fazla ${MAX_ACTIVE_INVITES_PER_USER} etkin davet kodun olabilir. Eskilerden birini iptal et.` };
+  }
+
   const code = generateInviteCode();
+  const expiresAt = minutes ? new Date(Date.now() + minutes * 60000).toISOString() : null;
 
   db.prepare(`
-    INSERT INTO hub_invites (hub_id, code, created_by)
-    VALUES (?, ?, ?)
-  `).run(hubId, code, userId);
+    INSERT INTO hub_invites (hub_id, code, created_by, max_uses, expires_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(hubId, code, userId, uses, expiresAt);
 
-  return { success: true, code, expires_after_idle_days: INDEFINITE_RETENTION.invite_idle_days };
+  return { success: true, code, expires_at: expiresAt, max_uses: uses, expires_after_idle_days: INDEFINITE_RETENTION.invite_idle_days };
+}
+
+// Etkin davetler: kurucu/moderatör hepsini, üye yalnızca kendi oluşturduklarını görür.
+function listHubInvites(hubId, viewerId) {
+  const tier = getMemberTier(hubId, viewerId);
+  if (!tier) return { success: false, status: 403, error: 'Bu Lobi\'a üye değilsin.' };
+  const canManageAll = tier === 'owner' || tier === 'moderator';
+  const rows = db.prepare(`
+    SELECT hub_invites.*, users.username AS creator_name
+    FROM hub_invites LEFT JOIN users ON users.id = hub_invites.created_by
+    WHERE hub_invites.hub_id = ? ${canManageAll ? '' : 'AND hub_invites.created_by = ?'}
+    ORDER BY hub_invites.id DESC
+  `).all(...(canManageAll ? [hubId] : [hubId, viewerId]));
+  return {
+    success: true,
+    can_manage_all: canManageAll,
+    invites: rows.filter((r) => inviteIsActive(r)).map((r) => ({
+      code: r.code, uses: r.uses, max_uses: r.max_uses, expires_at: r.expires_at, created_at: r.created_at,
+      creator: { id: r.created_by, username: r.creator_name }, mine: r.created_by === viewerId
+    }))
+  };
+}
+
+function revokeHubInvite(hubId, actorId, code) {
+  const invite = db.prepare(`SELECT * FROM hub_invites WHERE hub_id = ? AND code = ?`).get(hubId, String(code || '').trim());
+  if (!invite) return { success: false, status: 404, error: 'Davet kodu bulunamadı.' };
+  const tier = getMemberTier(hubId, actorId);
+  const isMod = tier === 'owner' || tier === 'moderator';
+  if (invite.created_by !== actorId && !isMod) return { success: false, status: 403, error: 'Yalnızca kendi davet kodunu iptal edebilirsin.' };
+  db.prepare(`DELETE FROM hub_invites WHERE id = ?`).run(invite.id);
+  return { success: true, creator_id: invite.created_by, by_moderator: invite.created_by !== actorId };
 }
 
 function joinHubByCode(code, userId) {
   const invite = db.prepare(`SELECT * FROM hub_invites WHERE code = ?`).get(String(code || '').trim());
 
   if (!invite) return { success: false, error: 'Geçersiz davet kodu.' };
-  if ((invite.last_used_at || invite.created_at) < sqlTimeAgo(new Date(), INDEFINITE_RETENTION.invite_idle_days)) {
+  if ((invite.last_used_at || invite.created_at) < sqlTimeAgo(new Date(), INDEFINITE_RETENTION.invite_idle_days)
+    || (invite.expires_at && new Date(invite.expires_at).getTime() <= Date.now())) {
     return { success: false, error: 'Bu davet kodunun süresi dolmuş.' };
   }
   if (invite.max_uses && invite.uses >= invite.max_uses) {
@@ -3299,8 +3360,14 @@ function joinHubByCode(code, userId) {
     return { success: false, error: 'Bu Lobi\'dan banlandın.' };
   }
 
-  db.prepare(`INSERT INTO hub_members (hub_id, user_id) VALUES (?, ?)`).run(invite.hub_id, userId);
-  db.prepare(`UPDATE hub_invites SET uses = uses + 1, last_used_at = CURRENT_TIMESTAMP WHERE id = ?`).run(invite.id);
+  const joined = db.transaction(() => {
+    // Sınır atomik olarak denetlenir: son kullanım hakkını iki kişi aynı anda alamaz.
+    const used = db.prepare(`UPDATE hub_invites SET uses = uses + 1, last_used_at = CURRENT_TIMESTAMP WHERE id = ? AND (max_uses IS NULL OR uses < max_uses)`).run(invite.id);
+    if (!used.changes) return false;
+    db.prepare(`INSERT INTO hub_members (hub_id, user_id) VALUES (?, ?)`).run(invite.hub_id, userId);
+    return true;
+  })();
+  if (!joined) return { success: false, error: 'Bu davet kodu kullanım limitine ulaşmış.' };
 
   return { success: true, hub_id: invite.hub_id };
 }
@@ -7137,7 +7204,8 @@ function purgeExpiredIndefiniteData(now = new Date()) {
   db.pragma('secure_delete = ON');
   return db.transaction(() => ({
     invites: db.prepare(`DELETE FROM hub_invites WHERE COALESCE(last_used_at, created_at) < ? OR (max_uses IS NOT NULL AND uses >= max_uses AND COALESCE(last_used_at, created_at) < ?)`)
-      .run(sqlTimeAgo(now, cfg.invite_idle_days), sqlTimeAgo(now, 7)).changes,
+      .run(sqlTimeAgo(now, cfg.invite_idle_days), sqlTimeAgo(now, 7)).changes
+      + db.prepare(`DELETE FROM hub_invites WHERE expires_at IS NOT NULL AND expires_at < ?`).run(new Date(now.getTime() - 7 * 86400000).toISOString()).changes,
     pending_friend_requests: db.prepare(`DELETE FROM friendships WHERE status = 'pending' AND created_at < ?`).run(sqlTimeAgo(now, cfg.pending_friend_days)).changes,
     feedback: db.prepare(`DELETE FROM feedback WHERE created_at < ?`).run(sqlTimeAgo(now, cfg.feedback_days)).changes
   }))();
@@ -7489,7 +7557,7 @@ const MOD_LOG_CATEGORIES = {
   members: ['member_kick', 'member_ban', 'member_unban', 'mod_add', 'mod_remove', 'join_approve', 'join_reject'],
   voice: ['voice_mute', 'voice_unmute', 'voice_kick', 'voice_unblock', 'voice_room_create', 'voice_room_delete'],
   chat: ['chat_clear', 'slow_mode', 'word_filter'],
-  settings: ['hub_update']
+  settings: ['hub_update', 'invite_revoke']
 };
 
 function logModAction(hubId, actorId, action, targetId = null, details = null) {
@@ -7552,6 +7620,8 @@ function listModLog(hubId, viewerId, { category, q, before, limit } = {}) {
 }
 
 module.exports = {
+  listHubInvites,
+  revokeHubInvite,
   logModAction,
   listModLog,
   getHubWordFilter,

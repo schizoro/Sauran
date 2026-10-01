@@ -20,10 +20,10 @@ Durum: `[ ]` sırada · `[~]` yapılıyor · `[x]` tamamlandı
 - [x] **Yavaş mod** — Lobi ayarları → Moderasyon; 5 sn – 1 saat. Kurucu ve moderatörler açıp kapatır ve muaftır. Üye yazma alanının üstünde geri sayım görür; metin, dosya, anket, çıkartma hepsi sunucuda da sınırlanır, yenilemede sayaç korunur.
 - [x] **Kelime filtresi** — Lobi ayarları → Moderasyon; "kelimeyi gizle (***)" ya da "mesajı engelle", hazır Türkçe+İngilizce küfür listesi + lobinin kendi listesi (kök* desteği). Harf/aksan, rakam hileleri (0→o), harf uzatma, araya nokta koyma yakalanır; masum kelimeler (sıkıntı, sikke) takılmaz. Mesaj, düzenleme, anket, paylaşımda uygulanır; kurucu/moderatör muaf, liste üyelere gösterilmez.
 - [x] **Moderasyon kaydı** — Lobi ayarları → Moderasyon → 📜 Kayıt; atma, yasak, yetki, katılma istekleri, sesli oda susturma/atma/engel, sohbet temizleme, yavaş mod, kelime filtresi, lobi ayarları. Kategori süzgeci, kullanıcı adı araması, sayfalama. Yalnızca kurucu/moderatör görür; 180 gün saklanır, mesaj içeriği yazılmaz.
-- [ ] Davet kodlarına süre ve kullanım sınırı ← sıradaki
+- [x] **Davet kodlarına süre ve kullanım sınırı** — 30 dk / 1 / 6 / 12 sa / 1 / 7 gün / süresiz; sınırsız ya da 1–100 kişi (varsayılan 7 gün, sınırsız). Davet bölümünde etkin kodlar listesi ve iptal: üye kendi kodlarını, kurucu/moderatör hepsini yönetir; başkasının kodunu iptal etmek kayda düşer. Son kullanım hakkı atomik.
 
 ## 4. Ses ve medya
-- [ ] Bas-konuş (push-to-talk)
+- [ ] Bas-konuş (push-to-talk) ← sıradaki
 - [ ] GIF arama
 - [ ] Link önizlemesi
 - [ ] Kamera / görüntülü görüşme *(şu an bilinçli olarak yok; karar gerekli)*
@@ -34,6 +34,7 @@ Durum: `[ ]` sırada · `[~]` yapılıyor · `[x]` tamamlandı
 - [ ] Ödeme sistemi *(bilinçli olarak kapalı beta + hukuki inceleme sonrasına bırakıldı; bkz. `ucretlendirme-hazirlik.md`)*
 
 ## Tamamlananlar (Ekim 2026)
+- [x] Düzeltme: lobi ayarlarından açılan pencereler (davet, arkadaş daveti, görsel kırpma…) ve bildirimler tam ekran ayarların arkasında kalıyordu
 - [x] Mesaj iletimi: anında görünen "gönderiliyor" mesajı, iPhone'da klavye/ekran zıplaması, doğrudan WebSocket, mesaj saatlerinin 3 saat geri görünmesi, Ayarlar'da bağlantı gecikmesi ölçer
 - [ ] *Karar bekliyor:* sunucu bölgesinin (Render) Frankfurt'a taşınması
 - [x] Lobi ayarları tam ekran ve bölümlü yeni tasarım (Genel, Görünürlük ve Katılım, Bahsetmeler, Davet, Moderasyon, Diğer)

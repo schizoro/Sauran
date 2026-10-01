@@ -215,6 +215,8 @@ const {
   verifyTwoFactorCode,
   requestEmailChange,
   getHubSlowMode,
+  listHubInvites,
+  revokeHubInvite,
   logModAction,
   listModLog,
   getHubWordFilter,
@@ -2244,7 +2246,7 @@ app.post('/api/hubs/:id/invite', inviteCreateLimiter, (req, res) => {
   if (!user) return;
 
   try {
-    const result = createHubInvite(Number(req.params.id), user.id);
+    const result = createHubInvite(Number(req.params.id), user.id, { expires_in_minutes: req.body?.expires_in_minutes, max_uses: req.body?.max_uses });
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -2256,6 +2258,24 @@ app.post('/api/hubs/:id/invite', inviteCreateLimiter, (req, res) => {
     console.error('Davet oluşturma API hatası:', error);
     res.status(500).json({ success: false, error: 'Davet oluşturulamadı.' });
   }
+});
+
+app.get('/api/hubs/:id/invites', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const result = listHubInvites(Number(req.params.id), user.id);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+  return res.json(result);
+});
+
+app.delete('/api/hubs/:id/invites/:code', contentWriteLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const hubId = Number(req.params.id);
+  const result = revokeHubInvite(hubId, user.id, req.params.code);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+  if (result.by_moderator) logModAction(hubId, user.id, 'invite_revoke', result.creator_id);
+  return res.json({ success: true });
 });
 
 app.post('/api/hubs/:id/invite-friend', (req, res) => {
