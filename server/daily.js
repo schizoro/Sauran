@@ -65,7 +65,10 @@ async function getOrCreateRoom(roomName, opts = {}) {
   }
 }
 
-async function createMeetingToken(roomName, userName, userId) {
+// Susturulmuş katılımcının gönderebileceği medya: ses (mikrofon) ve ekran sesi YOK; ekran görüntüsü (ve kamera) serbest.
+const MUTED_CAN_SEND = ['video', 'screenVideo'];
+
+async function createMeetingToken(roomName, userName, userId, { audioMuted = false } = {}) {
   const data = await dailyFetch('/meeting-tokens', {
     method: 'POST',
     body: JSON.stringify({
@@ -73,6 +76,8 @@ async function createMeetingToken(roomName, userName, userId) {
         room_name: roomName,
         user_name: userName,
         ...(userId ? { user_id: String(userId) } : {}),
+        // Susturma Daily sunucusunda uygulanır: istemci ne yaparsa yapsın ses/ekran sesi odaya iletilmez.
+        ...(audioMuted ? { permissions: { canSend: MUTED_CAN_SEND } } : {}),
         // Token yalnızca odaya GİRİŞ için kullanılır; kısa ömür, atılan/yetkisi kalkan birinin eski token ile geri girebileceği süreyi daraltır.
         exp: Math.floor(Date.now() / 1000) + 60 * 30
       }
@@ -111,4 +116,22 @@ async function ejectUser(roomName, userId, { ban = false } = {}) {
   }
 }
 
-module.exports = { ejectUser, createRoom, getRoom, getOrCreateRoom, createMeetingToken, deleteRoom, isConfigured: () => Boolean(DAILY_API_KEY) };
+// Odada şu an bulunan kullanıcının (token'daki user_id) ses gönderme iznini açar/kapatır. Kullanıcı odada değilse bir şey yapılmaz;
+// bir sonraki girişte izin, token üzerinden zaten doğru verilir.
+async function setUserAudioAllowed(roomName, userId, allowed) {
+  if (!DAILY_API_KEY || !roomName || !userId) return false;
+  try {
+    const presence = await dailyFetch(`/rooms/${encodeURIComponent(roomName)}/presence?userId=${encodeURIComponent(String(userId))}`);
+    const ids = (presence?.data || []).filter((p) => String(p.userId) === String(userId)).map((p) => p.id).filter(Boolean);
+    if (!ids.length) return true;
+    const data = {};
+    ids.forEach((id) => { data[id] = { canSend: allowed ? true : MUTED_CAN_SEND }; });
+    await dailyFetch(`/rooms/${encodeURIComponent(roomName)}/update-permissions`, { method: 'POST', body: JSON.stringify({ data }) });
+    return true;
+  } catch (error) {
+    console.error('Daily ses izni güncellenemedi:', error && error.message);
+    return false;
+  }
+}
+
+module.exports = { setUserAudioAllowed, ejectUser, createRoom, getRoom, getOrCreateRoom, createMeetingToken, deleteRoom, isConfigured: () => Boolean(DAILY_API_KEY) };

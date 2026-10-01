@@ -1870,3 +1870,24 @@ body.call-mini-active { padding-top: 42px; }
 .friends-sidebar-deleted-del { margin-left: auto; background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 14px; padding: 2px 6px; opacity: 0.6; }
 .friends-sidebar-deleted-del:hover { opacity: 1; }
 .dm-readonly-note { padding: 10px 14px; font-size: 12.5px; color: var(--text-secondary); text-align: center; border-top: 1px solid var(--border-soft); }
+
+
+/* ─── Sesli oda susturması (moderasyon) ─── */
+.call-voice-mute-banner {
+  align-self: center; max-width: 560px; width: calc(100% - 32px); margin: 0 auto 16px; padding: 12px 16px; border-radius: 14px;
+  background: rgba(240, 71, 71, 0.12); border: 1px solid rgba(240, 71, 71, 0.4); color: #ffb4b4; text-align: center;
+}
+.call-voice-mute-title { font-weight: bold; font-size: 13px; }
+.call-voice-mute-detail { font-size: 12px; opacity: 0.85; margin-top: 4px; line-height: 1.45; }
+.voice-mute-room-select { margin-bottom: 4px; }
+.voice-force-muted-tag {
+  display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+  background: rgba(240, 71, 71, 0.15); border: 1px solid rgba(240, 71, 71, 0.4); color: #ff9b9b; font-size: 10px; font-weight: bold; white-space: nowrap;
+}
+.voice-mod-mute-btn {
+  margin-left: 4px; width: 24px; height: 24px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05); color: #fff; font-size: 11px; cursor: pointer; flex-shrink: 0;
+}
+.voice-mod-mute-btn:hover { background: rgba(240, 71, 71, 0.25); }
+.voice-mute-row-meta { display: block; font-size: 10px; opacity: 0.7; margin-top: 2px; }
+.voice-icon-btn.locked { cursor: not-allowed; opacity: 0.6; }

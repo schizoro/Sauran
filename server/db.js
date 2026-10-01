@@ -4237,6 +4237,142 @@ function getVoiceRoom(roomId) {
   return db.prepare(`SELECT id, hub_id, name, created_by FROM hub_voice_rooms WHERE id = ?`).get(roomId);
 }
 
+// =====================================================
+// SESLİ ODA SUSTURMASI (moderasyon, kalıcı, oda bazlı)
+// =====================================================
+// Susturma YALNIZCA o sesli odada geçerlidir ve sunucuda saklanır: sayfa yenileme, odadan çıkıp girme, uygulamayı kapatıp açma ya da
+// hesaptan çıkıp tekrar girme susturmayı kaldırmaz. Süre: 30 dk, 60 dk ya da kaldırılana kadar (expires_at NULL).
+// Daily tarafında susturulan kişinin ses VE ekran sesi gönderme izni kapatılır (bkz. index.js); ekran görüntüsü serbesttir.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS voice_room_mutes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hub_id INTEGER NOT NULL,
+    voice_room_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    muted_by INTEGER,
+    muted_by_tier TEXT NOT NULL,
+    expires_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (voice_room_id, user_id),
+    FOREIGN KEY (hub_id) REFERENCES hubs(id) ON DELETE CASCADE,
+    FOREIGN KEY (voice_room_id) REFERENCES hub_voice_rooms(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (muted_by) REFERENCES users(id) ON DELETE SET NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_voice_room_mutes_hub ON voice_room_mutes(hub_id);
+  CREATE INDEX IF NOT EXISTS idx_voice_room_mutes_expires ON voice_room_mutes(expires_at);
+`);
+
+const VOICE_MUTE_DURATIONS = { '30': 30, '60': 60, until_lifted: null };
+
+// SQLite 'YYYY-MM-DD HH:MM:SS' (UTC) -> ISO; istemci geri sayımı için.
+function sqliteUtcToIso(value) {
+  return value ? `${String(value).replace(' ', 'T')}Z` : null;
+}
+
+function serializeVoiceMute(row) {
+  if (!row) return null;
+  return {
+    hub_id: row.hub_id,
+    room_id: row.voice_room_id,
+    room_name: row.room_name || null,
+    user_id: row.user_id,
+    username: row.username || null,
+    by_tier: row.muted_by_tier,
+    expires_at: sqliteUtcToIso(row.expires_at),
+    created_at: sqliteUtcToIso(row.created_at)
+  };
+}
+
+function getActiveVoiceMute(roomId, userId) {
+  const row = db.prepare(`
+    SELECT voice_room_mutes.*, hub_voice_rooms.name AS room_name
+    FROM voice_room_mutes JOIN hub_voice_rooms ON hub_voice_rooms.id = voice_room_mutes.voice_room_id
+    WHERE voice_room_mutes.voice_room_id = ? AND voice_room_mutes.user_id = ?
+      AND (voice_room_mutes.expires_at IS NULL OR voice_room_mutes.expires_at > datetime('now'))
+  `).get(roomId, userId);
+  return serializeVoiceMute(row);
+}
+
+function muteInVoiceRoom(hubId, roomId, actorId, targetId, duration) {
+  const actorTier = getMemberTier(hubId, actorId);
+  if (actorTier !== 'owner' && actorTier !== 'moderator') return { success: false, status: 403, error: 'Bu işlem için yetkin yok.' };
+  if (actorId === targetId) return { success: false, status: 400, error: 'Kendini susturamazsın.' };
+
+  const room = getVoiceRoom(roomId);
+  if (!room || room.hub_id !== hubId) return { success: false, status: 404, error: 'Oda bulunamadı.' };
+
+  const targetTier = getMemberTier(hubId, targetId);
+  if (!targetTier) return { success: false, status: 400, error: 'Kullanıcı bu Lobi üyesi değil.' };
+  if (targetTier === 'owner') return { success: false, status: 403, error: 'Lobi sahibi susturulamaz.' };
+  if (targetTier === 'moderator' && actorTier !== 'owner') return { success: false, status: 403, error: 'Yalnızca Lobi sahibi bir moderatörü susturabilir.' };
+
+  const key = String(duration ?? '');
+  if (!Object.prototype.hasOwnProperty.call(VOICE_MUTE_DURATIONS, key)) return { success: false, status: 400, error: 'Geçersiz süre.' };
+  const minutes = VOICE_MUTE_DURATIONS[key];
+
+  // Aynı odada zaten susturulmuşsa yeni karar eskisinin yerine geçer (süre yeniden başlar).
+  db.prepare(`
+    INSERT INTO voice_room_mutes (hub_id, voice_room_id, user_id, muted_by, muted_by_tier, expires_at)
+    VALUES (?, ?, ?, ?, ?, ${minutes ? `datetime('now', '+${Number(minutes)} minutes')` : 'NULL'})
+    ON CONFLICT(voice_room_id, user_id) DO UPDATE SET
+      muted_by = excluded.muted_by, muted_by_tier = excluded.muted_by_tier,
+      expires_at = excluded.expires_at, created_at = CURRENT_TIMESTAMP
+  `).run(hubId, roomId, targetId, actorId, actorTier);
+
+  return { success: true, mute: getActiveVoiceMute(roomId, targetId) };
+}
+
+// Her moderatör (ve Lobi sahibi), kimin koyduğundan bağımsız olarak susturmayı kaldırabilir.
+function unmuteInVoiceRoom(hubId, roomId, actorId, targetId) {
+  const actorTier = getMemberTier(hubId, actorId);
+  if (actorTier !== 'owner' && actorTier !== 'moderator') return { success: false, status: 403, error: 'Bu işlem için yetkin yok.' };
+  const info = db.prepare(`DELETE FROM voice_room_mutes WHERE hub_id = ? AND voice_room_id = ? AND user_id = ?`).run(hubId, roomId, targetId);
+  if (!info.changes) return { success: false, status: 404, error: 'Bu kullanıcı bu odada susturulmamış.' };
+  return { success: true };
+}
+
+function listVoiceMutes(hubId, actorId, query) {
+  const actorTier = getMemberTier(hubId, actorId);
+  if (actorTier !== 'owner' && actorTier !== 'moderator') return { success: false, status: 403, error: 'Bu işlem için yetkin yok.' };
+  const q = String(query || '').trim().toLowerCase().slice(0, 50);
+  const rows = db.prepare(`
+    SELECT voice_room_mutes.*, hub_voice_rooms.name AS room_name, users.username, users.avatar_data
+    FROM voice_room_mutes
+    JOIN hub_voice_rooms ON hub_voice_rooms.id = voice_room_mutes.voice_room_id
+    JOIN users ON users.id = voice_room_mutes.user_id
+    WHERE voice_room_mutes.hub_id = ?
+      AND (voice_room_mutes.expires_at IS NULL OR voice_room_mutes.expires_at > datetime('now'))
+      AND (? = '' OR INSTR(LOWER(users.username), ?) > 0)
+    ORDER BY voice_room_mutes.created_at DESC
+    LIMIT 200
+  `).all(hubId, q, q);
+  return { success: true, mutes: rows.map((r) => ({ ...serializeVoiceMute(r), avatar_data: r.avatar_data || null })) };
+}
+
+// Süresi dolan susturmaları siler ve döndürür (çağıran taraf kullanıcıyı bilgilendirir, Daily iznini geri açar).
+function takeExpiredVoiceMutes() {
+  return db.transaction(() => {
+    const rows = db.prepare(`
+      SELECT voice_room_mutes.*, hub_voice_rooms.name AS room_name
+      FROM voice_room_mutes JOIN hub_voice_rooms ON hub_voice_rooms.id = voice_room_mutes.voice_room_id
+      WHERE voice_room_mutes.expires_at IS NOT NULL AND voice_room_mutes.expires_at <= datetime('now')
+    `).all();
+    if (rows.length) db.prepare(`DELETE FROM voice_room_mutes WHERE expires_at IS NOT NULL AND expires_at <= datetime('now')`).run();
+    return rows.map(serializeVoiceMute);
+  })();
+}
+
+// Kullanıcının bu Lobi'deki etkin susturmaları (oda listesinde kilit göstermek için).
+function listMyVoiceMutes(hubId, userId) {
+  return db.prepare(`
+    SELECT voice_room_mutes.*, hub_voice_rooms.name AS room_name
+    FROM voice_room_mutes JOIN hub_voice_rooms ON hub_voice_rooms.id = voice_room_mutes.voice_room_id
+    WHERE voice_room_mutes.hub_id = ? AND voice_room_mutes.user_id = ?
+      AND (voice_room_mutes.expires_at IS NULL OR voice_room_mutes.expires_at > datetime('now'))
+  `).all(hubId, userId).map(serializeVoiceMute);
+}
+
 // Lobi sohbetini tamamen temizler. Yalnızca Lobi sahibi ve lobi moderatörleri.
 // Tepkiler ve anket oyları messages'a bağlı ON DELETE CASCADE ile birlikte silinir.
 function clearHubMessages(hubId, userId) {
@@ -6770,5 +6906,11 @@ module.exports = {
   createFeedback,
   listFeedback,
   voteFeedback,
+  getActiveVoiceMute,
+  muteInVoiceRoom,
+  unmuteInVoiceRoom,
+  listVoiceMutes,
+  takeExpiredVoiceMutes,
+  listMyVoiceMutes,
   db
 };

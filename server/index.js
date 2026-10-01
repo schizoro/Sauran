@@ -200,6 +200,12 @@ const {
   REPORT_REASONS,
   REPORT_STATUSES,
   REPORT_PRIORITIES,
+  getActiveVoiceMute,
+  muteInVoiceRoom,
+  unmuteInVoiceRoom,
+  listVoiceMutes,
+  takeExpiredVoiceMutes,
+  listMyVoiceMutes,
   db
 } = require('./db');
 
@@ -2644,9 +2650,11 @@ app.post('/api/hubs/:id/voice-rooms/:roomId/join', async (req, res) => {
     const room = await daily.getOrCreateRoom(roomName);
     const roomUrl = room.url;
 
-    const token = await daily.createMeetingToken(roomName, 'Sauran', user.id); // kullanıcı adı Daily'ye gitmez
+    // Bu odada susturulmuşsa token baştan "ses/ekran sesi gönderemez" izniyle üretilir (yenileme/yeniden giriş susturmayı aşamaz).
+    const mute = getActiveVoiceMute(roomId, user.id);
+    const token = await daily.createMeetingToken(roomName, 'Sauran', user.id, { audioMuted: Boolean(mute) }); // kullanıcı adı Daily'ye gitmez
 
-    return res.json({ success: true, room_url: roomUrl, token, room_id: roomId, room_name: room.name });
+    return res.json({ success: true, room_url: roomUrl, token, room_id: roomId, room_name: room.name, voice_mute: mute });
 
   } catch (error) {
     console.error('Sesli oda başlatma hatası:', error);
@@ -3062,7 +3070,9 @@ function pushNotification(userId, type, data) {
     hub_invite: `${data?.from_username || 'Biri'} seni ${data?.hub_name || 'bir'} lobisine davet etti.`,
     platform_role_notice: 'Sauran Yönetim: Yeni bir görev bildirimin var.',
     platform_role_revoked: 'Sauran Yönetim: Yönetim görevin hakkında bir bilgilendirme var.',
-    gift: `Sana bir hediye geldi: ${data?.label || 'ödül'}.`
+    gift: `Sana bir hediye geldi: ${data?.label || 'ödül'}.`,
+    voice_muted: `${data?.room_name || 'Bir'} sesli odasında ${data?.by_tier === 'owner' ? 'Lobi kurucusu' : 'bir moderatör'} tarafından susturuldun.`,
+    voice_unmuted: `${data?.room_name || 'Bir'} sesli odasındaki susturman kaldırıldı.`
   }[type];
 
   if (webPushLabel) {
@@ -3153,8 +3163,9 @@ function serializeVoiceParticipants(roomId) {
   return Array.from(voiceRoomParticipants.get(roomId)?.values() || []).map(p => ({
     user_id: p.user_id,
     username: p.username,
-    muted: p.muted,
-    deafened: p.deafened
+    muted: p.muted || Boolean(p.forceMuted),
+    deafened: p.deafened,
+    force_muted: Boolean(p.forceMuted)
   }));
 }
 
@@ -3377,32 +3388,99 @@ app.post('/api/hubs/:id/members/:userId/unban', (req, res) => {
   return res.json(result);
 });
 
-app.post('/api/hubs/:id/members/:userId/mute', (req, res) => {
+// =====================================================
+// SESLİ ODA SUSTURMASI (oda bazlı, kalıcı; eski Lobi geneli "zorla sustur" yerine)
+// =====================================================
+
+function voiceRoomDailyName(roomId) {
+  return getVoiceRoomDailyName(roomId) || null;
+}
+
+// Susturma/kaldırma sonrası: canlı katılımcı listesi, kullanıcının cihazları, kalıcı bildirim ve Daily izni.
+function applyVoiceMuteChange(mute, { lifted, reason, actorTier }) {
+  const roomId = mute.room_id;
+  const hubId = mute.hub_id;
+  const userId = mute.user_id;
+
+  const entry = voiceRoomParticipants.get(roomId)?.get(userId);
+  if (entry) {
+    entry.forceMuted = !lifted;
+    if (!lifted) entry.muted = true; // kaldırılınca mikrofon kendiliğinden AÇILMAZ; kişi isterse kendisi açar
+    broadcastVoiceRoom(hubId, roomId, { type: 'mute', user_id: userId, muted: entry.muted });
+  }
+
+  if (lifted) {
+    io.to(`user:${userId}`).emit('voice_force_unmuted', { hub_id: hubId, room_id: roomId, room_name: mute.room_name, reason });
+    const notif = createNotification(userId, 'voice_unmuted', { hub_id: hubId, room_id: roomId, room_name: mute.room_name, reason, by_tier: actorTier || null });
+    if (!notif.suppressed) pushNotification(userId, 'voice_unmuted', notif.data);
+  } else {
+    io.to(`user:${userId}`).emit('voice_force_muted', mute);
+    const notif = createNotification(userId, 'voice_muted', { hub_id: hubId, room_id: roomId, room_name: mute.room_name, by_tier: mute.by_tier, expires_at: mute.expires_at });
+    if (!notif.suppressed) pushNotification(userId, 'voice_muted', notif.data);
+  }
+
+  const dailyName = voiceRoomDailyName(roomId);
+  if (dailyName && daily.isConfigured()) daily.setUserAudioAllowed(dailyName, userId, Boolean(lifted)).catch(() => {});
+}
+
+app.post('/api/hubs/:id/voice-rooms/:roomId/mutes', (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
 
   const hubId = Number(req.params.id);
+  const roomId = Number(req.params.roomId);
+  const targetId = Number(req.body?.user_id);
+
+  const result = muteInVoiceRoom(hubId, roomId, user.id, targetId, req.body?.duration);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+
+  applyVoiceMuteChange(result.mute, { lifted: false });
+  return res.json({ success: true, mute: result.mute });
+});
+
+app.delete('/api/hubs/:id/voice-rooms/:roomId/mutes/:userId', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const hubId = Number(req.params.id);
+  const roomId = Number(req.params.roomId);
   const targetId = Number(req.params.userId);
 
-  const actorTier = getMemberTier(hubId, user.id);
-  if (actorTier !== 'owner' && actorTier !== 'moderator') {
-    return res.status(403).json({ success: false, error: 'Bu işlem için yetkin yok.' });
-  }
+  const existing = getActiveVoiceMute(roomId, targetId);
+  const result = unmuteInVoiceRoom(hubId, roomId, user.id, targetId);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
 
-  // Hedef bu lobinin üyesi olmalı; kurucu susturulamaz; moderatör yalnızca üyeleri susturabilir (moderatörü yalnızca kurucu).
-  const targetTier = getMemberTier(hubId, targetId);
-  if (targetId === user.id) return res.status(400).json({ success: false, error: 'Kendini susturamazsın.' });
-  if (!targetTier) return res.status(400).json({ success: false, error: 'Kullanıcı bu Lobi üyesi değil.' });
-  if (targetTier === 'owner') return res.status(403).json({ success: false, error: 'Lobi sahibi susturulamaz.' });
-  if (targetTier === 'moderator' && actorTier !== 'owner') {
-    return res.status(403).json({ success: false, error: 'Yalnızca Lobi sahibi bir moderatörü susturabilir.' });
-  }
-
-  const sockets = activeUsers.get(targetId);
-  if (sockets) sockets.forEach(sid => io.to(sid).emit('hub_force_muted', { hub_id: hubId }));
-
+  applyVoiceMuteChange(existing || { hub_id: hubId, room_id: roomId, user_id: targetId, room_name: null }, { lifted: true, reason: 'lifted', actorTier: getMemberTier(hubId, user.id) });
   return res.json({ success: true });
 });
+
+// Susturulanlar listesi (moderatör/kurucu); ?q= ile kullanıcı adında arama.
+app.get('/api/hubs/:id/voice-mutes', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const result = listVoiceMutes(Number(req.params.id), user.id, req.query.q);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+  return res.json({ success: true, mutes: result.mutes });
+});
+
+// Kullanıcının kendi etkin susturmaları (oda listesinde gösterim için).
+app.get('/api/hubs/:id/voice-mutes/me', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const hubId = Number(req.params.id);
+  if (!isHubMember(hubId, user.id)) return res.status(403).json({ success: false, error: 'Bu Lobi\'a üye değilsin.' });
+  return res.json({ success: true, mutes: listMyVoiceMutes(hubId, user.id) });
+});
+
+// Süresi dolan susturmalar: kayıt silinir, kullanıcıya bildirilir, Daily izni geri açılır.
+setInterval(() => {
+  try {
+    for (const mute of takeExpiredVoiceMutes()) applyVoiceMuteChange(mute, { lifted: true, reason: 'expired' });
+  } catch (error) {
+    console.error('Süresi dolan susturmalar işlenemedi:', error && error.message);
+  }
+}, 10 * 1000).unref();
 
 app.get('/api/hubs/:id/bans', (req, res) => {
   const user = requireAuth(req, res);
@@ -4138,11 +4216,13 @@ io.on('connection', (socket) => {
       const replacedEntry = voiceRoomParticipants.get(roomId).get(socket.userId);
       if (replacedEntry && replacedEntry.graceTimer) clearTimeout(replacedEntry.graceTimer);
 
+      const activeMute = getActiveVoiceMute(roomId, socket.userId);
       voiceRoomParticipants.get(roomId).set(socket.userId, {
         user_id: socket.userId,
         username: socket.username,
-        muted: Boolean(data?.muted),
+        muted: Boolean(data?.muted) || Boolean(activeMute),
         deafened: Boolean(data?.deafened),
+        forceMuted: Boolean(activeMute),
         socketId: socket.id,
         hubId
       });
@@ -4155,7 +4235,7 @@ io.on('connection', (socket) => {
         ? { type: 'joined', user_id: socket.userId, username: socket.username }
         : null);
 
-      reply({ success: true, participants: serializeVoiceParticipants(roomId) });
+      reply({ success: true, participants: serializeVoiceParticipants(roomId), voice_mute: activeMute });
 
     } catch (error) {
       console.error('Sesli oda katılım hatası:', error);
@@ -4180,6 +4260,11 @@ io.on('connection', (socket) => {
     if (!entry || entry.socketId !== socket.id) return;
 
     const muted = Boolean(data?.muted);
+    // Moderatörce susturulan kişi mikrofonunu "açık" gösteremez; istemciye doğru durum geri bildirilir.
+    if (entry.forceMuted && !muted) {
+      socket.emit('voice_force_muted', getActiveVoiceMute(roomId, socket.userId) || { room_id: roomId, hub_id: entry.hubId });
+      return;
+    }
     if (entry.muted === muted) return;
 
     entry.muted = muted;

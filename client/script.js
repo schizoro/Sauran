@@ -3624,6 +3624,30 @@ const I18N = {
     'banned-from-hub': { tr: 'Bu lobiden yasaklandın.', en: "You've been banned from this lobby." },
     'hub-bans-title': { tr: 'Yasaklılar', en: 'Banned Users' },
     'hub-bans-empty': { tr: 'Yasaklı kimse yok.', en: 'No one is banned.' },
+    'hub-mutes-title': { tr: 'Susturulanlar', en: 'Muted users' },
+    'hub-mutes-empty': { tr: 'Susturulan kimse yok.', en: 'No one is muted.' },
+    'hub-mutes-unmute': { tr: 'Kaldır', en: 'Unmute' },
+    'voice-mute-action': { tr: 'Sesli odada sustur', en: 'Mute in voice room' },
+    'voice-mute-room-label': { tr: 'Oda', en: 'Room' },
+    'voice-mute-duration-label': { tr: 'Süre', en: 'Duration' },
+    'voice-mute-30': { tr: '30 dakika', en: '30 minutes' },
+    'voice-mute-60': { tr: '60 dakika', en: '60 minutes' },
+    'voice-mute-until': { tr: 'Kaldırılana kadar', en: 'Until lifted' },
+    'voice-mute-until-hint': { tr: 'Bir moderatör ya da Lobi kurucusu kaldırana kadar sürer.', en: 'Lasts until a moderator or the lobby founder lifts it.' },
+    'voice-mute-no-rooms': { tr: 'Bu Lobide sesli oda yok.', en: 'This lobby has no voice rooms.' },
+    'voice-mute-done': { tr: 'Kullanıcı susturuldu.', en: 'User muted.' },
+    'voice-unmute-done': { tr: 'Susturma kaldırıldı.', en: 'Mute lifted.' },
+    'voice-unmute-confirm': { tr: 'Bu kullanıcının bu odadaki susturmasını kaldırmak istiyor musun?', en: 'Lift this user\'s mute in this room?' },
+    'voice-muted-by-owner': { tr: 'Lobi kurucusu', en: 'The lobby founder' },
+    'voice-muted-by-mod': { tr: 'Bir moderatör', en: 'A moderator' },
+    'voice-muted-title': { tr: 'Bu odada susturuldun', en: 'You are muted in this room' },
+    'voice-muted-remaining': { tr: 'Kalan süre', en: 'Time left' },
+    'voice-muted-until-lifted': { tr: 'Süre: kaldırılana kadar', en: 'Duration: until lifted' },
+    'voice-muted-share-note': { tr: 'Ekran paylaşırsan ekranın görünür, ama mikrofonun ve ekrandaki sesler izleyenlere iletilmez.', en: 'If you share your screen it stays visible, but your microphone and screen audio are not sent to viewers.' },
+    'voice-muted-locked': { tr: 'Susturulduğun için mikrofonunu açamazsın.', en: 'You are muted and cannot turn your microphone on.' },
+    'voice-unmuted-toast': { tr: 'Susturman kaldırıldı. Mikrofonunu istersen açabilirsin.', en: 'Your mute was lifted. You can turn your microphone on.' },
+    'voice-unmuted-expired-toast': { tr: 'Susturma süren doldu. Mikrofonunu istersen açabilirsin.', en: 'Your mute expired. You can turn your microphone on.' },
+    'voice-force-muted-tag': { tr: 'Susturuldu', en: 'Muted' },
     'hub-ban-search-placeholder': { tr: 'Kullanıcı adı ara...', en: 'Search username...' },
     'bans-back': { tr: 'Geri', en: 'Back' },
     'hub-ban-member': { tr: 'Katılımcı Yasakla', en: 'Ban a Member' },
@@ -4151,21 +4175,24 @@ function askShareFps() {
 }
 
 async function startScreenShareWithFps(fps, quality) {
+    // Susturulmuş kullanıcı ekran paylaşabilir ama ekran sesi hiç yakalanmaz (Daily izni de zaten iletmez).
+    const muteOpts = voiceForceMute ? { displayMediaOptions: { audio: false } } : {};
+    if (voiceForceMute) showToast(t('voice-muted-share-note'));
     const layers = {
         '60': { low: { maxBitrate: 600000, maxFramerate: 15, scaleResolutionDownBy: 2 }, medium: { maxBitrate: 1200000, maxFramerate: 30, scaleResolutionDownBy: 1 }, high: { maxBitrate: 2500000, maxFramerate: 60, scaleResolutionDownBy: 1 } },
         '15': { low: { maxBitrate: 400000, maxFramerate: 15, scaleResolutionDownBy: 2 }, medium: { maxBitrate: 800000, maxFramerate: 15, scaleResolutionDownBy: 1 }, high: { maxBitrate: 1500000, maxFramerate: 15, scaleResolutionDownBy: 1 } }
     };
     if (fps === '30' || !layers[fps]) {
-        await callFrame.startScreenShare({ screenVideoSendSettings: { maxQuality: quality } });
+        await callFrame.startScreenShare({ ...muteOpts, screenVideoSendSettings: { maxQuality: quality } });
         return;
     }
     try {
-        await callFrame.startScreenShare({ screenVideoSendSettings: { encodings: layers[fps] } });
+        await callFrame.startScreenShare({ ...muteOpts, screenVideoSendSettings: { encodings: layers[fps] } });
     } catch (error) {
         // Kullanıcı tarayıcı seçicisini iptal ettiyse hatayı yukarı bırak; ayar reddedildiyse standart kaliteye dön.
         if (error?.name === 'NotAllowedError') throw error;
         console.warn(fps + ' FPS ayarı reddedildi, standart kaliteye dönülüyor:', error);
-        await callFrame.startScreenShare({ screenVideoSendSettings: { maxQuality: quality } });
+        await callFrame.startScreenShare({ ...muteOpts, screenVideoSendSettings: { maxQuality: quality } });
     }
 }
 
@@ -4748,7 +4775,9 @@ function connectToChat() {
                 hub_invite: t('notif-hub-invite'),
                 platform_role_notice: t('notif-role-notice'),
                 platform_role_revoked: t('notif-role-revoked'),
-                gift: '🎁 Bir hediye aldın!'
+                gift: '🎁 Bir hediye aldın!',
+                voice_muted: payload?.data ? voiceMuteNoticeText(payload.data) : t('voice-muted-title'),
+                voice_unmuted: t('voice-unmuted-toast')
             };
             const label = labelByType[payload?.type] || t('notif-hub-invite');
             const channels = payload?.channels || {};
@@ -4876,11 +4905,18 @@ function connectToChat() {
         }
     });
 
-    socket.on('hub_force_muted', () => {
-        if (callFrame) {
-            voiceUserMuted = true;
-            callFrame.setLocalAudio(false);
-            if (callMode === 'hub-room') syncLocalMuteState(true);
+    // Moderatör/kurucu bu kullanıcıyı bir sesli odada susturdu (ya da kaldırdı). Kalıcı bildirim ayrıca bildirim listesine düşer.
+    socket.on('voice_force_muted', (mute) => {
+        if (!mute) return;
+        if (callMode === 'hub-room' && currentVoiceRoomId === mute.room_id) {
+            applyVoiceForceMute(mute, { announce: true });
+        }
+    });
+
+    socket.on('voice_force_unmuted', (data) => {
+        if (callMode === 'hub-room' && currentVoiceRoomId === data?.room_id) {
+            clearVoiceForceMute();
+            showToast(t(data?.reason === 'expired' ? 'voice-unmuted-expired-toast' : 'voice-unmuted-toast'));
         }
     });
 
@@ -4914,6 +4950,8 @@ function connectToChat() {
             currentVoiceParticipants = data.participants;
             renderHubRoomGrid(currentVoiceParticipants);
             updateVoiceSessionSummary();
+            // İzlenen ekranın sahibi bu arada susturulduysa (ya da susturması kalktıysa) ekran sesi buna göre kesilir/açılır.
+            if (watchedScreenshareSessionId) attachWatchedScreenAudio();
             handleVoicePresenceChange(data.change);
             refreshVoiceSpeaking();
 
@@ -6384,6 +6422,36 @@ function renderNotifications(notifications) {
                         <button class="notification-accept" data-accept type="button">${t('call-accept')}</button>
                         <button class="notification-decline" data-decline type="button">${t('call-decline')}</button>
                     </div>
+                </div>
+            `;
+
+        }
+
+        if (n.type === 'voice_muted') {
+
+            const d = n.data || {};
+            const duration = d.expires_at ? `${new Date(d.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}'e kadar` : t('voice-mute-until').toLowerCase();
+            return `
+                <div class="notification-card${seenClass(n)}" data-notif-id="${n.id}" data-notif-type="voice_muted">
+                    <div class="notification-text">
+                        🔇 <strong>${escapeHtml(voiceMuteByLabel(d.by_tier))}</strong> seni <strong>${escapeHtml(d.room_name || '')}</strong> sesli odasında susturdu (${escapeHtml(duration)}).
+                        ${escapeHtml(t('voice-muted-share-note'))}
+                    </div>
+                    ${infoActions(n, t('ok-got-it'))}
+                </div>
+            `;
+
+        }
+
+        if (n.type === 'voice_unmuted') {
+
+            const d = n.data || {};
+            return `
+                <div class="notification-card${seenClass(n)}" data-notif-id="${n.id}" data-notif-type="voice_unmuted">
+                    <div class="notification-text">
+                        🔈 <strong>${escapeHtml(d.room_name || '')}</strong> sesli odasındaki susturman ${d.reason === 'expired' ? 'süresi dolduğu için' : ''} kaldırıldı.
+                    </div>
+                    ${infoActions(n, t('ok-got-it'))}
                 </div>
             `;
 
@@ -8851,6 +8919,10 @@ let voiceLocalMuted = false;
 // Kullanıcının (ya da moderatörün) BİLEREK yaptığı sessize alma. Tarayıcının/işletim sisteminin
 // mikrofonu askıya alması (arka plan, ekran kilidi, başka uygulama) bunu DEĞİŞTİRMEZ.
 let voiceUserMuted = false;
+// Moderatör/kurucunun bu odada koyduğu susturma (sunucudan gelir): { room_id, by_tier, expires_at|null }. Açıkken mikrofon açılamaz.
+let voiceForceMute = null;
+let voiceForceMuteTimer = null;
+let voiceJoinStartMuted = false; // susturulmuş kullanıcı odaya mikrofon kapalı girer
 // Bu çağrıda mikrofon en az bir kez çalışır durumda görüldü mü (izin reddedilmişse kurtarma denenmez).
 let callMicEverLive = false;
 let voiceDeafened = false; // dinleme kapalı: odadaki uzak sesler bu cihazda çalınmaz
@@ -8910,7 +8982,8 @@ function voiceStatusIconsHtml(p, allowSelfAction) {
 
     return `
         <span class="voice-status">
-            <${tag} class="voice-icon-btn${p.muted ? ' off' : ''}${interactive ? ' interactive' : ''}" data-voice-user="${p.user_id}"${attrs('mic')} title="${t('voice-mic-title')}">${VOICE_MIC_SVG}</${tag}>
+            ${p.force_muted ? `<span class="voice-force-muted-tag" title="${escapeAttr(t('voice-force-muted-tag'))}">🔇 ${t('voice-force-muted-tag')}</span>` : ''}
+            <${tag} class="voice-icon-btn${p.muted ? ' off' : ''}${interactive ? ' interactive' : ''}${p.force_muted && p.user_id === currentUser?.id ? ' locked' : ''}" data-voice-user="${p.user_id}"${attrs('mic')} title="${t('voice-mic-title')}">${VOICE_MIC_SVG}</${tag}>
             <${tag} class="voice-icon-btn${p.deafened ? ' off' : ''}${interactive ? ' interactive' : ''}"${attrs('spk')} title="${t('voice-speaker-title')}">${VOICE_SPK_SVG}</${tag}>
         </span>
     `;
@@ -8958,6 +9031,181 @@ function updateMuteButton() {
     callMuteBtn.title = micLabel;
     callMuteBtn.setAttribute('aria-pressed', voiceLocalMuted ? 'true' : 'false');
     callMuteBtn.classList.toggle('muted', voiceLocalMuted);
+    callMuteBtn.classList.toggle('locked', Boolean(voiceForceMute));
+    if (voiceForceMute) callMuteBtn.title = t('voice-muted-locked');
+}
+
+
+// ─── Sesli oda susturması (moderasyon) ──────────────────────────────
+
+function voiceMuteByLabel(byTier) {
+    return byTier === 'owner' ? t('voice-muted-by-owner') : t('voice-muted-by-mod');
+}
+
+function formatMuteRemaining(expiresAt) {
+    const ms = Math.max(0, new Date(expiresAt).getTime() - Date.now());
+    const total = Math.ceil(ms / 1000);
+    const m = Math.floor(total / 60);
+    const sec = total % 60;
+    return `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+function renderVoiceForceMuteBanner() {
+    const banner = document.getElementById('call-voice-mute-banner');
+    if (!banner) return;
+    if (!voiceForceMute) {
+        banner.style.display = 'none';
+        return;
+    }
+    const by = voiceMuteByLabel(voiceForceMute.by_tier);
+    const duration = voiceForceMute.expires_at
+        ? `${t('voice-muted-remaining')}: ${formatMuteRemaining(voiceForceMute.expires_at)}`
+        : t('voice-muted-until-lifted');
+    document.getElementById('call-voice-mute-title').textContent = `🔇 ${t('voice-muted-title')} · ${by}`;
+    document.getElementById('call-voice-mute-detail').textContent = `${duration}. ${t('voice-muted-share-note')}`;
+    banner.style.display = 'block';
+}
+
+function voiceMuteNoticeText(mute) {
+    const by = voiceMuteByLabel(mute.by_tier);
+    const duration = mute.expires_at ? `${t('voice-muted-remaining')}: ${formatMuteRemaining(mute.expires_at)}` : t('voice-muted-until-lifted');
+    return `🔇 ${by} · ${t('voice-muted-title')}. ${duration}. ${t('voice-muted-share-note')}`;
+}
+
+// Susturmayı yerel olarak uygular: mikrofon kapanır ve kilitlenir, ekran sesi kesilir, uyarı gösterilir.
+// Asıl engel sunucudadır (Daily izni); bu, kullanıcının neyin neden olduğunu görmesi ve arayüzün tutarlı kalması içindir.
+function applyVoiceForceMute(mute, { announce } = {}) {
+    voiceForceMute = mute;
+    voiceUserMuted = true;
+    if (callFrame) {
+        try { callFrame.setLocalAudio(false); } catch (_) { /* yoksay */ }
+        try {
+            if (callFrame.participants()?.local?.screen) callFrame.updateScreenShare?.({ screenAudio: { isEnabled: false } });
+        } catch (_) { /* yoksay */ }
+    }
+    syncLocalMuteState(true);
+    updateMuteButton();
+    renderVoiceForceMuteBanner();
+    if (voiceForceMuteTimer) clearInterval(voiceForceMuteTimer);
+    if (mute.expires_at) voiceForceMuteTimer = setInterval(renderVoiceForceMuteBanner, 1000);
+    if (announce) alert(voiceMuteNoticeText(mute));
+}
+
+function clearVoiceForceMute() {
+    voiceForceMute = null;
+    if (voiceForceMuteTimer) { clearInterval(voiceForceMuteTimer); voiceForceMuteTimer = null; }
+    renderVoiceForceMuteBanner();
+    updateMuteButton();
+    // Mikrofon kendiliğinden AÇILMAZ; kullanıcı isterse kendisi açar.
+}
+
+// Sunucunun (oda katılımı / yeniden bağlanma) bildirdiği güncel duruma uyum.
+function syncVoiceForceMuteFromServer(mute) {
+    if (mute) applyVoiceForceMute(mute, { announce: !voiceForceMute });
+    else if (voiceForceMute) clearVoiceForceMute();
+}
+
+// Moderatör: susturma penceresi. Oda verilirse o oda seçili gelir; verilmezse kullanıcının şu an bulunduğu oda (yoksa ilk oda).
+function openVoiceMuteModal(targetId, targetName, presetRoomId) {
+    if (!currentHub) return;
+    const modal = document.getElementById('voice-mute-modal');
+    const select = document.getElementById('voice-mute-room-select');
+    const error = document.getElementById('voice-mute-error');
+    error.textContent = '';
+
+    if (!voiceRoomsCache.length) {
+        showToast(t('voice-mute-no-rooms'));
+        return;
+    }
+
+    const currentRoom = voiceRoomsCache.find((r) => (r.participants || []).some((p) => p.user_id === targetId));
+    const selectedId = presetRoomId || currentRoom?.id || voiceRoomsCache[0].id;
+    select.innerHTML = voiceRoomsCache.map((r) => `<option value="${r.id}"${r.id === selectedId ? ' selected' : ''}>${escapeHtml(r.name)}</option>`).join('');
+    document.getElementById('voice-mute-modal-sub').textContent = targetName || '';
+
+    const close = () => {
+        modal.style.display = 'none';
+        modal.querySelectorAll('[data-mute-duration]').forEach((b) => { b.onclick = null; });
+    };
+
+    modal.querySelectorAll('[data-mute-duration]').forEach((btn) => {
+        btn.onclick = async () => {
+            error.textContent = '';
+            try {
+                const response = await fetch(`/api/hubs/${currentHub.id}/voice-rooms/${Number(select.value)}/mutes`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                    body: JSON.stringify({ user_id: targetId, duration: btn.dataset.muteDuration })
+                });
+                const data = await response.json();
+                if (!data.success) { error.textContent = data.error || 'İşlem başarısız.'; return; }
+                close();
+                showToast(t('voice-mute-done'));
+                if (document.getElementById('hub-settings-mutes-view')?.style.display === 'flex') loadHubMutes();
+            } catch (_) {
+                error.textContent = 'İşlem başarısız.';
+            }
+        };
+    });
+
+    document.getElementById('voice-mute-close-btn').onclick = close;
+    modal.onclick = (event) => { if (event.target === modal) close(); };
+    modal.style.display = 'flex';
+}
+
+async function liftVoiceMute(roomId, userId) {
+    if (!currentHub) return false;
+    try {
+        const response = await fetch(`/api/hubs/${currentHub.id}/voice-rooms/${roomId}/mutes/${userId}`, { method: 'DELETE', credentials: 'include' });
+        const data = await response.json();
+        if (!data.success) { showToast(data.error || 'İşlem başarısız.'); return false; }
+        showToast(t('voice-unmute-done'));
+        return true;
+    } catch (_) {
+        showToast('İşlem başarısız.');
+        return false;
+    }
+}
+
+let hubMutesSearchTimer = null;
+
+async function loadHubMutes() {
+    if (!currentHub) return;
+    const container = document.getElementById('hub-settings-mutes-list');
+    const q = document.getElementById('hub-mutes-search-input').value.trim();
+
+    try {
+        const response = await fetch(`/api/hubs/${currentHub.id}/voice-mutes?q=${encodeURIComponent(q)}`, { credentials: 'include' });
+        const data = await response.json();
+        if (!data.success) return;
+
+        if (data.mutes.length === 0) {
+            container.innerHTML = `<div class="settings-blocked-empty">${t('hub-mutes-empty')}</div>`;
+            return;
+        }
+
+        container.innerHTML = data.mutes.map((m) => {
+            const name = m.username || '?';
+            const avatarInner = m.avatar_data ? `<img src="${escapeAttr(m.avatar_data)}" alt="">` : escapeHtml(name.charAt(0).toUpperCase());
+            const duration = m.expires_at ? `${t('voice-muted-remaining')}: ${formatMuteRemaining(m.expires_at)}` : t('voice-mute-until');
+            return `
+                <div class="settings-blocked-row">
+                    <span class="settings-blocked-avatar" style="--user-color:${getUserColor(name)};">${avatarInner}</span>
+                    <span class="settings-blocked-name">${escapeHtml(name)}
+                        <span class="voice-mute-row-meta">🎙 ${escapeHtml(m.room_name || '')} · ${escapeHtml(voiceMuteByLabel(m.by_tier))} · ${escapeHtml(duration)}</span>
+                    </span>
+                    <button class="settings-unblock-btn" data-unmute-room="${m.room_id}" data-unmute-user="${m.user_id}" type="button">${t('hub-mutes-unmute')}</button>
+                </div>
+            `;
+        }).join('');
+
+        container.querySelectorAll('[data-unmute-user]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                if (await liftVoiceMute(Number(btn.dataset.unmuteRoom), Number(btn.dataset.unmuteUser))) loadHubMutes();
+            });
+        });
+    } catch (error) {
+        console.error('Susturulanlar alınamadı:', error);
+    }
 }
 
 function syncLocalMuteState(muted) {
@@ -8988,6 +9236,10 @@ function syncLocalMuteState(muted) {
 function toggleLocalMute() {
     if (!callFrame || (callMode !== 'hub-room' && callMode !== 'dm')) return;
     const nextMuted = !voiceLocalMuted;
+    if (!nextMuted && voiceForceMute && callMode === 'hub-room') {
+        showToast(t('voice-muted-locked'));
+        return;
+    }
     voiceUserMuted = nextMuted;
     callFrame.setLocalAudio(!nextMuted);
     syncLocalMuteState(nextMuted);
@@ -9112,6 +9364,7 @@ function emitVoiceRoomJoin() {
             { room_id: currentVoiceRoomId, hub_id: currentVoiceRoomHubId, muted: voiceLocalMuted, deafened: voiceDeafened },
             (response) => {
                 clearTimeout(timer);
+                if (response?.success) syncVoiceForceMuteFromServer(response.voice_mute || null);
                 resolve(response || { success: false, error: 'Odaya katılınamadı.' });
             }
         );
@@ -9168,6 +9421,16 @@ function canShareScreen() {
     return !isMobile && Boolean(navigator.mediaDevices?.getDisplayMedia);
 }
 
+// Kurucu: kendisi dışında herkes; moderatör: yalnızca üyeler (sunucu da aynı kuralı uygular).
+function canModerateVoiceTarget(userId) {
+    if (!currentHub || !currentUser || userId === currentUser.id) return false;
+    const myTier = currentHub.my_permission_tier;
+    if (myTier !== 'owner' && myTier !== 'moderator') return false;
+    const target = (currentHub.members || []).find((m) => m.user_id === userId);
+    if (!target || target.permission_tier === 'owner') return false;
+    return myTier === 'owner' || target.permission_tier === 'member';
+}
+
 function voiceRoomMembersHtml(room) {
 
     const participants = room.participants || [];
@@ -9180,6 +9443,7 @@ function voiceRoomMembersHtml(room) {
                 <span class="hub-voice-member-avatar${voiceFrameParts(p.user_id).cls}" style="--user-color:${resolveUserColor(p.user_id, p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}${voiceFrameParts(p.user_id).overlay}</span>
                 <span class="hub-voice-member-name">${usernameCardHtml(p.username, isVoicePlus(p.user_id), nameFxOf(p.user_id))}${voiceSelfTagHtml(p.user_id)}</span>
                 ${voiceStatusIconsHtml(p, true)}
+                ${canModerateVoiceTarget(p.user_id) ? `<button class="voice-mod-mute-btn" type="button" data-mod-mute-user="${p.user_id}" data-mod-mute-room="${room.id}" data-mod-mute-name="${escapeAttr(p.username)}" data-mod-mute-active="${p.force_muted ? '1' : '0'}" title="${escapeAttr(p.force_muted ? t('hub-mutes-unmute') : t('voice-mute-action'))}">${p.force_muted ? '🔈' : '🔇'}</button>` : ''}
             </div>
         `).join('');
 
@@ -9281,6 +9545,19 @@ function renderVoiceRoomsList() {
             if (!confirm(t('voice-room-delete-confirm'))) return;
 
             await fetch(`/api/hubs/${currentHub.id}/voice-rooms/${roomId}`, { method: 'DELETE', credentials: 'include' });
+        });
+    });
+
+    hubVoiceRoomsList.querySelectorAll('[data-mod-mute-user]').forEach((btn) => {
+        btn.addEventListener('click', async (event) => {
+            event.stopPropagation();
+            const userId = Number(btn.dataset.modMuteUser);
+            const roomId = Number(btn.dataset.modMuteRoom);
+            if (btn.dataset.modMuteActive === '1') {
+                if (confirm(t('voice-unmute-confirm'))) await liftVoiceMute(roomId, userId);
+                return;
+            }
+            openVoiceMuteModal(userId, btn.dataset.modMuteName, roomId);
         });
     });
 
@@ -9392,6 +9669,7 @@ async function joinVoiceRoom(room) {
         }
 
         callMode = 'hub-room';
+        voiceJoinStartMuted = Boolean(data.voice_mute);
         currentVoiceRoomId = room.id;
         currentVoiceRoomHubId = currentHub.id;
         currentVoiceRoomName = room.name;
@@ -9438,6 +9716,7 @@ async function joinVoiceRoom(room) {
         voiceSessionConfirmed = true;
         currentVoiceParticipants = ack.participants;
         renderHubRoomGrid(currentVoiceParticipants);
+        voiceJoinStartMuted = false;
 
         hubInRoomPill.style.display = 'flex';
         hubInRoomName.textContent = room.name;
@@ -9543,6 +9822,9 @@ document.getElementById('call-hub-room-watch-btn').addEventListener('click', () 
     viewer.style.display = 'block';
     startScreenshareFpsMeter(video, viewer);
 
+    watchedScreenshareSessionId = screensharingSessionId;
+    attachWatchedScreenAudio();
+
 });
 
 // İzleyici penceresinde ölçülen gerçek FPS'i gösterir (paylaşan tarafın seçimini izleyen bilmez, ölçüm her zaman açık).
@@ -9576,6 +9858,8 @@ function closeScreenshareViewer() {
     viewer.classList.remove('fullscreen-mode', 'pseudo-fullscreen');
     viewer.style.display = 'none';
     video.srcObject = null;
+    watchedScreenshareSessionId = null;
+    detachWatchedScreenAudio();
 }
 
 document.getElementById('call-screenshare-close-btn').addEventListener('click', closeScreenshareViewer);
@@ -9755,7 +10039,7 @@ hubSettingsOpenBtn.addEventListener('click', () => {
 });
 
 function showHubSettingsView(view) {
-    ['main', 'pick', 'bans'].forEach((v) => {
+    ['main', 'pick', 'bans', 'mutes'].forEach((v) => {
         document.getElementById(`hub-settings-${v}-view`).style.display = v === view ? 'flex' : 'none';
     });
 }
@@ -9790,6 +10074,17 @@ document.getElementById('hub-bans-open-btn').addEventListener('click', () => {
 });
 
 document.getElementById('hub-bans-back-btn').addEventListener('click', () => showHubSettingsView('main'));
+
+document.getElementById('hub-mutes-open-btn').addEventListener('click', () => {
+    document.getElementById('hub-mutes-search-input').value = '';
+    showHubSettingsView('mutes');
+    loadHubMutes();
+});
+document.getElementById('hub-mutes-back-btn').addEventListener('click', () => showHubSettingsView('main'));
+document.getElementById('hub-mutes-search-input').addEventListener('input', () => {
+    clearTimeout(hubMutesSearchTimer);
+    hubMutesSearchTimer = setTimeout(loadHubMutes, 250);
+});
 
 document.getElementById('hub-ban-member-btn').addEventListener('click', () => {
     document.getElementById('hub-ban-search-input').value = '';
@@ -11757,7 +12052,7 @@ async function joinCallFrame(roomUrl, token) {
             // Bu uygulamada görüntülü görüşme yok — kamerayı hiç istemiyoruz ki
             // tarayıcı kamera izni bile sormasın (sadece mikrofon).
             startVideoOff: true,
-            startAudioOff: false,
+            startAudioOff: voiceJoinStartMuted,
             userMediaVideoConstraints: false
         });
 
@@ -11815,6 +12110,45 @@ callOverlay.addEventListener('click', tryPlayAllCallAudio);
 function clearRemoteCallAudio() {
     remoteCallAudioEls.forEach((el) => el.remove());
     remoteCallAudioEls.clear();
+    remoteScreenAudioTracks?.clear();
+    detachWatchedScreenAudio();
+}
+
+// ─── Ekran sesi: yalnızca izleyene, paylaşan susturulmamışsa ───
+// var: bu fonksiyonlar dosyanın başındaki akıştan da çağrılabilir (let/const geçici ölü bölgesine düşmesin).
+var remoteScreenAudioTracks = new Map(); // session_id -> MediaStreamTrack
+var watchedScreenshareSessionId = null;
+var watchedScreenAudioEl = null;
+
+function screenshareOwnerIsForceMuted(sessionId) {
+    const participant = callFrame ? Object.values(callFrame.participants() || {}).find((p) => p.session_id === sessionId) : null;
+    const userId = participant ? voiceUserIdForDailyParticipant(participant) : null;
+    return Boolean(userId && currentVoiceParticipants.find((p) => p.user_id === userId)?.force_muted);
+}
+
+function attachWatchedScreenAudio() {
+    const sessionId = watchedScreenshareSessionId;
+    const track = sessionId && remoteScreenAudioTracks.get(sessionId);
+    if (!track || screenshareOwnerIsForceMuted(sessionId)) { detachWatchedScreenAudio(); return; }
+    if (!watchedScreenAudioEl) {
+        watchedScreenAudioEl = document.createElement('audio');
+        watchedScreenAudioEl.autoplay = true;
+        watchedScreenAudioEl.playsInline = true;
+        watchedScreenAudioEl.setAttribute('data-call-audio', '1');
+        document.body.appendChild(watchedScreenAudioEl);
+    }
+    watchedScreenAudioEl.srcObject = new MediaStream([track]);
+    watchedScreenAudioEl.muted = voiceDeafened;
+    applySinkToAudioEl(watchedScreenAudioEl);
+    watchedScreenAudioEl.play().catch(() => {});
+}
+
+function detachWatchedScreenAudio() {
+    if (watchedScreenAudioEl) {
+        watchedScreenAudioEl.srcObject = null;
+        watchedScreenAudioEl.remove();
+        watchedScreenAudioEl = null;
+    }
 }
 
 function wireCallAudioUnlock() {
@@ -11822,6 +12156,14 @@ function wireCallAudioUnlock() {
     callFrame.on('track-started', (event) => {
 
         if (event?.track?.kind !== 'audio' || event?.participant?.local) return;
+
+        // Ekran sesi mikrofon sesinden AYRI tutulur ve herkese çalınmaz: yalnızca "İzle" ile o ekranı izleyen duyar
+        // (ve paylaşan susturulmuşsa hiç kimse). Eskiden aynı oturum anahtarıyla mikrofon sesinin yerine geçebiliyordu.
+        if (event.type === 'screenAudio') {
+            remoteScreenAudioTracks.set(event.participant.session_id, event.track);
+            if (watchedScreenshareSessionId === event.participant.session_id) attachWatchedScreenAudio();
+            return;
+        }
 
         const sessionId = event.participant?.session_id || `remote-${remoteCallAudioEls.size}`;
 
@@ -11845,6 +12187,12 @@ function wireCallAudioUnlock() {
     callFrame.on('track-stopped', (event) => {
 
         if (event?.track?.kind !== 'audio') return;
+
+        if (event.type === 'screenAudio') {
+            remoteScreenAudioTracks.delete(event.participant?.session_id);
+            if (watchedScreenshareSessionId === event.participant?.session_id) detachWatchedScreenAudio();
+            return;
+        }
 
         const sessionId = event.participant?.session_id;
         const audioEl = sessionId && remoteCallAudioEls.get(sessionId);
@@ -12718,6 +13066,8 @@ function leaveCall() {
     voiceRejoining = false;
     voiceLocalMuted = false;
     voiceUserMuted = false;
+    voiceJoinStartMuted = false;
+    if (voiceForceMute) clearVoiceForceMute();
     callMicEverLive = false;
     voiceDeafened = false;
     voiceLocalSpeaking = false;
@@ -12782,7 +13132,7 @@ function renderHubMembers() {
                         <button class="hub-member-menu-btn" type="button">⋯</button>
                         <div class="hub-member-menu liquid-glass" style="display:none;">
                             ${myTier === 'owner' ? `<button data-action="moderator">${m.permission_tier === 'moderator' ? t('remove-moderator') : t('make-moderator')}</button>` : ''}
-                            <button data-action="mute">🔇 ${t('mute')}</button>
+                            <button data-action="mute">🔇 ${t('voice-mute-action')}</button>
                             <button data-action="kick">👢 ${t('kick')}</button>
                             <button data-action="ban" class="hub-member-menu-danger">🚫 ${t('ban')}</button>
                         </div>
@@ -12889,7 +13239,8 @@ async function handleMemberModerationAction(action, targetId, targetTier) {
     }
 
     if (action === 'mute') {
-        await fetch(`/api/hubs/${currentHub.id}/members/${targetId}/mute`, { method: 'POST', credentials: 'include' });
+        const target = (currentHub.members || []).find((m) => m.user_id === targetId);
+        openVoiceMuteModal(targetId, target?.username || '', null);
         return;
     }
 
