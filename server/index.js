@@ -208,6 +208,13 @@ const {
   listMyVoiceMutes,
   getHubMessagesPage,
   getDmMessagesPage,
+  isTwoFactorEnabled,
+  getTwoFactorStatus,
+  startTwoFactorSetup,
+  enableTwoFactor,
+  verifyTwoFactorCode,
+  disableTwoFactor,
+  regenerateRecoveryCodes,
   getUnreadCounts,
   markScopeRead,
   canMentionEveryone,
@@ -732,31 +739,122 @@ app.post('/api/login', ...loginLimiter, (req, res) => {
       });
     }
 
+    const userPayload = {
+      id: result.id,
+      username: result.username,
+      email: result.email,
+      about_me: result.about_me,
+      status: result.status,
+      avatar_visibility: result.avatar_visibility,
+      avatar_data: result.avatar_data,
+      platform_role: result.platform_role,
+      assigned_platform_role: result.assigned_platform_role,
+      role_acceptance: result.role_acceptance,
+      role_notice: result.role_notice,
+      dev_notice: result.dev_notice
+    };
+
+    // İki adımlı doğrulama açıksa şifre tek başına oturum açmaz: kısa ömürlü bir "ikinci adım" bileti verilir.
+    if (isTwoFactorEnabled(result.id)) {
+      const challenge = crypto.randomBytes(24).toString('base64url');
+      loginChallenges.set(challenge, { userId: result.id, user: userPayload, expires: Date.now() + LOGIN_CHALLENGE_TTL_MS, attempts: 0 });
+      return res.json({ success: false, requires_2fa: true, challenge });
+    }
+
     const sessionToken = createSession(result.id, req.headers['user-agent']);
     setSessionCookie(req, res, sessionToken);
 
-    return res.json({
-      success: true,
-      user: {
-        id: result.id,
-        username: result.username,
-        email: result.email,
-        about_me: result.about_me,
-        status: result.status,
-        avatar_visibility: result.avatar_visibility,
-        avatar_data: result.avatar_data,
-        platform_role: result.platform_role,
-        assigned_platform_role: result.assigned_platform_role,
-        role_acceptance: result.role_acceptance,
-        role_notice: result.role_notice,
-        dev_notice: result.dev_notice
-      }
-    });
+    return res.json({ success: true, user: userPayload });
 
   } catch (error) {
     console.error('Giriş API hatası:', error);
     return res.status(500).json({ success: false, error: 'Giriş sırasında bir hata oluştu.' });
   }
+});
+
+// =====================================================
+// İKİ ADIMLI DOĞRULAMA
+// =====================================================
+
+const LOGIN_CHALLENGE_TTL_MS = 5 * 60 * 1000;
+const LOGIN_CHALLENGE_MAX_ATTEMPTS = 5;
+const loginChallenges = new Map(); // bilet -> { userId, user, expires, attempts }
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, c] of loginChallenges) if (c.expires < now) loginChallenges.delete(key);
+}, 60 * 1000).unref();
+
+const twoFactorLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla doğrulama denemesi. Biraz sonra tekrar dene.' });
+
+// Girişin ikinci adımı: { challenge, code } — code, uygulamadaki 6 haneli kod ya da bir kurtarma kodu.
+app.post('/api/login/2fa', twoFactorLimiter, (req, res) => {
+  const key = String(req.body?.challenge || '');
+  const challenge = loginChallenges.get(key);
+  if (!challenge || challenge.expires < Date.now()) {
+    loginChallenges.delete(key);
+    return res.status(401).json({ success: false, expired: true, error: 'Doğrulama süresi doldu. Yeniden giriş yap.' });
+  }
+  challenge.attempts += 1;
+  if (challenge.attempts > LOGIN_CHALLENGE_MAX_ATTEMPTS) {
+    loginChallenges.delete(key);
+    return res.status(429).json({ success: false, expired: true, error: 'Çok fazla hatalı deneme. Yeniden giriş yap.' });
+  }
+  const result = verifyTwoFactorCode(challenge.userId, req.body?.code);
+  if (!result.ok) return res.status(401).json({ success: false, error: 'Kod doğru değil.' });
+
+  loginChallenges.delete(key);
+  try {
+    const sessionToken = createSession(challenge.userId, req.headers['user-agent']);
+    setSessionCookie(req, res, sessionToken);
+  } catch (error) {
+    return res.status(403).json({ success: false, error: 'Giriş yapılamadı.' });
+  }
+  return res.json({ success: true, user: challenge.user, recovery_used: result.method === 'recovery', recovery_remaining: result.recovery_remaining });
+});
+
+app.get('/api/2fa/status', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  return res.json({ success: true, ...getTwoFactorStatus(user.id) });
+});
+
+// Kurulum: şifre yeniden istenir (açık kalmış bir oturumla başkası 2FA kurup hesabı kilitleyemesin).
+app.post('/api/2fa/setup', twoFactorLimiter, async (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  if (!verifyAccountPassword(user.id, req.body?.password)) return res.status(403).json({ success: false, error: 'Şifre doğru değil.' });
+  const result = startTwoFactorSetup(user.id);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+  let qr = null;
+  try { qr = await require('qrcode').toString(result.otpauth, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }); } catch (_) { /* QR üretilemezse elle giriş anahtarı yeter */ }
+  return res.json({ success: true, secret: result.secret, otpauth: result.otpauth, qr_svg: qr });
+});
+
+app.post('/api/2fa/enable', twoFactorLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const result = enableTwoFactor(user.id, req.body?.code);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+  return res.json({ success: true, recovery_codes: result.recovery_codes });
+});
+
+// Kapatma: şifre + geçerli bir kod (uygulama ya da kurtarma) gerekir.
+app.post('/api/2fa/disable', twoFactorLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  if (!verifyAccountPassword(user.id, req.body?.password)) return res.status(403).json({ success: false, error: 'Şifre doğru değil.' });
+  if (!verifyTwoFactorCode(user.id, req.body?.code).ok) return res.status(401).json({ success: false, error: 'Kod doğru değil.' });
+  disableTwoFactor(user.id);
+  return res.json({ success: true });
+});
+
+app.post('/api/2fa/recovery-codes', twoFactorLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  if (!verifyTwoFactorCode(user.id, req.body?.code).ok) return res.status(401).json({ success: false, error: 'Kod doğru değil.' });
+  const result = regenerateRecoveryCodes(user.id);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+  return res.json({ success: true, recovery_codes: result.recovery_codes });
 });
 
 // =====================================================

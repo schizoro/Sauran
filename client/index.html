@@ -70,6 +70,19 @@
                     </span>
                 </button>
 
+                <div id="login-2fa-step" class="login-2fa-step" style="display:none;">
+                    <p class="login-2fa-text" id="login-2fa-text">Doğrulayıcı uygulamandaki 6 haneli kodu gir.</p>
+                    <div class="field-float">
+                        <input type="text" id="login-2fa-input" placeholder=" " inputmode="numeric" autocomplete="one-time-code" maxlength="9" autocapitalize="off" spellcheck="false">
+                        <label for="login-2fa-input" id="login-2fa-label">Doğrulama kodu</label>
+                    </div>
+                    <button id="login-2fa-btn" type="button" class="login-2fa-btn">Doğrula</button>
+                    <div class="auth-switch login-2fa-links">
+                        <button id="login-2fa-recovery-toggle" type="button" class="forgot-link">Kurtarma kodu kullan</button>
+                        <button id="login-2fa-back" type="button" class="forgot-link">← Geri</button>
+                    </div>
+                </div>
+
                 <div class="auth-switch">
                     <button id="show-forgot-btn" type="button" class="forgot-link">
                         Şifremi Unuttum
@@ -1058,6 +1071,46 @@
         <div id="msg-search-results" class="msg-search-results" role="list"></div>
     </aside>
 
+    <div id="twofa-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="twofa-title">
+        <div class="modal-box market-modal-box twofa-box">
+            <div class="modal-header">
+                <span id="twofa-title">🔐 İki adımlı doğrulama</span>
+                <button id="twofa-close-btn" type="button" aria-label="Kapat">✕</button>
+            </div>
+            <div class="market-modal-body twofa-body">
+
+                <div class="twofa-step" data-twofa-step="password">
+                    <p class="mk-sub" id="twofa-password-text">Devam etmek için şifreni gir.</p>
+                    <input type="password" id="twofa-password" class="hub-name-input" autocomplete="current-password" placeholder="Şifren">
+                    <input type="text" id="twofa-code-confirm" class="hub-name-input" inputmode="numeric" autocomplete="one-time-code" placeholder="Uygulamadaki kod ya da kurtarma kodu" style="display:none;">
+                    <button type="button" class="hubset-save-btn" id="twofa-password-next">Devam</button>
+                </div>
+
+                <div class="twofa-step" data-twofa-step="scan" style="display:none;">
+                    <p class="mk-sub">1. Telefonunda bir doğrulayıcı uygulama aç (Google Authenticator, Microsoft Authenticator, 1Password, Authy…) ve bu kodu tara.</p>
+                    <div id="twofa-qr" class="twofa-qr"></div>
+                    <p class="mk-sub">Tarayamıyorsan bu anahtarı elle gir:</p>
+                    <code id="twofa-secret" class="twofa-secret"></code>
+                    <p class="mk-sub">2. Uygulamada görünen 6 haneli kodu yaz:</p>
+                    <input type="text" id="twofa-setup-code" class="hub-name-input twofa-code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456">
+                    <button type="button" class="hubset-save-btn" id="twofa-setup-verify">Doğrula ve aç</button>
+                </div>
+
+                <div class="twofa-step" data-twofa-step="codes" style="display:none;">
+                    <p class="mk-sub"><strong>Kurtarma kodlarını şimdi güvenli bir yere kaydet.</strong> Telefonunu kaybedersen giriş yapmanın tek yolu bunlar. Her kod bir kez kullanılabilir ve bir daha gösterilmeyecek.</p>
+                    <ol id="twofa-codes" class="twofa-codes"></ol>
+                    <div class="twofa-code-actions">
+                        <button type="button" class="hub-settings-action-btn" id="twofa-codes-copy">📋 Kopyala</button>
+                        <button type="button" class="hub-settings-action-btn" id="twofa-codes-download">⬇️ İndir (.txt)</button>
+                    </div>
+                    <button type="button" class="hubset-save-btn" id="twofa-codes-done">Kaydettim, bitir</button>
+                </div>
+
+                <div id="twofa-error" class="hub-create-error"></div>
+            </div>
+        </div>
+    </div>
+
     <div id="voice-mute-modal" class="modal-overlay" style="display:none;">
         <div class="modal-box market-modal-box share-fps-box">
             <div class="modal-header">
@@ -1749,6 +1802,14 @@
                     <input type="password" id="settings-new-password" placeholder="Yeni şifre">
                     <div id="settings-password-error" class="friend-add-error"></div>
                     <button id="settings-password-btn" type="button" class="about-btn about-btn-primary poll-submit-btn">Şifreyi Güncelle</button>
+
+                    <div class="hub-settings-divider"></div>
+
+                    <span class="profile-field-label">İki Adımlı Doğrulama</span>
+                    <div id="twofa-status" class="twofa-status"></div>
+                    <button id="twofa-enable-btn" class="hub-settings-action-btn" type="button" style="display:none;">🔐 İki adımlı doğrulamayı aç</button>
+                    <button id="twofa-codes-btn" class="hub-settings-action-btn" type="button" style="display:none;">🔑 Kurtarma kodlarını yenile</button>
+                    <button id="twofa-disable-btn" class="hub-settings-action-btn hub-settings-danger" type="button" style="display:none;">İki adımlı doğrulamayı kapat</button>
 
                     <div class="hub-settings-divider"></div>
 

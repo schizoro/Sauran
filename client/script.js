@@ -1241,6 +1241,85 @@ loginUsernameInput.addEventListener(
 // GİRİŞ API
 // =====================================================
 
+// ─── Girişte ikinci adım (2FA) ───
+let login2faChallenge = null;
+let login2faRecovery = false;
+
+function showLogin2faStep(challenge) {
+    login2faChallenge = challenge;
+    login2faRecovery = false;
+    document.querySelectorAll('#login-form > .field-float, #login-btn, #login-form > .auth-switch').forEach((el) => { el.style.display = 'none'; });
+    document.getElementById('login-2fa-step').style.display = 'flex';
+    syncLogin2faMode();
+    const input = document.getElementById('login-2fa-input');
+    input.value = '';
+    setTimeout(() => input.focus(), 30);
+}
+
+function hideLogin2faStep() {
+    login2faChallenge = null;
+    document.querySelectorAll('#login-form > .field-float, #login-btn, #login-form > .auth-switch').forEach((el) => { el.style.display = ''; });
+    document.getElementById('login-2fa-step').style.display = 'none';
+    clearAuthError();
+}
+
+function syncLogin2faMode() {
+    const input = document.getElementById('login-2fa-input');
+    document.getElementById('login-2fa-text').textContent = login2faRecovery
+        ? 'Kurtarma kodlarından birini gir (ör. abcd-efgh). Her kod bir kez kullanılabilir.'
+        : 'Doğrulayıcı uygulamandaki 6 haneli kodu gir.';
+    document.getElementById('login-2fa-label').textContent = login2faRecovery ? 'Kurtarma kodu' : 'Doğrulama kodu';
+    document.getElementById('login-2fa-recovery-toggle').textContent = login2faRecovery ? 'Uygulama kodu kullan' : 'Kurtarma kodu kullan';
+    input.inputMode = login2faRecovery ? 'text' : 'numeric';
+    input.autocomplete = login2faRecovery ? 'off' : 'one-time-code';
+}
+
+async function submitLogin2fa() {
+    const input = document.getElementById('login-2fa-input');
+    const btn = document.getElementById('login-2fa-btn');
+    const code = input.value.trim();
+    if (!code || !login2faChallenge) return;
+    clearAuthError();
+    btn.disabled = true;
+    try {
+        const response = await fetch('/api/login/2fa', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+            body: JSON.stringify({ challenge: login2faChallenge, code })
+        });
+        const data = await response.json();
+        if (!data.success) {
+            showAuthError(data.error || 'Kod doğru değil.');
+            if (data.expired) hideLogin2faStep();
+            input.select();
+            return;
+        }
+        if (data.recovery_used) {
+            alert(`Bir kurtarma kodu kullandın. Kalan kurtarma kodu: ${data.recovery_remaining}. Azaldıysa Ayarlar > Güvenlik'ten yenile.`);
+        }
+        login2faChallenge = null;
+        setCurrentUser(data.user);
+        connectToChat();
+    } catch (error) {
+        showAuthError('Sunucuya bağlanılamadı.');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+document.getElementById('login-2fa-btn').addEventListener('click', submitLogin2fa);
+document.getElementById('login-2fa-input').addEventListener('keydown', (event) => { if (event.key === 'Enter') submitLogin2fa(); });
+document.getElementById('login-2fa-input').addEventListener('input', (event) => {
+    // Uygulama kodunda 6 hane tamamlanınca otomatik doğrula.
+    if (!login2faRecovery && /^\d{6}$/.test(event.target.value.trim())) submitLogin2fa();
+});
+document.getElementById('login-2fa-recovery-toggle').addEventListener('click', () => {
+    login2faRecovery = !login2faRecovery;
+    syncLogin2faMode();
+    document.getElementById('login-2fa-input').value = '';
+    document.getElementById('login-2fa-input').focus();
+});
+document.getElementById('login-2fa-back').addEventListener('click', hideLogin2faStep);
+
 async function login() {
 
     clearAuthError();
@@ -1305,6 +1384,11 @@ async function login() {
         const data =
             await response.json();
 
+
+        if (data.requires_2fa) {
+            showLogin2faStep(data.challenge);
+            return;
+        }
 
         if (
             !response.ok ||
@@ -3248,7 +3332,131 @@ function describeUserAgent(ua) {
 
 }
 
+// ─── Ayarlar > Güvenlik: iki adımlı doğrulama ───
+async function loadTwoFactorStatus() {
+    const status = document.getElementById('twofa-status');
+    try {
+        const data = await (await fetch('/api/2fa/status', { credentials: 'include' })).json();
+        if (!data.success) return;
+        status.innerHTML = data.enabled
+            ? `<span class="twofa-badge on">● Açık</span> <span class="twofa-meta">Kalan kurtarma kodu: ${Number(data.recovery_remaining)}</span>`
+            : `<span class="twofa-badge off">● Kapalı</span> <span class="twofa-meta">Girişte şifreye ek olarak telefonundaki koddan da sorulur.</span>`;
+        document.getElementById('twofa-enable-btn').style.display = data.enabled ? 'none' : 'flex';
+        document.getElementById('twofa-codes-btn').style.display = data.enabled ? 'flex' : 'none';
+        document.getElementById('twofa-disable-btn').style.display = data.enabled ? 'flex' : 'none';
+    } catch (_) { /* yoksay */ }
+}
+
+const twofaModal = document.getElementById('twofa-modal');
+let twofaMode = 'enable'; // enable | disable | codes
+let twofaCodes = [];
+
+function showTwofaStep(step) {
+    twofaModal.querySelectorAll('[data-twofa-step]').forEach((el) => { el.style.display = el.dataset.twofaStep === step ? 'flex' : 'none'; });
+    document.getElementById('twofa-error').textContent = '';
+}
+
+function openTwofaModal(mode) {
+    twofaMode = mode;
+    const pw = document.getElementById('twofa-password');
+    const code = document.getElementById('twofa-code-confirm');
+    pw.value = '';
+    code.value = '';
+    pw.style.display = mode === 'codes' ? 'none' : '';
+    code.style.display = mode === 'enable' ? 'none' : '';
+    document.getElementById('twofa-password-text').textContent = mode === 'enable'
+        ? 'Devam etmek için şifreni gir.'
+        : mode === 'disable'
+            ? 'Kapatmak için şifreni ve uygulamadaki kodu (ya da bir kurtarma kodunu) gir.'
+            : 'Yeni kurtarma kodları için uygulamadaki kodu (ya da bir kurtarma kodunu) gir. Eski kodlar geçersiz olur.';
+    document.getElementById('twofa-password-next').textContent = mode === 'disable' ? 'Kapat' : 'Devam';
+    showTwofaStep('password');
+    twofaModal.style.display = 'flex';
+    setTimeout(() => (mode === 'codes' ? code : pw).focus(), 30);
+}
+
+function closeTwofaModal() {
+    twofaModal.style.display = 'none';
+    twofaCodes = [];
+    document.getElementById('twofa-codes').innerHTML = '';
+    document.getElementById('twofa-qr').innerHTML = '';
+    document.getElementById('twofa-secret').textContent = '';
+    loadTwoFactorStatus();
+}
+
+async function twofaPost(url, body) {
+    const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) });
+    return response.json();
+}
+
+function showRecoveryCodes(codes) {
+    twofaCodes = codes;
+    document.getElementById('twofa-codes').innerHTML = codes.map((c) => `<li><code>${escapeHtml(c)}</code></li>`).join('');
+    showTwofaStep('codes');
+}
+
+document.getElementById('twofa-password-next').addEventListener('click', async () => {
+    const error = document.getElementById('twofa-error');
+    const password = document.getElementById('twofa-password').value;
+    const code = document.getElementById('twofa-code-confirm').value.trim();
+    try {
+        if (twofaMode === 'enable') {
+            const data = await twofaPost('/api/2fa/setup', { password });
+            if (!data.success) { error.textContent = data.error || 'Olmadı.'; return; }
+            // QR sunucuda üretilen SVG'dir; sayfaya img kaynağı olarak (betik çalıştıramaz) konur.
+            document.getElementById('twofa-qr').innerHTML = data.qr_svg
+                ? `<img alt="QR kodu" src="data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(data.qr_svg)))}">`
+                : '';
+            document.getElementById('twofa-secret').textContent = data.secret.replace(/(.{4})/g, '$1 ').trim();
+            document.getElementById('twofa-setup-code').value = '';
+            showTwofaStep('scan');
+            setTimeout(() => document.getElementById('twofa-setup-code').focus(), 30);
+        } else if (twofaMode === 'disable') {
+            const data = await twofaPost('/api/2fa/disable', { password, code });
+            if (!data.success) { error.textContent = data.error || 'Olmadı.'; return; }
+            showToast('İki adımlı doğrulama kapatıldı.');
+            closeTwofaModal();
+        } else {
+            const data = await twofaPost('/api/2fa/recovery-codes', { code });
+            if (!data.success) { error.textContent = data.error || 'Olmadı.'; return; }
+            showRecoveryCodes(data.recovery_codes);
+        }
+    } catch (_) {
+        error.textContent = 'Sunucuya bağlanılamadı.';
+    }
+});
+
+document.getElementById('twofa-setup-verify').addEventListener('click', async () => {
+    const error = document.getElementById('twofa-error');
+    const data = await twofaPost('/api/2fa/enable', { code: document.getElementById('twofa-setup-code').value.trim() }).catch(() => null);
+    if (!data || !data.success) { error.textContent = data?.error || 'Sunucuya bağlanılamadı.'; return; }
+    showToast('İki adımlı doğrulama açıldı.');
+    showRecoveryCodes(data.recovery_codes);
+});
+document.getElementById('twofa-setup-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('twofa-setup-verify').click(); });
+
+document.getElementById('twofa-codes-copy').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(twofaCodes.join('\n')); showToast('Kopyalandı.'); } catch (_) { showToast('Kopyalanamadı; kodları elle not al.'); }
+});
+document.getElementById('twofa-codes-download').addEventListener('click', () => {
+    const text = `Sauran kurtarma kodları (${currentUser?.username || ''})\nHer kod bir kez kullanılabilir.\n\n${twofaCodes.join('\n')}\n`;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+    a.download = 'sauran-kurtarma-kodlari.txt';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+document.getElementById('twofa-codes-done').addEventListener('click', closeTwofaModal);
+document.getElementById('twofa-close-btn').addEventListener('click', () => {
+    if (twofaCodes.length && !confirm('Kurtarma kodlarını kaydettin mi? Bu pencereyi kapatınca bir daha gösterilmeyecek.')) return;
+    closeTwofaModal();
+});
+document.getElementById('twofa-enable-btn').addEventListener('click', () => openTwofaModal('enable'));
+document.getElementById('twofa-disable-btn').addEventListener('click', () => openTwofaModal('disable'));
+document.getElementById('twofa-codes-btn').addEventListener('click', () => openTwofaModal('codes'));
+
 async function loadSessions() {
+    loadTwoFactorStatus();
 
     const container = document.getElementById('settings-sessions-list');
 

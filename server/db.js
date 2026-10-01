@@ -7149,6 +7149,120 @@ function checkpointWal() {
   try { db.pragma('wal_checkpoint(TRUNCATE)'); return true; } catch (_) { return false; }
 }
 
+
+// =====================================================
+// İKİ ADIMLI DOĞRULAMA (TOTP + kurtarma kodları)
+// =====================================================
+// Gizli anahtar şifreli saklanır (bkz. totp.js). Kurulum iki adımlıdır: önce "bekleyen" anahtar üretilir ve QR ile
+// gösterilir; kullanıcı uygulamadaki kodu doğru girince etkinleşir (yanlış kurulumla hesap kilitlenmez).
+// Kurtarma kodları yalnızca bir kez gösterilir, veritabanında özetleri tutulur, her biri tek kullanımlıktır.
+const totp = require('./totp');
+{
+  const cols = db.prepare(`PRAGMA table_info(users)`).all().map((c) => c.name);
+  const addCol = (name, type) => { if (!cols.includes(name)) db.exec(`ALTER TABLE users ADD COLUMN ${name} ${type}`); };
+  addCol('totp_secret_enc', 'TEXT');
+  addCol('totp_enabled_at', 'DATETIME');
+  addCol('totp_last_step', 'INTEGER');
+  addCol('totp_pending_enc', 'TEXT');
+  addCol('totp_pending_at', 'DATETIME');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_recovery_codes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      code_hash TEXT NOT NULL,
+      used_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_recovery_codes_user ON user_recovery_codes(user_id);
+  `);
+}
+
+const TOTP_SETUP_TTL_MINUTES = 15;
+
+function isTwoFactorEnabled(userId) {
+  const row = db.prepare(`SELECT totp_enabled_at FROM users WHERE id = ?`).get(userId);
+  return Boolean(row && row.totp_enabled_at);
+}
+
+function getTwoFactorStatus(userId) {
+  const row = db.prepare(`SELECT totp_enabled_at FROM users WHERE id = ?`).get(userId);
+  const remaining = db.prepare(`SELECT COUNT(*) AS c FROM user_recovery_codes WHERE user_id = ? AND used_at IS NULL`).get(userId).c;
+  return { enabled: Boolean(row?.totp_enabled_at), enabled_at: row?.totp_enabled_at ? `${String(row.totp_enabled_at).replace(' ', 'T')}Z` : null, recovery_remaining: row?.totp_enabled_at ? remaining : 0 };
+}
+
+function startTwoFactorSetup(userId) {
+  if (isTwoFactorEnabled(userId)) return { success: false, status: 400, error: 'İki adımlı doğrulama zaten açık.' };
+  const user = db.prepare(`SELECT username FROM users WHERE id = ?`).get(userId);
+  const secret = totp.generateSecret();
+  db.prepare(`UPDATE users SET totp_pending_enc = ?, totp_pending_at = CURRENT_TIMESTAMP WHERE id = ?`).run(totp.encryptSecret(secret), userId);
+  return { success: true, secret, otpauth: totp.otpauthUri(secret, user.username) };
+}
+
+function replaceRecoveryCodes(userId) {
+  const codes = totp.generateRecoveryCodes(10);
+  db.prepare(`DELETE FROM user_recovery_codes WHERE user_id = ?`).run(userId);
+  const ins = db.prepare(`INSERT INTO user_recovery_codes (user_id, code_hash) VALUES (?, ?)`);
+  codes.forEach((c) => ins.run(userId, totp.hashRecoveryCode(c)));
+  return codes;
+}
+
+function enableTwoFactor(userId, code) {
+  const row = db.prepare(`
+    SELECT totp_pending_enc, totp_enabled_at,
+           (totp_pending_at > datetime('now', '-${TOTP_SETUP_TTL_MINUTES} minutes')) AS fresh
+    FROM users WHERE id = ?
+  `).get(userId);
+  if (!row) return { success: false, status: 404, error: 'Kullanıcı bulunamadı.' };
+  if (row.totp_enabled_at) return { success: false, status: 400, error: 'İki adımlı doğrulama zaten açık.' };
+  if (!row.totp_pending_enc || !row.fresh) return { success: false, status: 400, error: 'Kurulum süresi doldu. Baştan başla.' };
+  const secret = totp.decryptSecret(row.totp_pending_enc);
+  const step = secret ? totp.verifyTotp(secret, code) : null;
+  if (step === null) return { success: false, status: 400, error: 'Kod doğru değil. Uygulamadaki güncel 6 haneli kodu gir.' };
+  const codes = db.transaction(() => {
+    db.prepare(`
+      UPDATE users SET totp_secret_enc = totp_pending_enc, totp_enabled_at = CURRENT_TIMESTAMP, totp_last_step = ?,
+                       totp_pending_enc = NULL, totp_pending_at = NULL
+      WHERE id = ?
+    `).run(step, userId);
+    return replaceRecoveryCodes(userId);
+  })();
+  return { success: true, recovery_codes: codes };
+}
+
+// Uygulama kodu ya da kurtarma kodu. Uygulama kodunda aynı (ya da daha eski) zaman adımı ikinci kez kabul edilmez.
+function verifyTwoFactorCode(userId, code) {
+  const row = db.prepare(`SELECT totp_secret_enc, totp_last_step FROM users WHERE id = ? AND totp_enabled_at IS NOT NULL`).get(userId);
+  if (!row) return { ok: false };
+  const clean = String(code || '').trim();
+  if (/^\d{6}$/.test(clean.replace(/\s+/g, ''))) {
+    const secret = totp.decryptSecret(row.totp_secret_enc);
+    const step = secret ? totp.verifyTotp(secret, clean, row.totp_last_step) : null;
+    if (step === null) return { ok: false };
+    const info = db.prepare(`UPDATE users SET totp_last_step = ? WHERE id = ? AND (totp_last_step IS NULL OR totp_last_step < ?)`).run(step, userId, step);
+    return info.changes ? { ok: true, method: 'totp' } : { ok: false };
+  }
+  if (totp.normalizeRecoveryCode(clean).length !== 8) return { ok: false };
+  const hash = totp.hashRecoveryCode(clean);
+  const info = db.prepare(`UPDATE user_recovery_codes SET used_at = CURRENT_TIMESTAMP WHERE user_id = ? AND code_hash = ? AND used_at IS NULL`).run(userId, hash);
+  if (!info.changes) return { ok: false };
+  const remaining = db.prepare(`SELECT COUNT(*) AS c FROM user_recovery_codes WHERE user_id = ? AND used_at IS NULL`).get(userId).c;
+  return { ok: true, method: 'recovery', recovery_remaining: remaining };
+}
+
+function disableTwoFactor(userId) {
+  db.transaction(() => {
+    db.prepare(`UPDATE users SET totp_secret_enc = NULL, totp_enabled_at = NULL, totp_last_step = NULL, totp_pending_enc = NULL, totp_pending_at = NULL WHERE id = ?`).run(userId);
+    db.prepare(`DELETE FROM user_recovery_codes WHERE user_id = ?`).run(userId);
+  })();
+  return { success: true };
+}
+
+function regenerateRecoveryCodes(userId) {
+  if (!isTwoFactorEnabled(userId)) return { success: false, status: 400, error: 'İki adımlı doğrulama kapalı.' };
+  return { success: true, recovery_codes: replaceRecoveryCodes(userId) };
+}
+
 module.exports = {
   INDEFINITE_RETENTION,
   touchUserActivity,
@@ -7391,6 +7505,13 @@ module.exports = {
   listMyVoiceMutes,
   getHubMessagesPage,
   getDmMessagesPage,
+  isTwoFactorEnabled,
+  getTwoFactorStatus,
+  startTwoFactorSetup,
+  enableTwoFactor,
+  verifyTwoFactorCode,
+  disableTwoFactor,
+  regenerateRecoveryCodes,
   getUnreadCounts,
   markScopeRead,
   canMentionEveryone,

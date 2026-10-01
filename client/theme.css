@@ -1990,3 +1990,25 @@ body.hubset-open { overflow: hidden; }
 @media (max-width: 768px) {
   .msg-search-panel { width: 100%; border-left: 0; }
 }
+
+/* ── İki adımlı doğrulama ── */
+.login-2fa-step { flex-direction: column; gap: 12px; }
+.login-2fa-text { font-size: 14px; color: var(--text-secondary); margin: 0; }
+.login-2fa-btn { height: 46px; border-radius: 12px; background: var(--accent); color: #04202e; border: 0; font-weight: 600; cursor: pointer; }
+.login-2fa-btn:disabled { opacity: 0.6; }
+.login-2fa-links { display: flex; justify-content: space-between; }
+.twofa-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; }
+.twofa-badge { font-weight: 650; }
+.twofa-badge.on { color: var(--success); }
+.twofa-badge.off { color: var(--text-tertiary); }
+.twofa-meta { color: var(--text-tertiary); }
+.twofa-box { max-width: 440px; }
+.twofa-step { flex-direction: column; gap: 10px; }
+.twofa-qr { align-self: center; background: #fff; padding: 10px; border-radius: 12px; width: 200px; height: 200px; }
+.twofa-qr img { width: 100%; height: 100%; display: block; }
+.twofa-secret { display: block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 15px; letter-spacing: 0.04em; padding: 10px 12px; border-radius: 10px; background: var(--bg-app); border: 1px solid var(--border-soft-strong); user-select: all; word-break: break-all; color: var(--text-primary); }
+.twofa-code-input { font-size: 22px; letter-spacing: 0.3em; text-align: center; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.twofa-codes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; padding: 12px 12px 12px 32px; border-radius: 12px; background: var(--bg-app); border: 1px solid var(--border-soft-strong); margin: 0; }
+.twofa-codes code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 15px; color: var(--text-primary); user-select: all; }
+.twofa-code-actions { display: flex; gap: 8px; }
+.twofa-code-actions .hub-settings-action-btn { flex: 1; justify-content: center; }

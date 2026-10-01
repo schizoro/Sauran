@@ -26,6 +26,14 @@ function checkConfig(env = process.env, opts = {}) {
   if (dataDir === clientDir || dataDir.startsWith(clientDir + path.sep)) add('error', 'DATA_DIR', 'DATA_DIR herkese açık istemci dizininin İÇİNDE (sunucu başlamaz).');
   try { fs.mkdirSync(dataDir, { recursive: true }); fs.accessSync(dataDir, fs.constants.W_OK); add('ok', 'DATA_DIR yazılabilir', 'evet'); } catch (_) { add('error', 'DATA_DIR yazılabilir', 'HAYIR: dizin yazılamıyor.'); }
 
+  if (set('TOTP_ENCRYPTION_KEY')) {
+    const raw = String(env.TOTP_ENCRYPTION_KEY).trim();
+    const len = /^[0-9a-f]{64}$/i.test(raw) ? 32 : Buffer.from(raw, 'base64').length;
+    add(len === 32 ? 'ok' : 'error', 'TOTP_ENCRYPTION_KEY', len === 32 ? 'ayarlı' : '32 bayt olmalı (64 hex ya da base64).');
+  } else {
+    add('warn', 'TOTP_ENCRYPTION_KEY', 'ayarlı değil: 2FA anahtarları DATA_DIR/totp.key dosyasıyla şifrelenir. Disk kaybolursa 2FA kullanan herkes kurtarma koduna muhtaç kalır; ortam değişkeni olarak ayarlayıp güvenli bir yerde saklayın.');
+  }
+
   add(set('DAILY_API_KEY') ? 'ok' : 'warn', 'DAILY_API_KEY', set('DAILY_API_KEY') ? 'ayarlı' : 'eksik: sesli sohbet/oda ve Daily temizliği çalışmaz.');
 
   const vapid = ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT'].filter(set);
