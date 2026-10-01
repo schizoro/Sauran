@@ -2534,7 +2534,7 @@ function updatePrivacy(userId, visibility) {
 function updateAvatar(userId, dataUrl) {
   try {
     if (dataUrl !== null) {
-      if (typeof dataUrl !== 'string' || !/^data:image\/(png|jpe?g|webp|gif);base64,/.test(dataUrl)) {
+      if (typeof dataUrl !== 'string' || !/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(dataUrl)) {
         return { success: false, error: 'Geçersiz görsel formatı.' };
       }
 
@@ -2564,7 +2564,7 @@ function updateAvatar(userId, dataUrl) {
 function updateBanner(userId, dataUrl) {
   try {
     if (dataUrl !== null) {
-      if (typeof dataUrl !== 'string' || !/^data:image\/(png|jpe?g|webp|gif);base64,/.test(dataUrl)) {
+      if (typeof dataUrl !== 'string' || !/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(dataUrl)) {
         return { success: false, error: 'Geçersiz görsel formatı.' };
       }
 
@@ -2680,7 +2680,7 @@ function createHub(userId, { name, image_data, ...discovery }) {
       return { success: false, error: 'Lobi adı 3-40 karakter olmalıdır.' };
     }
 
-    if (image_data && !/^data:image\/(png|jpe?g|webp|gif);base64,/.test(image_data)) {
+    if (image_data && !/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(image_data)) {
       return { success: false, error: 'Geçersiz görsel formatı.' };
     }
 
@@ -2729,7 +2729,7 @@ function updateHub(hubId, userId, { name, image_data, theme, bg_image, ...discov
 
   if (bg_image) {
     if (!hasFeature(userId, 'lobby_image')) return { success: false, error: 'Lobi arka plan görseli yalnızca Sauran Plus abonelerine (ya da hediye edilenlere) açık.' };
-    if (typeof bg_image !== 'string' || !/^data:image\/(png|jpe?g|webp);base64,/.test(bg_image)) return { success: false, error: 'Geçersiz arka plan görseli formatı.' };
+    if (typeof bg_image !== 'string' || !/^data:image\/(png|jpe?g|webp);base64,[A-Za-z0-9+/]+=*$/.test(bg_image)) return { success: false, error: 'Geçersiz arka plan görseli formatı.' };
     if (bg_image.length > HUB_BG_MAX_CHARS) return { success: false, error: 'Arka plan görseli çok büyük.' };
   }
 
@@ -2748,7 +2748,7 @@ function updateHub(hubId, userId, { name, image_data, theme, bg_image, ...discov
   }
 
   if (image_data !== undefined) {
-    if (image_data && !/^data:image\/(png|jpe?g|webp|gif);base64,/.test(image_data)) {
+    if (image_data && !/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(image_data)) {
       return { success: false, error: 'Geçersiz görsel formatı.' };
     }
     db.prepare(`UPDATE hubs SET image_data = ? WHERE id = ?`).run(stripImageMetadata(image_data) || null, hubId);
@@ -3908,9 +3908,10 @@ function createHubPoll(hubId, userId, username, question, options) {
   return { success: true, message: getMessageById(info.lastInsertRowid) };
 }
 
-function voteHubPoll(messageId, userId, optionIndex) {
-  const message = db.prepare(`SELECT id, kind, payload FROM messages WHERE id = ?`).get(messageId);
-  if (!message || message.kind !== 'poll') return { success: false, error: 'Anket bulunamadı.' };
+function voteHubPoll(messageId, userId, optionIndex, hubId) {
+  // Anket, isteğin yapıldığı (ve üyeliği doğrulanan) Lobi'ya ait olmalı: başka Lobi'nın anketine oy verilemez/içeriği okunamaz.
+  const message = db.prepare(`SELECT id, kind, payload, hub_id FROM messages WHERE id = ?`).get(messageId);
+  if (!message || message.kind !== 'poll' || message.hub_id !== hubId) return { success: false, error: 'Anket bulunamadı.' };
 
   const payload = JSON.parse(message.payload);
   if (!Number.isInteger(optionIndex) || optionIndex < 0 || optionIndex >= payload.options.length) {
@@ -3945,7 +3946,7 @@ function createHubShare(hubId, userId, username, content, url) {
 }
 
 function createHubVoiceMessage(hubId, userId, username, audioData, duration) {
-  if (typeof audioData !== 'string' || !/^data:audio\/(webm|ogg|mp4|mpeg|wav);base64,/.test(audioData)) {
+  if (typeof audioData !== 'string' || !/^data:audio\/(webm|ogg|mp4|mpeg|wav);base64,[A-Za-z0-9+/]+=*$/.test(audioData)) {
     return { success: false, error: 'Geçersiz ses formatı.' };
   }
 
@@ -4012,8 +4013,25 @@ function grantMonthlyPlusCoins() {
   return { granted, month };
 }
 
+// Dosya verisi katı bir base64 data URL olmalı; asıl MIME türü istemcinin bildirdiğinden değil, verinin kendisinden okunur.
+const FILE_DATA_URL = /^data:([a-z0-9][a-z0-9._+-]{0,63}\/[a-z0-9][a-z0-9._+-]{0,99})((?:;[a-z0-9._+-]+=[a-z0-9._+-]+)*);base64,[A-Za-z0-9+/]+=*$/i;
+// Tarayıcıda açılınca kod çalıştırabilen türler görsel/video olarak gösterilmez, her zaman indirilebilir "dosya" olarak işaretlenir.
+const ACTIVE_CONTENT_MIMES = new Set(['image/svg+xml', 'text/html', 'application/xhtml+xml', 'text/xml', 'application/xml', 'text/javascript', 'application/javascript']);
+
+function fileMimeFromDataUrl(fileData) {
+  const m = typeof fileData === 'string' ? FILE_DATA_URL.exec(fileData) : null;
+  return m ? m[1].toLowerCase() : null;
+}
+
+function safeFileKind(mime) {
+  if (ACTIVE_CONTENT_MIMES.has(mime)) return 'file';
+  if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('video/')) return 'video';
+  return 'file';
+}
+
 function validateFilePayload(fileData, mime, size, userId) {
-  if (typeof fileData !== 'string' || !fileData.startsWith('data:')) {
+  if (typeof fileData !== 'string' || !fileMimeFromDataUrl(fileData)) {
     return { success: false, error: 'Geçersiz dosya formatı.' };
   }
 
@@ -4040,14 +4058,13 @@ function createHubFileMessage(hubId, userId, username, file) {
   const check = validateFilePayload(data, mime, size, userId);
   if (!check.success) return check;
 
-  const kind = String(mime || '').startsWith('image/') ? 'image'
-    : String(mime || '').startsWith('video/') ? 'video'
-    : 'file';
+  const realMime = fileMimeFromDataUrl(data);
+  const kind = safeFileKind(realMime);
 
   const payload = JSON.stringify({
     data: stripImageMetadata(data), // görselse EXIF/GPS vb. üstveri çıkarılır (piksellere dokunulmaz)
     name: String(name || 'dosya').slice(0, 200),
-    mime: String(mime || 'application/octet-stream').slice(0, 100),
+    mime: realMime.slice(0, 100),
     size: Number(size) || 0
   });
 
@@ -4617,6 +4634,12 @@ function respondHubInviteNotification(notificationId, userId, accept) {
   const data = JSON.parse(notif.data);
 
   if (accept) {
+    // Davet gönderildikten sonra banlanan kullanıcı eski davetle geri giremez; silinmiş Lobi'ya da katılınamaz.
+    const hubExists = db.prepare(`SELECT 1 FROM hubs WHERE id = ?`).get(data.hub_id);
+    if (!hubExists || isHubBanned(data.hub_id, userId)) {
+      db.prepare(`UPDATE notifications SET status = 'declined' WHERE id = ?`).run(notificationId);
+      return { success: false, error: 'Bu Lobi\'a katılamazsın.' };
+    }
     if (!isHubMember(data.hub_id, userId)) {
       db.prepare(`INSERT INTO hub_members (hub_id, user_id) VALUES (?, ?)`).run(data.hub_id, userId);
     }
@@ -5226,7 +5249,7 @@ function saveDmVoiceMessage(fromId, fromUsername, toId, audioData, duration) {
   // Askıdaki hesaba YENİ mesaj gönderilemez (mevcut DM geçmişi olduğu gibi durur).
   if (isAccountSuspended(toId)) return { success: false, error: DM_UNAVAILABLE_ERROR };
 
-  if (typeof audioData !== 'string' || !/^data:audio\/(webm|ogg|mp4|mpeg|wav);base64,/.test(audioData)) {
+  if (typeof audioData !== 'string' || !/^data:audio\/(webm|ogg|mp4|mpeg|wav);base64,[A-Za-z0-9+/]+=*$/.test(audioData)) {
     return { success: false, error: 'Geçersiz ses formatı.' };
   }
 
@@ -5260,14 +5283,13 @@ function createDmFileMessage(fromId, fromUsername, toId, file) {
   const check = validateFilePayload(data, mime, size, fromId);
   if (!check.success) return check;
 
-  const kind = String(mime || '').startsWith('image/') ? 'dm_image'
-    : String(mime || '').startsWith('video/') ? 'dm_video'
-    : 'dm_file';
+  const realMime = fileMimeFromDataUrl(data);
+  const kind = `dm_${safeFileKind(realMime)}`;
 
   const payload = JSON.stringify({
     data: stripImageMetadata(data), // görselse EXIF/GPS vb. üstveri çıkarılır (piksellere dokunulmaz)
     name: String(name || 'dosya').slice(0, 200),
-    mime: String(mime || 'application/octet-stream').slice(0, 100),
+    mime: realMime.slice(0, 100),
     size: Number(size) || 0
   });
 

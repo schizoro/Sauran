@@ -2003,7 +2003,7 @@ function renderProfile() {
 
     const bannerEl = document.getElementById('profile-modal-banner');
     if (currentUser.banner_data) {
-        bannerEl.style.setProperty('--banner-img', `url(${currentUser.banner_data})`);
+        bannerEl.style.setProperty('--banner-img', cssImageUrl(currentUser.banner_data));
         bannerEl.classList.add('has-image');
     } else {
         bannerEl.classList.remove('has-image');
@@ -6046,7 +6046,7 @@ function renderTopFriends(friends) {
 
     topFriendsList.innerHTML = friends.map(f => `
         <div class="top-friend-item" data-user-id="${f.id}">
-            <span class="profile-avatar" style="--user-color:${getUserColor(f.username)};">${f.username.charAt(0).toUpperCase()}</span>
+            <span class="profile-avatar" style="--user-color:${getUserColor(f.username)};">${escapeHtml(f.username.charAt(0).toUpperCase())}</span>
             <span>${usernameCardHtml(f.username, f.plus_active, f.name_effect)}</span>
         </div>
     `).join('');
@@ -7080,7 +7080,7 @@ function renderOtherProfile() {
 
     const otherBannerEl = document.getElementById('other-profile-banner');
     if (profile.banner_data) {
-        otherBannerEl.style.setProperty('--banner-img', `url(${profile.banner_data})`);
+        otherBannerEl.style.setProperty('--banner-img', cssImageUrl(profile.banner_data));
         otherBannerEl.classList.add('has-image');
     } else {
         otherBannerEl.classList.remove('has-image');
@@ -9669,7 +9669,7 @@ function renderHubBgControls() {
     if (!preview || !currentHub) return;
     const allowed = userHasFeature('lobby_image');
     const shown = hubSettingsBgImage === undefined ? currentHub.bg_image : hubSettingsBgImage;
-    preview.style.backgroundImage = shown ? `url(${shown})` : '';
+    preview.style.backgroundImage = shown ? cssImageUrl(shown) : '';
     document.getElementById('hubset-bg-pick-btn').disabled = !allowed;
     document.getElementById('hubset-bg-clear-btn').disabled = !allowed || !shown;
     document.getElementById('hubset-bg-hint').textContent = allowed ? '' : 'Lobi arka planı Sauran Plus abonelerine açıktır.';
@@ -9726,7 +9726,7 @@ hubSettingsOpenBtn.addEventListener('click', () => {
     hubSettingsError.textContent = '';
 
     if (currentHub.image_data) {
-        hubSettingsImagePreview.style.backgroundImage = `url(${currentHub.image_data})`;
+        hubSettingsImagePreview.style.backgroundImage = cssImageUrl(currentHub.image_data);
         hubSettingsImagePreview.classList.remove('hub-icon-initial');
         hubSettingsImagePreview.innerHTML = '';
     } else {
@@ -9902,7 +9902,7 @@ hubSettingsImageInput.addEventListener('change', async () => {
         const dataUrl = await openImageCropper(file, { aspect: 1, outWidth: 256, title: 'Lobi Görselini Kırp' });
         if (!dataUrl) return;
         hubSettingsNewImageData = dataUrl;
-        hubSettingsImagePreview.style.backgroundImage = `url(${dataUrl})`;
+        hubSettingsImagePreview.style.backgroundImage = cssImageUrl(dataUrl);
         hubSettingsImagePreview.textContent = '';
     } catch (error) {
         console.error('Görsel işlenemedi:', error);
@@ -10744,7 +10744,7 @@ function renderHubCard(hub) {
     card.className = 'hub-card';
 
     const iconHtml = hub.image_data
-        ? `<img src="${hub.image_data}" class="hub-card-icon" alt="">`
+        ? `<img src="${escapeAttr(hub.image_data)}" class="hub-card-icon" alt="">`
         : `<span class="hub-card-icon">${hubInitialHtml(hub.name)}</span>`;
 
     card.innerHTML = `
@@ -10900,7 +10900,7 @@ hubCreateImageInput.addEventListener(
             const dataUrl = await openImageCropper(file, { aspect: 1, outWidth: 256, title: 'Lobi Görselini Kırp' });
             if (!dataUrl) return;
             hubCreateImageData = dataUrl;
-            hubCreateImagePreview.innerHTML = `<img src="${hubCreateImageData}" alt="">`;
+            hubCreateImagePreview.innerHTML = `<img src="${escapeAttr(hubCreateImageData)}" alt="">`;
             hubCreateImagePreview.style.display = '';
 
         } catch (error) {
@@ -11252,11 +11252,11 @@ function renderHubDetail() {
 
     hubDetailView.dataset.hubTheme = currentHub.theme || 'default';
     hubDetailView.classList.toggle('has-hub-bg', Boolean(currentHub.bg_image));
-    if (currentHub.bg_image) hubDetailView.style.setProperty('--hub-bg-image', `url(${currentHub.bg_image})`);
+    if (currentHub.bg_image) hubDetailView.style.setProperty('--hub-bg-image', cssImageUrl(currentHub.bg_image));
     else hubDetailView.style.removeProperty('--hub-bg-image');
 
     if (currentHub.image_data) {
-        hubDetailIcon.innerHTML = `<img src="${currentHub.image_data}" alt="" style="width:22px;height:22px;border-radius:6px;object-fit:cover;">`;
+        hubDetailIcon.innerHTML = `<img src="${escapeAttr(currentHub.image_data)}" alt="" style="width:22px;height:22px;border-radius:6px;object-fit:cover;">`;
     } else {
         hubDetailIcon.innerHTML = hubInitialHtml(currentHub.name);
     }
@@ -13509,9 +13509,14 @@ shareSubmitBtn.addEventListener(
 // YARDIMCI — HTML NİTELİK KAÇIŞI
 // =====================================================
 
+// CSS url() içine yalnızca katı biçimde doğrulanmış base64 görsel girer (tırnak/parantez kaçamaz, dış adres yüklenemez).
+function cssImageUrl(value) {
+    return typeof value === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(value) ? `url("${value}")` : 'none';
+}
+
 function escapeAttr(value) {
 
-    return String(value || '').replaceAll('"', '&quot;');
+    return String(value || '').replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
 }
 

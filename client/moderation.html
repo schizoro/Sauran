@@ -100,7 +100,12 @@
         let currentReports = [];
 
         function esc(s) {
-            return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        // Yalnızca http(s) bağlantılarına izin verilir (javascript:, data: vb. tıklanabilir olmaz).
+        function safeUrl(u) {
+            try { const url = new URL(String(u || '')); return (url.protocol === 'http:' || url.protocol === 'https:') ? url.href : null; } catch (_) { return null; }
         }
 
         // Backend'e/DB'ye giden gerçek değerler İngilizce kod olarak kalıyor
@@ -273,7 +278,7 @@
                 return `<div><strong>${esc(ctx.content || payload.question || '')}</strong></div>${optionsHtml}`;
             }
             if (kind === 'share') {
-                return `${esc(ctx.content || '')}${payload.url ? `<br><a href="${esc(payload.url)}" target="_blank" rel="noopener noreferrer" style="color:#5cc8ff;">${esc(payload.url)}</a>` : ''}`;
+                return `${esc(ctx.content || '')}${payload.url ? (safeUrl(payload.url) ? `<br><a href="${esc(safeUrl(payload.url))}" target="_blank" rel="noopener noreferrer" style="color:#5cc8ff;">${esc(payload.url)}</a>` : `<br>${esc(payload.url)}`) : ''}`;
             }
             if (kind === 'sticker' || kind === 'dm_sticker') {
                 const id = payload.id || '';

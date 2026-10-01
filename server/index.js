@@ -237,20 +237,104 @@ const corsOptionsDelegate = (req, callback) => {
 const io = new Server(server, {
   cors: { origin: true, credentials: true, methods: ['GET', 'POST'] },
   // Bağlantı (el sıkışma) yalnızca izinli origin'den kabul edilir; izinsiz origin'e CORS başlığı olsa bile bağlantı REDDEDİLİR.
-  allowRequest: (req, callback) => callback(null, isRequestOriginAllowed(req.headers.origin, req.headers.host)),
+  // Ayrıca geçerli oturum çerezi olmayan bağlantı Engine.IO seviyesinde (paket kabul edilmeden önce) reddedilir:
+  // oturumsuz biri büyük tamponu (maxHttpBufferSize) kullanarak sunucuya veri okutamaz.
+  allowRequest: (req, callback) => {
+    if (!isRequestOriginAllowed(req.headers.origin, req.headers.host)) return callback(null, false);
+    // Mevcut bir Engine.IO oturumunun (sid) sonraki istekleri el sıkışmada zaten doğrulandı; her yoklamada DB'ye gidilmez.
+    if (/[?&]sid=/.test(req.url || '')) return callback(null, true);
+    try {
+      return callback(null, Boolean(getUserFromSessionToken(getSessionTokenFromCookie(req.headers.cookie))));
+    } catch (_) {
+      return callback(null, false);
+    }
+  },
   // Sauran Premium dosya limiti 100 MB'a çıkabildiği için (~1.4 kat base64 payı ile ~140 MB) tampon buna göre büyütüldü.
   maxHttpBufferSize: 140_000_000
 });
 
 app.use(cors(corsOptionsDelegate));
-app.use(express.json({ limit: '140mb' }));
+
+// =====================================================
+// GÜVENLİK BAŞLIKLARI (tüm yanıtlar: sayfalar, statik dosyalar, API)
+// =====================================================
+// Zorunlu CSP yalnızca hiçbir şeyi bozmayacak yönergeleri içerir (çerçeveleme/clickjacking, <base>, eklenti, form hedefi).
+// Tam kaynak kısıtlaması önce Report-Only olarak gelir: ihlaller yalnızca tarayıcı konsoluna düşer, hiçbir şey engellenmez.
+// Konsolda ihlal görülmediği doğrulandıktan sonra Report-Only satırı zorunlu CSP'ye taşınabilir.
+const CSP_ENFORCED = "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'";
+const CSP_REPORT_ONLY = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://*.daily.co",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "media-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self' https://*.daily.co wss://*.daily.co wss: https://*.wss.daily.co",
+  "worker-src 'self' blob:",
+  "frame-src 'self' https://*.daily.co",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "form-action 'self'"
+].join('; ');
+
+app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy', CSP_ENFORCED);
+  res.setHeader('Content-Security-Policy-Report-Only', CSP_REPORT_ONLY);
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // Mikrofon/kamera/ekran paylaşımı bilerek kısıtlanmaz (Daily çağrı motoru bunlara ihtiyaç duyar); yalnızca hiç kullanılmayan API'ler kapatılır.
+  res.setHeader('Permissions-Policy', 'geolocation=(), payment=(), usb=(), serial=(), hid=()');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  // HSTS yalnızca HTTPS üzerinden ve üretim benzeri ortamda (yerel HTTP geliştirmeyi kilitlememek için). Alt alan adları kapsanmaz.
+  if (req.secure || isProduction || process.env.RENDER === 'true') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000');
+  }
+  res.removeHeader('X-Powered-By');
+  next();
+});
+app.disable('x-powered-by');
+
+// =====================================================
+// İSTEK GÖVDESİ BOYUTU
+// =====================================================
+// Varsayılan JSON gövde sınırı küçüktür. Yalnızca dosya/ses/görsel taşıyan uçlar büyük gövde kabul eder ve bu uçlarda
+// gövde, oturum doğrulanmadan AYRIŞTIRILMAZ (oturumsuz biri sunucuya 140 MB'lık gövde okutup belleği dolduramaz).
+const jsonSmall = express.json({ limit: '1mb' });
+const jsonImage = express.json({ limit: '12mb' });
+const jsonFile = express.json({ limit: '140mb' });
+const IMAGE_BODY_PATHS = [/^\/api\/profile\/(avatar|banner)\/?$/, /^\/api\/hubs\/?$/, /^\/api\/hubs\/\d+\/?$/];
+const FILE_BODY_PATHS = [/^\/api\/hubs\/\d+\/(file|voice|share)\/?$/];
+
+app.use((req, res, next) => {
+  const isFile = FILE_BODY_PATHS.some((re) => re.test(req.path));
+  const isImage = !isFile && IMAGE_BODY_PATHS.some((re) => re.test(req.path));
+  if ((isFile || isImage) && !getSessionTokenFromCookie(req.headers.cookie)) {
+    return res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
+  }
+  if ((isFile || isImage) && !getUserFromRequest(req)) {
+    return res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
+  }
+  return (isFile ? jsonFile : isImage ? jsonImage : jsonSmall)(req, res, next);
+});
+
+// Gövde sınırı aşıldığında Express'in HTML hata sayfası yerine anlaşılır JSON döner.
+app.use((err, req, res, next) => {
+  if (err && err.type === 'entity.too.large') return res.status(413).json({ success: false, error: 'İstek çok büyük.' });
+  if (err && err.type === 'entity.parse.failed') return res.status(400).json({ success: false, error: 'Geçersiz istek gövdesi.' });
+  return next(err);
+});
 
 // =====================================================
 // RATE LIMITING (bellek içi, basit sabit pencere)
 // =====================================================
 
+const rateLimitStores = [];
+
 function rateLimit({ windowMs, max, keyFn, message }) {
   const hits = new Map();
+  rateLimitStores.push({ hits, windowMs });
 
   return (req, res, next) => {
     const key = keyFn(req);
@@ -269,10 +353,25 @@ function rateLimit({ windowMs, max, keyFn, message }) {
   };
 }
 
+// Süresi dolmuş sayaçlar düzenli temizlenir (aksi halde bir daha gelmeyen her IP/anahtar bellekte sonsuza dek kalırdı).
+setInterval(() => {
+  const now = Date.now();
+  for (const { hits, windowMs } of rateLimitStores) {
+    for (const [key, times] of hits) {
+      if (!times.length || now - times[times.length - 1] >= windowMs) hits.delete(key);
+    }
+  }
+}, 60 * 1000).unref();
+
 const byIp = (req) => req.ip;
 const byIpAndUser = (req) => `${req.ip}:${(req.body?.username || req.body?.email || '').toLowerCase()}`;
 
-const loginLimiter = rateLimit({ windowMs: 5 * 60 * 1000, max: 8, keyFn: byIpAndUser, message: 'Çok fazla giriş denemesi. 5 dakika sonra tekrar dene.' });
+const loginLimiterPerAccount = rateLimit({ windowMs: 5 * 60 * 1000, max: 8, keyFn: byIpAndUser, message: 'Çok fazla giriş denemesi. 5 dakika sonra tekrar dene.' });
+// Aynı IP'den çok sayıda FARKLI hesaba deneme (kimlik bilgisi doldurma) için IP başına genel sınır.
+const loginLimiterPerIp = rateLimit({ windowMs: 15 * 60 * 1000, max: 40, keyFn: byIp, message: 'Çok fazla giriş denemesi. Biraz sonra tekrar dene.' });
+const loginLimiter = [loginLimiterPerIp, loginLimiterPerAccount];
+// Sık kullanılan ama spam'e açık yazma uçları (anket, oy, tepki, çıkartma, düzenleme) için kullanıcı başına genel sınır.
+const contentWriteLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, keyFn: byIp, message: 'Çok hızlı işlem yapıyorsun, biraz yavaşla.' });
 // Kod doğrulama uçları: kod 6 haneli olduğundan tahmin edilmesi (kaba kuvvet) zorlaştırılır. Kayıt başına deneme sayısı ayrıca db.js'de sınırlıdır
 // (5 hatalı denemeden sonra kod yanar); bu limitler IP başına istek sayısını ve scrypt maliyetini sınırlar. Her uç kendi sayaçlarını kullanır.
 const makeCodeLimiters = () => [
@@ -562,7 +661,7 @@ app.post('/api/verify', ...verifyLimiters, (req, res) => {
 // GİRİŞ
 // =====================================================
 
-app.post('/api/login', loginLimiter, (req, res) => {
+app.post('/api/login', ...loginLimiter, (req, res) => {
   try {
     const { username, password } = req.body;
 
@@ -2195,7 +2294,10 @@ app.post('/api/hubs/:id/leave', (req, res) => {
 
   try {
     const result = leaveHub(Number(req.params.id), user.id);
-    if (result.success) removeUserFromHubVoiceRooms(Number(req.params.id), user.id);
+    if (result.success) {
+      removeUserFromHubVoiceRooms(Number(req.params.id), user.id);
+      io.in(`user:${user.id}`).socketsLeave(`hub:${Number(req.params.id)}`);
+    }
     return res.json(result);
   } catch (error) {
     console.error('Lobi ayrılma API hatası:', error);
@@ -2254,7 +2356,7 @@ app.get('/api/hubs/:id/messages', (req, res) => {
   }
 });
 
-app.post('/api/hubs/:id/poll', (req, res) => {
+app.post('/api/hubs/:id/poll', contentWriteLimiter, (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
 
@@ -2281,7 +2383,7 @@ app.post('/api/hubs/:id/poll', (req, res) => {
   }
 });
 
-app.post('/api/hubs/:id/poll/:messageId/vote', (req, res) => {
+app.post('/api/hubs/:id/poll/:messageId/vote', contentWriteLimiter, (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
 
@@ -2292,7 +2394,7 @@ app.post('/api/hubs/:id/poll/:messageId/vote', (req, res) => {
   }
 
   try {
-    const result = voteHubPoll(Number(req.params.messageId), user.id, req.body?.option_index);
+    const result = voteHubPoll(Number(req.params.messageId), user.id, req.body?.option_index, hubId);
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -2389,7 +2491,7 @@ app.post('/api/hubs/:id/file', fileUploadLimiter, (req, res) => {
   }
 });
 
-app.post('/api/hubs/:id/sticker', (req, res) => {
+app.post('/api/hubs/:id/sticker', contentWriteLimiter, (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
 
@@ -2620,7 +2722,7 @@ app.delete('/api/messages/:id', (req, res) => {
   }
 });
 
-app.patch('/api/messages/:id', (req, res) => {
+app.patch('/api/messages/:id', contentWriteLimiter, (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
 
@@ -2652,7 +2754,7 @@ app.patch('/api/messages/:id', (req, res) => {
 // eklenen yeni aksiyonlar — hepsi requireAuth + kendi fonksiyonu içindeki
 // erişim/yetki kontrolüyle korunuyor (bkz. server/db.js).
 
-app.post('/api/messages/:id/reactions', (req, res) => {
+app.post('/api/messages/:id/reactions', contentWriteLimiter, (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
 
@@ -2738,7 +2840,7 @@ app.delete('/api/messages/:id/pin', (req, res) => {
   }
 });
 
-app.post('/api/messages/:id/forward', (req, res) => {
+app.post('/api/messages/:id/forward', contentWriteLimiter, (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
 
@@ -3183,6 +3285,7 @@ app.delete('/api/hubs/:id', (req, res) => {
     }
 
     finalizeHubPurge({ voice_room_ids: result.voice_room_ids, daily_room_names: result.daily_room_names });
+    io.in(`hub:${Number(req.params.id)}`).socketsLeave(`hub:${Number(req.params.id)}`);
 
     return res.json({ success: true });
 
@@ -3201,8 +3304,24 @@ function kickUserFromHubSockets(hubId, userId, eventName) {
   if (sockets) {
     sockets.forEach(sid => io.to(sid).emit(eventName, { hub_id: hubId }));
   }
+  // Kullanıcının tüm soketleri Lobi odasından sunucu tarafında çıkarılır: istemci olayı yok saysa bile yeni mesaj/olay almaz.
+  io.in(`user:${userId}`).socketsLeave(`hub:${hubId}`);
   // Aktif sesli oda bağlantısı varsa da kes.
   removeUserFromHubVoiceRooms(hubId, userId);
+  // Daily tarafında da (Lobi araması + Lobi'nin sesli odaları) çıkarılır; banlananın aynı oturuma eski token ile dönmesi engellenir.
+  ejectUserFromHubDailyRooms(hubId, userId, { ban: eventName === 'hub_banned' });
+}
+
+function ejectUserFromHubDailyRooms(hubId, userId, opts) {
+  if (!daily.isConfigured()) return;
+  try {
+    const names = [getHubDailyRoomName(hubId)]
+      .concat(listVoiceRooms(hubId).map((room) => getVoiceRoomDailyName(room.id)))
+      .filter(Boolean);
+    names.forEach((name) => daily.ejectUser(name, userId, opts).catch(() => {}));
+  } catch (error) {
+    console.error('Daily odasından çıkarma hatası:', error && error.message);
+  }
 }
 
 app.post('/api/hubs/:id/members/:userId/moderator', (req, res) => {
@@ -3841,6 +3960,12 @@ io.on('connection', (socket) => {
       const toUserId = Number(data?.to_user_id);
       if (!toUserId || !areFriends(socket.userId, toUserId)) return;
 
+      // Arama daveti (her biri push bildirimi de tetikler) için soket başına sınır: dakikada en fazla 6.
+      const now = Date.now();
+      socket.data.callInviteTimes = (socket.data.callInviteTimes || []).filter((t) => now - t < 60_000);
+      if (socket.data.callInviteTimes.length >= 6) return;
+      socket.data.callInviteTimes.push(now);
+
       // Aynı arayan için önceki çalan arama varsa sessizce değiştirilir (çift kayıt yazılmaz).
       clearPendingDmCall(socket.userId);
       const ringTimer = setTimeout(() => finishMissedDmCall(socket.userId, 'timeout'), DM_CALL_RING_MS);
@@ -3864,6 +3989,7 @@ io.on('connection', (socket) => {
   socket.on('dm_call_cancel', (data) => {
     const toUserId = Number(data?.to_user_id);
     if (!toUserId || !socket.userId) return;
+    if (!areFriends(socket.userId, toUserId) && !activeDmCalls.has(dmPairKey(socket.userId, toUserId))) return; // yalnızca arkadaş (ya da süren aramanın karşı tarafı)
     io.to(`user:${toUserId}`).emit('dm_call_cancelled', { from_user_id: socket.userId });
     const pending = pendingDmCalls.get(socket.userId);
     if (pending && pending.toId === toUserId) {
@@ -3875,6 +4001,7 @@ io.on('connection', (socket) => {
   socket.on('dm_call_decline', (data) => {
     const toUserId = Number(data?.to_user_id);
     if (!toUserId || !socket.userId) return;
+    if (!areFriends(socket.userId, toUserId) && !activeDmCalls.has(dmPairKey(socket.userId, toUserId))) return; // yalnızca arkadaş (ya da süren aramanın karşı tarafı)
     io.to(`user:${toUserId}`).emit('dm_call_declined', { from_user_id: socket.userId });
     const pendingDecline = pendingDmCalls.get(toUserId);
     if (pendingDecline && pendingDecline.toId === socket.userId) {
@@ -3888,6 +4015,7 @@ io.on('connection', (socket) => {
   socket.on('dm_call_accept', (data) => {
     const toUserId = Number(data?.to_user_id);
     if (!toUserId || !socket.userId) return;
+    if (!areFriends(socket.userId, toUserId) && !activeDmCalls.has(dmPairKey(socket.userId, toUserId))) return; // yalnızca arkadaş (ya da süren aramanın karşı tarafı)
     io.to(`user:${toUserId}`).emit('dm_call_accepted', { from_user_id: socket.userId });
     const pendingAccept = pendingDmCalls.get(toUserId);
     if (pendingAccept && pendingAccept.toId === socket.userId) {
@@ -3900,6 +4028,7 @@ io.on('connection', (socket) => {
   socket.on('dm_call_end', (data) => {
     const toUserId = Number(data?.to_user_id);
     if (!toUserId || !socket.userId) return;
+    if (!areFriends(socket.userId, toUserId) && !activeDmCalls.has(dmPairKey(socket.userId, toUserId))) return; // yalnızca arkadaş (ya da süren aramanın karşı tarafı)
     io.to(`user:${toUserId}`).emit('dm_call_ended', { from_user_id: socket.userId });
     finishAnsweredDmCall(socket.userId, toUserId);
   });

@@ -73,7 +73,8 @@ async function createMeetingToken(roomName, userName, userId) {
         room_name: roomName,
         user_name: userName,
         ...(userId ? { user_id: String(userId) } : {}),
-        exp: Math.floor(Date.now() / 1000) + 60 * 60 * 4
+        // Token yalnızca odaya GİRİŞ için kullanılır; kısa ömür, atılan/yetkisi kalkan birinin eski token ile geri girebileceği süreyi daraltır.
+        exp: Math.floor(Date.now() / 1000) + 60 * 30
       }
     })
   });
@@ -95,4 +96,19 @@ async function deleteRoom(roomName) {
   throw new Error(info || `Daily API hatası (${response.status})`);
 }
 
-module.exports = { createRoom, getRoom, getOrCreateRoom, createMeetingToken, deleteRoom, isConfigured: () => Boolean(DAILY_API_KEY) };
+// Kullanıcıyı (meeting token'daki user_id ile) Daily odasından çıkarır; ban=true ise aynı oturuma bu user_id ile yeniden giremez.
+// Oda yoksa/oturum açık değilse sessizce geçilir (en iyi çaba).
+async function ejectUser(roomName, userId, { ban = false } = {}) {
+  if (!DAILY_API_KEY || !roomName || !userId) return false;
+  try {
+    await dailyFetch(`/rooms/${encodeURIComponent(roomName)}/eject`, {
+      method: 'POST',
+      body: JSON.stringify({ user_ids: [String(userId)], ban: Boolean(ban) })
+    });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+module.exports = { ejectUser, createRoom, getRoom, getOrCreateRoom, createMeetingToken, deleteRoom, isConfigured: () => Boolean(DAILY_API_KEY) };
