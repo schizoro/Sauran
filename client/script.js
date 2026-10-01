@@ -3651,6 +3651,16 @@ const I18N = {
     'voice-kick-action': { tr: 'Sesli odadan at', en: 'Remove from voice room' },
     'voice-kick-confirm': { tr: 'Bu kişiyi sesli odadan atmak istediğine emin misin? (İsterse yeniden girebilir.)', en: 'Remove this person from the voice room? (They can rejoin.)' },
     'voice-kick-done': { tr: 'Kişi sesli odadan atıldı.', en: 'Removed from the voice room.' },
+    'voice-kick-now': { tr: 'Anlık (bağlantıyı kes)', en: 'Now (disconnect only)' },
+    'voice-kick-now-hint': { tr: 'Kişi odadan çıkarılır, isterse hemen geri girebilir.', en: 'They are removed and can rejoin right away.' },
+    'voice-kick-blocked-done': { tr: 'Kişi odadan atıldı ve girişi engellendi.', en: 'Removed and blocked from the room.' },
+    'voice-kick-blocked-until': { tr: 'Bu odaya kaldırılana kadar giremezsin.', en: 'You cannot enter this room until it is lifted.' },
+    'voice-kick-blocked-for': { tr: 'Bu odaya şu saate kadar giremezsin', en: 'You cannot enter this room until' },
+    'voice-kick-can-rejoin': { tr: 'İstersen yeniden girebilirsin.', en: 'You can rejoin if you want.' },
+    'voice-unblocked-toast': { tr: 'odasına artık girebilirsin.', en: 'room is open to you again.' },
+    'hub-blocks-title': { tr: 'Odaya Girişi Engellenenler', en: 'Blocked from rooms' },
+    'hub-blocks-empty': { tr: 'Girişi engellenen kimse yok.', en: 'No one is blocked.' },
+    'hub-blocks-lift': { tr: 'Engeli kaldır', en: 'Lift' },
     'voice-kicked-text': { tr: 'seni bu sesli odadan attı', en: 'removed you from this voice room' },
     'hub-ban-search-placeholder': { tr: 'Kullanıcı adı ara...', en: 'Search username...' },
     'bans-back': { tr: 'Geri', en: 'Back' },
@@ -4782,7 +4792,8 @@ function connectToChat() {
                 gift: '🎁 Bir hediye aldın!',
                 voice_muted: payload?.data ? voiceMuteNoticeText(payload.data) : t('voice-muted-title'),
                 voice_unmuted: t('voice-unmuted-toast'),
-                voice_kicked: `👢 ${voiceMuteByLabel(payload?.data?.by_tier)} ${t('voice-kicked-text')}`
+                voice_kicked: `👢 ${voiceMuteByLabel(payload?.data?.by_tier)} ${t('voice-kicked-text')}`,
+                voice_unblocked: `🚪 ${payload?.data?.room_name || ''} ${t('voice-unblocked-toast')}`
             };
             const label = labelByType[payload?.type] || t('notif-hub-invite');
             const channels = payload?.channels || {};
@@ -4921,8 +4932,15 @@ function connectToChat() {
     socket.on('voice_room_kicked', (data) => {
         if (callMode === 'hub-room' && currentVoiceRoomId === data?.room_id) {
             leaveCall();
-            alert(`👢 ${voiceMuteByLabel(data.by_tier)} ${t('voice-kicked-text')}: ${data.room_name || ''}`);
+            const after = !data.blocked ? t('voice-kick-can-rejoin')
+                : data.expires_at ? `${t('voice-kick-blocked-for')} ${new Date(data.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`
+                : t('voice-kick-blocked-until');
+            alert(`👢 ${voiceMuteByLabel(data.by_tier)} ${t('voice-kicked-text')}: ${data.room_name || ''}\n${after}`);
         }
+    });
+
+    socket.on('voice_room_unblocked', (data) => {
+        showToast(`🚪 ${data?.room_name || ''} ${t('voice-unblocked-toast')}`);
     });
 
     socket.on('voice_force_unmuted', (data) => {
@@ -6462,7 +6480,20 @@ function renderNotifications(notifications) {
                 <div class="notification-card${seenClass(n)}" data-notif-id="${n.id}" data-notif-type="voice_kicked">
                     <div class="notification-text">
                         👢 <strong>${escapeHtml(voiceMuteByLabel(d.by_tier))}</strong> seni <strong>${escapeHtml(d.room_name || '')}</strong> sesli odasından attı.
+                        ${escapeHtml(!d.blocked ? t('voice-kick-can-rejoin') : d.expires_at ? `${t('voice-kick-blocked-for')} ${new Date(d.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.` : t('voice-kick-blocked-until'))}
                     </div>
+                    ${infoActions(n, t('ok-got-it'))}
+                </div>
+            `;
+
+        }
+
+        if (n.type === 'voice_unblocked') {
+
+            const d = n.data || {};
+            return `
+                <div class="notification-card${seenClass(n)}" data-notif-id="${n.id}" data-notif-type="voice_unblocked">
+                    <div class="notification-text">🚪 <strong>${escapeHtml(d.room_name || '')}</strong> ${escapeHtml(t('voice-unblocked-toast'))}</div>
                     ${infoActions(n, t('ok-got-it'))}
                 </div>
             `;
@@ -9132,8 +9163,11 @@ function syncVoiceForceMuteFromServer(mute) {
 }
 
 // Moderatör: susturma penceresi. Oda verilirse o oda seçili gelir; verilmezse kullanıcının şu an bulunduğu oda (yoksa ilk oda).
-function openVoiceMuteModal(targetId, targetName, presetRoomId) {
+function openVoiceMuteModal(targetId, targetName, presetRoomId, mode = 'mute') {
     if (!currentHub) return;
+    const isKick = mode === 'kick';
+    document.getElementById('voice-mute-modal-title').textContent = isKick ? `👢 ${t('voice-kick-action')}` : `🔇 ${t('voice-mute-action')}`;
+    document.getElementById('voice-kick-now-opt').style.display = isKick ? '' : 'none';
     const modal = document.getElementById('voice-mute-modal');
     const select = document.getElementById('voice-mute-room-select');
     const error = document.getElementById('voice-mute-error');
@@ -9158,15 +9192,16 @@ function openVoiceMuteModal(targetId, targetName, presetRoomId) {
         btn.onclick = async () => {
             error.textContent = '';
             try {
-                const response = await fetch(`/api/hubs/${currentHub.id}/voice-rooms/${Number(select.value)}/mutes`, {
+                const response = await fetch(`/api/hubs/${currentHub.id}/voice-rooms/${Number(select.value)}/${isKick ? 'kick' : 'mutes'}`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
                     body: JSON.stringify({ user_id: targetId, duration: btn.dataset.muteDuration })
                 });
                 const data = await response.json();
                 if (!data.success) { error.textContent = data.error || 'İşlem başarısız.'; return; }
                 close();
-                showToast(t('voice-mute-done'));
+                showToast(isKick ? t(data.block ? 'voice-kick-blocked-done' : 'voice-kick-done') : t('voice-mute-done'));
                 if (document.getElementById('hub-settings-mutes-view')?.style.display === 'flex') loadHubMutes();
+                if (document.getElementById('hub-settings-blocks-view')?.style.display === 'flex') loadHubBlocks();
             } catch (_) {
                 error.textContent = 'İşlem başarısız.';
             }
@@ -9178,17 +9213,59 @@ function openVoiceMuteModal(targetId, targetName, presetRoomId) {
     modal.style.display = 'flex';
 }
 
-async function kickFromVoiceRoom(roomId, userId) {
-    if (!currentHub || !confirm(t('voice-kick-confirm'))) return;
+function kickFromVoiceRoom(roomId, userId) {
+    const member = (currentHub?.members || []).find((m) => m.user_id === userId);
+    openVoiceMuteModal(userId, member?.username || '', roomId, 'kick');
+}
+
+async function liftVoiceBlock(roomId, userId) {
+    if (!currentHub) return false;
     try {
-        const response = await fetch(`/api/hubs/${currentHub.id}/voice-rooms/${roomId}/kick`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-            body: JSON.stringify({ user_id: userId })
-        });
+        const response = await fetch(`/api/hubs/${currentHub.id}/voice-rooms/${roomId}/blocks/${userId}`, { method: 'DELETE', credentials: 'include' });
         const data = await response.json();
-        showToast(data.success ? t('voice-kick-done') : (data.error || 'İşlem başarısız.'));
+        if (!data.success) { showToast(data.error || 'İşlem başarısız.'); return false; }
+        return true;
     } catch (_) {
         showToast('İşlem başarısız.');
+        return false;
+    }
+}
+
+let hubBlocksSearchTimer = null;
+
+async function loadHubBlocks() {
+    if (!currentHub) return;
+    const container = document.getElementById('hub-settings-blocks-list');
+    const q = document.getElementById('hub-blocks-search-input').value.trim();
+    try {
+        const response = await fetch(`/api/hubs/${currentHub.id}/voice-blocks?q=${encodeURIComponent(q)}`, { credentials: 'include' });
+        const data = await response.json();
+        if (!data.success) return;
+        if (data.blocks.length === 0) {
+            container.innerHTML = `<div class="settings-blocked-empty">${t('hub-blocks-empty')}</div>`;
+            return;
+        }
+        container.innerHTML = data.blocks.map((b) => {
+            const name = b.username || '?';
+            const avatarInner = b.avatar_data ? `<img src="${escapeAttr(b.avatar_data)}" alt="">` : escapeHtml(name.charAt(0).toUpperCase());
+            const duration = b.expires_at ? `${t('voice-muted-remaining')}: ${formatMuteRemaining(b.expires_at)}` : t('voice-mute-until');
+            return `
+                <div class="settings-blocked-row">
+                    <span class="settings-blocked-avatar" style="--user-color:${getUserColor(name)};">${avatarInner}</span>
+                    <span class="settings-blocked-name">${escapeHtml(name)}
+                        <span class="voice-mute-row-meta">🎙 ${escapeHtml(b.room_name || '')} · ${escapeHtml(voiceMuteByLabel(b.by_tier))} · ${escapeHtml(duration)}</span>
+                    </span>
+                    <button class="settings-unblock-btn" data-unblock-room="${b.room_id}" data-unblock-user="${b.user_id}" type="button">${t('hub-blocks-lift')}</button>
+                </div>
+            `;
+        }).join('');
+        container.querySelectorAll('[data-unblock-user]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                if (await liftVoiceBlock(Number(btn.dataset.unblockRoom), Number(btn.dataset.unblockUser))) loadHubBlocks();
+            });
+        });
+    } catch (error) {
+        console.error('Engellenenler alınamadı:', error);
     }
 }
 
@@ -10086,7 +10163,7 @@ hubSettingsOpenBtn.addEventListener('click', () => {
 });
 
 function showHubSettingsView(view) {
-    ['main', 'pick', 'bans', 'mutes'].forEach((v) => {
+    ['main', 'pick', 'bans', 'mutes', 'blocks'].forEach((v) => {
         document.getElementById(`hub-settings-${v}-view`).style.display = v === view ? 'flex' : 'none';
     });
 }
@@ -10128,6 +10205,16 @@ document.getElementById('hub-mutes-open-btn').addEventListener('click', () => {
     loadHubMutes();
 });
 document.getElementById('hub-mutes-back-btn').addEventListener('click', () => showHubSettingsView('main'));
+document.getElementById('hub-blocks-open-btn').addEventListener('click', () => {
+    document.getElementById('hub-blocks-search-input').value = '';
+    showHubSettingsView('blocks');
+    loadHubBlocks();
+});
+document.getElementById('hub-blocks-back-btn').addEventListener('click', () => showHubSettingsView('main'));
+document.getElementById('hub-blocks-search-input').addEventListener('input', () => {
+    clearTimeout(hubBlocksSearchTimer);
+    hubBlocksSearchTimer = setTimeout(loadHubBlocks, 250);
+});
 document.getElementById('hub-mutes-search-input').addEventListener('input', () => {
     clearTimeout(hubMutesSearchTimer);
     hubMutesSearchTimer = setTimeout(loadHubMutes, 250);

@@ -761,6 +761,7 @@
                 <div id="hub-settings-bans-section" style="display:none;">
                     <button id="hub-bans-open-btn" class="hub-settings-action-btn" type="button">⛔ <span data-i18n="hub-bans-title">Yasaklılar</span></button>
                     <button id="hub-mutes-open-btn" class="hub-settings-action-btn" type="button">🔇 <span data-i18n="hub-mutes-title">Susturulanlar</span></button>
+                    <button id="hub-blocks-open-btn" class="hub-settings-action-btn" type="button">🚪 <span data-i18n="hub-blocks-title">Odaya Girişi Engellenenler</span></button>
                 </div>
 
                 <button id="hub-clear-chat-btn" class="hub-settings-action-btn hub-settings-danger" type="button" style="display:none;">🧹 <span data-i18n="hub-settings-clear-chat">Lobi Sohbetini Temizle</span></button>
@@ -789,6 +790,13 @@
                 <span class="profile-field-label" data-i18n="hub-mutes-title">Susturulanlar</span>
                 <input type="text" id="hub-mutes-search-input" class="hub-name-input" data-i18n-placeholder="hub-ban-search-placeholder" placeholder="Kullanıcı adı ara..." autocomplete="off">
                 <div id="hub-settings-mutes-list" class="settings-blocked-list settings-blocked-list-tall"></div>
+            </div>
+
+            <div class="hub-settings-body" id="hub-settings-blocks-view" style="display:none;">
+                <button id="hub-blocks-back-btn" class="hub-settings-back-btn" type="button">← <span data-i18n="bans-back">Geri</span></button>
+                <span class="profile-field-label" data-i18n="hub-blocks-title">Odaya Girişi Engellenenler</span>
+                <input type="text" id="hub-blocks-search-input" class="hub-name-input" data-i18n-placeholder="hub-ban-search-placeholder" placeholder="Kullanıcı adı ara..." autocomplete="off">
+                <div id="hub-settings-blocks-list" class="settings-blocked-list settings-blocked-list-tall"></div>
             </div>
 
             <div class="hub-settings-body" id="hub-settings-bans-view" style="display:none;">
@@ -966,6 +974,7 @@
                 <label class="profile-field-label" for="voice-mute-room-select" data-i18n="voice-mute-room-label">Oda</label>
                 <select id="voice-mute-room-select" class="hub-name-input voice-mute-room-select"></select>
                 <p class="mk-sub" data-i18n="voice-mute-duration-label">Süre</p>
+                <button type="button" class="share-fps-opt" data-mute-duration="now" id="voice-kick-now-opt" style="display:none;"><b data-i18n="voice-kick-now">Anlık (bağlantıyı kes)</b><small data-i18n="voice-kick-now-hint">Kişi odadan çıkarılır, isterse hemen geri girebilir.</small></button>
                 <button type="button" class="share-fps-opt" data-mute-duration="30"><b data-i18n="voice-mute-30">30 dakika</b></button>
                 <button type="button" class="share-fps-opt" data-mute-duration="60"><b data-i18n="voice-mute-60">60 dakika</b></button>
                 <button type="button" class="share-fps-opt" data-mute-duration="until_lifted"><b data-i18n="voice-mute-until">Kaldırılana kadar</b><small data-i18n="voice-mute-until-hint">Bir moderatör ya da Lobi kurucusu kaldırana kadar sürer.</small></button>

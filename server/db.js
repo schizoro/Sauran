@@ -4363,6 +4363,127 @@ function takeExpiredVoiceMutes() {
   })();
 }
 
+// =====================================================
+// SESLİ ODAYA GİRİŞ ENGELİ (odadan süreli atma)
+// =====================================================
+// "Anlık" atmada kayıt tutulmaz (kişi hemen geri girebilir). 30/60 dk ya da kaldırılana kadar seçilirse kişi o süre boyunca
+// YALNIZCA o odaya giremez; engel sunucuda saklanır, istemciden bağımsızdır. Her moderatör (ve kurucu) kaldırabilir.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS voice_room_blocks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hub_id INTEGER NOT NULL,
+    voice_room_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    blocked_by INTEGER,
+    blocked_by_tier TEXT NOT NULL,
+    expires_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (voice_room_id, user_id),
+    FOREIGN KEY (hub_id) REFERENCES hubs(id) ON DELETE CASCADE,
+    FOREIGN KEY (voice_room_id) REFERENCES hub_voice_rooms(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (blocked_by) REFERENCES users(id) ON DELETE SET NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_voice_room_blocks_hub ON voice_room_blocks(hub_id);
+  CREATE INDEX IF NOT EXISTS idx_voice_room_blocks_expires ON voice_room_blocks(expires_at);
+`);
+
+const VOICE_KICK_DURATIONS = { now: 0, '30': 30, '60': 60, until_lifted: null };
+
+function serializeVoiceBlock(row) {
+  if (!row) return null;
+  return {
+    hub_id: row.hub_id,
+    room_id: row.voice_room_id,
+    room_name: row.room_name || null,
+    user_id: row.user_id,
+    username: row.username || null,
+    by_tier: row.blocked_by_tier,
+    expires_at: sqliteUtcToIso(row.expires_at),
+    created_at: sqliteUtcToIso(row.created_at)
+  };
+}
+
+function getActiveVoiceBlock(roomId, userId) {
+  const row = db.prepare(`
+    SELECT voice_room_blocks.*, hub_voice_rooms.name AS room_name
+    FROM voice_room_blocks JOIN hub_voice_rooms ON hub_voice_rooms.id = voice_room_blocks.voice_room_id
+    WHERE voice_room_blocks.voice_room_id = ? AND voice_room_blocks.user_id = ?
+      AND (voice_room_blocks.expires_at IS NULL OR voice_room_blocks.expires_at > datetime('now'))
+  `).get(roomId, userId);
+  return serializeVoiceBlock(row);
+}
+
+// Yetki ve süre doğrulaması; süreli seçimde engel kaydı yazılır. Kişiyi odadan çıkarmak çağıranın işidir.
+function kickFromVoiceRoomRecord(hubId, roomId, actorId, targetId, duration) {
+  const actorTier = getMemberTier(hubId, actorId);
+  if (actorTier !== 'owner' && actorTier !== 'moderator') return { success: false, status: 403, error: 'Bu işlem için yetkin yok.' };
+  if (!targetId || actorId === targetId) return { success: false, status: 400, error: 'Kendini odadan atamazsın.' };
+
+  const room = getVoiceRoom(roomId);
+  if (!room || room.hub_id !== hubId) return { success: false, status: 404, error: 'Oda bulunamadı.' };
+
+  const targetTier = getMemberTier(hubId, targetId);
+  if (!targetTier) return { success: false, status: 400, error: 'Kullanıcı bu Lobi üyesi değil.' };
+  if (targetTier === 'owner') return { success: false, status: 403, error: 'Lobi sahibi odadan atılamaz.' };
+  if (targetTier === 'moderator' && actorTier !== 'owner') return { success: false, status: 403, error: 'Yalnızca Lobi sahibi bir moderatörü odadan atabilir.' };
+
+  const key = String(duration ?? 'now');
+  if (!Object.prototype.hasOwnProperty.call(VOICE_KICK_DURATIONS, key)) return { success: false, status: 400, error: 'Geçersiz süre.' };
+  const minutes = VOICE_KICK_DURATIONS[key];
+
+  if (minutes === 0) return { success: true, room, actorTier, block: null };
+
+  db.prepare(`
+    INSERT INTO voice_room_blocks (hub_id, voice_room_id, user_id, blocked_by, blocked_by_tier, expires_at)
+    VALUES (?, ?, ?, ?, ?, ${minutes ? `datetime('now', '+${Number(minutes)} minutes')` : 'NULL'})
+    ON CONFLICT(voice_room_id, user_id) DO UPDATE SET
+      blocked_by = excluded.blocked_by, blocked_by_tier = excluded.blocked_by_tier,
+      expires_at = excluded.expires_at, created_at = CURRENT_TIMESTAMP
+  `).run(hubId, roomId, targetId, actorId, actorTier);
+
+  return { success: true, room, actorTier, block: getActiveVoiceBlock(roomId, targetId) };
+}
+
+function unblockFromVoiceRoom(hubId, roomId, actorId, targetId) {
+  const actorTier = getMemberTier(hubId, actorId);
+  if (actorTier !== 'owner' && actorTier !== 'moderator') return { success: false, status: 403, error: 'Bu işlem için yetkin yok.' };
+  const existing = getActiveVoiceBlock(roomId, targetId);
+  const info = db.prepare(`DELETE FROM voice_room_blocks WHERE hub_id = ? AND voice_room_id = ? AND user_id = ?`).run(hubId, roomId, targetId);
+  if (!info.changes) return { success: false, status: 404, error: 'Bu kullanıcının bu odaya girişi engelli değil.' };
+  return { success: true, block: existing || { hub_id: hubId, room_id: roomId, user_id: targetId, room_name: null }, actorTier };
+}
+
+function listVoiceBlocks(hubId, actorId, query) {
+  const actorTier = getMemberTier(hubId, actorId);
+  if (actorTier !== 'owner' && actorTier !== 'moderator') return { success: false, status: 403, error: 'Bu işlem için yetkin yok.' };
+  const q = String(query || '').trim().toLowerCase().slice(0, 50);
+  const rows = db.prepare(`
+    SELECT voice_room_blocks.*, hub_voice_rooms.name AS room_name, users.username, users.avatar_data
+    FROM voice_room_blocks
+    JOIN hub_voice_rooms ON hub_voice_rooms.id = voice_room_blocks.voice_room_id
+    JOIN users ON users.id = voice_room_blocks.user_id
+    WHERE voice_room_blocks.hub_id = ?
+      AND (voice_room_blocks.expires_at IS NULL OR voice_room_blocks.expires_at > datetime('now'))
+      AND (? = '' OR INSTR(LOWER(users.username), ?) > 0)
+    ORDER BY voice_room_blocks.created_at DESC
+    LIMIT 200
+  `).all(hubId, q, q);
+  return { success: true, blocks: rows.map((r) => ({ ...serializeVoiceBlock(r), avatar_data: r.avatar_data || null })) };
+}
+
+function takeExpiredVoiceBlocks() {
+  return db.transaction(() => {
+    const rows = db.prepare(`
+      SELECT voice_room_blocks.*, hub_voice_rooms.name AS room_name
+      FROM voice_room_blocks JOIN hub_voice_rooms ON hub_voice_rooms.id = voice_room_blocks.voice_room_id
+      WHERE voice_room_blocks.expires_at IS NOT NULL AND voice_room_blocks.expires_at <= datetime('now')
+    `).all();
+    if (rows.length) db.prepare(`DELETE FROM voice_room_blocks WHERE expires_at IS NOT NULL AND expires_at <= datetime('now')`).run();
+    return rows.map(serializeVoiceBlock);
+  })();
+}
+
 // Kullanıcının bu Lobi'deki etkin susturmaları (oda listesinde kilit göstermek için).
 function listMyVoiceMutes(hubId, userId) {
   return db.prepare(`
@@ -6912,5 +7033,10 @@ module.exports = {
   listVoiceMutes,
   takeExpiredVoiceMutes,
   listMyVoiceMutes,
+  getActiveVoiceBlock,
+  kickFromVoiceRoomRecord,
+  unblockFromVoiceRoom,
+  listVoiceBlocks,
+  takeExpiredVoiceBlocks,
   db
 };

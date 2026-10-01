@@ -206,6 +206,11 @@ const {
   listVoiceMutes,
   takeExpiredVoiceMutes,
   listMyVoiceMutes,
+  getActiveVoiceBlock,
+  kickFromVoiceRoomRecord,
+  unblockFromVoiceRoom,
+  listVoiceBlocks,
+  takeExpiredVoiceBlocks,
   db
 } = require('./db');
 
@@ -2635,6 +2640,9 @@ app.post('/api/hubs/:id/voice-rooms/:roomId/join', async (req, res) => {
     return res.status(404).json({ success: false, error: 'Oda bulunamadı.' });
   }
 
+  const block = getActiveVoiceBlock(roomId, user.id);
+  if (block) return res.status(403).json({ success: false, error: voiceBlockMessage(block), voice_block: block });
+
   if (isVoiceRoomFull(roomId, user.id)) {
     return res.status(409).json({ success: false, error: `Bu oda dolu (en fazla ${MAX_VOICE_ROOM_PARTICIPANTS} kişi).` });
   }
@@ -3073,7 +3081,8 @@ function pushNotification(userId, type, data) {
     gift: `Sana bir hediye geldi: ${data?.label || 'ödül'}.`,
     voice_muted: `${data?.room_name || 'Bir'} sesli odasında ${data?.by_tier === 'owner' ? 'Lobi kurucusu' : 'bir moderatör'} tarafından susturuldun.`,
     voice_unmuted: `${data?.room_name || 'Bir'} sesli odasındaki susturman kaldırıldı.`,
-    voice_kicked: `${data?.by_tier === 'owner' ? 'Lobi kurucusu' : 'Bir moderatör'} seni ${data?.room_name || 'bir'} sesli odasından attı.`
+    voice_kicked: `${data?.by_tier === 'owner' ? 'Lobi kurucusu' : 'Bir moderatör'} seni ${data?.room_name || 'bir'} sesli odasından attı.`,
+    voice_unblocked: `${data?.room_name || 'Bir'} sesli odasına artık girebilirsin.`
   }[type];
 
   if (webPushLabel) {
@@ -3455,8 +3464,16 @@ app.delete('/api/hubs/:id/voice-rooms/:roomId/mutes/:userId', (req, res) => {
   return res.json({ success: true });
 });
 
-// Sesli odadan atma: kişi odanın canlı listesinden ve Daily görüşmesinden anında çıkarılır (istemci iş birliği yapmasa da).
-// Yasak değildir; kişi isterse odaya yeniden girebilir. Yetki kuralları susturmayla aynıdır.
+// Sesli odadan atma. Süre: 'now' (anlık: yalnızca bağlantı kesilir, hemen geri girebilir), '30' / '60' dk ya da 'until_lifted'
+// (bu sürede YALNIZCA bu odaya giremez). Kişi odadaysa canlı listeden ve Daily görüşmesinden anında çıkarılır (istemci iş birliği yapmasa da).
+// Süreli engelde Daily'de ayrıca yasak konmaz: kişinin elindeki eski token en fazla 30 dk geçerlidir ve yeni token, engel varken verilmez.
+function voiceBlockMessage(block) {
+  const by = block.by_tier === 'owner' ? 'Lobi kurucusu' : 'bir moderatör';
+  if (!block.expires_at) return `Bu sesli odaya girişin ${by} tarafından kaldırılana kadar engellendi.`;
+  const mins = Math.max(1, Math.ceil((new Date(block.expires_at).getTime() - Date.now()) / 60000));
+  return `Bu sesli odaya girişin ${by} tarafından engellendi. Kalan süre: ${mins} dk.`;
+}
+
 app.post('/api/hubs/:id/voice-rooms/:roomId/kick', (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
@@ -3464,35 +3481,66 @@ app.post('/api/hubs/:id/voice-rooms/:roomId/kick', (req, res) => {
   const hubId = Number(req.params.id);
   const roomId = Number(req.params.roomId);
   const targetId = Number(req.body?.user_id);
+  const duration = String(req.body?.duration || 'now');
+  const inRoom = Boolean(voiceRoomParticipants.get(roomId)?.has(targetId));
 
-  const actorTier = getMemberTier(hubId, user.id);
-  if (actorTier !== 'owner' && actorTier !== 'moderator') return res.status(403).json({ success: false, error: 'Bu işlem için yetkin yok.' });
-  if (!targetId || targetId === user.id) return res.status(400).json({ success: false, error: 'Kendini odadan atamazsın.' });
-
-  const room = getVoiceRoom(roomId);
-  if (!room || room.hub_id !== hubId) return res.status(404).json({ success: false, error: 'Oda bulunamadı.' });
-
-  const targetTier = getMemberTier(hubId, targetId);
-  if (targetTier === 'owner') return res.status(403).json({ success: false, error: 'Lobi sahibi odadan atılamaz.' });
-  if (targetTier === 'moderator' && actorTier !== 'owner') return res.status(403).json({ success: false, error: 'Yalnızca Lobi sahibi bir moderatörü odadan atabilir.' });
-
-  if (!voiceRoomParticipants.get(roomId)?.has(targetId)) {
+  // Anlık atma yalnızca odadaki biri için anlamlıdır (önce kontrol edilir ki boşuna kayıt yazılmasın).
+  if (duration === 'now' && !inRoom) {
+    const pre = kickFromVoiceRoomRecord(hubId, roomId, user.id, targetId, 'now');
+    if (!pre.success) return res.status(pre.status || 400).json({ success: false, error: pre.error });
     return res.status(404).json({ success: false, error: 'Bu kişi şu an bu odada değil.' });
   }
 
-  // Önce kişiye bildirilir (istemci "atıldın" gösterip bağlantıyı kendisi kapatır), sonra sunucu listeden çıkarır.
-  const payload = { hub_id: hubId, room_id: roomId, room_name: room.name, by_tier: actorTier };
-  io.to(`user:${targetId}`).emit('voice_room_kicked', payload);
-  removeVoiceParticipant(targetId, roomId);
+  const result = kickFromVoiceRoomRecord(hubId, roomId, user.id, targetId, duration);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
 
-  const dailyName = voiceRoomDailyName(roomId);
-  if (dailyName && daily.isConfigured()) daily.ejectUser(dailyName, targetId, { ban: false }).catch(() => {});
+  const payload = {
+    hub_id: hubId, room_id: roomId, room_name: result.room.name, by_tier: result.actorTier,
+    blocked: Boolean(result.block), expires_at: result.block ? result.block.expires_at : null
+  };
+
+  if (inRoom) {
+    // Önce kişiye bildirilir (istemci "atıldın" gösterip bağlantıyı kendisi kapatır), sonra sunucu listeden çıkarır.
+    io.to(`user:${targetId}`).emit('voice_room_kicked', payload);
+    removeVoiceParticipant(targetId, roomId);
+    const dailyName = voiceRoomDailyName(roomId);
+    if (dailyName && daily.isConfigured()) daily.ejectUser(dailyName, targetId, { ban: false }).catch(() => {});
+  }
 
   const notif = createNotification(targetId, 'voice_kicked', payload);
   if (!notif.suppressed) pushNotification(targetId, 'voice_kicked', notif.data);
 
+  return res.json({ success: true, block: result.block });
+});
+
+app.delete('/api/hubs/:id/voice-rooms/:roomId/blocks/:userId', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  const hubId = Number(req.params.id);
+  const targetId = Number(req.params.userId);
+  const result = unblockFromVoiceRoom(hubId, Number(req.params.roomId), user.id, targetId);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+
+  notifyVoiceUnblocked(result.block, 'lifted');
   return res.json({ success: true });
 });
+
+// Odaya girişi engellenenler listesi (moderatör/kurucu); ?q= ile kullanıcı adında arama.
+app.get('/api/hubs/:id/voice-blocks', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const result = listVoiceBlocks(Number(req.params.id), user.id, req.query.q);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+  return res.json({ success: true, blocks: result.blocks });
+});
+
+function notifyVoiceUnblocked(block, reason) {
+  const data = { hub_id: block.hub_id, room_id: block.room_id, room_name: block.room_name, reason };
+  io.to(`user:${block.user_id}`).emit('voice_room_unblocked', data);
+  const notif = createNotification(block.user_id, 'voice_unblocked', data);
+  if (!notif.suppressed) pushNotification(block.user_id, 'voice_unblocked', notif.data);
+}
 
 // Susturulanlar listesi (moderatör/kurucu); ?q= ile kullanıcı adında arama.
 app.get('/api/hubs/:id/voice-mutes', (req, res) => {
@@ -3517,6 +3565,7 @@ app.get('/api/hubs/:id/voice-mutes/me', (req, res) => {
 setInterval(() => {
   try {
     for (const mute of takeExpiredVoiceMutes()) applyVoiceMuteChange(mute, { lifted: true, reason: 'expired' });
+    for (const block of takeExpiredVoiceBlocks()) notifyVoiceUnblocked(block, 'expired');
   } catch (error) {
     console.error('Süresi dolan susturmalar işlenemedi:', error && error.message);
   }
@@ -4227,6 +4276,9 @@ io.on('connection', (socket) => {
       if (!room || room.hub_id !== hubId) {
         return reply({ success: false, error: 'Oda bulunamadı.' });
       }
+
+      const block = getActiveVoiceBlock(roomId, socket.userId);
+      if (block) return reply({ success: false, error: voiceBlockMessage(block), voice_block: block });
 
       if (isVoiceRoomFull(roomId, socket.userId)) {
         return reply({ success: false, error: `Bu oda dolu (en fazla ${MAX_VOICE_ROOM_PARTICIPANTS} kişi).` });
