@@ -1143,12 +1143,26 @@
                 </div>
 
                 <div class="twofa-step" data-twofa-step="scan" style="display:none;">
-                    <p class="mk-sub">1. Telefonunda bir doğrulayıcı uygulama aç (Google Authenticator, Microsoft Authenticator, 1Password, Authy…) ve bu kodu tara.</p>
-                    <div id="twofa-qr" class="twofa-qr"></div>
-                    <p class="mk-sub">Tarayamıyorsan bu anahtarı elle gir:</p>
-                    <code id="twofa-secret" class="twofa-secret"></code>
-                    <p class="mk-sub">2. Uygulamada görünen 6 haneli kodu yaz:</p>
-                    <input type="text" id="twofa-setup-code" class="hub-name-input twofa-code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456">
+                    <div class="twofa-stephead"><span class="twofa-num">1</span> Doğrulayıcı uygulamaya ekle</div>
+
+                    <!-- Telefonda: QR taranamaz, uygulama doğrudan açılır -->
+                    <a id="twofa-open-app" class="hubset-save-btn twofa-open-app" href="#">📲 Doğrulayıcı uygulamada aç</a>
+                    <!-- Bilgisayarda: telefonla QR taranır -->
+                    <div id="twofa-qr-wrap" class="twofa-qr-wrap">
+                        <p class="mk-sub twofa-qr-hint">Telefonundaki doğrulayıcı uygulamayla bu kodu tara.</p>
+                        <div id="twofa-qr" class="twofa-qr"></div>
+                    </div>
+
+                    <p class="mk-sub twofa-noapp">Uygulaman yok mu? <a href="https://apps.apple.com/app/google-authenticator/id388497605" target="_blank" rel="noopener">iPhone</a> · <a href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2" target="_blank" rel="noopener">Android</a> için Google Authenticator'ı ücretsiz indir.</p>
+
+                    <details class="twofa-manual">
+                        <summary>Olmadı mı? Anahtarı elle gir</summary>
+                        <code id="twofa-secret" class="twofa-secret"></code>
+                        <button type="button" class="hub-settings-action-btn" id="twofa-secret-copy">📋 Anahtarı kopyala</button>
+                    </details>
+
+                    <div class="twofa-stephead"><span class="twofa-num">2</span> Uygulamada görünen 6 haneli kodu yaz</div>
+                    <input type="text" id="twofa-setup-code" class="hub-name-input twofa-code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••">
                     <button type="button" class="hubset-save-btn" id="twofa-setup-verify">Doğrula ve aç</button>
                 </div>
 

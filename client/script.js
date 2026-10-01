@@ -3410,6 +3410,11 @@ document.getElementById('twofa-password-next').addEventListener('click', async (
                 ? `<img alt="QR kodu" src="data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(data.qr_svg)))}">`
                 : '';
             document.getElementById('twofa-secret').textContent = data.secret.replace(/(.{4})/g, '$1 ').trim();
+            // Telefonda (dokunmatik + dar ekran) QR yerine doğrulayıcı uygulamayı doğrudan açan bağlantı gösterilir.
+            const isPhone = window.matchMedia('(pointer: coarse)').matches && Math.min(window.screen.width, window.screen.height) < 820;
+            twofaModal.querySelector('.twofa-box').dataset.device = isPhone ? 'phone' : 'desktop';
+            document.getElementById('twofa-open-app').href = data.otpauth;
+            twofaModal.querySelector('.twofa-manual').open = false;
             document.getElementById('twofa-setup-code').value = '';
             showTwofaStep('scan');
             setTimeout(() => document.getElementById('twofa-setup-code').focus(), 30);
@@ -3565,6 +3570,10 @@ document.getElementById('email-change-code').addEventListener('input', (e) => {
 });
 document.getElementById('email-change-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); emailChangeConfirm(); } });
 
+document.getElementById('twofa-secret-copy').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(document.getElementById('twofa-secret').textContent.replace(/\s/g, '')); showToast('Anahtar kopyalandı.'); }
+    catch (_) { showToast('Kopyalanamadı.'); }
+});
 document.getElementById('twofa-enable-btn').addEventListener('click', () => openTwofaModal('enable'));
 document.getElementById('twofa-disable-btn').addEventListener('click', () => openTwofaModal('disable'));
 document.getElementById('twofa-codes-btn').addEventListener('click', () => openTwofaModal('codes'));

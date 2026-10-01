@@ -2057,3 +2057,20 @@ body.hubset-open { overflow: hidden; }
    ve bildirim baloncukları ayarların ÜSTÜNDE görünmeli. */
 body.hubset-open .modal-overlay, body.hubset-open .cropper-overlay { z-index: 950; }
 body.hubset-open .toast-container { z-index: 1000; }
+
+/* 2FA kurulumu: sade, iki adımlı */
+.twofa-stephead { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 15px; color: var(--text-primary); margin-top: 4px; }
+.twofa-num { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--accent, #5cc8ff); color: #0b0c10; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+.twofa-open-app { display: flex; align-items: center; justify-content: center; text-decoration: none; }
+.twofa-qr-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.twofa-qr-hint { margin: 0; text-align: center; }
+.twofa-noapp { margin: 0; font-size: 12.5px; }
+.twofa-noapp a, .twofa-manual summary { color: var(--accent, #5cc8ff); }
+.twofa-manual { font-size: 13px; }
+.twofa-manual summary { cursor: pointer; padding: 4px 0; list-style: none; text-decoration: underline; }
+.twofa-manual summary::-webkit-details-marker { display: none; }
+.twofa-manual[open] { display: flex; flex-direction: column; gap: 8px; }
+.twofa-manual .twofa-secret { font-size: 13px; }
+/* Telefonda QR gizli (aynı telefonla taranamaz); bilgisayarda "uygulamada aç" gizli */
+.twofa-box[data-device="phone"] .twofa-qr-wrap { display: none; }
+.twofa-box[data-device="desktop"] .twofa-open-app { display: none; }
