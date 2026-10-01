@@ -30,7 +30,7 @@ Durum: `[ ]` sırada · `[~]` yapılıyor · `[x]` tamamlandı
 
 ## 5. Platform ve ticari
 - [x] **Grup DM** — Arkadaşlar panelinde "Gruplar"; en fazla 10 kişi, yalnızca arkadaşlar eklenir (aralarında engel varsa eklenemez). İsteğe bağlı ad (yoksa üye adları), kişi ekleme, kurucunun çıkarması, ayrılma (sahiplik en eski üyeye geçer; son kişi çıkınca grup silinir), bildirim aç/kapa, 📞 grup araması. Mesajlar, dosya, bahsetme, arama, link önizlemesi lobi altyapısından gelir; sistem satırları (ekledi/çıkardı/ayrıldı/adı değişti).
-- [ ] iOS yerel uygulama *(şu an PWA — bekliyor: Mac yok, Apple geliştirici hesabı yok. Mac'siz yol: GitHub Actions'ın macOS makinesiyle bulutta derleme; yine de hesap gerekir)*
+- [~] **iOS yerel uygulama** — HAZIR, yalnızca yayın bekliyor (Apple geliştirici hesabı). `mobile/ios` (Capacitor): arka plan sesi, kilit ekranı mikrofon kontrolü, ses çıkışı seçimi, bildirimler (APNs, içeriksiz), Universal Links, simge. Mac gerekmez: GitHub Actions macOS'ta derliyor (imzasız derleme denetimi ✅ geçti). Yayın adımları: `docs/ios-yayin.md`.
 - [ ] Ödeme sistemi *(bilinçli olarak kapalı beta + hukuki inceleme sonrasına bırakıldı; bkz. `ucretlendirme-hazirlik.md`)*
 
 ## Tamamlananlar (Ekim 2026)
@@ -49,6 +49,6 @@ Durum: `[ ]` sırada · `[~]` yapılıyor · `[x]` tamamlandı
 - GIF arama: Tenor (Google Cloud anahtarı) mı GIPHY (developers.giphy.com anahtarı) mı? Anahtar alınınca yapılacak.
 - Karar: Render sunucu bölgesinin Frankfurt'a taşınması.
 - Karar: Kamera / görüntülü görüşme.
-- iOS uygulaması: Apple geliştirici hesabı (yıllık 99 $) açılınca; Mac olmadığı için derleme GitHub Actions (macOS) üzerinden kurulacak.
+- iOS uygulaması: Apple geliştirici hesabı (yıllık 99 $) açılınca `docs/ios-yayin.md` adımları (GitHub gizli değişkenleri + Render APNs değişkenleri → Actions'tan TestFlight'a yükle).
 - Render'a `TOTP_ENCRYPTION_KEY` eklenmesi (2FA için) ve kopyasının saklanması.
 - Canlı sitede e-posta değiştirme ve 2FA "Doğrulayıcı uygulamada aç" düğmesinin telefonda denenmesi.
