@@ -2273,3 +2273,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
 /* DM paneli zaten bulanık cam: içindeki her balonun ayrıca arka plan bulanıklaştırması (iPhone'da çok pahalı) kapalı */
 #dm-modal .dm-msg.bubble-glass { -webkit-backdrop-filter: none; backdrop-filter: none; background: linear-gradient(135deg, rgba(255,255,255,.13), rgba(255,255,255,.05)); }
 #dm-close-btn { touch-action: manipulation; }
+/* Grup görünümü: lobiye özgü düğmeler nerede olursa olsun (telefonda üst çubuğa taşınmış olsalar da) gizli */
+body.in-group[data-view="hub-detail"] #hub-settings-open-btn,
+body.in-group[data-view="hub-detail"] #lobby-superlike-btn,
+body.in-group[data-view="hub-detail"] #hub-member-options-wrap,
+body.in-group[data-view="hub-detail"] #hub-voice-rooms-toggle-btn,
+body.in-group[data-view="hub-detail"] #hub-voice-rooms-side,
+body.in-group[data-view="hub-detail"] .topbar-lobby-badge { display: none !important; }

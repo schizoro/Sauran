@@ -13814,6 +13814,8 @@ function renderHubDetail() {
 
     const group = isGroupHub(currentHub);
     hubDetailView.classList.toggle('is-group', group);
+    // Telefonda lobi düğmeleri üst çubuğa taşınıyor: grup gizlemesi sayfa genelinde (body) yapılır.
+    document.body.classList.toggle('in-group', group);
     document.getElementById('group-call-btn').style.display = group ? '' : 'none';
     document.getElementById('group-settings-btn').style.display = group ? '' : 'none';
     hubDetailName.textContent = group ? groupDisplayName(currentHub) : currentHub.name;
