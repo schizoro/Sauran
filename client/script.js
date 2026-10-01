@@ -3336,7 +3336,7 @@ function maybeNotifyIncomingHubMessage(msg) {
     if (getBrowserNotifState() !== 'granted' && !getNativeNotify()) return;
     if (!shouldShowSystemNotification()) return;
 
-    showSystemNotification(currentHub.name, `${msg.username}: ${dmPreviewText(msg)}`, {
+    showSystemNotification(currentHub.type === 'group' ? groupDisplayName(currentHub) : currentHub.name, `${msg.username}: ${dmPreviewText(msg)}`, {
         tag: `hub-${currentHub.id}`,
         renotify: true,
         data: { url: `/?open_hub=${currentHub.id}` }
@@ -9568,6 +9568,17 @@ function wireStickerPicker(prefix, onPick) {
 
 // prefix: 'hub' | 'dm' — bekler #{prefix}-attach-btn, #{prefix}-attach-menu,
 // #{prefix}-attach-input-camera/gallery/file elementlerinin var olduğunu.
+// Açılır menü ekran dışına taşıyorsa yatayda içeri kaydırır.
+function clampPopupToViewport(el) {
+    el.style.marginLeft = '';
+    const r = el.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    let dx = 0;
+    if (r.left < 8) dx = 8 - r.left;
+    else if (r.right > vw - 8) dx = (vw - 8) - r.right;
+    if (dx) el.style.marginLeft = `${Math.round(dx)}px`;
+}
+
 function wireAttachMenu(prefix, onFile) {
 
     const btn = document.getElementById(`${prefix}-attach-btn`);
@@ -9581,6 +9592,7 @@ function wireAttachMenu(prefix, onFile) {
     btn.addEventListener('click', (event) => {
         event.stopPropagation();
         menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
+        if (menu.style.display === 'flex') clampPopupToViewport(menu);
     });
 
     document.addEventListener('click', (event) => {
@@ -9595,7 +9607,7 @@ function wireAttachMenu(prefix, onFile) {
             if (item.dataset.attach === 'sticker') {
                 event.stopPropagation();
                 const picker = document.getElementById(`${prefix}-sticker-picker`);
-                if (picker) picker.style.display = 'grid';
+                if (picker) { picker.style.display = 'grid'; clampPopupToViewport(picker); }
                 return;
             }
             inputs[item.dataset.attach]?.click();
@@ -15364,7 +15376,7 @@ function renderHubMembers() {
 
     const membersPanelTitle = document.getElementById('hub-members-panel-title');
     if (membersPanelTitle) {
-        membersPanelTitle.textContent = `${currentHub.name} — ${t('members-title')} - ${currentHub.members.length}`;
+        membersPanelTitle.textContent = `${currentHub.type === 'group' ? groupDisplayName(currentHub) : currentHub.name} — ${t('members-title')} - ${currentHub.members.length}`;
     }
 
     // Sıra: kurucu, hemen altında moderatörler, sonra üyeler (grup içinde sunucu sırası korunur); yönetim ile üyeler arasında ince çizgi

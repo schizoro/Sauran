@@ -2280,3 +2280,7 @@ body.in-group[data-view="hub-detail"] #hub-member-options-wrap,
 body.in-group[data-view="hub-detail"] #hub-voice-rooms-toggle-btn,
 body.in-group[data-view="hub-detail"] #hub-voice-rooms-side,
 body.in-group[data-view="hub-detail"] .topbar-lobby-badge { display: none !important; }
+
+/* Ek menü / çıkartma seçici: ortak dropdown animasyonu translateX(-50%) içerdiği için solda yarısı ekran dışından kayıyordu */
+@keyframes attachPopIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.composer-attach-menu, .sticker-picker { animation: attachPopIn 0.16s ease-out; }
