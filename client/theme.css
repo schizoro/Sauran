@@ -2173,3 +2173,36 @@ body.hubset-open #group-pick-modal { z-index: 960; }
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
 }
 #profile-modal .profile-close-btn:hover, #other-profile-modal .profile-close-btn:hover { background: rgba(8, 10, 14, 0.92); color: #5cc8ff; border-color: #5cc8ff; }
+
+/* ══ Sol ray sırası (telefon): Ana Menü · Keşfet · Lobiler · Arkadaşlar · Arkadaş Ekle · Gruplar ══ */
+.rail-btn-mobile { display: none; }
+@media (max-width: 900px) {
+  .rail-btn-mobile { display: grid; }
+  #rail-home { order: 1; }
+  #rail-discover { order: 2; }
+  #rail-lobbies { order: 3; }
+  .rail-btn-friends { order: 4; }
+  #rail-friend { order: 5; }
+  #rail-groups { order: 6; }
+  body.lobby-drawer-open:not(.drawer-friends):not(.drawer-groups) #rail-lobbies,
+  body.drawer-groups #rail-groups, body.drawer-friends #rail-friends { color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-line); }
+  /* Lobiler çekmeceyle değil raydan açılır: üst çubuktaki üç çizgi kalktı */
+  .topbar .lobby-nav-toggle { display: none !important; }
+  /* Çekmece kipleri: Lobiler | Arkadaşlar | Gruplar (her biri yalnız kendi bölümü) */
+  .lobby-nav .friends-groups { display: none; }
+  body.drawer-groups .lobby-nav .friends-groups { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; margin: 0; }
+  body.drawer-groups .lobby-nav .friends-groups-list { overflow-y: auto; }
+  body.drawer-groups .lobby-nav-head, body.drawer-groups #lobby-nav-list, body.drawer-groups .lobby-nav .friends-sidebar { display: none !important; }
+  /* Üst çubuk: daha yüksek; "Ana Menü" en solda */
+  :root { --topbar-h: 58px; }
+  .topbar { min-height: var(--topbar-h) !important; padding-top: 6px; padding-bottom: 6px; padding-left: 14px; }
+  .topbar-left { gap: 0; }
+  #topbar-context-title { padding-left: 2px; font-size: 18px; }
+  /* Profil yazısı çerçeveden biraz ayrık, okunur */
+  .app-rail .rail-avatar[data-lbl]::after { margin-top: 7px; }
+}
+/* Masaüstü: Gruplar lobilerin altında kendi bölümü */
+@media (min-width: 901px) {
+  .lobby-nav .friends-groups { margin: 12px 0 4px; padding-top: 12px; border-top: 1px solid var(--border-soft); flex: 0 1 auto; max-height: 28%; display: flex; flex-direction: column; min-height: 0; }
+  .lobby-nav .friends-groups-list { overflow-y: auto; min-height: 0; }
+}

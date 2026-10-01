@@ -262,6 +262,19 @@
                 if (!open) document.body.classList.add('lobby-drawer-open', 'drawer-friends');
                 return;
             }
+            if (k === 'lobbies' || k === 'groups') {
+                // Küçük ekran: Lobiler / Gruplar çekmecesi. Aynı düğmeye tekrar basmak kapatır.
+                const mode = k === 'groups' ? 'drawer-groups' : null;
+                const open = document.body.classList.contains('lobby-drawer-open')
+                    && (mode ? document.body.classList.contains(mode) : !document.body.classList.contains('drawer-friends') && !document.body.classList.contains('drawer-groups'));
+                closeDrawer();
+                if (!open) {
+                    document.body.classList.add('lobby-drawer-open');
+                    if (mode) document.body.classList.add(mode);
+                    btn.setAttribute('aria-expanded', 'true');
+                }
+                return;
+            }
             if (k === 'discover') {
                 closeDrawer();
                 if (typeof openDiscover === 'function') openDiscover();
@@ -285,7 +298,11 @@
 
     // ── Küçük ekran: lobi listesi çekmece ──────────────────────────────
     const toggle = $('lobby-nav-toggle');
-    function closeDrawer() { document.body.classList.remove('lobby-drawer-open', 'drawer-friends'); if (toggle) toggle.setAttribute('aria-expanded', 'false'); }
+    function closeDrawer() {
+        document.body.classList.remove('lobby-drawer-open', 'drawer-friends', 'drawer-groups');
+        if (toggle) toggle.setAttribute('aria-expanded', 'false');
+        document.querySelectorAll('#rail-lobbies, #rail-groups').forEach((b) => b.setAttribute('aria-expanded', 'false'));
+    }
     if (toggle) {
         toggle.setAttribute('aria-expanded', 'false');
         toggle.addEventListener('click', () => {
@@ -305,11 +322,16 @@
         if (document.body.classList.contains('lobby-drawer-open') && !e.target.closest('#lobby-nav, #lobby-nav-toggle, #app-rail')) closeDrawer();
         // Arkadaş satırına dokununca sohbet açılır; çekmece kapanır (küçük ekran).
         if (e.target.closest('#friends-sidebar-list .friends-sidebar-row') && window.innerWidth <= 900) closeDrawer();
+        // Grup satırı / yeni grup / lobi satırı: çekmece kapanır (açılan pencere çekmecenin arkasında kalmasın).
+        if (e.target.closest('#friends-groups-list .group-row, #group-create-open-btn') && window.innerWidth <= 900) closeDrawer();
     });
 
     // ── Arkadaşlar paneli: lobi listesinin altına taşı (sağ panel yok) ──
     const friends = $('friends-sidebar');
     if (friends) nav.appendChild(friends);
+    // Gruplar: arkadaş panelinden ayrı, kendi bölümü (masaüstünde lobilerin altında; telefonda "Gruplar" çekmecesi).
+    const groups = $('friends-groups');
+    if (groups) nav.insertBefore(groups, friends || null);
 
     // Not: Üyeler düğmesinin ikonu/etiketi ve mobilde üst çubuğa taşınması artık
     // tamamen script.js'te (placeMobileTopbarItems) yönetiliyor; burada eskiden

@@ -6563,7 +6563,15 @@ async function refreshUnreadCounts() {
     }
 }
 
+function renderGroupsRailDot() {
+    const dot = document.getElementById('rail-groups-dot');
+    if (!dot) return;
+    const any = (groupsCache || []).some((g) => { const i = unreadHubCounts.get(g.id); return i && !i.muted && (i.count > 0 || i.mentions > 0); });
+    dot.style.display = any ? '' : 'none';
+}
+
 function renderHubUnreadBadges() {
+    try { renderGroupsRailDot(); } catch (_) { /* gruplar henüz yüklenmedi */ }
     document.querySelectorAll('[data-hub-unread]').forEach((el) => {
         const info = unreadHubCounts.get(Number(el.dataset.hubUnread));
         const count = info?.count || 0;
@@ -8902,7 +8910,7 @@ document.addEventListener('click', async (e) => {
 
 // Buton açıklamaları: ikonların altında kısa (2 kelime) etiket.
 (function labelButtons() {
-    const map = { 'rail-home': 'Ana Menü', 'rail-friends': 'Arkadaşlar', 'rail-discover': 'Keşfet', 'rail-notifications': 'Bildirim', 'rail-friend': 'Arkadaş Ekle', 'rail-settings': 'Ayarlar', 'rail-profile': 'Profil',
+    const map = { 'rail-home': 'Ana Menü', 'rail-lobbies': 'Lobiler', 'rail-groups': 'Gruplar', 'rail-friends': 'Arkadaşlar', 'rail-discover': 'Keşfet', 'rail-notifications': 'Bildirim', 'rail-friend': 'Arkadaş Ekle', 'rail-settings': 'Ayarlar', 'rail-profile': 'Profil',
         'discover-search-toggle': 'Ara', 'discover-wallet': 'Coin', 'topbar-menu-btn': 'Menü', 'lobby-nav-toggle': 'Lobiler', 'hub-back-btn': '' };
     Object.entries(map).forEach(([id, label]) => { const el = document.getElementById(id); if (el && label) el.dataset.lbl = label; });
 })();
@@ -13504,7 +13512,6 @@ document.getElementById('friends-groups-list').addEventListener('click', (event)
     const row = event.target.closest('[data-group-id]');
     if (!row) return;
     openHub(Number(row.dataset.groupId));
-    if (window.matchMedia('(max-width: 900px)').matches) document.getElementById('friends-sidebar')?.classList.remove('open');
 });
 
 // ── Grup oluştur / kişi ekle penceresi ──
