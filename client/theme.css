@@ -1920,3 +1920,8 @@ body.hubset-open { overflow: hidden; }
 .notification-preview { margin-top: 4px; font-size: 12px; opacity: 0.75; font-style: italic; }
 .lobby .lobby-unread { margin-left: auto; min-width: 20px; height: 20px; font-size: 11px; }
 .lobby .lobby-unread[style*='inline-flex'] + .lobby-count { display: none; }
+
+/* Gönderiliyor / gönderilemedi */
+.msg-pending { opacity: 0.55; pointer-events: none; transition: opacity 0.2s; }
+.msg-failed { opacity: 0.8; box-shadow: inset 3px 0 0 var(--danger); border-radius: 10px; }
+.msg-failed::after { content: 'Gönderilemedi'; display: block; font-size: 11px; color: var(--danger); padding: 2px 0 4px 8px; }

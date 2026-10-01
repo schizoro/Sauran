@@ -3030,6 +3030,11 @@ function emitHubMessage(hubId, message) {
 
   if (!push.isConfigured() || !message?.user_id) return;
 
+  // Push şifreleme/gönderimi mesajın sokete yazılmasını geciktirmesin diye bir sonraki tura bırakılır.
+  setImmediate(() => dispatchHubMessagePush(hubId, message));
+}
+
+function dispatchHubMessagePush(hubId, message) {
   const info = getHubPushInfo(hubId);
   if (!info) return;
 
@@ -4103,13 +4108,14 @@ io.on('connection', (socket) => {
       const toUserId = Number(data?.to_user_id);
       const replyToMessageId = data?.reply_to_message_id ? Number(data.reply_to_message_id) : null;
       const result = saveDmMessage(socket.userId, socket.username, toUserId, data?.content, replyToMessageId);
+      const clientId = typeof data?.client_id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(data.client_id) ? data.client_id : null;
 
       if (!result.success) {
-        socket.emit('message_error', result.error);
+        socket.emit('message_error', result.error, clientId);
         return;
       }
 
-      emitDmMessage(result.message);
+      emitDmMessage(clientId ? { ...result.message, client_id: clientId } : result.message);
 
     } catch (error) {
       console.error('DM kaydedilirken hata:', error);
@@ -4324,7 +4330,7 @@ io.on('connection', (socket) => {
       if (!content || !hubId) return;
 
       if (content.length > 500) {
-        socket.emit('message_error', 'Mesajınız çok uzun (Maksimum 500 karakter).');
+        socket.emit('message_error', 'Mesajınız çok uzun (Maksimum 500 karakter).', data?.client_id || null);
         return;
       }
 
@@ -4335,9 +4341,12 @@ io.on('connection', (socket) => {
 
       const replyToMessageId = data?.reply_to_message_id ? Number(data.reply_to_message_id) : null;
       const message = saveHubMessage(hubId, socket.userId, socket.username, content, replyToMessageId);
+      // İstemcinin "gönderiliyor" diye hemen gösterdiği geçici mesajı gerçek mesajla eşleştirmesi için yalnızca geri yansıtılır.
+      const clientId = typeof data?.client_id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(data.client_id) ? data.client_id : null;
 
-      emitHubMessage(hubId, message);
-      notifyHubMentions(hubId, message);
+      emitHubMessage(hubId, clientId ? { ...message, client_id: clientId } : message);
+      // Bildirim işleri mesajın yayınını geciktirmesin: soket yazımı önce boşalsın.
+      setImmediate(() => notifyHubMentions(hubId, message));
 
     } catch (error) {
       console.error('Lobi mesajı kaydedilirken hata:', error);

@@ -3258,7 +3258,7 @@ async function loadSessions() {
         if (!data.success) return;
 
         container.innerHTML = data.sessions.map((s) => {
-            const date = new Date(s.created_at).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const date = serverDate(s.created_at).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
             return `
                 <div class="settings-blocked-row">
                     <span class="settings-blocked-name">
@@ -3646,6 +3646,7 @@ const I18N = {
     'hubset-everyone-nobody': { tr: 'Kimse (kapalı)', en: 'No one (off)' },
     'hubset-everyone-hint': { tr: 'Kişilere tek tek @ad ile bahsetmek her üyeye açıktır; bu ayar yalnızca @everyone içindir.', en: 'Mentioning people with @name is open to all members; this setting only covers @everyone.' },
     'hub-blocks-title-short': { tr: 'Oda Engelleri', en: 'Room blocks' },
+    'msg-send-failed': { tr: 'Gönderilemedi', en: 'Not sent' },
     'mention-toast': { tr: 'senden bahsetti', en: 'mentioned you' },
     'mention-everyone-hint': { tr: 'Lobideki herkese bildirim', en: 'Notify everyone in the lobby' },
     'mention-badge-title': { tr: 'Senden bahsedildi', en: 'You were mentioned' },
@@ -4657,7 +4658,9 @@ function connectToChat() {
 
     socket.on(
         'message_error',
-        (errorMessage) => {
+        (errorMessage, clientId) => {
+
+            markPendingFailed(clientId);
 
             alert(
                 'Uyarı: ' +
@@ -4676,7 +4679,7 @@ function connectToChat() {
         'hub_message',
         (msg) => {
 
-            appendHubMessage(msg);
+            if (!resolvePendingSend(msg)) appendHubMessage(msg);
 
             if (currentHub && document.visibilityState === 'visible') markReadSoon('hub', currentHub.id, msg.id);
 
@@ -4829,7 +4832,7 @@ function connectToChat() {
 
             if (otherId === activeDmUserId) {
 
-                appendDmMessage(msg);
+                if (!resolvePendingSend(msg)) appendDmMessage(msg);
                 if (document.visibilityState === 'visible') markReadSoon('dm', otherId, msg.id);
 
             } else if (msg.kind === 'dm_call') {
@@ -5880,6 +5883,15 @@ async function logout() {
 // HTML GÜVENLİĞİ
 // =====================================================
 
+// Sunucu (SQLite) zamanları UTC'dir ama saat dilimi eki taşımaz ("2026-10-01 04:02:00"); eksiz okunursa tarayıcı yerel saat sanar
+// ve Türkiye'de saatler 3 saat geride görünür. Eki olmayan bu biçim UTC olarak okunur; ISO (Z'li) değerler olduğu gibi kalır.
+function serverDate(value) {
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(value)) {
+        return new Date(value.replace(' ', 'T') + 'Z');
+    }
+    return new Date(value);
+}
+
 function escapeHtml(value) {
 
     return String(value)
@@ -5960,7 +5972,7 @@ function markReadSoon(type, id, messageId) {
 }
 
 function latestFeedMessageId(feed) {
-    const items = feed.querySelectorAll('[data-message-id]');
+    const items = [...feed.querySelectorAll('[data-message-id]')].filter((el) => /^[0-9]+$/.test(el.dataset.messageId));
     return items.length ? Number(items[items.length - 1].dataset.messageId) : null;
 }
 
@@ -7742,7 +7754,7 @@ function appendDmCallLog(msg, opts) {
     }
 
     const time = msg.created_at
-        ? new Date(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+        ? serverDate(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
         : '';
 
     const row = document.createElement('div');
@@ -7774,6 +7786,7 @@ function appendDmMessage(msg, opts) {
 
     row.appendChild(wrap);
     wireMsgAvatars(row);
+    if (opts && opts.clientId) trackPendingSend(opts.clientId, row, 'dm');
 
     placeFeedItem(dmFeed, row, opts);
 
@@ -7788,7 +7801,91 @@ function placeFeedItem(feed, el, opts) {
         return;
     }
     feed.appendChild(el);
-    feed.scrollTop = feed.scrollHeight;
+    // Kullanıcı yukarıda eski mesajları okuyorsa yeni mesaj onu aşağı çekmez; kendi gönderdiği ya da en alttaysa kaydırılır.
+    if ((opts && opts.forceScroll === true) || feed._stickBottom !== false) feed.scrollTop = feed.scrollHeight;
+}
+
+// ─── Akış en altta kalsın: klavye açılıp kapanınca / pencere boyutu değişince zıplama olmasın ───
+function keepFeedPinned(feed) {
+    feed._stickBottom = true;
+    feed.addEventListener('scroll', () => {
+        feed._stickBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
+    }, { passive: true });
+    const repin = () => { if (feed._stickBottom) feed.scrollTop = feed.scrollHeight; };
+    if (typeof ResizeObserver === 'function') new ResizeObserver(repin).observe(feed);
+    window.visualViewport?.addEventListener('resize', repin);
+}
+
+// ─── Gönderilen mesaj sunucudan dönmeden "gönderiliyor" olarak hemen görünür; dönünce gerçek mesajla yer değiştirir ───
+const pendingSends = new Map(); // client_id -> { el, kind, timer }
+
+function newClientId() {
+    return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function optimisticMessage(content, kind, extra) {
+    return {
+        id: null,
+        user_id: currentUser.id,
+        username: currentUser.username,
+        avatar_data: currentUser.avatar_data || null,
+        avatar_frame: currentUser.avatar_frame || null,
+        profile_color: currentUser.profile_color || null,
+        chat_theme: currentUser.chat_theme,
+        bubble_style: currentUser.bubble_style,
+        name_effect: currentUser.name_effect,
+        plus_active: currentUser.plus_active,
+        content,
+        kind,
+        created_at: new Date().toISOString(),
+        reactions: [],
+        ...extra
+    };
+}
+
+function trackPendingSend(clientId, el, kind) {
+    el.classList.add('msg-pending');
+    el.dataset.clientId = clientId;
+    const timer = setTimeout(() => markPendingFailed(clientId), 15000);
+    pendingSends.set(clientId, { el, kind, timer });
+}
+
+function markPendingFailed(clientId) {
+    const entry = clientId ? pendingSends.get(clientId) : [...pendingSends.values()][0];
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    entry.el.classList.remove('msg-pending');
+    entry.el.classList.add('msg-failed');
+    entry.el.title = t('msg-send-failed');
+    pendingSends.delete(entry.el.dataset.clientId);
+}
+
+// Sunucudan dönen mesaj bekleyen geçici mesajla eşleşirse onun yerine geçer (true döner) ve yeni satır eklenmez.
+function resolvePendingSend(msg) {
+    const entry = msg?.client_id && pendingSends.get(msg.client_id);
+    if (!entry) return false;
+    clearTimeout(entry.timer);
+    pendingSends.delete(msg.client_id);
+    entry.el.classList.remove('msg-pending');
+    if (entry.kind === 'hub') {
+        entry.el.dataset.messageId = msg.id;
+        renderHubMessageIntoWrap(entry.el, msg);
+    } else {
+        const wrap = entry.el.querySelector('.dm-msg');
+        if (wrap) {
+            wrap.dataset.messageId = msg.id;
+            renderDmMessageIntoWrap(wrap, msg, true);
+        }
+    }
+    return true;
+}
+
+// Gönder düğmesine dokunmak giriş alanının odağını almasın: iPhone'da klavye kapanıp ekran zıplamasın.
+function keepComposerFocus(button, input) {
+    if (!button) return;
+    const hold = (event) => { if (document.activeElement === input) event.preventDefault(); };
+    button.addEventListener('pointerdown', hold);
+    button.addEventListener('mousedown', hold);
 }
 
 // ─── Sohbet geçmişi sayfalama (yukarı kaydırınca daha eski mesajlar) ───
@@ -7864,7 +7961,7 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
     applyChatTheme(wrap, msg.user_id, msg.chat_theme, msg.bubble_style);
 
     const time = msg.created_at
-        ? new Date(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+        ? serverDate(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
         : '';
 
     const editedTag = msg.edited ? ` <span class="edited-tag">(${t('edited-tag')})</span>` : '';
@@ -9026,7 +9123,9 @@ dmForm.addEventListener(
         const content = dmMessageInput.value.trim();
         if (!content || !activeDmUserId || !socket) return;
 
-        socket.emit('dm_message', { to_user_id: activeDmUserId, content, reply_to_message_id: dmReplyTarget });
+        const clientId = newClientId();
+        appendDmMessage(optimisticMessage(content, 'dm', { to_user_id: activeDmUserId, reply_to_message_id: dmReplyTarget }), { forceScroll: true, clientId });
+        socket.emit('dm_message', { to_user_id: activeDmUserId, content, reply_to_message_id: dmReplyTarget, client_id: clientId });
 
         dmMessageInput.value = '';
         cancelMessageReply('dm');
@@ -9103,6 +9202,10 @@ const hubDetailCount = document.getElementById('hub-detail-count');
 const hubFeed = document.getElementById('hub-feed');
 hubFeed.addEventListener('scroll', () => { if (hubFeed.scrollTop < 120) loadOlderMessages('hub'); }, { passive: true });
 dmFeed.addEventListener('scroll', () => { if (dmFeed.scrollTop < 120) loadOlderMessages('dm'); }, { passive: true });
+keepFeedPinned(hubFeed);
+keepFeedPinned(dmFeed);
+keepComposerFocus(document.getElementById('hub-send-btn'), document.getElementById('hub-message-input'));
+keepComposerFocus(document.querySelector('#dm-form .composer-send-btn, form .composer-send-btn:not(#hub-send-btn)'), dmMessageInput);
 
 // ─── Sayfanın en altına in butonu ─────────────────────────────────────────
 const hubScrollBottomBtn = document.getElementById('hub-scroll-bottom-btn');
@@ -13875,7 +13978,11 @@ hubChatForm.addEventListener(
         const content = hubMessageInput.value.trim();
         if (!content || !currentHub || !socket) return;
 
-        socket.emit('hub_chat_message', { hub_id: currentHub.id, content, reply_to_message_id: hubReplyTarget });
+        const clientId = newClientId();
+        if (content.length <= 500) {
+            appendHubMessage(optimisticMessage(content, 'text', { reply_to_message_id: hubReplyTarget }), { forceScroll: true, clientId });
+        }
+        socket.emit('hub_chat_message', { hub_id: currentHub.id, content, reply_to_message_id: hubReplyTarget, client_id: clientId });
 
         hubMessageInput.value = '';
         cancelMessageReply('hub');
@@ -14113,6 +14220,7 @@ function appendHubMessage(msg, opts) {
     wrap.dataset.userId = msg.user_id;
 
     renderHubMessageIntoWrap(wrap, msg);
+    if (opts && opts.clientId) trackPendingSend(opts.clientId, wrap, 'hub');
 
     placeFeedItem(hubFeed, wrap, opts);
 
@@ -14146,7 +14254,7 @@ function renderHubMessageIntoWrap(wrap, msg) {
     wrap.classList.toggle('hub-msg-mentions-me', messageMentionsMe(msg));
 
     const time = msg.created_at
-        ? new Date(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+        ? serverDate(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
         : '';
 
     const editedTag = msg.edited ? `<span class="edited-tag">(${t('edited-tag')})</span>` : '';
