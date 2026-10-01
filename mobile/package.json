@@ -2,15 +2,19 @@
   "name": "sauran-mobile",
   "version": "1.0.0",
   "private": true,
-  "description": "Sauran Android kabuğu (Capacitor) — web uygulamasını yerel WebView'da açar ve sesli odada ön plan servisi çalıştırır.",
+  "description": "Sauran Android ve iPhone kabuğu (Capacitor) — web uygulamasını yerel WebView'da açar; sesli odada arka plan sesi ve bildirimler.",
   "scripts": {
-    "sync": "cap sync android",
-    "open": "cap open android"
+    "sync": "cap sync",
+    "sync:android": "cap sync android",
+    "sync:ios": "cap sync ios",
+    "open": "cap open android",
+    "open:ios": "cap open ios"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
     "@capacitor/cli": "^8.5.2",
     "@capacitor/core": "^8.5.2",
+    "@capacitor/ios": "^8.5.2",
     "@capacitor/push-notifications": "^8.1.2"
   }
 }

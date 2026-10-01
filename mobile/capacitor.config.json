@@ -6,10 +6,24 @@
     "url": "https://sauran.online",
     "androidScheme": "https",
     "cleartext": false,
-    "allowNavigation": ["sauran.online"]
+    "allowNavigation": [
+      "sauran.online"
+    ]
   },
   "android": {
     "allowMixedContent": false,
     "backgroundColor": "#0d0f14"
+  },
+  "ios": {
+    "backgroundColor": "#0d0f14",
+    "contentInset": "never",
+    "scrollEnabled": true,
+    "allowsLinkPreview": false,
+    "limitsNavigationsToAppBoundDomains": false
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": []
+    }
   }
 }

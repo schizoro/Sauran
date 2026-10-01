@@ -4,6 +4,7 @@ const linkpreview = require('./linkpreview');
 const { sendEmailChangeCodeEmail, sendEmailChangedNoticeEmail, sendInactivityWarningEmail, sendAccountExistsEmail, sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail } = require('./mailer');
 const push = require('./push');
 const fcm = require('./fcm');
+const apns = require('./apns');
 const daily = require('./daily');
 const express = require('express');
 const http = require('http');
@@ -1577,13 +1578,27 @@ app.post('/api/push/subscribe', (req, res) => {
 });
 
 // Android uygulaması (FCM): cihaz anahtarını kaydet / kaldır. Web Push'tan ayrıdır.
+// iPhone uygulaması: sauran.online bağlantıları (davet, sohbet) uygulamada açılsın (Universal Links).
+// APPLE_TEAM_ID ayarlanınca etkinleşir; Apple bu dosyayı yönlendirmesiz, application/json olarak ister.
+app.get(['/.well-known/apple-app-site-association', '/apple-app-site-association'], (req, res) => {
+  const teamId = String(process.env.APPLE_TEAM_ID || process.env.APNS_TEAM_ID || '').trim();
+  if (!/^[A-Z0-9]{10}$/.test(teamId)) return res.status(404).end();
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  return res.end(JSON.stringify({
+    applinks: { details: [{ appIDs: [`${teamId}.${process.env.APNS_BUNDLE_ID || 'online.sauran.app'}`], components: [{ '/': '/app*' }, { '/': '/invite/*' }, { '/': '/' }] }] }
+  }));
+});
+
 app.post('/api/fcm/register', (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
 
-  const result = saveFcmToken(user.id, req.body?.token, req.headers['user-agent']);
-  // delivery: sunucu tarafında FCM gerçekten yapılandırılmış mı (istemci yerel bildirimi buna göre bırakır).
-  return res.status(result.success ? 200 : 400).json({ ...result, delivery: fcm.isConfigured() });
+  // iPhone uygulaması aynı ucu platform: 'ios' ile kullanır (anahtar APNs cihaz anahtarıdır).
+  const platform = req.body?.platform === 'ios' ? 'ios' : 'android';
+  const result = saveFcmToken(user.id, req.body?.token, req.headers['user-agent'], platform);
+  // delivery: sunucu tarafında FCM/APNs gerçekten yapılandırılmış mı (istemci yerel bildirimi buna göre bırakır).
+  return res.status(result.success ? 200 : 400).json({ ...result, delivery: platform === 'ios' ? apns.isConfigured() : fcm.isConfigured() });
 });
 
 app.post('/api/fcm/unregister', (req, res) => {
@@ -3434,7 +3449,8 @@ async function dispatchWebPush(userId, type, payload) {
 
   const webPushOn = push.isConfigured();
   const fcmOn = fcm.isConfigured();
-  if (!webPushOn && !fcmOn) return;
+  const apnsOn = apns.isConfigured();
+  if (!webPushOn && !fcmOn && !apnsOn) return;
 
   // Askıdaki (veya artık var olmayan) hesabın cihazlarına — mesaj önizlemesi dahil —
   // hiçbir bildirim gönderilmez. Abonelik satırları silinmez (askı geri alınabilir).
@@ -3472,6 +3488,17 @@ async function dispatchWebPush(userId, type, payload) {
       invalid.forEach((token) => removeFcmToken(token));
     } catch (error) {
       console.error('FCM hatası:', error.message);
+    }
+  }
+
+  // iPhone uygulaması (APNs): aynı kurallar ve aynı genel (içeriksiz) metin.
+  if (apnsOn) {
+    try {
+      const tokens = listFcmTokens(userId, 'ios');
+      const invalid = await apns.sendToTokens(tokens, { ...payload, type });
+      invalid.forEach((token) => removeFcmToken(token));
+    } catch (error) {
+      console.error('APNs hatası:', error.message);
     }
   }
 

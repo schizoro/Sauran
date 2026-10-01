@@ -1,0 +1,137 @@
+# Sauran iPhone uygulaması — Mac olmadan, GitHub'ın macOS makinelerinde derleme.
+#
+# 1) "build-check": her iPhone değişikliğinde (ya da elle) projeyi simülatör için İMZASIZ derler. Apple hesabı GEREKTİRMEZ;
+#    Swift kodunun ve proje dosyasının bozulmadığını gösterir.
+# 2) "release": yalnızca elle başlatılır (Actions → iOS → Run workflow → release = true). Apple geliştirici hesabı açıldıktan
+#    sonra aşağıdaki gizli değişkenler (Settings → Secrets and variables → Actions) eklenince imzalı derleyip TestFlight'a yükler:
+#      APPLE_TEAM_ID        10 karakterlik Team ID
+#      ASC_KEY_ID           App Store Connect API anahtar kimliği (Users and Access → Integrations → App Store Connect API)
+#      ASC_ISSUER_ID        aynı sayfadaki Issuer ID
+#      ASC_KEY_P8_BASE64    indirilen AuthKey_XXXX.p8 dosyasının base64 hali  (base64 -i AuthKey_XXXX.p8 | pbcopy)
+#    Anahtarın rolü "Admin" olmalı (imza sertifikası ve profil bulutta otomatik oluşturulur).
+name: iOS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'TestFlight için imzalı derleyip yükle (Apple hesabı ve gizli değişkenler gerekli)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-check:
+    if: ${{ !inputs.release }}
+    runs-on: macos-15
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - run: npx cap sync ios
+      - name: Xcode sürümü
+        run: xcodebuild -version
+      - name: Simülatör için imzasız derleme
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO \
+            build | tail -n 80
+
+  release:
+    if: ${{ inputs.release }}
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+    steps:
+      - name: Gizli değişkenler var mı?
+        working-directory: .
+        run: |
+          for v in APPLE_TEAM_ID ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8_BASE64; do
+            if [ -z "${!v}" ]; then echo "::error::$v gizli değişkeni eksik (bkz. docs/ios-yayin.md)"; exit 1; fi
+          done
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - run: npx cap sync ios
+      - name: App Store Connect API anahtarı
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          echo "$ASC_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8"
+      - name: Arşivle (imzalı)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Sauran.xcarchive" \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            archive | tail -n 80
+      - name: App Store Connect'e yükle (TestFlight)
+        run: |
+          set -o pipefail
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Sauran.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" | tail -n 60
+      - name: Anahtarı sil
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys"

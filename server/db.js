@@ -5844,7 +5844,7 @@ function getAccountExport(userId) {
   // Bildirim cihazları: yalnızca tür + cihaz bilgisi + kayıt zamanı. Uç nokta URL'si, anahtarlar ve FCM anahtarı GÜVENLİK SIRRIDIR, verilmez.
   const notificationDevices = [
     ...db.prepare(`SELECT user_agent, created_at FROM push_subscriptions WHERE user_id = ?`).all(userId).map(r => ({ type: 'web_push', ...r })),
-    ...db.prepare(`SELECT user_agent, created_at FROM fcm_tokens WHERE user_id = ?`).all(userId).map(r => ({ type: 'android_fcm', ...r }))
+    ...db.prepare(`SELECT user_agent, created_at, platform FROM fcm_tokens WHERE user_id = ?`).all(userId).map(({ platform, ...r }) => ({ type: platform === 'ios' ? 'ios_apns' : 'android_fcm', ...r }))
   ];
 
   return {
@@ -6291,16 +6291,26 @@ db.exec(`
 
 const MAX_FCM_TOKENS_PER_USER = 10;
 
-function saveFcmToken(userId, token, userAgent) {
-  if (typeof token !== 'string' || token.length < 20 || token.length > 4096 || /\s/.test(token)) {
+// iPhone uygulaması (APNs) anahtarları da bu tabloda, platform = 'ios' ile tutulur (Android: 'android', FCM).
+{
+  const cols = db.prepare(`PRAGMA table_info(fcm_tokens)`).all().map((c) => c.name);
+  if (!cols.includes('platform')) db.exec(`ALTER TABLE fcm_tokens ADD COLUMN platform TEXT NOT NULL DEFAULT 'android'`);
+}
+
+function saveFcmToken(userId, token, userAgent, platform = 'android') {
+  platform = platform === 'ios' ? 'ios' : 'android';
+  const valid = platform === 'ios'
+    ? typeof token === 'string' && /^[0-9a-fA-F]{64,200}$/.test(token)
+    : typeof token === 'string' && token.length >= 20 && token.length <= 4096 && !/\s/.test(token);
+  if (!valid) {
     return { success: false, error: 'Geçersiz cihaz anahtarı.' };
   }
 
   // Aynı cihaz başka bir hesapla giriş yaptıysa anahtar yeni hesaba geçer.
   db.prepare(`
-    INSERT INTO fcm_tokens (user_id, token, user_agent) VALUES (?, ?, ?)
-    ON CONFLICT(token) DO UPDATE SET user_id = excluded.user_id, user_agent = excluded.user_agent
-  `).run(userId, token, String(userAgent || '').slice(0, 300));
+    INSERT INTO fcm_tokens (user_id, token, user_agent, platform) VALUES (?, ?, ?, ?)
+    ON CONFLICT(token) DO UPDATE SET user_id = excluded.user_id, user_agent = excluded.user_agent, platform = excluded.platform
+  `).run(userId, platform === 'ios' ? token.toLowerCase() : token, String(userAgent || '').slice(0, 300), platform);
 
   db.prepare(`
     DELETE FROM fcm_tokens WHERE user_id = ? AND id NOT IN (
@@ -6319,8 +6329,8 @@ function removeFcmToken(token, userId) {
   }
 }
 
-function listFcmTokens(userId) {
-  return db.prepare(`SELECT token FROM fcm_tokens WHERE user_id = ?`).all(userId).map(row => row.token);
+function listFcmTokens(userId, platform = 'android') {
+  return db.prepare(`SELECT token FROM fcm_tokens WHERE user_id = ? AND platform = ?`).all(userId, platform).map(row => row.token);
 }
 
 // =====================================================

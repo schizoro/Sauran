@@ -3206,9 +3206,11 @@ async function initNativeFcm() {
             if (!value) return;
 
             try {
+                // iPhone uygulamasında anahtar Apple'ın (APNs) cihaz anahtarıdır; sunucu platforma göre gönderir.
+                const platform = typeof cap.getPlatform === 'function' && cap.getPlatform() === 'ios' ? 'ios' : 'android';
                 const response = await fetch('/api/fcm/register', {
                     method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token: value })
+                    body: JSON.stringify({ token: value, platform })
                 });
                 const data = await response.json().catch(() => ({}));
                 if (response.ok && data.success) {
