@@ -1882,6 +1882,77 @@ function applyAdminLinkVisibility(user) {
     if (giftLink) giftLink.style.display = user.platform_role === 'founder' ? 'flex' : 'none';
 }
 
+
+// ─── iPhone: "Ana Ekrana Ekle" yönergesi ── Safari'de (ana ekrandan açılmamış) iPhone/iPad kullanıcısına, oturum açtıktan
+// birkaç saniye sonra bir kez gösterilir. "Anladım" 14 gün, "Bir daha gösterme" kalıcı susturur. Yerel uygulamada hiç çıkmaz.
+const A2HS_KEY = 'sauran_a2hs';
+var a2hsScheduled = false;
+
+function a2hsEnvironment() {
+    const ua = navigator.userAgent || '';
+    const isIos = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (!isIos) return null;
+    if (window.Capacitor?.isNativePlatform?.()) return null;
+    const standalone = navigator.standalone === true || Boolean(window.matchMedia?.('(display-mode: standalone)').matches);
+    if (standalone) return null;
+    // Instagram, Facebook, TikTok, X vb. uygulama içi tarayıcılar ana ekrana ekleyemez: önce Safari'de açılmalı.
+    const inApp = /FBAN|FBAV|Instagram|Line\/|Twitter|TikTok|musical_ly|Snapchat|GSA\//i.test(ua);
+    return { inApp };
+}
+
+function a2hsShouldShow() {
+    try {
+        const v = JSON.parse(localStorage.getItem(A2HS_KEY) || 'null');
+        if (v?.never) return false;
+        if (v?.until && Date.now() < v.until) return false;
+    } catch (_) { /* yoksay */ }
+    return true;
+}
+
+function a2hsRemember(value) {
+    try { localStorage.setItem(A2HS_KEY, JSON.stringify(value)); } catch (_) { /* yoksay */ }
+}
+
+function maybeShowA2hs(force = false) {
+    const env = a2hsEnvironment();
+    if (!force && (!env || !a2hsShouldShow())) return;
+    const modal = document.getElementById('a2hs-modal');
+    document.getElementById('a2hs-steps-safari').style.display = env?.inApp ? 'none' : '';
+    document.getElementById('a2hs-steps-inapp').style.display = env?.inApp ? '' : 'none';
+    modal.style.display = 'flex';
+}
+
+function scheduleA2hs() {
+    if (a2hsScheduled || !a2hsEnvironment() || !a2hsShouldShow()) return;
+    a2hsScheduled = true;
+    // Başka bir pencere (sesli arama, ayar, bildirim izni…) açıksa onu bölmesin: biraz bekleyip yeniden dener.
+    const tryShow = (attempt) => {
+        const busy = callMode || [...document.querySelectorAll('.modal-overlay, .hubset-screen')].some((el) => el.style.display === 'flex');
+        if (busy && attempt < 6) { setTimeout(() => tryShow(attempt + 1), 20000); return; }
+        if (!busy) maybeShowA2hs();
+    };
+    setTimeout(() => tryShow(0), 4000);
+}
+
+{
+    const btn = document.getElementById('settings-a2hs-btn');
+    if (btn && a2hsEnvironment()) btn.style.display = 'flex';
+    btn?.addEventListener('click', () => maybeShowA2hs(true));
+}
+
+document.getElementById('a2hs-ok-btn').addEventListener('click', () => {
+    a2hsRemember({ until: Date.now() + 14 * 86400000 });
+    document.getElementById('a2hs-modal').style.display = 'none';
+});
+document.getElementById('a2hs-close-btn').addEventListener('click', () => {
+    a2hsRemember({ until: Date.now() + 14 * 86400000 });
+    document.getElementById('a2hs-modal').style.display = 'none';
+});
+document.getElementById('a2hs-never-btn').addEventListener('click', () => {
+    a2hsRemember({ never: true });
+    document.getElementById('a2hs-modal').style.display = 'none';
+});
+
 function setCurrentUser(user) {
 
     currentUser =
@@ -1895,6 +1966,8 @@ function setCurrentUser(user) {
         user.username;
 
     renderProfile();
+
+    scheduleA2hs();
 
 }
 

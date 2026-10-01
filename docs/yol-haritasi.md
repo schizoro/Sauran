@@ -34,6 +34,7 @@ Durum: `[ ]` sırada · `[~]` yapılıyor · `[x]` tamamlandı
 - [ ] Ödeme sistemi *(bilinçli olarak kapalı beta + hukuki inceleme sonrasına bırakıldı; bkz. `ucretlendirme-hazirlik.md`)*
 
 ## Tamamlananlar (Ekim 2026)
+- [x] iPhone: Safari'de girene bir kez "Ana ekrana ekle" yönergesi (uygulama içi tarayıcıda önce "Safari'de aç"); Ayarlar → Genel'den yeniden açılabilir
 - [x] Düzeltme: lobi ayarlarından açılan pencereler (davet, arkadaş daveti, görsel kırpma…) ve bildirimler tam ekran ayarların arkasında kalıyordu
 - [x] Mesaj iletimi: anında görünen "gönderiliyor" mesajı, iPhone'da klavye/ekran zıplaması, doğrudan WebSocket, mesaj saatlerinin 3 saat geri görünmesi, Ayarlar'da bağlantı gecikmesi ölçer
 - [ ] *Karar bekliyor:* sunucu bölgesinin (Render) Frankfurt'a taşınması

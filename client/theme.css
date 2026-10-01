@@ -2150,3 +2150,11 @@ body.hubset-open #group-pick-modal { z-index: 960; }
 #group-settings-members .settings-blocked-name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
 #group-settings-members .voice-mute-row-meta { display: inline; margin: 0; }
 #group-settings-leave { margin-top: 6px; flex-shrink: 0; }
+
+/* iPhone ana ekrana ekle yönergesi */
+.a2hs-steps { list-style: none; margin: 4px 0 6px; padding: 0; display: flex; flex-direction: column; gap: 12px; counter-reset: a2hs; }
+.a2hs-steps li { display: flex; align-items: center; gap: 12px; font-size: 14.5px; line-height: 1.4; color: var(--text-primary, #e6e6e6); }
+.a2hs-ico { width: 40px; height: 40px; flex-shrink: 0; border-radius: 12px; display: grid; place-items: center; background: rgba(92, 200, 255, 0.12); color: var(--accent, #5cc8ff); font-size: 18px; font-weight: 700; }
+.a2hs-ico svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.a2hs-ico-text { font-size: 12px; }
+.a2hs-never { align-self: center; }

@@ -1265,6 +1265,30 @@
         </div>
     </div>
 
+    <!-- iPhone: Ana Ekrana Ekle yönergesi -->
+    <div id="a2hs-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="a2hs-title">
+        <div class="modal-box market-modal-box twofa-box a2hs-box">
+            <div class="modal-header">
+                <span id="a2hs-title">📲 Sauran'ı ana ekrana ekle</span>
+                <button id="a2hs-close-btn" type="button" aria-label="Kapat">✕</button>
+            </div>
+            <div class="market-modal-body twofa-body">
+                <p class="mk-sub" id="a2hs-intro">Uygulama gibi tam ekran açılır ve mesaj bildirimleri alırsın. 10 saniye sürer:</p>
+                <ol class="a2hs-steps" id="a2hs-steps-safari">
+                    <li><span class="a2hs-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M6 11H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-1"/></svg></span><span>Ekranın altındaki <b>Paylaş</b> düğmesine dokun.</span></li>
+                    <li><span class="a2hs-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/></svg></span><span>Listeyi aşağı kaydır ve <b>Ana Ekrana Ekle</b>'yi seç.</span></li>
+                    <li><span class="a2hs-ico a2hs-ico-text" aria-hidden="true">Ekle</span><span>Sağ üstteki <b>Ekle</b>'ye dokun. Sonra Sauran'ı ana ekrandaki simgesinden aç.</span></li>
+                </ol>
+                <ol class="a2hs-steps" id="a2hs-steps-inapp" style="display:none;">
+                    <li><span class="a2hs-ico" aria-hidden="true">⋯</span><span>Şu an bir uygulamanın içindeki tarayıcıdasın. Sağ üstteki <b>⋯</b> menüsünden <b>Safari'de Aç</b>'ı seç.</span></li>
+                    <li><span class="a2hs-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M6 11H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-1"/></svg></span><span>Safari'de <b>Paylaş</b> → <b>Ana Ekrana Ekle</b> → <b>Ekle</b>.</span></li>
+                </ol>
+                <button type="button" class="hubset-save-btn" id="a2hs-ok-btn">Anladım</button>
+                <button type="button" class="email-reveal-btn a2hs-never" id="a2hs-never-btn">Bir daha gösterme</button>
+            </div>
+        </div>
+    </div>
+
     <div id="voice-mute-modal" class="modal-overlay" style="display:none;">
         <div class="modal-box market-modal-box share-fps-box">
             <div class="modal-header">
@@ -1857,6 +1881,8 @@
             <div class="poll-create-body settings-modal-body">
 
                 <div class="settings-panel" data-settings-panel="general">
+
+                    <button id="settings-a2hs-btn" class="hub-settings-action-btn" type="button" style="display:none;">📲 Sauran'ı ana ekrana ekle (iPhone)</button>
 
                     <div class="settings-connection-row">
                         <span class="profile-field-label" data-i18n="conn-label">Sunucu bağlantısı</span>
