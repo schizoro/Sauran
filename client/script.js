@@ -10342,11 +10342,19 @@ function sideDockActive() { return SIDEDOCK_MQ.matches && sideDockPref() === 'do
 
 // side: panel, backdrop, toggle düğmesi, body sınıfı
 function setHubSide(side, backdrop, toggle, dockClass, open) {
+    // Telefonda panel üst çubuğun tam altından başlar (iPhone'da çentik/güvenli alan nedeniyle çubuk yüksekliği değişken).
+    if (open && !SIDEDOCK_MQ.matches) {
+        const bar = document.querySelector('.topbar');
+        if (bar) side.style.top = `${Math.round(bar.getBoundingClientRect().bottom)}px`;
+    } else if (!open) {
+        side.style.top = '';
+    }
     side.classList.toggle('open', open);
     toggle.classList.toggle('open', open);
     const dock = sideDockActive();
     backdrop.classList.toggle('open', open && !dock);
     document.body.classList.toggle(dockClass, open && dock);
+    document.body.classList.toggle('hub-side-open', Boolean(document.querySelector('.hub-detail-side.open, .hub-voice-rooms-side.open')) && !dock);
 }
 function refreshHubSides() {
     setHubSide(hubDetailSide, hubSideBackdrop, hubMembersToggleBtn, 'dock-members', hubDetailSide.classList.contains('open'));
@@ -10362,6 +10370,7 @@ function addSideCloseBtn(side, onClose) {
     btn.title = 'Kapat';
     btn.textContent = '✕';
     btn.addEventListener('click', onClose);
+    btn.addEventListener('pointerup', (e) => { e.preventDefault(); onClose(); });
     side.prepend(btn);
 }
 
@@ -10371,6 +10380,7 @@ hubMembersToggleBtn.addEventListener('click', () => {
 
 const closeMembersSide = () => setHubSide(hubDetailSide, hubSideBackdrop, hubMembersToggleBtn, 'dock-members', false);
 hubSideBackdrop.addEventListener('click', closeMembersSide);
+hubSideBackdrop.addEventListener('pointerup', closeMembersSide);
 addSideCloseBtn(hubDetailSide, closeMembersSide);
 
 const hubDeleteBtn = document.getElementById('hub-delete-btn');
@@ -10389,6 +10399,7 @@ hubVoiceRoomsToggleBtn.addEventListener('click', () => {
 
 const closeVoiceSide = () => setHubSide(hubVoiceRoomsSide, hubVoiceRoomsBackdrop, hubVoiceRoomsToggleBtn, 'dock-voice', false);
 hubVoiceRoomsBackdrop.addEventListener('click', closeVoiceSide);
+hubVoiceRoomsBackdrop.addEventListener('pointerup', closeVoiceSide);
 addSideCloseBtn(hubVoiceRoomsSide, closeVoiceSide);
 
 SIDEDOCK_MQ.addEventListener('change', refreshHubSides);

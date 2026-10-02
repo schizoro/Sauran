@@ -2324,3 +2324,13 @@ body.in-group[data-view="hub-detail"] .topbar-lobby-badge { display: none !impor
   .hub-msg, .dm-msg, .dm-msg-row { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
   .hub-msg input, .hub-msg textarea, .dm-msg input, .dm-msg textarea { -webkit-user-select: text; user-select: text; }
 }
+
+/* Telefon: yan paneller açıkken donma — panelin bulanıklığı (backdrop-filter) arkadaki hareketli mesaj efektlerini
+   her karede yeniden bulanıklaştırıyordu. Panel opak, efektler panel açıkken duraklatılır. */
+@media (max-width: 900px) {
+  .hub-detail-side, .hub-voice-rooms-side { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: #121821 !important; bottom: 0; z-index: 70; }
+  body.theme-purple .hub-detail-side, body.theme-purple .hub-voice-rooms-side { background: #17122a !important; }
+  .hub-side-backdrop.open { cursor: pointer; z-index: 69; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  body.hub-side-open .hub-feed *, body.hub-side-open .hub-feed *::before, body.hub-side-open .hub-feed *::after { animation-play-state: paused !important; }
+  .hub-side-close-btn { width: 36px; height: 36px; font-size: 16px; }
+}
