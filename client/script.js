@@ -5699,6 +5699,16 @@ function connectToChat() {
     });
 
 
+    // Yeniden bağlanınca açık lobinin kanalına tekrar katıl ve kopukluk sırasında kaçan mesajları yükle.
+    let firstConnect = !socket.connected;
+    socket.on('connect', () => {
+        if (firstConnect) { firstConnect = false; return; }
+        if (currentHub && document.body.dataset.view === 'hub-detail') {
+            socket.emit('join_hub', currentHub.id);
+            if (!pendingSends.size) loadHubMessages(currentHub.id);
+        }
+    });
+
     socket.on('connect', reportAppVisibility);
     reportAppVisibility();
 

@@ -4910,6 +4910,8 @@ io.on('connection', (socket) => {
       const clientId = typeof data?.client_id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(data.client_id) ? data.client_id : null;
 
       markSlowModePost(hubId, socket.userId);
+      // Yeniden bağlanan soket lobi kanalına henüz katılmamış olabilir: üyeliği doğrulandı, kanala al ki onay ve sonraki mesajlar ulaşsın.
+      if (!socket.rooms.has(`hub:${hubId}`)) socket.join(`hub:${hubId}`);
       emitHubMessage(hubId, clientId ? { ...message, client_id: clientId } : message);
       // Bildirim işleri mesajın yayınını geciktirmesin: soket yazımı önce boşalsın.
       setImmediate(() => notifyHubMentions(hubId, message));

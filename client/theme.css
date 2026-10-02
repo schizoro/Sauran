@@ -2337,3 +2337,8 @@ body.in-group[data-view="hub-detail"] .topbar-lobby-badge { display: none !impor
 @media (max-width: 900px) {
   .topbar .topbar-lobby-actions #hub-settings-open-btn { font-size: 18px; line-height: 1; padding: 0 10px; }
 }
+
+/* Mesaj yazma alanı: odaklanınca çıkan mavi dikdörtgen çerçeve yok (kutunun kendisi zaten yuvarlak) */
+#hub-message-input, #dm-message-input, #hub-message-input:focus, #dm-message-input:focus, #hub-message-input:focus-visible, #dm-message-input:focus-visible {
+  outline: none !important; box-shadow: none !important; border: 0 !important; border-radius: 0; background: transparent; -webkit-appearance: none; appearance: none;
+}
