@@ -2307,3 +2307,13 @@ body.in-group[data-view="hub-detail"] .topbar-lobby-badge { display: none !impor
   .hub-voice-rooms-side.open { z-index: 85; }
   .hub-detail-side { top: 72px; }
 }
+
+/* Telefonda lobi üst sağ butonları: simge tam ortada, butonlar biraz daha geniş */
+@media (max-width: 900px) {
+  .topbar .topbar-lobby-actions .topbar-superlike-btn,
+  .topbar .topbar-lobby-actions .hub-icon-btn,
+  .topbar .topbar-lobby-actions .hub-members-toggle-btn {
+    display: flex; align-items: center; justify-content: center; padding: 0 9px; min-width: 44px; height: 40px; line-height: 1;
+  }
+  .topbar .topbar-lobby-actions [data-lbl]::after { display: none; }
+}
