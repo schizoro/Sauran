@@ -9790,6 +9790,8 @@ function wireVoiceCards(container) {
 }
 
 
+const MSG_PRESS_TARGETS = '.hub-msg-bubble, .dm-msg-line, .hub-msg-sticker, .dm-msg-sticker, .hub-share-card, .file-msg-card, [class*="link-preview"], [class*="poll"], [class*="voice-msg"], [class*="media"], img';
+
 function enableLongPress(el) {
 
     if (el.dataset.longPressWired) return;
@@ -9797,9 +9799,17 @@ function enableLongPress(el) {
 
     let timer = null;
 
-    el.addEventListener('touchstart', () => {
+    el.addEventListener('touchstart', (event) => {
+
+        clearTimeout(timer);
+        // Yalnızca mesaj balonunun (ya da ek/çıkartma/anket kartının) üzerinde basılı tutunca açılır; satırın boş alanında değil.
+        if (!event.target.closest(MSG_PRESS_TARGETS)) return;
+        if (event.target.closest('.hub-msg-actions, button, a, input, audio, video')) return;
 
         timer = setTimeout(() => {
+
+            if (navigator.vibrate) { try { navigator.vibrate(10); } catch (_) { /* yoksay */ } }
+            window.getSelection?.()?.removeAllRanges();
 
             document.querySelectorAll('.show-actions').forEach((other) => {
                 if (other !== el) other.classList.remove('show-actions');
@@ -9811,6 +9821,9 @@ function enableLongPress(el) {
 
     }, { passive: true });
 
+    el.addEventListener('contextmenu', (event) => {
+        if (window.matchMedia('(hover: none)').matches && event.target.closest(MSG_PRESS_TARGETS)) event.preventDefault();
+    });
     el.addEventListener('touchmove', () => clearTimeout(timer), { passive: true });
     el.addEventListener('touchend', () => clearTimeout(timer));
     el.addEventListener('touchcancel', () => clearTimeout(timer));

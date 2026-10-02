@@ -2317,3 +2317,10 @@ body.in-group[data-view="hub-detail"] .topbar-lobby-badge { display: none !impor
   }
   .topbar .topbar-lobby-actions [data-lbl]::after { display: none; }
 }
+
+/* Dokunmatik: mesaj satırında büyük vurgu çerçevesi yok; basılı tutunca metin seçilmez (Kopyala ⋯ menüsünde) */
+@media (hover: none) {
+  .hub-msg:hover, .hub-msg.show-actions, .dm-msg:hover, .dm-msg.show-actions, .message:hover { background: transparent !important; box-shadow: none !important; }
+  .hub-msg, .dm-msg, .dm-msg-row { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  .hub-msg input, .hub-msg textarea, .dm-msg input, .dm-msg textarea { -webkit-user-select: text; user-select: text; }
+}
