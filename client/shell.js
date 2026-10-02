@@ -321,9 +321,9 @@
     document.addEventListener('click', (e) => {
         if (document.body.classList.contains('lobby-drawer-open') && !e.target.closest('#lobby-nav, #lobby-nav-toggle, #app-rail')) closeDrawer();
         // Arkadaş satırına dokununca sohbet açılır; çekmece kapanır (küçük ekran).
-        if (e.target.closest('#friends-sidebar-list .friends-sidebar-row') && window.innerWidth <= 900) closeDrawer();
+        if (e.target.closest('#friends-sidebar-list .friends-sidebar-row')) closeDrawer();
         // Grup satırı / yeni grup / lobi satırı: çekmece kapanır (açılan pencere çekmecenin arkasında kalmasın).
-        if (e.target.closest('#friends-groups-list .group-row, #group-create-open-btn') && window.innerWidth <= 900) closeDrawer();
+        if (e.target.closest('#friends-groups-list .group-row, #group-create-open-btn')) closeDrawer();
     });
 
     // ── Arkadaşlar paneli: lobi listesinin altına taşı (sağ panel yok) ──

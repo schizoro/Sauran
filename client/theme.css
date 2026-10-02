@@ -250,21 +250,54 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .home-empty { color: var(--text-tertiary); text-align: center; margin: 22vh auto 0; }
 
 @media (min-width: 901px) {
-  #chat-screen[style*="flex"] { display: grid !important; grid-template-columns: 68px 252px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); height: 100dvh; }
-  .app-rail { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 0; grid-column: 1; grid-row: 1 / 3; }
-  .lobby-nav {
-    display: flex; flex-direction: column; grid-column: 2; grid-row: 1 / 3; margin: 12px 0; padding: 18px 10px; min-height: 0; border-radius: var(--radius-lg);
-    background: var(--glass-1); box-shadow: var(--hi), 0 0 0 1px var(--border-soft);
-    -webkit-backdrop-filter: blur(var(--blur-1)) saturate(1.2); backdrop-filter: blur(var(--blur-1)) saturate(1.2);
+  /* Masaüstü de telefonla AYNI gezinme: tek sütunlu etiketli sol ray + rayın yanında açılan Lobiler/Arkadaşlar/Gruplar çekmecesi. */
+  #chat-screen[style*="flex"] { display: grid !important; grid-template-columns: calc(var(--rail-w) + 4px) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); height: 100dvh; }
+  .app-rail {
+    display: flex; flex-direction: column; align-items: center; gap: 16px; position: relative; z-index: 55; grid-column: 1; grid-row: 1 / 3;
+    width: 60px; margin: 8px 0 8px 8px; padding: 14px 0; border-radius: 30px; background: var(--glass-2);
+    -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.35); backdrop-filter: blur(var(--blur-2)) saturate(1.35);
+    box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong), 0 16px 40px -14px rgba(0, 0, 0, 0.55);
   }
-  .topbar { grid-column: 3; grid-row: 1; border-bottom: 0; padding: 14px 24px 0; min-height: 0; }
+  .app-rail-logo { display: none; }
+  .app-rail .rail-btn { width: 46px; height: 46px; border-radius: 50%; flex: none; }
+  .app-rail .rail-btn:hover { background: var(--glass-1); }
+  .app-rail .rail-btn.on { background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-line); }
+  .app-rail .rail-btn-friends, .app-rail .rail-btn-mobile { display: grid; }
+  #rail-home { order: 1; }
+  #rail-discover { order: 2; }
+  #rail-lobbies { order: 3; }
+  .rail-btn-friends { order: 4; }
+  #rail-friend { order: 5; }
+  #rail-groups { order: 6; }
+  #rail-notifications, #rail-settings { display: none; }
+  .rail-spacer { order: 8; flex: 1; }
+  .rail-avatar { order: 9; width: 46px; height: 46px; margin-top: 0; box-shadow: 0 0 0 1px var(--border-soft-strong); }
+  .rail-dot { top: 8px; right: 8px; }
+  .app-rail .rail-avatar[data-lbl]::after { margin-top: 7px; }
+  body.lobby-drawer-open:not(.drawer-friends):not(.drawer-groups) #rail-lobbies,
+  body.drawer-groups #rail-groups, body.drawer-friends #rail-friends { color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-line); }
+  .lobby-nav {
+    display: flex; flex-direction: column; position: fixed; z-index: 200; left: calc(var(--rail-w) + 4px); top: 8px; bottom: 8px; width: 300px; margin: 0; padding: 18px 12px 12px;
+    min-height: 0; border-radius: 28px; transform: translateX(calc(-100% - var(--rail-w) - 24px)); transition: transform 0.25s var(--ease);
+    background: var(--glass-2); -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.35); backdrop-filter: blur(var(--blur-2)) saturate(1.35);
+    box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong), var(--shadow-focus);
+  }
+  body.lobby-drawer-open .lobby-nav { transform: none; }
+  /* Çekmece kipleri: Lobiler | Arkadaşlar | Gruplar (her biri yalnız kendi bölümü) */
+  body:not(.drawer-friends) .lobby-nav .friends-sidebar { display: none !important; }
+  body.drawer-friends .lobby-nav-head, body.drawer-friends #lobby-nav-list { display: none; }
+  body.drawer-friends .lobby-nav .friends-sidebar { max-height: none; flex: 1 1 auto; border-top: 0; margin-top: 0; padding-top: 4px; }
+  .lobby-nav .friends-groups { display: none; }
+  body.drawer-groups .lobby-nav .friends-groups { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; margin: 0; padding-top: 0; border-top: 0; max-height: none; }
+  body.drawer-groups .lobby-nav .friends-groups-list { overflow-y: auto; }
+  body.drawer-groups .lobby-nav-head, body.drawer-groups #lobby-nav-list, body.drawer-groups .lobby-nav .friends-sidebar { display: none !important; }
+  .topbar { grid-column: 2; grid-row: 1; border-bottom: 0; padding: 14px 24px 0; min-height: 0; }
   .topbar-logo, .topbar-profile-btn { display: none; }
-  .chat-area { grid-column: 3; grid-row: 2; min-height: 0; }
+  .chat-area { grid-column: 2; grid-row: 2; min-height: 0; }
   .hub-back-btn { display: none; }
-  #hub-list-content, #hub-list-header { display: none !important; }
-  .hub-list-view { align-items: center; }
-  #hub-list-empty[style*="none"] ~ .home-empty { display: block; }
+  .home-empty { display: none !important; }
 }
+@media (min-width: 901px) and (max-height: 720px) { .app-rail { gap: 8px; padding: 10px 0; } }
 
 @media (max-width: 900px) {
   .lobby-nav-toggle { display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-secondary); cursor: pointer; }
@@ -336,9 +369,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .hub-voice-rooms-toggle-btn.has-active { color: var(--success); }
 .hub-voice-room-add-btn, .hub-voice-room-leave-btn { border-radius: 12px; }
 @media (min-width: 901px) {
-  .hub-voice-rooms-side { left: 320px; top: 12px; bottom: 12px; }
-  .hub-voice-rooms-toggle-btn { left: 320px; }
-  .hub-voice-rooms-toggle-btn.open { left: 580px; }
+  .hub-voice-rooms-side { left: calc(var(--rail-w) + 4px); top: 12px; bottom: 12px; }
+  .hub-voice-rooms-toggle-btn { left: calc(var(--rail-w) + 4px); }
+  .hub-voice-rooms-toggle-btn.open { left: calc(var(--rail-w) + 264px); }
 }
 
 /* ══ Aşama 3: kalan farklar ═════════════════════════════════════════════ */
@@ -2201,9 +2234,8 @@ body.hubset-open #group-pick-modal { z-index: 960; }
   /* Profil yazısı çerçeveden biraz ayrık, okunur */
   .app-rail .rail-avatar[data-lbl]::after { margin-top: 7px; }
 }
-/* Masaüstü: Gruplar lobilerin altında kendi bölümü */
+/* Masaüstü: Gruplar da telefondaki gibi kendi çekmece kipinde (bkz. yukarıdaki min-width: 901px bloğu) */
 @media (min-width: 901px) {
-  .lobby-nav .friends-groups { margin: 12px 0 4px; padding-top: 12px; border-top: 1px solid var(--border-soft); flex: 0 1 auto; max-height: 28%; display: flex; flex-direction: column; min-height: 0; }
   .lobby-nav .friends-groups-list { overflow-y: auto; min-height: 0; }
 }
 
