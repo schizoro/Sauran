@@ -2334,3 +2334,6 @@ body.in-group[data-view="hub-detail"] .topbar-lobby-badge { display: none !impor
   body.hub-side-open .hub-feed *, body.hub-side-open .hub-feed *::before, body.hub-side-open .hub-feed *::after { animation-play-state: paused !important; }
   .hub-side-close-btn { width: 36px; height: 36px; font-size: 16px; }
 }
+@media (max-width: 900px) {
+  .topbar .topbar-lobby-actions #hub-settings-open-btn { font-size: 18px; line-height: 1; padding: 0 10px; }
+}

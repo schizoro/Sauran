@@ -13893,7 +13893,7 @@ function renderHubDetail() {
     hubDeleteBtn.style.display = currentHub.is_owner ? 'block' : 'none';
     if (hubSettingsOpenBtn) {
         const canOpenSettings = currentHub.is_owner || currentHub.my_permission_tier === 'moderator';
-        hubSettingsOpenBtn.style.display = canOpenSettings ? 'block' : 'none';
+        hubSettingsOpenBtn.style.display = canOpenSettings ? '' : 'none';
     }
 
     // Lobi sahibi kendi Lobi'ını bildiremez (anlamsız) — backend de aynı
