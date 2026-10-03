@@ -2584,7 +2584,7 @@ avatarFileInput.addEventListener(
 
             // Sauran Premium: animasyonlu (GIF) profil fotoğrafı — kırpma aracı her kareyi tek kareye
             // düzleştirdiği için Premium abonesinde GIF'i kırpmadan, olduğu gibi (animasyonlu) yüklüyoruz.
-            const isAnimatedGif = file.type === 'image/gif' && currentUser?.premium_active;
+            const isAnimatedGif = file.type === 'image/gif' && userHasFeature('gif_avatar');
             let dataUrl;
             if (isAnimatedGif) {
                 const GIF_MAX_BYTES = 5 * 1024 * 1024;
@@ -2678,7 +2678,7 @@ bannerFileInput.addEventListener('change', async () => {
         // Plus abonesinde GIF olduğu gibi yüklenir; Plus olmayan GIF seçerse bilgilendirilir.
         let dataUrl;
         if (file.type === 'image/gif') {
-            if (!currentUser?.plus_active) {
+            if (!userHasFeature('gif_banner')) {
                 showToast('Hareketli kapak fotoğrafı Sauran Plus abonelerine açıktır.');
                 return;
             }
@@ -4632,7 +4632,7 @@ function renderChatThemePicker() {
     const picker = document.getElementById('chat-theme-picker');
     const hint = document.getElementById('chat-theme-hint');
     if (!picker || !currentUser) return;
-    const isPlus = Boolean(currentUser.plus_active);
+    const isPlus = userHasFeature('chat_theme');
     const active = currentUser.chat_theme || 'classic';
     picker.querySelectorAll('.chat-theme-option').forEach((btn) => {
         const theme = btn.dataset.theme;
@@ -4893,7 +4893,7 @@ function renderBubbleStylePicker() {
     const picker = document.getElementById('bubble-style-picker');
     const hint = document.getElementById('bubble-style-hint');
     if (!picker || !currentUser) return;
-    const isPlus = Boolean(currentUser.plus_active);
+    const isPlus = userHasFeature('bubble_style');
     const active = currentUser.bubble_style || 'default';
     picker.querySelectorAll('.chat-theme-option').forEach((btn) => {
         const style = btn.dataset.bubble;
@@ -7719,7 +7719,7 @@ async function renderCzPremium(sub) {
     const on = sub.premium.active;
     const feat = (ic, title, text, state, extra) => `<div class="cz-feat"><span class="cz-feat-ic" aria-hidden="true">${ic}</span><span class="cz-feat-text"><strong>${title}</strong><small>${text}</small>${extra || ''}</span><span class="cz-chip ${state === 'on' ? 'cz-chip-on' : 'cz-chip-soon'}">${state === 'on' ? 'Aktif' : state === 'soon' ? 'Yakında' : 'Premium'}</span></div>`;
     let boosts = null;
-    if (on) { try { const r = await fetch('/api/me/boosts', { credentials: 'include' }); const d = await r.json(); if (d.success) boosts = d; } catch (_) {} }
+    try { const r = await fetch('/api/me/boosts', { credentials: 'include' }); const d = await r.json(); if (d.success && (on || d.slots.total > 0)) boosts = d; } catch (_) {}
     const boostExtra = boosts
         ? `<small>Boş takviye: <b>${boosts.slots.free}</b> / ${boosts.slots.total}${boosts.hubs.length ? ' · Verdiklerin: ' + boosts.hubs.map((h) => escapeHtml(h.name) + (h.boosts > 1 ? ' ×' + h.boosts : '')).join(', ') : ''}</small>`
         : '';
@@ -8279,9 +8279,8 @@ async function renderBoostModal() {
         if (d.success) { b = d.boost; currentHub.boost = b; }
     } catch (_) {}
     if (!b) { body.innerHTML = '<p class="mk-state">Yüklenemedi.</p>'; return; }
-    const sub = await fetchSubscriptionState();
-    const premium = sub.premium.active;
     const slots = b.my_slots || { total: 0, used: 0, free: 0 };
+    const premium = slots.total > 0;
     const goal = b.next_at != null ? b.next_at : b.count;
     const pct = b.next_at != null ? Math.max(4, Math.min(100, (b.count / Math.max(1, b.next_at)) * 100)) : 100;
     const boosters = b.boosters.length
@@ -8289,7 +8288,7 @@ async function renderBoostModal() {
         : '<span class="hubset-hint">Henüz kimse takviye etmedi.</span>';
     let action;
     if (!premium) {
-        action = `<p class="hubset-hint">Lobi Takviyesi Sauran Premium abonelerine açıktır; her ay ${slots.total || 3} takviye kazanırlar.</p><button id="boost-open-subs" class="hub-create-image-btn" type="button">👑 Abonelikleri gör</button>`;
+        action = `<p class="hubset-hint">Lobi Takviyesi Sauran Premium abonelerine açıktır; her ay 3 takviye kazanırlar. Hediye takviye de kullanabilirsin.</p><button id="boost-open-subs" class="hub-create-image-btn" type="button">👑 Abonelikleri gör</button>`;
     } else {
         action = `<p class="hubset-hint">Takviyelerin: <b>${slots.free}</b> / ${slots.total} boş. Bu lobide: <b>${b.my_boosts}</b>.</p>
             <div class="atmo-actions">
@@ -10285,7 +10284,7 @@ function wireStickerPicker(prefix, onPick) {
         btn.innerHTML = stickerInnerHtml(sticker.id);
         btn.title = 'Sauran Premium';
         btn.addEventListener('click', () => {
-            if (!currentUser?.premium_active) {
+            if (!userHasFeature('premium_sticker_pack')) {
                 showToast('Premium çıkartmalar Sauran Premium abonelerine açıktır.');
                 return;
             }

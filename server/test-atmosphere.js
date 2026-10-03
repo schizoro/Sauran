@@ -181,6 +181,79 @@ test('Premium çıkartmalar: yalnızca Premium gönderebilir; Plus ve ücretsiz 
   assert.strictEqual(send(sOwner, 't_stk_o', 'prem-yok').success, false);
 });
 
+test('HEDİYE ARACI KORUMASI: features.js ve atmosphere.js kayıtlarının tamamı Hediye Aracı kataloğunda (yeni ekleneni unutma)', () => {
+  const { FEATURES } = require('./features');
+  const { ATMOSPHERES } = require('./atmosphere');
+  const keys = new Set(dbm.listGiftProducts().map((p) => p.key));
+  Object.keys(FEATURES).forEach((k) => assert.ok(keys.has(k), 'Hediye kataloğunda yok: ' + k));
+  ATMOSPHERES.forEach((a) => assert.ok(keys.has('atmo:' + a.key), 'Hediye kataloğunda yok: atmo:' + a.key));
+  ['coin', 'plus', 'premium', 'boost'].forEach((k) => assert.ok(keys.has(k)));
+});
+
+test('Hediye: tek özellik (sohbet teması, balon, profil sesi, GIF banner) yalnızca o özelliği açar', () => {
+  const founder = user('t_gift_f', null), g1 = user('t_gift_1', null);
+  assert.strictEqual(dbm.updateChatTheme(g1, 'soft').success, false);
+  assert.strictEqual(dbm.giftProduct(founder, 't_gift_1', 'chat_theme', 1).success, true);
+  assert.strictEqual(dbm.updateChatTheme(g1, 'soft').success, true);
+  assert.strictEqual(dbm.updateBubbleStyle(g1, 'glass').success, false); // balon verilmedi
+  assert.strictEqual(dbm.giftProduct(founder, 't_gift_1', 'bubble_style', 1).success, true);
+  assert.strictEqual(dbm.updateBubbleStyle(g1, 'glass').success, true);
+  assert.strictEqual(dbm.setProfileSound(g1, 'cyber').success, false);
+  assert.strictEqual(dbm.giftProduct(founder, 't_gift_1', 'profile_sound', 1).success, true);
+  assert.strictEqual(dbm.setProfileSound(g1, 'cyber').success, true);
+  assert.strictEqual(dbm.effectiveProfileSound(g1), 'cyber');
+  assert.strictEqual(dbm.listFeatures(g1).includes('gif_banner'), false);
+  assert.strictEqual(dbm.giftProduct(founder, 't_gift_1', 'gif_banner', 1).success, true);
+  assert.strictEqual(dbm.listFeatures(g1).includes('gif_banner'), true);
+});
+
+test('Hediye: Premium\'a özel özellik (Premium çıkartma, GIF avatar) Plus ile açılmaz, hediyeyle açılır', () => {
+  const founder = user('t_gift_f2', null), plusU = user('t_gift_pl', 'plus'), freeU = user('t_gift_fr', null);
+  assert.strictEqual(dbm.hasFeature(plusU, 'premium_sticker_pack'), false);
+  assert.strictEqual(dbm.giftProduct(founder, 't_gift_fr', 'premium_sticker_pack', 1).success, true);
+  assert.strictEqual(dbm.hasFeature(freeU, 'premium_sticker_pack'), true);
+  assert.strictEqual(dbm.hasFeature(freeU, 'gif_avatar'), false);
+  assert.strictEqual(dbm.giftProduct(founder, 't_gift_pl', 'gif_avatar', 1).success, true);
+  assert.strictEqual(dbm.hasFeature(plusU, 'gif_avatar'), true);
+});
+
+test('Hediye: Atmosphere paketi (ücretsiz kullanıcıya) paketi ve ihtiyaç duyduğu tüm hakları açar, uygulanabilir', () => {
+  const founder = user('t_gift_f3', null), g3 = user('t_gift_3', null);
+  assert.strictEqual(dbm.applyAtmosphere(g3, 'cyber').success, false);
+  assert.strictEqual(dbm.giftProduct(founder, 't_gift_3', 'atmo:cyber', 1).success, true);
+  const r = dbm.applyAtmosphere(g3, 'cyber');
+  assert.strictEqual(r.success, true);
+  assert.strictEqual(dbm.effectiveAtmosphere(g3), 'cyber');
+  assert.strictEqual(dbm.effectiveProfileSound(g3), 'cyber');
+  assert.strictEqual(dbm.listAtmospheresFor(g3).find((a) => a.key === 'cyber').available, true);
+  assert.strictEqual(dbm.listAtmospheresFor(g3).find((a) => a.key === 'cosmic').available, false); // diğer paket hâlâ kilitli
+  // Coin kademeli paket de hediye edilebilir (satın alma açılmadan önce)
+  assert.strictEqual(dbm.giftProduct(founder, 't_gift_3', 'atmo:cosmic-night', 1).success, true);
+  assert.strictEqual(dbm.applyAtmosphere(g3, 'cosmic-night').success, true);
+});
+
+test('Hediye Lobi Takviyesi: Premium olmadan kullanılır, kalıcıdır, Premium yuvalarıyla birleşir', () => {
+  const founder = user('t_bg_f', null), gu = user('t_bg_u', null), pu = user('t_bg_p', 'premium');
+  const hubG = dbm.createHub(pu, { name: 'Hediye Takviye Lobisi' }).id;
+  dbm.joinHubForTest && dbm.joinHubForTest(hubG, gu);
+  db.prepare('INSERT OR IGNORE INTO hub_members (hub_id, user_id, role_id, permission_tier) VALUES (?, ?, NULL, ?)').run(hubG, gu, 'member');
+  assert.strictEqual(dbm.boostHub(gu, hubG).success, false); // kredisi yok
+  assert.strictEqual(dbm.giftProduct(founder, 't_bg_u', 'boost', 2).success, true);
+  assert.deepStrictEqual([dbm.listMyBoosts(gu).slots.total, dbm.listMyBoosts(gu).slots.free], [2, 2]);
+  assert.strictEqual(dbm.boostHub(gu, hubG).success, true);
+  assert.strictEqual(dbm.boostHub(gu, hubG).success, true);
+  assert.strictEqual(dbm.boostHub(gu, hubG).success, false); // 2 hediye bitti
+  assert.strictEqual(dbm.getHubBoostInfo(hubG, gu).count, 2);
+  // hediye takviye Premium'dan bağımsız kalıcıdır; Premium takviyesi ise abonelikle düşer
+  assert.strictEqual(dbm.giftProduct(founder, 't_bg_p', 'boost', 1).success, true);
+  assert.strictEqual(dbm.listMyBoosts(pu).slots.total, PREMIUM_MONTHLY_BOOSTS + 1);
+  assert.strictEqual(dbm.boostHub(pu, hubG).success, true); // önce Premium yuvası kullanılır
+  assert.strictEqual(db.prepare(`SELECT source FROM hub_boosts WHERE user_id = ? ORDER BY id DESC LIMIT 1`).get(pu).source, 'premium');
+  db.prepare(`UPDATE entitlements SET expires_at = '2000-01-01 00:00:00' WHERE user_id = ?`).run(pu);
+  assert.strictEqual(dbm.getHubBoostInfo(hubG, gu).count, 2); // Premium'un takviyesi düştü, hediye olanlar kaldı
+  assert.strictEqual(dbm.listMyBoosts(pu).slots.total, 1); // yalnızca hediye yuva
+});
+
 console.log(`\n${passed} test geçti`);
 try { db.close(); fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true }); } catch (_) { /* Windows dosya kilidi: geçici klasör bırakılabilir */ }
 process.exit(0);

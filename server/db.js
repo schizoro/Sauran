@@ -161,6 +161,14 @@ db.exec(`
     FOREIGN KEY (hub_id) REFERENCES hubs(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
+  CREATE TABLE IF NOT EXISTS boost_credits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    amount INTEGER NOT NULL,
+    gift_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
   CREATE INDEX IF NOT EXISTS idx_hub_boosts_hub ON hub_boosts(hub_id, removed_at);
   CREATE INDEX IF NOT EXISTS idx_hub_boosts_user ON hub_boosts(user_id, removed_at);
 `);
@@ -296,6 +304,10 @@ const hubColumns = db
 if (!hubColumns.includes('banner_data')) {
   // Lobi bannerı (Seviye 3): GIF olabilir. Okuma anında seviyeye göre gizlenir.
   db.exec(`ALTER TABLE hubs ADD COLUMN banner_data TEXT`);
+}
+if (!db.prepare(`PRAGMA table_info(hub_boosts)`).all().some((c) => c.name === 'source')) {
+  // 'premium' = aylık Premium takviyesi (abonelik bitince düşer) | 'gift' = hediye takviye (kalıcı, abonelikten bağımsız)
+  db.exec(`ALTER TABLE hub_boosts ADD COLUMN source TEXT NOT NULL DEFAULT 'premium'`);
 }
 if (!hubColumns.includes('atmosphere')) {
   // Lobi Atmosphere'i (Seviye 3'te açılır; okuma anında seviyeye göre 'none' sayılabilir).
@@ -2427,8 +2439,8 @@ const CHAT_THEMES = ['classic', 'soft', 'contrast'];
 function updateChatTheme(userId, theme) {
   const value = String(theme || 'classic');
   if (!CHAT_THEMES.includes(value)) return { success: false, error: 'Geçersiz sohbet teması.' };
-  if (value !== 'classic' && !hasActivePlus(userId)) {
-    return { success: false, error: 'Bu sohbet teması yalnızca Sauran Plus abonelerine açık.' };
+  if (value !== 'classic' && !hasFeature(userId, 'chat_theme')) {
+    return { success: false, error: 'Bu sohbet teması yalnızca Sauran Plus abonelerine (ya da hediye edilenlere) açık.' };
   }
   db.prepare(`UPDATE users SET chat_theme = ? WHERE id = ?`).run(value, userId);
   return { success: true, chat_theme: value };
@@ -2453,8 +2465,8 @@ const BUBBLE_STYLES = ['default', 'round', 'glass', 'outline', 'shadow'];
 function updateBubbleStyle(userId, style) {
   const value = String(style || 'default');
   if (!BUBBLE_STYLES.includes(value)) return { success: false, error: 'Geçersiz balon stili.' };
-  if (value !== 'default' && !hasActivePlus(userId)) {
-    return { success: false, error: 'Mesaj balonu stilleri yalnızca Sauran Plus abonelerine açık.' };
+  if (value !== 'default' && !hasFeature(userId, 'bubble_style')) {
+    return { success: false, error: 'Mesaj balonu stilleri yalnızca Sauran Plus abonelerine (ya da hediye edilenlere) açık.' };
   }
   db.prepare(`UPDATE users SET bubble_style = ? WHERE id = ?`).run(value, userId);
   return { success: true, bubble_style: value };
@@ -2535,9 +2547,14 @@ function updateProfileEffect(userId, effect) {
 
 // ── Sauran Atmosphere ─────────────────────────────────────────────────────────────────────────────
 const { ATMOSPHERES, SOUND_KEYS, getAtmosphere } = require('./atmosphere');
+const { FEATURES } = require('./features');
 
+function ownsAtmosphere(userId, key) {
+  return Boolean(db.prepare(`SELECT 1 FROM entitlements WHERE user_id = ? AND product = ? AND (expires_at IS NULL OR expires_at > datetime('now')) LIMIT 1`).get(userId, 'atmo:' + key));
+}
 function atmosphereAllowed(userId, atmo) {
   if (!atmo) return false;
+  if (ownsAtmosphere(userId, atmo.key)) return true; // hediye edilen / (ileride) satın alınan paket
   if (atmo.tier === 'coin') return false; // Coin satın alma henüz açık değil
   return atmo.tier === 'premium' ? hasActivePremium(userId) : hasActivePlus(userId);
 }
@@ -2587,7 +2604,7 @@ function applyAtmosphere(userId, key) {
 
 // Ziyaretçilerin duyacağı ses anahtarı: seçilmiş ses, yoksa Atmosphere'in sesi; abonelik bitince ya da kapalıysa ''.
 function effectiveProfileSound(userId) {
-  if (!hasActivePlus(userId)) return '';
+  if (!hasFeature(userId, 'profile_sound')) return '';
   const row = db.prepare(`SELECT profile_sound, profile_sound_on FROM users WHERE id = ?`).get(userId);
   if (!row || row.profile_sound_on === 0) return '';
   if (row.profile_sound && SOUND_KEYS.includes(row.profile_sound)) return row.profile_sound;
@@ -2603,7 +2620,7 @@ function getProfileSoundChoice(userId) {
 function setProfileSound(userId, key) {
   const value = String(key || '');
   if (value && !SOUND_KEYS.includes(value)) return { success: false, error: 'Geçersiz ses.' };
-  if (value && !hasActivePlus(userId)) return { success: false, error: 'Profil sesi seçmek Sauran Plus/Premium aboneliği gerektirir.' };
+  if (value && !hasFeature(userId, 'profile_sound')) return { success: false, error: 'Profil sesi seçmek Sauran Plus/Premium aboneliği (ya da hediye) gerektirir.' };
   db.prepare(`UPDATE users SET profile_sound = ? WHERE id = ?`).run(value, userId);
   return { success: true, profile_sound: value };
 }
@@ -2616,23 +2633,29 @@ function setProfileSoundOn(userId, on) {
 // ── Lobi Takviyesi ────────────────────────────────────────────────────────────────────────────────
 const { PREMIUM_MONTHLY_BOOSTS, BOOST_COOLDOWN_HOURS, BOOST_LEVELS, levelForBoosts, HUB_EMOJI_SLOTS } = require('./atmosphere');
 
-// Yalnızca hâlâ Premium olan kullanıcıların takviyeleri sayılır (abonelik bitince takviye otomatik düşer).
+// Premium takviyeleri yalnızca kullanıcı hâlâ Premium ise sayılır (abonelik bitince düşer); hediye takviyeler kalıcıdır.
 function hubBoostCount(hubId) {
   return db.prepare(`
     SELECT COUNT(*) AS c FROM hub_boosts b
     WHERE b.hub_id = ? AND b.removed_at IS NULL
-      AND EXISTS(SELECT 1 FROM entitlements e WHERE e.user_id = b.user_id AND e.product = 'premium' AND (e.expires_at IS NULL OR e.expires_at > datetime('now')))
+      AND (b.source = 'gift' OR EXISTS(SELECT 1 FROM entitlements e WHERE e.user_id = b.user_id AND e.product = 'premium' AND (e.expires_at IS NULL OR e.expires_at > datetime('now'))))
   `).get(hubId).c;
 }
 function hubLevel(hubId) { return levelForBoosts(hubBoostCount(hubId)); }
 
 function userBoostSlots(userId) {
-  const total = hasActivePremium(userId) ? PREMIUM_MONTHLY_BOOSTS : 0;
-  const used = db.prepare(`
+  const cd = `-${BOOST_COOLDOWN_HOURS} hours`;
+  const usedBy = (source) => db.prepare(`
     SELECT COUNT(*) AS c FROM hub_boosts
-    WHERE user_id = ? AND (removed_at IS NULL OR removed_at > datetime('now', ?))
-  `).get(userId, `-${BOOST_COOLDOWN_HOURS} hours`).c;
-  return { total, used: Math.min(used, total), free: Math.max(0, total - used) };
+    WHERE user_id = ? AND source = ? AND (removed_at IS NULL OR removed_at > datetime('now', ?))
+  `).get(userId, source, cd).c;
+  const premTotal = hasActivePremium(userId) ? PREMIUM_MONTHLY_BOOSTS : 0;
+  const giftTotal = db.prepare(`SELECT COALESCE(SUM(amount), 0) AS s FROM boost_credits WHERE user_id = ?`).get(userId).s;
+  const premFree = Math.max(0, premTotal - usedBy('premium'));
+  const giftFree = Math.max(0, giftTotal - usedBy('gift'));
+  const total = premTotal + giftTotal;
+  const free = premFree + giftFree;
+  return { total, used: total - free, free, prem_free: premFree, gift_free: giftFree, gift_total: giftTotal };
 }
 
 function getHubBoostInfo(hubId, viewerId) {
@@ -2644,7 +2667,7 @@ function getHubBoostInfo(hubId, viewerId) {
     SELECT users.id, users.username, COUNT(*) AS boosts FROM hub_boosts b
     INNER JOIN users ON users.id = b.user_id
     WHERE b.hub_id = ? AND b.removed_at IS NULL
-      AND EXISTS(SELECT 1 FROM entitlements e WHERE e.user_id = b.user_id AND e.product = 'premium' AND (e.expires_at IS NULL OR e.expires_at > datetime('now')))
+      AND (b.source = 'gift' OR EXISTS(SELECT 1 FROM entitlements e WHERE e.user_id = b.user_id AND e.product = 'premium' AND (e.expires_at IS NULL OR e.expires_at > datetime('now'))))
     GROUP BY users.id ORDER BY boosts DESC, MIN(b.created_at) ASC LIMIT 8
   `).all(hubId);
   return {
@@ -2658,10 +2681,11 @@ function boostHub(userId, hubId) {
   const hub = db.prepare(`SELECT id, type, visibility FROM hubs WHERE id = ?`).get(hubId);
   if (!hub) return { success: false, status: 404, error: 'Lobi bulunamadı.' };
   if (hub.type === 'group') return { success: false, status: 400, error: 'Gruplar takviye edilemez.' };
-  if (!hasActivePremium(userId)) return { success: false, status: 403, error: 'Lobi Takviyesi Sauran Premium abonelerine açıktır.' };
+  const slots = userBoostSlots(userId);
+  if (slots.total < 1) return { success: false, status: 403, error: 'Lobi Takviyesi Sauran Premium abonelerine açıktır (ya da hediye takviye gerekir).' };
   if (!isHubMember(hubId, userId) && hub.visibility !== 'discoverable') return { success: false, status: 403, error: 'Önce bu lobiye katılmalısın.' };
-  if (userBoostSlots(userId).free < 1) return { success: false, status: 400, error: 'Boş takviyen kalmadı.' };
-  db.prepare(`INSERT INTO hub_boosts (hub_id, user_id) VALUES (?, ?)`).run(hubId, userId);
+  if (slots.free < 1) return { success: false, status: 400, error: 'Boş takviyen kalmadı.' };
+  db.prepare(`INSERT INTO hub_boosts (hub_id, user_id, source) VALUES (?, ?, ?)`).run(hubId, userId, slots.prem_free > 0 ? 'premium' : 'gift');
   return { success: true, boost: getHubBoostInfo(hubId, userId) };
 }
 
@@ -2811,8 +2835,8 @@ function updateAvatar(userId, dataUrl) {
       // Kırpılmış statik fotoğraflar ~2MB'ı geçmez. Sauran Premium'un animasyonlu (GIF) avatarı kırpılmadan,
       // olduğu gibi yüklendiği için daha büyük olabilir (istemci 5MB ham dosya sınırı uyguluyor, base64 ~6.7MB).
       const isGif = dataUrl.startsWith('data:image/gif;base64,');
-      if (isGif && !hasActivePremium(userId)) {
-        return { success: false, error: 'Animasyonlu profil fotoğrafı yalnızca Sauran Premium abonelerine açık.' };
+      if (isGif && !hasFeature(userId, 'gif_avatar')) {
+        return { success: false, error: 'Animasyonlu profil fotoğrafı yalnızca Sauran Premium abonelerine (ya da hediye edilenlere) açık.' };
       }
       const maxLen = isGif ? 7_000_000 : 2_000_000;
       if (dataUrl.length > maxLen) {
@@ -2840,8 +2864,8 @@ function updateBanner(userId, dataUrl) {
 
       // Sauran Plus: animasyonlu (GIF) kapak fotoğrafı, kırpılmadan olduğu gibi yüklenir (istemci 5MB ham dosya sınırı uyguluyor).
       const isGif = dataUrl.startsWith('data:image/gif;base64,');
-      if (isGif && !hasActivePlus(userId)) {
-        return { success: false, error: 'Animasyonlu kapak fotoğrafı yalnızca Sauran Plus abonelerine açık.' };
+      if (isGif && !hasFeature(userId, 'gif_banner')) {
+        return { success: false, error: 'Animasyonlu kapak fotoğrafı yalnızca Sauran Plus abonelerine (ya da hediye edilenlere) açık.' };
       }
       if (dataUrl.length > (isGif ? 7_000_000 : 3_000_000)) {
         return { success: false, error: 'Görsel çok büyük.' };
@@ -3402,13 +3426,10 @@ const GIFT_PRODUCTS = {
   coin:          { label: 'Sauran Coin',        type: 'balance', enabled: true,  min: 1, max: 100000, unit: 'Coin' },
   plus:          { label: 'Sauran Plus',        type: 'timed',   enabled: true,  min: 1, max: 3650,   unit: 'gün' },
   premium:       { label: 'Sauran Premium',     type: 'timed',   enabled: true,  min: 1, max: 3650,   unit: 'gün' },
-  profile_theme: { label: 'Profil teması',      type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' },
-  profile_effect:{ label: 'Profil efekti',      type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' },
-  name_effect:   { label: 'İsim efekti',        type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' },
-  lobby_theme:   { label: 'Lobi teması',        type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' },
-  lobby_image:   { label: 'Lobi görseli hakkı', type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' },
-  custom_emoji:  { label: 'Özel emoji',         type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' },
-  sticker_pack:  { label: 'Sticker paketi',     type: 'item',    enabled: true, min: 1, max: 1,      unit: 'adet' }
+  boost:         { label: 'Lobi Takviyesi',     type: 'boost',   enabled: true,  min: 1, max: 50,     unit: 'takviye' },
+  // Aşağısı OTOMATİK: server/features.js (özellikler) + server/atmosphere.js (Atmosphere paketleri). Yeni kayıt = yeni hediye ürünü.
+  ...Object.fromEntries(Object.entries(FEATURES).map(([key, f]) => [key, { label: f.label, type: 'item', enabled: true, min: 1, max: 1, unit: 'adet', tier: f.tier }])),
+  ...Object.fromEntries(ATMOSPHERES.map((a) => ['atmo:' + a.key, { label: 'Atmosphere: ' + a.label, type: 'atmo', enabled: true, min: 1, max: 1, unit: 'paket', tier: a.tier }]))
 };
 
 function listGiftProducts() {
@@ -3432,6 +3453,19 @@ function giftProduct(actorId, username, productKey, quantity, note) {
     } else if (p.type === 'timed') {
       const cur = db.prepare(`SELECT MAX(expires_at) AS e FROM entitlements WHERE user_id = ? AND product = ? AND expires_at > datetime('now')`).get(target.id, productKey).e;
       db.prepare(`INSERT INTO entitlements (user_id, product, expires_at, gift_id) VALUES (?, ?, datetime(COALESCE(?, 'now'), '+' || ? || ' days'), ?)`).run(target.id, productKey, cur, n, giftId);
+    } else if (p.type === 'boost') {
+      db.prepare(`INSERT INTO boost_credits (user_id, amount, gift_id) VALUES (?, ?, ?)`).run(target.id, n, giftId);
+    } else if (p.type === 'atmo') {
+      // Paketin kendisi + paketin kullandığı tek-özellik hakları (sohbet teması, balon, profil/isim efekti, ses). Hepsi kalıcı.
+      const atmo = getAtmosphere(productKey.slice('atmo:'.length));
+      const ins = db.prepare(`INSERT INTO entitlements (user_id, product, expires_at, gift_id) VALUES (?, ?, NULL, ?)`);
+      if (!ownsAtmosphere(target.id, atmo.key)) ins.run(target.id, productKey, giftId);
+      const needs = ['profile_sound'];
+      for (const k of ['chat_theme', 'bubble_style', 'profile_theme', 'name_effect', 'profile_effect']) {
+        const v = atmo.bundle[k];
+        if (v && v !== 'none' && v !== 'classic' && v !== 'default') needs.push(k);
+      }
+      for (const k of needs) if (!hasFeature(target.id, k)) ins.run(target.id, k, giftId);
     } else {
       db.prepare(`INSERT INTO entitlements (user_id, product, expires_at, gift_id) VALUES (?, ?, NULL, ?)`).run(target.id, productKey, giftId);
     }
@@ -3934,10 +3968,10 @@ function hydrateMessage(row, viewerId = null) {
   // (üyelik biterse geçmiş mesajlar da otomatik 'classic' görünür).
   if ('chat_theme' in row) {
     const senderIsPlus = row.user_id && hasActivePlus(row.user_id);
-    row.chat_theme = senderIsPlus ? (row.chat_theme || 'classic') : 'classic';
+    row.chat_theme = row.user_id && hasFeature(row.user_id, 'chat_theme') ? (row.chat_theme || 'classic') : 'classic';
     if ('profile_color' in row) row.profile_color = row.profile_color || null; // profil rengi herkese açık
     row.plus_active = Boolean(senderIsPlus);
-    row.bubble_style = senderIsPlus ? (row.bubble_style || 'default') : 'default';
+    row.bubble_style = row.user_id && hasFeature(row.user_id, 'bubble_style') ? (row.bubble_style || 'default') : 'default';
     row.name_effect = row.user_id && hasFeature(row.user_id, 'name_effect') ? (row.name_effect || 'none') : 'none';
   }
 
@@ -4597,11 +4631,12 @@ function hasActivePlus(userId) {
 
 // Tek tek açılabilen Plus özellikleri: aktif Plus/Premium hepsine sahiptir; Hediye Aracı'ndan tek bir özellik hediye edilen
 // kullanıcı (entitlements'ta o ürün anahtarıyla kalıcı kayıt) yalnızca o özelliği kullanır.
-const PLUS_FEATURES = ['profile_theme', 'profile_effect', 'name_effect', 'lobby_theme', 'lobby_image', 'sticker_pack', 'custom_emoji'];
+const PLUS_FEATURES = Object.keys(FEATURES); // (ad geriye dönük uyumluluk için; Premium'a özel olanlar dahil tüm özellikler)
 
 function hasFeature(userId, key) {
-  if (!userId || !PLUS_FEATURES.includes(key)) return false;
-  if (hasActivePlus(userId)) return true;
+  const f = FEATURES[key];
+  if (!userId || !f) return false;
+  if (f.tier === 'premium' ? hasActivePremium(userId) : hasActivePlus(userId)) return true;
   return Boolean(db.prepare(`SELECT 1 FROM entitlements WHERE user_id = ? AND product = ? AND (expires_at IS NULL OR expires_at > datetime('now')) LIMIT 1`).get(userId, key));
 }
 
@@ -4731,7 +4766,7 @@ function stickerEmoji(id) {
 
 function validateStickerFor(userId, stickerId) {
   if (PREMIUM_STICKERS.includes(stickerId)) {
-    return hasActivePremium(userId) ? null : 'Bu çıkartma yalnızca Sauran Premium abonelerine açık.';
+    return hasFeature(userId, 'premium_sticker_pack') ? null : 'Bu çıkartma yalnızca Sauran Premium abonelerine (ya da hediye edilenlere) açık.';
   }
   if (PLUS_STICKERS.includes(stickerId)) {
     return hasFeature(userId, 'sticker_pack') ? null : 'Bu çıkartma yalnızca Sauran Plus abonelerine (ya da hediye edilenlere) açık.';
