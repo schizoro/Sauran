@@ -116,7 +116,9 @@
         const q = state.query;
         const match = (e) => !q || e.name.toLowerCase().includes(q);
         const secs = [], jumps = [];
-        const rec = recent().filter((r) => (r.k === 'x' || (r.k === 'c' && r.url)) && (!q || (r.name || '').includes(q)));
+        // Sık kullanılanlarda yalnızca şu an kullanılabilir özel emojiler (kişisel + kilitsiz lobi) gösterilir.
+        const usable = new Set([...(d.personal || []).map((e) => e.url), ...(d.lobbies || []).filter((l) => !l.locked).flatMap((l) => l.emojis.map((e) => e.url))]);
+        const rec = recent().filter((r) => (r.k === 'x' || (r.k === 'c' && r.url && (!state.data || usable.has(r.url)))) && (!q || (r.name || '').includes(q)));
         if (rec.length) {
             secs.push(sectionHtml('recent', 'Sık kullanılan', rec.map((r) => r.k === 'x'
                 ? `<button type="button" class="ep-item ep-uni" data-ins="${escA(r.ch)}">${esc(r.ch)}</button>`
