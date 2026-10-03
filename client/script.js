@@ -7732,7 +7732,8 @@ async function renderCzPremium(sub) {
         ${feat('📎', '100 MB dosya / video', 'Plus: 50 MB.', on ? 'on' : 'prem')}
         ${feat('📺', 'Yüksek kalite ekran paylaşımı', 'Plus\'tan daha yüksek bit hızı tavanı; ağın elverdiği ölçüde daha net görüntü.', on ? 'on' : 'prem')}
         ${feat('🧸', '12 Premium hareketli çıkartma', 'Ejderha, Anka kuşu, Aslan, Astronot ve daha fazlası.', on ? 'on' : 'prem')}
-        ${feat('🎬', 'Premium emoji paketleri ve erken erişim', 'Yeni Premium içeriklere erken erişim bu pakete dahil olacak.', 'soon')}
+        ${feat('😍', '12 Premium tepki emojisi', 'Plus\'ın 12 ek emojisinin üstüne: 🐉 🦄 👑 💎 🌟 🚀 …', on ? 'on' : 'prem')}
+        ${feat('⏳', 'Yeni içeriklere erken erişim', 'Yeni Atmosphere ve özellikler önce Premium\'a açılır.', on ? 'on' : 'prem')}
         <div class="atmo-actions" style="margin-top:12px;">
             <button id="cz-open-subs-btn" class="atmo-btn" type="button">Abonelikleri gör</button>
             <button id="cz-open-atmo-btn" class="atmo-btn atmo-btn-use" type="button">🌌 Atmosphere'lere git</button>
@@ -7862,9 +7863,9 @@ function atmoCardHtml(a) {
         ? '<button class="atmo-btn atmo-btn-on" type="button" disabled>✓ Kullanılıyor</button>'
         : a.available
             ? `<button class="atmo-btn atmo-btn-use" type="button" data-atmo-act="use" data-key="${a.key}">Kullan</button>`
-            : `<button class="atmo-btn" type="button" disabled>${a.tier === 'coin' ? `🪙 ${a.price_coins} · Yakında` : a.tier === 'premium' ? '👑 Premium gerekli' : '✦ Plus gerekli'}</button>`;
+            : `<button class="atmo-btn" type="button" disabled>${a.tier === 'coin' ? `🪙 ${a.price_coins} · Yakında` : a.early_access_until ? '👑 Premium erken erişim' : a.tier === 'premium' ? '👑 Premium gerekli' : '✦ Plus gerekli'}</button>`;
     return `<article class="atmo-card${a.active ? ' active' : ''}" data-key="${a.key}">
-        <div class="atmo-art" style="background:${a.art}"><span class="atmo-emoji" aria-hidden="true">${a.emoji}</span>${tier}</div>
+        <div class="atmo-art" style="background:${a.art}"><span class="atmo-emoji" aria-hidden="true">${a.emoji}</span>${tier}${a.early_access_until ? '<span class="atmo-early">⏳ Erken erişim</span>' : ''}</div>
         <div class="atmo-body">
             <h4>${escapeHtml(a.label)}</h4>
             <p>${escapeHtml(a.desc)}</p>
@@ -8492,7 +8493,8 @@ async function loadSubscriptions() {
                 <li><span class="subs-ic">🎞️</span><span><b>Animasyonlu (GIF)</b> profil fotoğrafı</span></li>
                 <li><span class="subs-ic">📺</span><span><b>Yüksek kalite ekran paylaşımı</b> <small>(Plus'tan daha yüksek bit hızı)</small></span></li>
                 <li><span class="subs-ic">🧸</span><span><b>12 Premium hareketli çıkartma</b> <small>(Ejderha, Anka kuşu, Aslan, Astronot…)</small></span></li>
-                <li class="subs-soon"><span class="subs-ic">🎬</span><span>Premium emoji paketleri, erken erişim <small>(yakında)</small></span></li>
+                <li><span class="subs-ic">😍</span><span><b>12 Premium tepki emojisi</b> <small>(Plus'ın 12 ek emojisinin üstüne)</small></span></li>
+                <li><span class="subs-ic">⏳</span><span><b>Yeni içeriklere erken erişim</b> <small>(yeni Atmosphere ve özellikler önce Premium'a)</small></span></li>
             </ul>
             ${subsStatusHtml(premium, false)}
         </div>`;
@@ -9702,6 +9704,7 @@ const QUICK_REACTION_EMOJIS = ['❤️', '😂', '👍', '🔥', '😮'];
 const ALL_REACTION_EMOJIS = ['❤️', '😂', '👍', '👎', '😮', '😢', '🔥'];
 // Sauran Plus "Özel emoji paketi": ek tepki emojileri (sunucu yetkisiz eklemeyi reddeder).
 const EXTRA_REACTION_EMOJIS = ['🥰', '😎', '🤩', '🥳', '🤔', '💯', '🎉', '🙏', '👏', '💀', '😭', '✨'];
+const PREMIUM_REACTION_EMOJIS = ['🐉', '🦄', '👑', '💎', '🌟', '🚀', '🔮', '🎭', '🏆', '🧿', '🎯', '🌠'];
 const FORWARDABLE_KINDS = ['text', 'dm', 'voice', 'dm_voice', 'image', 'dm_image', 'video', 'dm_video', 'file', 'dm_file'];
 
 let hubReplyTarget = null;
@@ -9773,6 +9776,7 @@ function buildMsgActionsBarHtml(msg, opts) {
             <div class="msg-reaction-picker liquid-glass" style="display:none;">
                 ${ALL_REACTION_EMOJIS.map(e => `<button type="button" data-emoji="${e}">${e}</button>`).join('')}
                 ${EXTRA_REACTION_EMOJIS.map(e => `<button type="button" class="react-extra${userHasFeature('custom_emoji') ? '' : ' locked'}" data-emoji="${e}" title="Sauran Plus">${e}</button>`).join('')}
+                ${PREMIUM_REACTION_EMOJIS.map(e => `<button type="button" class="react-extra react-prem${userHasFeature('premium_emoji_pack') ? '' : ' locked'}" data-emoji="${e}" title="Sauran Premium">${e}</button>`).join('')}
             </div>
             <div class="msg-actions-menu liquid-glass" style="display:none;">${menuHtml}</div>
         </div>
@@ -9844,7 +9848,7 @@ function wireMessageActions(wrap, msg, opts) {
         picker?.querySelectorAll('[data-emoji]').forEach((btn) => {
             btn.addEventListener('click', (event) => {
                 event.stopPropagation();
-                if (btn.classList.contains('locked')) { showToast('Ek emoji paketi Sauran Plus abonelerine açıktır.'); return; }
+                if (btn.classList.contains('locked')) { showToast(btn.classList.contains('react-prem') ? 'Premium emoji paketi Sauran Premium abonelerine açıktır.' : 'Ek emoji paketi Sauran Plus abonelerine açıktır.'); return; }
                 picker.style.display = 'none';
                 sendReactionRequest(msg.id, btn.dataset.emoji, false);
             });

@@ -254,6 +254,43 @@ test('Hediye Lobi Takviyesi: Premium olmadan kullanılır, kalıcıdır, Premium
   assert.strictEqual(dbm.listMyBoosts(pu).slots.total, 1); // yalnızca hediye yuva
 });
 
+test('Premium emoji paketi: yalnızca Premium (ya da hediye) tepki verebilir', () => {
+  const eP = user('t_em_prem', 'premium'), eL = user('t_em_plus', 'plus'), eF = user('t_em_free', null), founder = user('t_em_f', null);
+  assert.match(dbm.addReaction(999999, eF, '🐉').error, /Premium/);
+  assert.match(dbm.addReaction(999999, eL, '🐉').error, /Premium/); // Plus yetmez
+  assert.strictEqual(dbm.addReaction(999999, eP, '🐉').error, 'Mesaj bulunamadı.'); // kapıdan geçti
+  assert.strictEqual(dbm.addReaction(999999, eL, '🥰').error, 'Mesaj bulunamadı.'); // Plus emojisi hâlâ Plus'ta
+  assert.strictEqual(dbm.giftProduct(founder, 't_em_plus', 'premium_emoji_pack', 1).success, true);
+  assert.strictEqual(dbm.addReaction(999999, eL, '🐉').error, 'Mesaj bulunamadı.'); // hediyeyle açıldı
+});
+
+test('Erken erişim: tarihe kadar yalnızca Premium; sonra normal kademe; hediye/sahiplik her zaman geçer', () => {
+  const { ATMOSPHERES } = require('./atmosphere');
+  const { FEATURES } = require('./features');
+  const ePrem = user('t_ea_prem', 'premium'), ePlus = user('t_ea_plus', 'plus'), eGift = user('t_ea_gift', null), founder = user('t_ea_f', null);
+  const midnight = ATMOSPHERES.find((a) => a.key === 'midnight');
+  const future = new Date(Date.now() + 86400000).toISOString(), past = new Date(Date.now() - 86400000).toISOString();
+  try {
+    midnight.early_access_until = future;
+    assert.strictEqual(dbm.listAtmospheresFor(ePlus).find((a) => a.key === 'midnight').available, false);
+    assert.strictEqual(dbm.listAtmospheresFor(ePrem).find((a) => a.key === 'midnight').available, true);
+    assert.ok(dbm.listAtmospheresFor(ePlus).find((a) => a.key === 'midnight').early_access_until);
+    dbm.giftProduct(founder, 't_ea_gift', 'atmo:midnight', 1);
+    assert.strictEqual(dbm.listAtmospheresFor(eGift).find((a) => a.key === 'midnight').available, true);
+    midnight.early_access_until = past;
+    assert.strictEqual(dbm.listAtmospheresFor(ePlus).find((a) => a.key === 'midnight').available, true);
+    assert.strictEqual(dbm.listAtmospheresFor(ePlus).find((a) => a.key === 'midnight').early_access_until, null);
+    FEATURES.chat_theme.early_access_until = future;
+    assert.strictEqual(dbm.hasFeature(ePlus, 'chat_theme'), false);
+    assert.strictEqual(dbm.hasFeature(ePrem, 'chat_theme'), true);
+    FEATURES.chat_theme.early_access_until = past;
+    assert.strictEqual(dbm.hasFeature(ePlus, 'chat_theme'), true);
+  } finally {
+    delete midnight.early_access_until;
+    delete FEATURES.chat_theme.early_access_until;
+  }
+});
+
 console.log(`\n${passed} test geçti`);
 try { db.close(); fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true }); } catch (_) { /* Windows dosya kilidi: geçici klasör bırakılabilir */ }
 process.exit(0);

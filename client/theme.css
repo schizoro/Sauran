@@ -2527,3 +2527,5 @@ body.hubset-open .hub-fx > i { animation-play-state: paused; }
 .hub-emoji-item img { width: 28px; height: 28px; object-fit: contain; }
 .hub-emoji-item button { border: 0; background: none; color: var(--text-tertiary); cursor: pointer; }
 .hub-emoji-item button:hover { color: var(--danger); }
+.atmo-early { position: absolute; top: 10px; right: 10px; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: rgba(8, 10, 14, .62); color: #ffd166; box-shadow: 0 0 0 1px rgba(255, 209, 102, .4); }
+.msg-reaction-picker .react-prem { box-shadow: 0 0 0 1px rgba(255, 209, 102, .35); border-radius: 8px; }

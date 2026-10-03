@@ -2556,7 +2556,8 @@ function atmosphereAllowed(userId, atmo) {
   if (!atmo) return false;
   if (ownsAtmosphere(userId, atmo.key)) return true; // hediye edilen / (ileride) satın alınan paket
   if (atmo.tier === 'coin') return false; // Coin satın alma henüz açık değil
-  return atmo.tier === 'premium' ? hasActivePremium(userId) : hasActivePlus(userId);
+  const early = atmo.early_access_until && Date.now() < new Date(atmo.early_access_until).getTime();
+  return atmo.tier === 'premium' || early ? hasActivePremium(userId) : hasActivePlus(userId);
 }
 
 // Okuma anında geçerli Atmosphere: abonelik bitmişse (ya da paket kaldırılmışsa) 'none'.
@@ -2571,6 +2572,7 @@ function listAtmospheresFor(userId) {
   return ATMOSPHERES.map((a) => ({
     key: a.key, label: a.label, emoji: a.emoji, desc: a.desc, art: a.art, tier: a.tier, category: a.category,
     price_coins: a.price_coins, purchasable: Boolean(a.purchasable), bundle: a.bundle, sound: a.sound, hub_effect: a.hub_effect || 'none',
+    early_access_until: a.early_access_until && Date.now() < new Date(a.early_access_until).getTime() ? a.early_access_until : null,
     available: atmosphereAllowed(userId, a), active: a.key === active
   }));
 }
@@ -4636,7 +4638,8 @@ const PLUS_FEATURES = Object.keys(FEATURES); // (ad geriye dönük uyumluluk iç
 function hasFeature(userId, key) {
   const f = FEATURES[key];
   if (!userId || !f) return false;
-  if (f.tier === 'premium' ? hasActivePremium(userId) : hasActivePlus(userId)) return true;
+  const early = f.early_access_until && Date.now() < new Date(f.early_access_until).getTime();
+  if (f.tier === 'premium' || early ? hasActivePremium(userId) : hasActivePlus(userId)) return true;
   return Boolean(db.prepare(`SELECT 1 FROM entitlements WHERE user_id = ? AND product = ? AND (expires_at IS NULL OR expires_at > datetime('now')) LIMIT 1`).get(userId, key));
 }
 
@@ -6403,6 +6406,8 @@ db.exec(`
 const ALLOWED_REACTION_EMOJIS = ['❤️', '😂', '👍', '👎', '😮', '😢', '🔥'];
 // Sauran Plus "Özel emoji paketi": ek tepki emojileri. Eklemek yalnızca yetkiliye açık; herkes başkalarının tepkisini görür.
 const EXTRA_REACTION_EMOJIS = ['🥰', '😎', '🤩', '🥳', '🤔', '💯', '🎉', '🙏', '👏', '💀', '😭', '✨'];
+// Sauran Premium emoji paketi: Plus'ın 12 ek emojisinin üstüne 12 tane daha (yalnızca Premium).
+const PREMIUM_REACTION_EMOJIS = ['🐉', '🦄', '👑', '💎', '🌟', '🚀', '🔮', '🎭', '🏆', '🧿', '🎯', '🌠'];
 
 function getMessageReactions(messageId, viewerId) {
   const rows = db.prepare(`
@@ -6431,7 +6436,9 @@ function getMessageAccessInfo(messageId, actorId) {
 
 function addReaction(messageId, userId, emoji) {
   const isExtra = EXTRA_REACTION_EMOJIS.includes(emoji);
-  if (!ALLOWED_REACTION_EMOJIS.includes(emoji) && !isExtra) return { success: false, error: 'Geçersiz emoji.' };
+  const isPremiumEmoji = PREMIUM_REACTION_EMOJIS.includes(emoji);
+  if (!ALLOWED_REACTION_EMOJIS.includes(emoji) && !isExtra && !isPremiumEmoji) return { success: false, error: 'Geçersiz emoji.' };
+  if (isPremiumEmoji && !hasFeature(userId, 'premium_emoji_pack')) return { success: false, error: 'Bu emoji paketi yalnızca Sauran Premium abonelerine (ya da hediye edilenlere) açık.' };
   if (isExtra && !hasFeature(userId, 'custom_emoji')) return { success: false, error: 'Bu emoji paketi yalnızca Sauran Plus abonelerine (ya da hediye edilenlere) açık.' };
 
   const { msg, hasAccess } = getMessageAccessInfo(messageId, userId);
