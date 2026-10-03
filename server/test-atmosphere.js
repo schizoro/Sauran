@@ -144,6 +144,32 @@ test('Lobi bannerı: Seviye 3 şartı, yalnızca sahip, GIF kabul, boyut sınır
   assert.strictEqual(dbm.setHubBanner(hub2, o2, null).success, true); // kaldırma her seviyede serbest
 });
 
+test('Lobi emojileri: Seviye 4 şartı, yalnızca sahip, ad/format/boyut/yuva denetimi, seviye düşünce gizlenir', () => {
+  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==';
+  const o3 = user('t_em_o', 'premium');
+  const hub3 = dbm.createHub(o3, { name: 'Emoji Lobisi' }).id;
+  assert.strictEqual(dbm.addHubEmoji(hub3, o3, 'kedi', png).success, false); // Seviye 1
+  const ins = db.prepare('INSERT INTO hub_boosts (hub_id, user_id) VALUES (?, ?)');
+  const bs = [user('t_em_1', 'premium'), user('t_em_2', 'premium'), user('t_em_3', 'premium'), user('t_em_4', 'premium')];
+  bs.forEach((b) => { for (let i = 0; i < 3; i++) ins.run(hub3, b); });
+  assert.strictEqual(dbm.hubLevel(hub3), 4);
+  assert.strictEqual(dbm.addHubEmoji(hub3, bs[0], 'kedi', png).success, false); // sahip değil
+  assert.strictEqual(dbm.addHubEmoji(hub3, o3, 'Kedi!', png).success, false); // geçersiz ad
+  assert.strictEqual(dbm.addHubEmoji(hub3, o3, 'kedi', 'data:image/svg+xml;base64,AAAA').success, false); // svg yok
+  assert.strictEqual(dbm.addHubEmoji(hub3, o3, 'kedi', 'data:image/png;base64,' + 'A'.repeat(150_000)).success, false); // çok büyük
+  assert.strictEqual(dbm.addHubEmoji(hub3, o3, 'kedi', png).success, true);
+  assert.strictEqual(dbm.addHubEmoji(hub3, o3, 'kedi', png).success, false); // yinelenen ad
+  for (let i = 0; i < 9; i++) assert.strictEqual(dbm.addHubEmoji(hub3, o3, 'e' + i + 'x', png).success, true);
+  assert.strictEqual(dbm.addHubEmoji(hub3, o3, 'fazla', png).success, false); // 10 yuva dolu
+  assert.strictEqual(dbm.getHubDetail(hub3, o3).emojis.length, 10);
+  const emojiId = dbm.getHubDetail(hub3, o3).emojis[0].id;
+  assert.strictEqual(dbm.removeHubEmoji(hub3, bs[0], emojiId).success, false); // sahip değil
+  assert.strictEqual(dbm.removeHubEmoji(hub3, o3, emojiId).emojis.length, 9);
+  db.prepare(`UPDATE entitlements SET expires_at = '2000-01-01 00:00:00' WHERE user_id = ?`).run(bs[0]);
+  assert.strictEqual(dbm.hubLevel(hub3), 3);
+  assert.deepStrictEqual(dbm.getHubDetail(hub3, o3).emojis, []); // Seviye 4 altında gizli
+});
+
 console.log(`\n${passed} test geçti`);
 try { db.close(); fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true }); } catch (_) { /* Windows dosya kilidi: geçici klasör bırakılabilir */ }
 process.exit(0);

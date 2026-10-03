@@ -138,6 +138,19 @@ if (!userColumns.includes('profile_sound_on')) {
 }
 
 // Lobi Takviyesi: Premium kullanıcılar takviyelerini lobilere verir. removed_at = geri çekildi (yuva bir süre dolu sayılır).
+// Lobiye özel emojiler (Seviye 4): mesajlarda :isim: ile kullanılır.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS hub_emojis (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hub_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    image_data TEXT NOT NULL,
+    created_by INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(hub_id, name),
+    FOREIGN KEY (hub_id) REFERENCES hubs(id) ON DELETE CASCADE
+  );
+`);
 db.exec(`
   CREATE TABLE IF NOT EXISTS hub_boosts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2601,7 +2614,7 @@ function setProfileSoundOn(userId, on) {
 }
 
 // ── Lobi Takviyesi ────────────────────────────────────────────────────────────────────────────────
-const { PREMIUM_MONTHLY_BOOSTS, BOOST_COOLDOWN_HOURS, BOOST_LEVELS, levelForBoosts } = require('./atmosphere');
+const { PREMIUM_MONTHLY_BOOSTS, BOOST_COOLDOWN_HOURS, BOOST_LEVELS, levelForBoosts, HUB_EMOJI_SLOTS } = require('./atmosphere');
 
 // Yalnızca hâlâ Premium olan kullanıcıların takviyeleri sayılır (abonelik bitince takviye otomatik düşer).
 function hubBoostCount(hubId) {
@@ -2688,6 +2701,37 @@ function setHubBanner(hubId, userId, dataUrl) {
   const clean = stripImageMetadata(dataUrl);
   db.prepare(`UPDATE hubs SET banner_data = ? WHERE id = ?`).run(clean, hubId);
   return { success: true, banner_data: clean };
+}
+
+const HUB_EMOJI_MAX_CHARS = 140_000; // ~100 KB
+const HUB_EMOJI_NAME_RE = /^[a-z0-9_]{2,20}$/;
+function listHubEmojis(hubId) {
+  if (hubLevel(hubId) < 4) return [];
+  return db.prepare(`SELECT id, name, image_data FROM hub_emojis WHERE hub_id = ? ORDER BY id ASC LIMIT ?`).all(hubId, HUB_EMOJI_SLOTS);
+}
+function addHubEmoji(hubId, userId, name, dataUrl) {
+  const hub = db.prepare(`SELECT id, created_by, type FROM hubs WHERE id = ?`).get(hubId);
+  if (!hub) return { success: false, status: 404, error: 'Lobi bulunamadı.' };
+  if (hub.type === 'group') return { success: false, status: 400, error: 'Bu işlem gruplarda kullanılamaz.' };
+  if (hub.created_by !== userId) return { success: false, status: 403, error: 'Sadece Lobi sahibi emoji ekleyebilir.' };
+  if (hubLevel(hubId) < 4) return { success: false, status: 403, error: 'Lobi emojileri Seviye 4\'te açılır.' };
+  const n = String(name || '').trim().toLowerCase();
+  if (!HUB_EMOJI_NAME_RE.test(n)) return { success: false, status: 400, error: 'Emoji adı 2-20 karakter; yalnızca küçük harf, rakam ve alt çizgi.' };
+  if (typeof dataUrl !== 'string' || !/^data:image\/(png|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(dataUrl)) return { success: false, status: 400, error: 'Geçersiz görsel formatı (PNG, WebP ya da GIF).' };
+  if (dataUrl.length > HUB_EMOJI_MAX_CHARS) return { success: false, status: 400, error: 'Emoji görseli çok büyük (en fazla ~100 KB).' };
+  const count = db.prepare(`SELECT COUNT(*) AS c FROM hub_emojis WHERE hub_id = ?`).get(hubId).c;
+  if (count >= HUB_EMOJI_SLOTS) return { success: false, status: 400, error: `Emoji yuvaları dolu (${HUB_EMOJI_SLOTS}).` };
+  if (db.prepare(`SELECT 1 FROM hub_emojis WHERE hub_id = ? AND name = ?`).get(hubId, n)) return { success: false, status: 400, error: 'Bu adda bir emoji zaten var.' };
+  const clean = stripImageMetadata(dataUrl);
+  const info = db.prepare(`INSERT INTO hub_emojis (hub_id, name, image_data, created_by) VALUES (?, ?, ?, ?)`).run(hubId, n, clean, userId);
+  return { success: true, emoji: { id: Number(info.lastInsertRowid), name: n, image_data: clean }, emojis: listHubEmojis(hubId) };
+}
+function removeHubEmoji(hubId, userId, emojiId) {
+  const hub = db.prepare(`SELECT id, created_by FROM hubs WHERE id = ?`).get(hubId);
+  if (!hub) return { success: false, status: 404, error: 'Lobi bulunamadı.' };
+  if (hub.created_by !== userId) return { success: false, status: 403, error: 'Sadece Lobi sahibi emoji silebilir.' };
+  db.prepare(`DELETE FROM hub_emojis WHERE id = ? AND hub_id = ?`).run(emojiId, hubId);
+  return { success: true, emojis: listHubEmojis(hubId) };
 }
 
 function setHubAtmosphere(hubId, userId, key) {
@@ -3634,6 +3678,8 @@ function getHubDetail(hubId, userId) {
     bg_image: (hasFeature(hub.created_by, 'lobby_image') || boost.level >= 2) ? (hub.bg_image || null) : null,
     atmosphere: hubAtmosphereEffective(hub),
     banner_data: boost.level >= 3 ? (hub.banner_data || null) : null,
+    emojis: boost.level >= 4 ? listHubEmojis(hubId) : [],
+    emoji_slots: HUB_EMOJI_SLOTS,
     boost,
     roles,
     members,
@@ -8253,6 +8299,8 @@ module.exports = {
   getHubBoostInfo,
   setHubAtmosphere,
   setHubBanner,
+  addHubEmoji,
+  removeHubEmoji,
   hubLevel,
   PROFILE_THEMES,
   updateProfileTheme,

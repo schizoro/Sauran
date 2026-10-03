@@ -99,6 +99,8 @@ const {
   getHubBoostInfo,
   setHubAtmosphere,
   setHubBanner,
+  addHubEmoji,
+  removeHubEmoji,
   hubLevel,
   updateProfileTheme,
   updateNameEffect,
@@ -2326,6 +2328,30 @@ app.put('/api/hubs/:id/banner', contentWriteLimiter, (req, res) => {
     io.to(`hub:${hubId}`).emit('hub_boost_changed', { hub_id: hubId, banner: true });
     return res.json(result);
   } catch (error) { console.error('Lobi banner hatası:', error); return res.status(500).json({ success: false, error: 'Yüklenemedi.' }); }
+});
+
+// Lobiye özel emojiler (Seviye 4): yalnızca sahip ekler/siler; mesajlarda :isim: ile kullanılır.
+app.post('/api/hubs/:id/emojis', contentWriteLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const hubId = Number(req.params.id);
+    const result = addHubEmoji(hubId, user.id, req.body && req.body.name, req.body && req.body.image_data);
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    io.to(`hub:${hubId}`).emit('hub_boost_changed', { hub_id: hubId, emojis: true });
+    return res.json(result);
+  } catch (error) { console.error('Lobi emoji ekleme hatası:', error); return res.status(500).json({ success: false, error: 'Eklenemedi.' }); }
+});
+app.delete('/api/hubs/:id/emojis/:emojiId', contentWriteLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const hubId = Number(req.params.id);
+    const result = removeHubEmoji(hubId, user.id, Number(req.params.emojiId));
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    io.to(`hub:${hubId}`).emit('hub_boost_changed', { hub_id: hubId, emojis: true });
+    return res.json(result);
+  } catch (error) { console.error('Lobi emoji silme hatası:', error); return res.status(500).json({ success: false, error: 'Silinemedi.' }); }
 });
 
 // Lobi Atmosphere'i (Seviye 3+): yalnızca lobi sahibi. { atmosphere: 'cyber' | 'none' }
