@@ -90,6 +90,12 @@ const {
   effectiveAtmosphere,
   listAtmospheresFor,
   setProfileSoundOn,
+  boostHub,
+  unboostHub,
+  listMyBoosts,
+  getHubBoostInfo,
+  setHubAtmosphere,
+  hubLevel,
   updateProfileTheme,
   updateNameEffect,
   updateBubbleStyle,
@@ -2264,6 +2270,53 @@ app.patch('/api/hubs/:id', (req, res) => {
     console.error('Lobi güncelleme hatası:', error);
     res.status(500).json({ success: false, error: 'Lobi güncellenemedi.' });
   }
+});
+
+// ── Lobi Takviyesi ── Premium aboneler aylık takviyelerini lobilere verir; lobi seviyesi yükselir.
+app.get('/api/me/boosts', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try { return res.json({ success: true, ...listMyBoosts(user.id) }); }
+  catch (error) { console.error('Takviye listesi hatası:', error); return res.status(500).json({ success: false, error: 'Yüklenemedi.' }); }
+});
+
+app.get('/api/hubs/:id/boost', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const hubId = Number(req.params.id);
+    if (!getHubDetail(hubId, user.id)) return res.status(404).json({ success: false, error: 'Lobi bulunamadı.' });
+    return res.json({ success: true, boost: getHubBoostInfo(hubId, user.id) });
+  } catch (error) { console.error('Takviye bilgisi hatası:', error); return res.status(500).json({ success: false, error: 'Yüklenemedi.' }); }
+});
+
+function boostRoute(action) {
+  return (req, res) => {
+    const user = requireAuth(req, res);
+    if (!user) return;
+    try {
+      const hubId = Number(req.params.id);
+      const result = action(user.id, hubId);
+      if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+      io.to(`hub:${hubId}`).emit('hub_boost_changed', { hub_id: hubId, count: result.boost.count, level: result.boost.level });
+      return res.json(result);
+    } catch (error) { console.error('Takviye hatası:', error); return res.status(500).json({ success: false, error: 'İşlem yapılamadı.' }); }
+  };
+}
+app.post('/api/hubs/:id/boost', contentWriteLimiter, boostRoute(boostHub));
+app.delete('/api/hubs/:id/boost', contentWriteLimiter, boostRoute(unboostHub));
+
+// Lobi Atmosphere'i (Seviye 3+): yalnızca lobi sahibi. { atmosphere: 'cyber' | 'none' }
+app.put('/api/hubs/:id/atmosphere', contentWriteLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const hubId = Number(req.params.id);
+    const result = setHubAtmosphere(hubId, user.id, req.body && req.body.atmosphere);
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    io.to(`hub:${hubId}`).emit('hub_boost_changed', { hub_id: hubId, atmosphere: result.atmosphere });
+    return res.json(result);
+  } catch (error) { console.error('Lobi Atmosphere hatası:', error); return res.status(500).json({ success: false, error: 'Uygulanamadı.' }); }
 });
 
 app.put('/api/hubs/:id/slow-mode', contentWriteLimiter, (req, res) => {

@@ -133,6 +133,21 @@ if (!userColumns.includes('profile_sound_on')) {
   db.exec(`ALTER TABLE users ADD COLUMN profile_sound_on INTEGER NOT NULL DEFAULT 1`);
 }
 
+// Lobi Takviyesi: Premium kullanıcılar takviyelerini lobilere verir. removed_at = geri çekildi (yuva bir süre dolu sayılır).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS hub_boosts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hub_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    removed_at DATETIME,
+    FOREIGN KEY (hub_id) REFERENCES hubs(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_hub_boosts_hub ON hub_boosts(hub_id, removed_at);
+  CREATE INDEX IF NOT EXISTS idx_hub_boosts_user ON hub_boosts(user_id, removed_at);
+`);
+
 const VALID_STATUSES = ['active', 'idle', 'busy', 'invisible'];
 const VALID_VISIBILITIES = ['public', 'friends', 'private'];
 
@@ -261,6 +276,10 @@ const hubColumns = db
   .all()
   .map(col => col.name);
 
+if (!hubColumns.includes('atmosphere')) {
+  // Lobi Atmosphere'i (Seviye 3'te açılır; okuma anında seviyeye göre 'none' sayılabilir).
+  db.exec(`ALTER TABLE hubs ADD COLUMN atmosphere TEXT NOT NULL DEFAULT 'none'`);
+}
 if (!hubColumns.includes('image_data')) {
   db.exec(`ALTER TABLE hubs ADD COLUMN image_data TEXT`);
 }
@@ -2548,6 +2567,95 @@ function setProfileSoundOn(userId, on) {
   return { success: true, profile_sound_on: on ? 1 : 0 };
 }
 
+// ── Lobi Takviyesi ────────────────────────────────────────────────────────────────────────────────
+const { PREMIUM_MONTHLY_BOOSTS, BOOST_COOLDOWN_HOURS, BOOST_LEVELS, levelForBoosts } = require('./atmosphere');
+
+// Yalnızca hâlâ Premium olan kullanıcıların takviyeleri sayılır (abonelik bitince takviye otomatik düşer).
+function hubBoostCount(hubId) {
+  return db.prepare(`
+    SELECT COUNT(*) AS c FROM hub_boosts b
+    WHERE b.hub_id = ? AND b.removed_at IS NULL
+      AND EXISTS(SELECT 1 FROM entitlements e WHERE e.user_id = b.user_id AND e.product = 'premium' AND (e.expires_at IS NULL OR e.expires_at > datetime('now')))
+  `).get(hubId).c;
+}
+function hubLevel(hubId) { return levelForBoosts(hubBoostCount(hubId)); }
+
+function userBoostSlots(userId) {
+  const total = hasActivePremium(userId) ? PREMIUM_MONTHLY_BOOSTS : 0;
+  const used = db.prepare(`
+    SELECT COUNT(*) AS c FROM hub_boosts
+    WHERE user_id = ? AND (removed_at IS NULL OR removed_at > datetime('now', ?))
+  `).get(userId, `-${BOOST_COOLDOWN_HOURS} hours`).c;
+  return { total, used: Math.min(used, total), free: Math.max(0, total - used) };
+}
+
+function getHubBoostInfo(hubId, viewerId) {
+  const count = hubBoostCount(hubId);
+  const level = levelForBoosts(count);
+  const next = BOOST_LEVELS.find((l) => l.level === level + 1) || null;
+  const mine = viewerId ? db.prepare(`SELECT COUNT(*) AS c FROM hub_boosts WHERE hub_id = ? AND user_id = ? AND removed_at IS NULL`).get(hubId, viewerId).c : 0;
+  const boosters = db.prepare(`
+    SELECT users.id, users.username, COUNT(*) AS boosts FROM hub_boosts b
+    INNER JOIN users ON users.id = b.user_id
+    WHERE b.hub_id = ? AND b.removed_at IS NULL
+      AND EXISTS(SELECT 1 FROM entitlements e WHERE e.user_id = b.user_id AND e.product = 'premium' AND (e.expires_at IS NULL OR e.expires_at > datetime('now')))
+    GROUP BY users.id ORDER BY boosts DESC, MIN(b.created_at) ASC LIMIT 8
+  `).all(hubId);
+  return {
+    count, level, max_level: BOOST_LEVELS[BOOST_LEVELS.length - 1].level,
+    next_at: next ? next.at : null, goal: next ? next.at : BOOST_LEVELS[BOOST_LEVELS.length - 1].at,
+    levels: BOOST_LEVELS, boosters, my_boosts: mine, my_slots: viewerId ? userBoostSlots(viewerId) : { total: 0, used: 0, free: 0 }
+  };
+}
+
+function boostHub(userId, hubId) {
+  const hub = db.prepare(`SELECT id, type, visibility FROM hubs WHERE id = ?`).get(hubId);
+  if (!hub) return { success: false, status: 404, error: 'Lobi bulunamadı.' };
+  if (hub.type === 'group') return { success: false, status: 400, error: 'Gruplar takviye edilemez.' };
+  if (!hasActivePremium(userId)) return { success: false, status: 403, error: 'Lobi Takviyesi Sauran Premium abonelerine açıktır.' };
+  if (!isHubMember(hubId, userId) && hub.visibility !== 'discoverable') return { success: false, status: 403, error: 'Önce bu lobiye katılmalısın.' };
+  if (userBoostSlots(userId).free < 1) return { success: false, status: 400, error: 'Boş takviyen kalmadı.' };
+  db.prepare(`INSERT INTO hub_boosts (hub_id, user_id) VALUES (?, ?)`).run(hubId, userId);
+  return { success: true, boost: getHubBoostInfo(hubId, userId) };
+}
+
+function unboostHub(userId, hubId) {
+  const row = db.prepare(`SELECT id FROM hub_boosts WHERE hub_id = ? AND user_id = ? AND removed_at IS NULL ORDER BY id DESC LIMIT 1`).get(hubId, userId);
+  if (!row) return { success: false, status: 404, error: 'Bu lobide takviyen yok.' };
+  db.prepare(`UPDATE hub_boosts SET removed_at = datetime('now') WHERE id = ?`).run(row.id);
+  return { success: true, boost: getHubBoostInfo(hubId, userId) };
+}
+
+function listMyBoosts(userId) {
+  const hubs = db.prepare(`
+    SELECT hubs.id, hubs.name, COUNT(*) AS boosts FROM hub_boosts b INNER JOIN hubs ON hubs.id = b.hub_id
+    WHERE b.user_id = ? AND b.removed_at IS NULL GROUP BY hubs.id ORDER BY MAX(b.id) DESC
+  `).all(userId);
+  return { slots: userBoostSlots(userId), hubs, cooldown_hours: BOOST_COOLDOWN_HOURS };
+}
+
+// Lobi Atmosphere'i Seviye 3'ten itibaren açılır; bir paket seçmek lobi temasını da paketin temasına çeker.
+function hubAtmosphereEffective(hub) {
+  if (!hub || !hub.atmosphere || hub.atmosphere === 'none') return 'none';
+  return hubLevel(hub.id) >= 3 && getAtmosphere(hub.atmosphere) ? hub.atmosphere : 'none';
+}
+function setHubAtmosphere(hubId, userId, key) {
+  const hub = db.prepare(`SELECT id, created_by, type FROM hubs WHERE id = ?`).get(hubId);
+  if (!hub) return { success: false, status: 404, error: 'Lobi bulunamadı.' };
+  if (hub.type === 'group') return { success: false, status: 400, error: 'Bu işlem gruplarda kullanılamaz.' };
+  if (hub.created_by !== userId) return { success: false, status: 403, error: 'Sadece Lobi sahibi Atmosphere seçebilir.' };
+  const value = String(key || 'none');
+  if (value === 'none') {
+    db.prepare(`UPDATE hubs SET atmosphere = 'none' WHERE id = ?`).run(hubId);
+    return { success: true, atmosphere: 'none' };
+  }
+  const atmo = getAtmosphere(value);
+  if (!atmo) return { success: false, status: 400, error: 'Geçersiz Atmosphere.' };
+  if (hubLevel(hubId) < 3) return { success: false, status: 403, error: 'Lobi Atmosphere özelliği Seviye 3\'te açılır. Lobiyi takviye et.' };
+  db.prepare(`UPDATE hubs SET atmosphere = ?, theme = ? WHERE id = ?`).run(atmo.key, atmo.hub_theme || 'default', hubId);
+  return { success: true, atmosphere: atmo.key, theme: atmo.hub_theme || 'default' };
+}
+
 const ABOUT_ME_MAX_FREE = 300;
 const ABOUT_ME_MAX_PLUS = 600;
 
@@ -2796,11 +2904,11 @@ function updateHub(hubId, userId, { name, image_data, theme, bg_image, mention_e
   if (theme !== undefined) {
     theme = String(theme || 'default');
     if (!HUB_THEMES.includes(theme)) return { success: false, error: 'Geçersiz Lobi teması.' };
-    if (theme !== 'default' && !hasFeature(userId, 'lobby_theme')) return { success: false, error: 'Lobi teması yalnızca Sauran Plus abonelerine (ya da hediye edilenlere) açık.' };
+    if (theme !== 'default' && !hasFeature(userId, 'lobby_theme') && hubLevel(hubId) < 2) return { success: false, error: 'Lobi teması yalnızca Sauran Plus abonelerine (ya da hediye edilenlere) açık.' };
   }
 
   if (bg_image) {
-    if (!hasFeature(userId, 'lobby_image')) return { success: false, error: 'Lobi arka plan görseli yalnızca Sauran Plus abonelerine (ya da hediye edilenlere) açık.' };
+    if (!hasFeature(userId, 'lobby_image') && hubLevel(hubId) < 2) return { success: false, error: 'Lobi arka plan görseli yalnızca Sauran Plus abonelerine (ya da hediye edilenlere) açık.' };
     if (typeof bg_image !== 'string' || !/^data:image\/(png|jpe?g|webp);base64,[A-Za-z0-9+/]+=*$/.test(bg_image)) return { success: false, error: 'Geçersiz arka plan görseli formatı.' };
     if (bg_image.length > HUB_BG_MAX_CHARS) return { success: false, error: 'Arka plan görseli çok büyük.' };
   }
@@ -3465,10 +3573,16 @@ function getHubDetail(hubId, userId) {
     ? db.prepare(`SELECT role_id, permission_tier, muted FROM hub_members WHERE hub_id = ? AND user_id = ?`).get(hubId, userId)
     : null;
 
+  const boost = getHubBoostInfo(hubId, userId);
+  const boosterIds = new Set(boost.boosters.map((b) => b.id));
+  members.forEach((m) => { m.is_booster = boosterIds.has(m.user_id); });
+
   return {
     ...hub,
-    theme: hasFeature(hub.created_by, 'lobby_theme') ? (hub.theme || 'default') : 'default',
-    bg_image: hasFeature(hub.created_by, 'lobby_image') ? (hub.bg_image || null) : null,
+    theme: (hasFeature(hub.created_by, 'lobby_theme') || boost.level >= 2) ? (hub.theme || 'default') : 'default',
+    bg_image: (hasFeature(hub.created_by, 'lobby_image') || boost.level >= 2) ? (hub.bg_image || null) : null,
+    atmosphere: hubAtmosphereEffective(hub),
+    boost,
     roles,
     members,
     is_member: Boolean(membership),
@@ -8077,6 +8191,12 @@ module.exports = {
   effectiveAtmosphere,
   listAtmospheresFor,
   setProfileSoundOn,
+  boostHub,
+  unboostHub,
+  listMyBoosts,
+  getHubBoostInfo,
+  setHubAtmosphere,
+  hubLevel,
   PROFILE_THEMES,
   updateProfileTheme,
   NAME_EFFECTS,

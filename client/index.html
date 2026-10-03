@@ -502,6 +502,21 @@
 
                     </div>
 
+                    <div id="hub-boost-strip" class="hub-boost-strip" style="display:none;">
+                        <button id="hbs-info" class="hbs-info" type="button" aria-label="Lobi Takviyesi">
+                            <span class="hbs-ic" aria-hidden="true">💎</span>
+                            <span id="hbs-count" class="hbs-count"></span>
+                            <span id="hbs-level" class="hbs-level"></span>
+                            <span class="hbs-bar" aria-hidden="true"><i id="hbs-fill"></i></span>
+                        </button>
+                        <button id="hbs-sound-btn" class="hbs-sound" type="button" style="display:none;">▶ Lobi sesi</button>
+                        <button id="hbs-cta" class="hbs-cta" type="button">Bu Lobiyi Takviye Et</button>
+                        <div id="hbs-sound-ask" class="hbs-ask" style="display:none;">
+                            <span>Lobi/profil sesleri otomatik çalsın mı?</span>
+                            <button id="hbs-ask-yes" type="button">Evet</button>
+                            <button id="hbs-ask-no" type="button">Hayır</button>
+                        </div>
+                    </div>
                     <div id="lobby-supporters" class="lobby-supporters" hidden></div>
                     <div id="hub-feed" class="hub-feed"></div>
 
@@ -719,6 +734,7 @@
                     <button type="button" class="hubset-nav-btn" data-hubset-section="permissions"><span aria-hidden="true">📣</span><span data-i18n="hubset-sec-permissions">Bahsetmeler</span></button>
                     <button type="button" class="hubset-nav-btn" data-hubset-section="invite"><span aria-hidden="true">✉️</span><span data-i18n="hubset-sec-invite">Davet</span></button>
                     <button type="button" class="hubset-nav-btn" data-hubset-section="moderation"><span aria-hidden="true">🛡️</span><span data-i18n="hubset-sec-moderation">Moderasyon</span></button>
+                    <button type="button" class="hubset-nav-btn" data-hubset-section="atmosphere"><span aria-hidden="true">🌌</span><span>Atmosphere</span></button>
                     <button type="button" class="hubset-nav-btn" data-hubset-section="other"><span aria-hidden="true">⚙️</span><span data-i18n="hubset-sec-other">Diğer</span></button>
                 </nav>
 
@@ -741,27 +757,6 @@
                             </div>
                         </div>
 
-                        <div class="hubset-card">
-                            <div id="hubset-theme-block" style="display:none;">
-                    <span class="profile-field-label">Lobi Teması <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
-                    <div id="hubset-theme-picker" class="chat-theme-picker">
-                        <button type="button" class="chat-theme-option" data-hub-theme="default"><span class="chat-theme-swatch"></span>Klasik</button>
-                        <button type="button" class="chat-theme-option" data-hub-theme="aurora"><span class="chat-theme-swatch hub-theme-swatch-aurora"></span>Aurora</button>
-                        <button type="button" class="chat-theme-option" data-hub-theme="ember"><span class="chat-theme-swatch hub-theme-swatch-ember"></span>Kor</button>
-                        <button type="button" class="chat-theme-option" data-hub-theme="forest"><span class="chat-theme-swatch hub-theme-swatch-forest"></span>Orman</button>
-                    </div>
-                    <p id="hubset-theme-hint" class="hubset-hint"></p>
-
-                    <span class="profile-field-label">Lobi Arka Planı <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
-                    <div class="hub-bg-row">
-                        <span id="hubset-bg-preview" class="hub-bg-preview"></span>
-                        <button id="hubset-bg-pick-btn" class="hub-create-image-btn" type="button">Görsel Seç</button>
-                        <button id="hubset-bg-clear-btn" class="hub-create-image-btn" type="button">Kaldır</button>
-                        <input type="file" id="hubset-bg-input" accept="image/png,image/jpeg,image/webp" hidden>
-                    </div>
-                    <p id="hubset-bg-hint" class="hubset-hint"></p>
-                </div>
-                        </div>
                     </section>
 
                     <!-- GÖRÜNÜRLÜK VE KATILIM -->
@@ -941,6 +936,36 @@
                     </section>
 
                     <!-- DİĞER -->
+                    <section class="hubset-panel" data-hubset-panel="atmosphere" style="display:none;">
+                        <div class="hubset-panel-head">
+                            <h3>Atmosphere</h3>
+                            <p>Lobinin görünümü ve sesi. Seviye 2 tema/arka planı, Seviye 3 Atmosphere + lobi sesini açar.</p>
+                        </div>
+                        <div class="hubset-card" id="hubset-boost-card"></div>
+                        <div class="hubset-card" id="hubset-atmo-card"></div>
+                        <div class="hubset-card">
+                            <div id="hubset-theme-block" style="display:none;">
+                    <span class="profile-field-label">Lobi Teması <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
+                    <div id="hubset-theme-picker" class="chat-theme-picker">
+                        <button type="button" class="chat-theme-option" data-hub-theme="default"><span class="chat-theme-swatch"></span>Klasik</button>
+                        <button type="button" class="chat-theme-option" data-hub-theme="aurora"><span class="chat-theme-swatch hub-theme-swatch-aurora"></span>Aurora</button>
+                        <button type="button" class="chat-theme-option" data-hub-theme="ember"><span class="chat-theme-swatch hub-theme-swatch-ember"></span>Kor</button>
+                        <button type="button" class="chat-theme-option" data-hub-theme="forest"><span class="chat-theme-swatch hub-theme-swatch-forest"></span>Orman</button>
+                    </div>
+                    <p id="hubset-theme-hint" class="hubset-hint"></p>
+
+                    <span class="profile-field-label">Lobi Arka Planı <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
+                    <div class="hub-bg-row">
+                        <span id="hubset-bg-preview" class="hub-bg-preview"></span>
+                        <button id="hubset-bg-pick-btn" class="hub-create-image-btn" type="button">Görsel Seç</button>
+                        <button id="hubset-bg-clear-btn" class="hub-create-image-btn" type="button">Kaldır</button>
+                        <input type="file" id="hubset-bg-input" accept="image/png,image/jpeg,image/webp" hidden>
+                    </div>
+                    <p id="hubset-bg-hint" class="hubset-hint"></p>
+                </div>
+                        </div>
+                    </section>
+
                     <section class="hubset-panel" data-hubset-panel="other" style="display:none;">
                         <div class="hubset-panel-head">
                             <h3 data-i18n="hubset-sec-other">Diğer</h3>
@@ -1376,6 +1401,16 @@
                     <small>Yazı, slayt, belge paylaşımı; düşük internet kullanımı.</small>
                 </button>
             </div>
+        </div>
+    </div>
+
+    <div id="boost-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-box market-modal-box boost-modal-box">
+            <div class="modal-header">
+                <span>💎 Lobi Takviyesi</span>
+                <button id="boost-close-btn">✕</button>
+            </div>
+            <div class="market-modal-body" id="boost-body"></div>
         </div>
     </div>
 

@@ -5239,6 +5239,7 @@ function connectToChat() {
         showToast(t('wf-blocked'));
     });
 
+    socket.on('hub_boost_changed', (p) => { if (currentHub && p && p.hub_id === currentHub.id && typeof refreshHubAfterBoost === 'function') refreshHubAfterBoost(); });
     socket.on('hub_slow_mode', (data) => {
         if (!currentHub || Number(data?.hub_id) !== currentHub.id) return;
         const changed = Number(currentHub.slow_mode_seconds || 0) !== Number(data.seconds);
@@ -7697,17 +7698,28 @@ async function fetchSubscriptionState() {
     return { plus: { active: false }, premium: { active: false } };
 }
 
-function renderCzPremium(sub) {
+async function renderCzPremium(sub) {
     const box = document.getElementById('cz-premium');
     if (!box) return;
     const on = sub.premium.active;
-    const feat = (ic, title, text, state) => `<div class="cz-feat"><span class="cz-feat-ic" aria-hidden="true">${ic}</span><span class="cz-feat-text"><strong>${title}</strong><small>${text}</small></span><span class="cz-chip ${state === 'on' ? 'cz-chip-on' : 'cz-chip-soon'}">${state === 'on' ? 'Aktif' : 'Yakında'}</span></div>`;
+    const feat = (ic, title, text, state, extra) => `<div class="cz-feat"><span class="cz-feat-ic" aria-hidden="true">${ic}</span><span class="cz-feat-text"><strong>${title}</strong><small>${text}</small>${extra || ''}</span><span class="cz-chip ${state === 'on' ? 'cz-chip-on' : 'cz-chip-soon'}">${state === 'on' ? 'Aktif' : state === 'soon' ? 'Yakında' : 'Premium'}</span></div>`;
+    let boosts = null;
+    if (on) { try { const r = await fetch('/api/me/boosts', { credentials: 'include' }); const d = await r.json(); if (d.success) boosts = d; } catch (_) {} }
+    const boostExtra = boosts
+        ? `<small>Boş takviye: <b>${boosts.slots.free}</b> / ${boosts.slots.total}${boosts.hubs.length ? ' · Verdiklerin: ' + boosts.hubs.map((h) => escapeHtml(h.name) + (h.boosts > 1 ? ' ×' + h.boosts : '')).join(', ') : ''}</small>`
+        : '';
     box.innerHTML = `
-        <div class="cz-prem-head">${on ? '<span class="subs-status subs-status-on" style="display:inline-block;">✓ Premium aktif</span>' : 'Premium aktif değil.'}</div>
-        ${feat('🪙', 'Aylık 250 Sauran Coin', 'Plus\'taki 100 Coin\'in üstünde.', on ? 'on' : 'soon')}
-        ${feat('🎞️', 'Hareketli (GIF) avatar', 'Profil fotoğrafın hareketli olabilir.', on ? 'on' : 'soon')}
-        ${feat('📎', '100 MB dosya / video', 'Plus: 50 MB.', on ? 'on' : 'soon')}
-        <button id="cz-open-subs-btn" class="hub-create-image-btn" type="button" style="margin-top:12px;">Abonelikleri gör</button>`;
+        <div class="cz-prem-head">${on ? '<span class="subs-status subs-status-on" style="display:inline-block;">✓ Premium aktif</span> &nbsp;Sauran\'ın gelişmiş, tam deneyimi.' : 'Premium aktif değil. Plus = kişiselleştirme; Premium = Sauran\'ın gelişmiş, tam deneyimi.'}</div>
+        ${feat('💎', 'Aylık 3 Lobi Takviyesi', 'Kendi lobine, arkadaşının ya da bir topluluğun lobisine ver; lobi seviyesi yükselir (Seviye 3\'te lobi Atmosphere + sesi).', on ? 'on' : 'prem', boostExtra)}
+        ${feat('🌌', 'Premium Atmosphere paketleri', 'Cyber Gaming ve Cosmic gibi görsel + ses + efekt paketleri.', on ? 'on' : 'prem')}
+        ${feat('🪙', 'Aylık 250 Sauran Coin', 'Plus\'taki 100 Coin\'in üstünde.', on ? 'on' : 'prem')}
+        ${feat('🎞️', 'Hareketli (GIF) avatar', 'Profil fotoğrafın hareketli olabilir.', on ? 'on' : 'prem')}
+        ${feat('📎', '100 MB dosya / video', 'Plus: 50 MB.', on ? 'on' : 'prem')}
+        ${feat('🎬', 'Hareketli banner, yüksek kalite yayın, Premium çıkartma/emoji paketleri', 'Yeni Premium içeriklere erken erişim de bu pakete dahil olacak.', 'soon')}
+        <div class="atmo-actions" style="margin-top:12px;">
+            <button id="cz-open-subs-btn" class="atmo-btn" type="button">Abonelikleri gör</button>
+            <button id="cz-open-atmo-btn" class="atmo-btn atmo-btn-use" type="button">🌌 Atmosphere'lere git</button>
+        </div>`;
 }
 
 async function loadCustomizeCenter() {
@@ -7734,7 +7746,7 @@ async function loadCustomizeCenter() {
     renderProfileThemePicker();
     renderNameEffectPicker();
     renderProfileEffectPicker();
-    renderCzPremium(sub);
+    await renderCzPremium(sub);
 }
 
 function showCzSection(section) {
@@ -7778,6 +7790,7 @@ document.getElementById('cz-edit-profile-btn')?.addEventListener('click', () => 
 });
 czScreen?.addEventListener('click', (e) => {
     if (e.target.id === 'cz-open-subs-btn') { closeCustomizeCenter(); document.getElementById('subs-open-btn')?.click(); }
+    if (e.target.id === 'cz-open-atmo-btn') showCzSection('atmosphere');
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && czScreen && czScreen.style.display === 'flex') closeCustomizeCenter(); });
 
@@ -7966,6 +7979,189 @@ document.getElementById('settings-atmo-lobby-mute')?.addEventListener('change', 
 document.getElementById('settings-atmo-volume')?.addEventListener('input', (e) => { atmoSetPref('volume', e.target.value / 100); const o = document.getElementById('settings-atmo-volume-out'); if (o) o.textContent = e.target.value; });
 document.getElementById('settings-btn')?.addEventListener('click', syncAtmoSettings);
 syncAtmoSettings();
+
+// =====================================================
+// LOBİ TAKVİYESİ + LOBİ ATMOSPHERE — Premium takviyesi lobinin seviyesini yükseltir; Seviye 3'te lobi Atmosphere + sesi açılır.
+// =====================================================
+
+function hubBoost() { return (currentHub && currentHub.boost) || null; }
+
+function renderHubBoostStrip() {
+    const strip = document.getElementById('hub-boost-strip');
+    if (!strip) return;
+    const b = hubBoost();
+    if (!currentHub || !b || isGroupHub(currentHub)) { strip.style.display = 'none'; return; }
+    strip.style.display = '';
+    document.getElementById('hbs-count').textContent = b.next_at != null ? `${b.count} / ${b.next_at} Takviye` : `${b.count} Takviye`;
+    document.getElementById('hbs-level').textContent = `Seviye ${b.level}`;
+    const pct = b.next_at != null ? Math.max(4, Math.min(100, (b.count / Math.max(1, b.next_at)) * 100)) : 100;
+    document.getElementById('hbs-fill').style.width = pct + '%';
+    strip.dataset.level = b.level;
+    syncLobbySound();
+}
+
+function lobbyAtmo() {
+    if (!currentHub || !currentHub.atmosphere || currentHub.atmosphere === 'none') return null;
+    return atmoCatalog ? atmoCatalog.get(currentHub.atmosphere) : null;
+}
+
+// Lobi sesi: Seviye 3+ lobide, tercihlere göre (otomatik oynat / lobi seslerini kapat). Başka lobiye/ekrana geçince durur.
+async function syncLobbySound() {
+    const btn = document.getElementById('hbs-sound-btn');
+    const ask = document.getElementById('hbs-sound-ask');
+    if (!btn) return;
+    btn.style.display = 'none'; ask.style.display = 'none';
+    if (!currentHub || !currentHub.atmosphere || currentHub.atmosphere === 'none') { stopAtmoSound('lobby'); return; }
+    await ensureAtmoCatalog();
+    const a = lobbyAtmo();
+    if (!a) return;
+    if (atmoPref('lobby_mute', '0') === '1') { stopAtmoSound('lobby'); return; }
+    btn.style.display = '';
+    btn.dataset.sound = a.sound;
+    const playing = atmoContext === 'lobby' && window.SauranAtmo && window.SauranAtmo.isPlaying(a.sound);
+    btn.textContent = playing ? '■ Lobi sesi' : '▶ Lobi sesi';
+    if (playing) return;
+    const pref = atmoPref('autoplay', null);
+    if (pref === 'on' && currentHub.id !== syncLobbySound.lastHubId) {
+        syncLobbySound.lastHubId = currentHub.id;
+        playAtmoSound(a.sound, 'lobby', (st) => { btn.textContent = st === 'end' ? '▶ Lobi sesi' : '■ Lobi sesi'; });
+    } else if (pref === null) ask.style.display = '';
+}
+document.getElementById('hbs-sound-btn')?.addEventListener('click', (e) => {
+    const btn = e.currentTarget;
+    if (atmoContext === 'lobby' && window.SauranAtmo && window.SauranAtmo.isPlaying()) { stopAtmoSound('lobby'); btn.textContent = '▶ Lobi sesi'; return; }
+    if (btn.dataset.sound) playAtmoSound(btn.dataset.sound, 'lobby', (st) => { btn.textContent = st === 'end' ? '▶ Lobi sesi' : '■ Lobi sesi'; });
+});
+document.getElementById('hbs-ask-yes')?.addEventListener('click', () => { atmoSetPref('autoplay', 'on'); syncAtmoSettings(); syncLobbySound.lastHubId = null; syncLobbySound(); });
+document.getElementById('hbs-ask-no')?.addEventListener('click', () => { atmoSetPref('autoplay', 'off'); syncAtmoSettings(); document.getElementById('hbs-sound-ask').style.display = 'none'; });
+
+// ── Takviye penceresi ──
+function boostLevelsHtml(b) {
+    return b.levels.filter((l) => l.level > 1).map((l) => {
+        const done = b.level >= l.level;
+        return `<div class="bst-level${done ? ' done' : ''}">
+            <div class="bst-level-head"><span class="bst-lv">Seviye ${l.level}</span><strong>${escapeHtml(l.title)}</strong><span class="bst-at">${done ? '✓ Açık' : `${l.at} takviye`}</span></div>
+            <ul>${l.perks.map((p) => `<li>${escapeHtml(p.text)}${p.soon ? ' <span class="cz-chip cz-chip-soon">Yakında</span>' : ''}</li>`).join('')}</ul>
+        </div>`;
+    }).join('');
+}
+async function renderBoostModal() {
+    const body = document.getElementById('boost-body');
+    if (!body || !currentHub) return;
+    let b = hubBoost();
+    try {
+        const r = await fetch(`/api/hubs/${currentHub.id}/boost`, { credentials: 'include' });
+        const d = await r.json();
+        if (d.success) { b = d.boost; currentHub.boost = b; }
+    } catch (_) {}
+    if (!b) { body.innerHTML = '<p class="mk-state">Yüklenemedi.</p>'; return; }
+    const sub = await fetchSubscriptionState();
+    const premium = sub.premium.active;
+    const slots = b.my_slots || { total: 0, used: 0, free: 0 };
+    const goal = b.next_at != null ? b.next_at : b.count;
+    const pct = b.next_at != null ? Math.max(4, Math.min(100, (b.count / Math.max(1, b.next_at)) * 100)) : 100;
+    const boosters = b.boosters.length
+        ? b.boosters.map((x) => `<span class="atmo-chip">💎 ${escapeHtml(x.username)}${x.boosts > 1 ? ' ×' + x.boosts : ''}</span>`).join('')
+        : '<span class="hubset-hint">Henüz kimse takviye etmedi.</span>';
+    let action;
+    if (!premium) {
+        action = `<p class="hubset-hint">Lobi Takviyesi Sauran Premium abonelerine açıktır; her ay ${slots.total || 3} takviye kazanırlar.</p><button id="boost-open-subs" class="hub-create-image-btn" type="button">👑 Abonelikleri gör</button>`;
+    } else {
+        action = `<p class="hubset-hint">Takviyelerin: <b>${slots.free}</b> / ${slots.total} boş. Bu lobide: <b>${b.my_boosts}</b>.</p>
+            <div class="atmo-actions">
+                <button id="boost-give-btn" class="atmo-btn atmo-btn-use" type="button" ${slots.free < 1 ? 'disabled' : ''}>💎 Bu Lobiyi Takviye Et</button>
+                ${b.my_boosts > 0 ? '<button id="boost-take-btn" class="atmo-btn" type="button">Takviyemi geri çek</button>' : ''}
+            </div>
+            <p class="hubset-hint">Geri çekilen takviyenin yuvası 24 saat dolu kalır.</p>`;
+    }
+    body.innerHTML = `
+        <div class="bst-top"><span class="bst-big">💎 ${b.count}${b.next_at != null ? ' / ' + goal : ''} Takviye</span><span class="bst-lvl">Seviye ${b.level}</span></div>
+        <div class="bst-bar"><i style="width:${pct}%"></i></div>
+        <p class="hubset-hint">${b.next_at != null ? `Sonraki seviyeye ${Math.max(0, b.next_at - b.count)} takviye kaldı.` : 'En yüksek seviyedesin.'}</p>
+        ${boostLevelsHtml(b)}
+        <div class="cz-card-title" style="margin-top:12px;">Takviye edenler</div>
+        <div class="atmo-chips">${boosters}</div>
+        <div class="cz-card-title" style="margin-top:12px;">Sen</div>
+        ${action}`;
+}
+function openBoostModal() { document.getElementById('boost-modal').style.display = 'flex'; renderBoostModal(); }
+function closeBoostModal() { document.getElementById('boost-modal').style.display = 'none'; }
+async function refreshHubAfterBoost() {
+    if (!currentHub) return;
+    try {
+        const d = await (await fetch(`/api/hubs/${currentHub.id}`, { credentials: 'include' })).json();
+        if (d.success) { currentHub = d.hub; renderHubDetail(); if (hubSettingsModal.style.display === 'flex') renderHubAtmosphereSection(); }
+    } catch (_) {}
+}
+document.getElementById('hbs-info')?.addEventListener('click', openBoostModal);
+document.getElementById('hbs-cta')?.addEventListener('click', openBoostModal);
+document.getElementById('boost-close-btn')?.addEventListener('click', closeBoostModal);
+document.getElementById('boost-modal')?.addEventListener('click', async (e) => {
+    if (e.target.id === 'boost-modal') { closeBoostModal(); return; }
+    if (e.target.closest('#boost-open-subs')) { closeBoostModal(); document.getElementById('subs-open-btn')?.click(); return; }
+    const give = e.target.closest('#boost-give-btn'), take = e.target.closest('#boost-take-btn');
+    if (!give && !take || !currentHub) return;
+    try {
+        const r = await fetch(`/api/hubs/${currentHub.id}/boost`, { method: give ? 'POST' : 'DELETE', credentials: 'include' });
+        const d = await r.json();
+        if (!d.success) { showToast(d.error || 'Olmadı.'); return; }
+        showToast(give ? '💎 Takviye verildi!' : 'Takviye geri çekildi.');
+        await refreshHubAfterBoost();
+        renderBoostModal();
+    } catch (_) { showToast('Bağlantı hatası.'); }
+});
+
+// ── Lobi Ayarları → Atmosphere ──
+function renderHubAtmosphereSection() {
+    const boostCard = document.getElementById('hubset-boost-card');
+    const atmoCard = document.getElementById('hubset-atmo-card');
+    if (!boostCard || !atmoCard || !currentHub) return;
+    const b = hubBoost() || { count: 0, level: 1, next_at: 2, levels: [] };
+    boostCard.innerHTML = `<div class="cz-card-title">Takviye</div>
+        <div class="bst-top"><span class="bst-big">💎 ${b.count}${b.next_at != null ? ' / ' + b.next_at : ''} Takviye</span><span class="bst-lvl">Seviye ${b.level}</span></div>
+        <button id="hubset-boost-open" class="hub-create-image-btn" type="button">💎 Lobiyi takviye et / ayrıntılar</button>`;
+    if (!currentHub.is_owner) { atmoCard.style.display = 'none'; return; }
+    atmoCard.style.display = '';
+    if (b.level < 3) {
+        const need = Math.max(0, 7 - b.count);
+        atmoCard.innerHTML = `<div class="cz-card-title">Lobi Atmosphere ve sesi</div><p class="hubset-hint">🔒 Seviye 3'te açılır (${need} takviye kaldı). Açılınca hazır bir Atmosphere seçersin; lobi teması ve sesi tek tıkla uygulanır.</p>`;
+        return;
+    }
+    ensureAtmoCatalog().then((cat) => {
+        if (!cat) return;
+        atmoCard.innerHTML = `<div class="cz-card-title">Lobi Atmosphere ve sesi</div>
+            <p class="hubset-hint">Lobi sesi profil sesinden farklıdır: "bu lobinin atmosferi". Giriş → düşüş → düşük seviyeli ambient akışıyla çalar.</p>
+            ${currentHub.atmosphere && currentHub.atmosphere !== 'none' ? '<button id="hubatmo-clear" class="atmo-clear" type="button">✕ Lobi Atmosphere\'ini kaldır</button>' : ''}
+            <div class="cz-atmo-grid" id="hubatmo-grid">${cat.items.map((a) => atmoCardHtml({ ...a, available: true, active: a.key === currentHub.atmosphere, tier: 'plus' }).replace(/<span class="atmo-tier[^>]*>[^<]*<\/span>/, '').replace(/data-atmo-act="/g, 'data-hubatmo-act="')).join('')}</div>`;
+    });
+}
+document.getElementById('hubset-nav')?.addEventListener('click', (e) => { if (e.target.closest('[data-hubset-section="atmosphere"]')) renderHubAtmosphereSection(); });
+document.getElementById('hubset-atmo-card')?.addEventListener('click', async (e) => {
+    if (e.target.closest('#hubatmo-clear')) { await setHubAtmosphereKey('none'); return; }
+    const btn = e.target.closest('[data-hubatmo-act]');
+    if (!btn) return;
+    const key = btn.dataset.key, a = atmoCatalog && atmoCatalog.get(key);
+    if (btn.dataset.hubatmoAct === 'use') { await setHubAtmosphereKey(key); return; }
+    if (btn.dataset.hubatmoAct === 'preview' && a) {
+        if (atmoContext === 'preview' && document.querySelector(`#hubatmo-grid .atmo-stage[data-stage-for="${key}"].on`)) { stopAtmoSound('preview'); return; }
+        document.querySelectorAll('.atmo-stage.on').forEach((x) => setAtmoStage(x.dataset.stageFor, 'end'));
+        playAtmoSound(a.sound, 'preview', (st) => setAtmoStage(key, st));
+    }
+});
+document.getElementById('hubset-boost-card')?.addEventListener('click', (e) => { if (e.target.closest('#hubset-boost-open')) openBoostModal(); });
+async function setHubAtmosphereKey(key) {
+    if (!currentHub) return;
+    try {
+        const r = await fetch(`/api/hubs/${currentHub.id}/atmosphere`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ atmosphere: key }) });
+        const d = await r.json();
+        if (!d.success) { showToast(d.error || 'Uygulanamadı.'); return; }
+        showToast(key === 'none' ? 'Lobi Atmosphere\'i kaldırıldı.' : 'Lobi Atmosphere\'i uygulandı.');
+        syncLobbySound.lastHubId = null;
+        await refreshHubAfterBoost();
+        hubSettingsTheme = currentHub.theme || 'default';
+        renderHubThemePicker();
+    } catch (_) { showToast('Uygulanamadı.'); }
+}
 
 async function loadInventoryModal() {
     const state = document.getElementById('inventory-state');
@@ -11981,12 +12177,12 @@ let hubSettingsBgImage = undefined; // undefined = değişmedi, null = kaldır, 
 function renderHubBgControls() {
     const preview = document.getElementById('hubset-bg-preview');
     if (!preview || !currentHub) return;
-    const allowed = userHasFeature('lobby_image');
+    const allowed = userHasFeature('lobby_image') || (currentHub.boost && currentHub.boost.level >= 2);
     const shown = hubSettingsBgImage === undefined ? currentHub.bg_image : hubSettingsBgImage;
     preview.style.backgroundImage = shown ? cssImageUrl(shown) : '';
     document.getElementById('hubset-bg-pick-btn').disabled = !allowed;
     document.getElementById('hubset-bg-clear-btn').disabled = !allowed || !shown;
-    document.getElementById('hubset-bg-hint').textContent = allowed ? '' : 'Lobi arka planı Sauran Plus abonelerine açıktır.';
+    document.getElementById('hubset-bg-hint').textContent = allowed ? '' : 'Lobi arka planı Sauran Plus abonelerine ya da Seviye 2 lobilere açıktır.';
 }
 
 document.getElementById('hubset-bg-pick-btn')?.addEventListener('click', () => document.getElementById('hubset-bg-input').click());
@@ -12010,14 +12206,14 @@ function renderHubThemePicker() {
     const block = document.getElementById('hubset-theme-block');
     if (!block || !currentHub) return;
     block.style.display = currentHub.is_owner ? '' : 'none';
-    const isPlus = userHasFeature('lobby_theme');
+    const isPlus = userHasFeature('lobby_theme') || (currentHub.boost && currentHub.boost.level >= 2);
     document.querySelectorAll('#hubset-theme-picker .chat-theme-option').forEach((btn) => {
         const theme = btn.dataset.hubTheme;
         btn.disabled = theme !== 'default' && !isPlus;
         btn.classList.toggle('selected', theme === hubSettingsTheme);
         btn.title = btn.disabled ? 'Sauran Plus gerekli' : '';
     });
-    document.getElementById('hubset-theme-hint').textContent = isPlus ? '' : 'Lobi temaları Sauran Plus abonelerine açıktır.';
+    document.getElementById('hubset-theme-hint').textContent = isPlus ? '' : 'Lobi temaları Sauran Plus abonelerine ya da Seviye 2 lobilere açıktır.';
 }
 
 document.getElementById('hubset-theme-picker')?.addEventListener('click', (event) => {
@@ -12072,6 +12268,7 @@ hubSettingsOpenBtn.addEventListener('click', () => {
         permissions: isOwner,
         invite: true,
         moderation: canModerate,
+        atmosphere: true,
         other: true
     };
     document.querySelectorAll('#hubset-nav [data-hubset-section]').forEach((btn) => {
@@ -12090,7 +12287,7 @@ hubSettingsOpenBtn.addEventListener('click', () => {
 // ─── Lobi ayarları: tam ekran, bölümlü pencere ───
 let hubsetAllowed = {};
 let hubsetCurrent = 'general';
-const HUBSET_SAVE_SECTIONS = ['general', 'visibility', 'permissions'];
+const HUBSET_SAVE_SECTIONS = ['general', 'visibility', 'permissions', 'atmosphere'];
 
 function showHubsetSection(section) {
     if (!hubsetAllowed[section]) section = Object.keys(hubsetAllowed).find((k) => hubsetAllowed[k]) || 'invite';
@@ -12108,6 +12305,7 @@ function showHubsetSection(section) {
     const saveVisible = Boolean(currentHub?.is_owner) && HUBSET_SAVE_SECTIONS.includes(section);
     document.getElementById('hubset-savebar').style.display = saveVisible ? 'flex' : 'none';
     document.getElementById('hubset-content').scrollTop = 0;
+    if (section === 'atmosphere') renderHubAtmosphereSection();
     if (section === 'moderation') showHubSettingsView('bans');
     if (section === 'invite') loadHubInvites();
 }
@@ -13205,6 +13403,7 @@ let hubCreateImageData = null;
 function switchToView(view) {
 
     document.body.dataset.view = view;
+    if (view !== 'hub-detail') { stopAtmoSound('lobby'); if (typeof syncLobbySound === 'function') syncLobbySound.lastHubId = null; }
     placeMobileTopbarItems(view);
 
     hubListView.style.display = view === 'hubs' ? 'flex' : 'none';
@@ -14164,6 +14363,7 @@ function renderHubDetail() {
     }
 
     renderHubMembers();
+    renderHubBoostStrip();
 
 }
 
@@ -15702,7 +15902,7 @@ function renderHubMembers() {
         knownVoicePlus.set(m.user_id, Boolean(m.plus_active));
         knownNameFx.set(m.user_id, m.name_effect || 'none');
         const isSelf = m.user_id === currentUser.id;
-        const tierBadge = m.permission_tier === 'owner' ? ' 👑' : m.permission_tier === 'moderator' ? ' 🛡️' : '';
+        const tierBadge = (m.permission_tier === 'owner' ? ' 👑' : m.permission_tier === 'moderator' ? ' 🛡️' : '') + (m.is_booster ? ' <span class="booster-mark" title="Lobi takviyecisi">💎</span>' : '');
 
         // Kurucu herkese (kendisi hariç) işlem yapabilir; moderatör yalnızca üyelere — diğer moderatör ve kurucuya değil.
         const showMenu = canModerate && !isSelf && m.permission_tier !== 'owner' && (myTier === 'owner' || m.permission_tier === 'member');
