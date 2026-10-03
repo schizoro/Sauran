@@ -58,7 +58,7 @@ const BOOST_COOLDOWN_HOURS = 24; // takviyeyi geri çekince o yuva 24 saat boşa
 const BOOST_LEVELS = [
   { level: 1, at: 0, title: 'Standart lobi', perks: [] },
   { level: 2, at: 2, title: 'Özel görünüm', perks: [{ text: 'Özel lobi teması' }, { text: 'Özel lobi arka planı' }] },
-  { level: 3, at: 7, title: 'Atmosphere', perks: [{ text: 'Lobi Atmosphere + lobi sesi' }, { text: 'Hareketli lobi bannerı', soon: true }, { text: 'Özel lobi görsel efektleri' }] },
+  { level: 3, at: 7, title: 'Atmosphere', perks: [{ text: 'Lobi Atmosphere + lobi sesi' }, { text: 'Hareketli lobi bannerı (GIF)' }, { text: 'Özel lobi görsel efektleri' }] },
   { level: 4, at: 10, title: 'Gelişmiş lobi', perks: [{ text: 'Gelişmiş sesli oda özellikleri', soon: true }, { text: 'Özel animasyonlar', soon: true }, { text: 'Daha fazla kişiselleştirme', soon: true }, { text: 'Özel lobi içerikleri', soon: true }] }
 ];
 function levelForBoosts(count) {

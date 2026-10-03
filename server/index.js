@@ -98,6 +98,7 @@ const {
   listMyBoosts,
   getHubBoostInfo,
   setHubAtmosphere,
+  setHubBanner,
   hubLevel,
   updateProfileTheme,
   updateNameEffect,
@@ -377,7 +378,7 @@ app.disable('x-powered-by');
 const jsonSmall = express.json({ limit: '1mb' });
 const jsonImage = express.json({ limit: '12mb' });
 const jsonFile = express.json({ limit: '140mb' });
-const IMAGE_BODY_PATHS = [/^\/api\/profile\/(avatar|banner)\/?$/, /^\/api\/hubs\/?$/, /^\/api\/hubs\/\d+\/?$/];
+const IMAGE_BODY_PATHS = [/^\/api\/profile\/(avatar|banner)\/?$/, /^\/api\/hubs\/?$/, /^\/api\/hubs\/\d+\/?$/, /^\/api\/hubs\/\d+\/banner\/?$/];
 const FILE_BODY_PATHS = [/^\/api\/hubs\/\d+\/(file|voice|share)\/?$/];
 
 app.use((req, res, next) => {
@@ -2313,6 +2314,19 @@ function boostRoute(action) {
 }
 app.post('/api/hubs/:id/boost', contentWriteLimiter, boostRoute(boostHub));
 app.delete('/api/hubs/:id/boost', contentWriteLimiter, boostRoute(unboostHub));
+
+// Lobi bannerı (Seviye 3+, GIF olabilir): yalnızca lobi sahibi. { banner_data: 'data:image/...' | null }
+app.put('/api/hubs/:id/banner', contentWriteLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const hubId = Number(req.params.id);
+    const result = setHubBanner(hubId, user.id, req.body ? req.body.banner_data : null);
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    io.to(`hub:${hubId}`).emit('hub_boost_changed', { hub_id: hubId, banner: true });
+    return res.json(result);
+  } catch (error) { console.error('Lobi banner hatası:', error); return res.status(500).json({ success: false, error: 'Yüklenemedi.' }); }
+});
 
 // Lobi Atmosphere'i (Seviye 3+): yalnızca lobi sahibi. { atmosphere: 'cyber' | 'none' }
 app.put('/api/hubs/:id/atmosphere', contentWriteLimiter, (req, res) => {

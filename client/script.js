@@ -8053,6 +8053,16 @@ syncAtmoSettings();
 
 function hubBoost() { return (currentHub && currentHub.boost) || null; }
 
+// Lobi bannerı (Seviye 3): GIF olabilir. Sunucu seviye düşünce banner_data'yı zaten göndermez.
+function renderHubBanner() {
+    const el = document.getElementById('hub-banner');
+    if (!el) return;
+    const show = currentHub && currentHub.banner_data && !isGroupHub(currentHub);
+    el.style.display = show ? '' : 'none';
+    if (show) el.style.backgroundImage = cssImageUrl(currentHub.banner_data);
+    else el.style.backgroundImage = '';
+}
+
 // Lobi görsel efekti (Seviye 3 + Atmosphere): arka planda hafif, sohbeti engellemeyen bir katman. Az eleman, yalnızca transform/opacity.
 const HUB_FX_COUNT = { petals: 14, stars: 26, lights: 4 };
 async function renderHubEffect() {
@@ -8217,12 +8227,18 @@ function renderHubAtmosphereSection() {
     atmoCard.style.display = '';
     if (b.level < 3) {
         const need = Math.max(0, 7 - b.count);
-        atmoCard.innerHTML = `<div class="cz-card-title">Lobi Atmosphere ve sesi</div><p class="hubset-hint">🔒 Seviye 3'te açılır (${need} takviye kaldı). Açılınca hazır bir Atmosphere seçersin; lobi teması ve sesi tek tıkla uygulanır.</p>`;
+        atmoCard.innerHTML = `<div class="cz-card-title">Lobi Atmosphere, sesi ve bannerı</div><p class="hubset-hint">🔒 Seviye 3'te açılır (${need} takviye kaldı). Açılınca hazır bir Atmosphere seçersin (tema, ses ve efekt tek tıkla) ve hareketli (GIF) lobi bannerı yükleyebilirsin.</p>`;
         return;
     }
     ensureAtmoCatalog().then((cat) => {
         if (!cat) return;
-        atmoCard.innerHTML = `<div class="cz-card-title">Lobi Atmosphere ve sesi</div>
+        atmoCard.innerHTML = `<div class="cz-card-title">Lobi bannerı</div>
+            <div class="hub-bg-row"><span id="hubset-banner-preview" class="hub-bg-preview hub-banner-preview" style="${currentHub.banner_data ? 'background-image:' + cssImageUrl(currentHub.banner_data) : ''}"></span>
+                <button id="hubset-banner-pick" class="hub-create-image-btn" type="button">Görsel / GIF Seç</button>
+                <button id="hubset-banner-clear" class="hub-create-image-btn" type="button" ${currentHub.banner_data ? '' : 'disabled'}>Kaldır</button>
+                <input type="file" id="hubset-banner-input" accept="image/png,image/jpeg,image/webp,image/gif" hidden></div>
+            <p class="hubset-hint">Lobinin üstünde görünür. GIF en fazla 2 MB.</p>
+            <div class="cz-card-title" style="margin-top:14px;">Lobi Atmosphere ve sesi</div>
             <p class="hubset-hint">Lobi sesi profil sesinden farklıdır: "bu lobinin atmosferi". Giriş → düşüş → düşük seviyeli ambient akışıyla çalar.</p>
             ${currentHub.atmosphere && currentHub.atmosphere !== 'none' ? '<button id="hubatmo-clear" class="atmo-clear" type="button">✕ Lobi Atmosphere\'ini kaldır</button>' : ''}
             <div class="cz-atmo-grid" id="hubatmo-grid">${cat.items.map((a) => atmoCardHtml({ ...a, available: true, active: a.key === currentHub.atmosphere, tier: 'plus' }).replace(/<span class="atmo-tier[^>]*>[^<]*<\/span>/, '').replace(/data-atmo-act="/g, 'data-hubatmo-act="')).join('')}</div>`;
@@ -8242,6 +8258,36 @@ document.getElementById('hubset-atmo-card')?.addEventListener('click', async (e)
     }
 });
 document.getElementById('hubset-boost-card')?.addEventListener('click', (e) => { if (e.target.closest('#hubset-boost-open')) openBoostModal(); });
+async function saveHubBanner(dataUrl) {
+    if (!currentHub) return;
+    try {
+        const r = await fetch(`/api/hubs/${currentHub.id}/banner`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ banner_data: dataUrl }) });
+        const d = await r.json();
+        if (!d.success) { showToast(d.error || 'Yüklenemedi.'); return; }
+        showToast(dataUrl ? 'Lobi bannerı güncellendi.' : 'Lobi bannerı kaldırıldı.');
+        await refreshHubAfterBoost();
+    } catch (_) { showToast('Yüklenemedi.'); }
+}
+document.getElementById('hubset-atmo-card')?.addEventListener('click', (e) => {
+    if (e.target.closest('#hubset-banner-pick')) document.getElementById('hubset-banner-input')?.click();
+    if (e.target.closest('#hubset-banner-clear')) saveHubBanner(null);
+});
+document.getElementById('hubset-atmo-card')?.addEventListener('change', async (e) => {
+    if (e.target.id !== 'hubset-banner-input') return;
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+        let dataUrl;
+        if (file.type === 'image/gif') {
+            if (file.size > 2 * 1024 * 1024) { showToast('Hareketli banner en fazla 2 MB olabilir.'); return; }
+            dataUrl = await readFileAsDataUrl(file);
+        } else {
+            dataUrl = await openImageCropper(file, { aspect: 4, outWidth: 1200, title: 'Lobi Bannerını Kırp' });
+        }
+        if (dataUrl) await saveHubBanner(dataUrl);
+    } catch (_) { showToast('Görsel işlenemedi.'); }
+});
 async function setHubAtmosphereKey(key) {
     if (!currentHub) return;
     try {
@@ -14460,6 +14506,7 @@ function renderHubDetail() {
     renderHubMembers();
     renderHubBoostStrip();
     renderHubEffect();
+    renderHubBanner();
 
 }
 

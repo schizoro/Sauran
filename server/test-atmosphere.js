@@ -124,6 +124,26 @@ test('Coin paketi listede fiyatıyla görünür ama satın alma açılana kadar 
   assert.strictEqual(dbm.applyAtmosphere(prem, 'cosmic-night').success, false);
 });
 
+test('Lobi bannerı: Seviye 3 şartı, yalnızca sahip, GIF kabul, boyut sınırı, seviye düşünce gizlenir', () => {
+  const gif = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+  const o2 = user('t_ban_o', 'premium');
+  const hub2 = dbm.createHub(o2, { name: 'Banner Lobisi' }).id;
+  assert.strictEqual(dbm.setHubBanner(hub2, o2, gif).success, false); // Seviye 1
+  const ins = db.prepare('INSERT INTO hub_boosts (hub_id, user_id) VALUES (?, ?)');
+  const boosters = [user('t_ban_1', 'premium'), user('t_ban_2', 'premium'), user('t_ban_3', 'premium')];
+  boosters.forEach((b) => { for (let i = 0; i < 3; i++) ins.run(hub2, b); });
+  assert.strictEqual(dbm.hubLevel(hub2), 3);
+  assert.strictEqual(dbm.setHubBanner(hub2, boosters[0], gif).success, false); // sahip değil
+  assert.strictEqual(dbm.setHubBanner(hub2, o2, 'data:text/html;base64,AAAA').success, false);
+  assert.strictEqual(dbm.setHubBanner(hub2, o2, 'data:image/gif;base64,' + 'A'.repeat(3_100_000)).success, false); // çok büyük
+  assert.strictEqual(dbm.setHubBanner(hub2, o2, gif).success, true);
+  assert.strictEqual(dbm.getHubDetail(hub2, o2).banner_data, gif);
+  db.prepare(`UPDATE entitlements SET expires_at = '2000-01-01 00:00:00' WHERE user_id = ?`).run(boosters[0]);
+  assert.strictEqual(dbm.hubLevel(hub2), 2);
+  assert.strictEqual(dbm.getHubDetail(hub2, o2).banner_data, null); // Seviye 3 altında gizli
+  assert.strictEqual(dbm.setHubBanner(hub2, o2, null).success, true); // kaldırma her seviyede serbest
+});
+
 console.log(`\n${passed} test geçti`);
 try { db.close(); fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true }); } catch (_) { /* Windows dosya kilidi: geçici klasör bırakılabilir */ }
 process.exit(0);

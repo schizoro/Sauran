@@ -280,6 +280,10 @@ const hubColumns = db
   .all()
   .map(col => col.name);
 
+if (!hubColumns.includes('banner_data')) {
+  // Lobi bannerı (Seviye 3): GIF olabilir. Okuma anında seviyeye göre gizlenir.
+  db.exec(`ALTER TABLE hubs ADD COLUMN banner_data TEXT`);
+}
 if (!hubColumns.includes('atmosphere')) {
   // Lobi Atmosphere'i (Seviye 3'te açılır; okuma anında seviyeye göre 'none' sayılabilir).
   db.exec(`ALTER TABLE hubs ADD COLUMN atmosphere TEXT NOT NULL DEFAULT 'none'`);
@@ -2668,6 +2672,24 @@ function hubAtmosphereEffective(hub) {
   if (!hub || !hub.atmosphere || hub.atmosphere === 'none') return 'none';
   return hubLevel(hub.id) >= 3 && getAtmosphere(hub.atmosphere) ? hub.atmosphere : 'none';
 }
+const HUB_BANNER_MAX_CHARS = 3_000_000; // GIF'li bannerlar her lobi açılışında gelir: hafif tutulur (~2,2 MB ham dosya)
+function setHubBanner(hubId, userId, dataUrl) {
+  const hub = db.prepare(`SELECT id, created_by, type FROM hubs WHERE id = ?`).get(hubId);
+  if (!hub) return { success: false, status: 404, error: 'Lobi bulunamadı.' };
+  if (hub.type === 'group') return { success: false, status: 400, error: 'Bu işlem gruplarda kullanılamaz.' };
+  if (hub.created_by !== userId) return { success: false, status: 403, error: 'Sadece Lobi sahibi banner seçebilir.' };
+  if (dataUrl === null || dataUrl === undefined || dataUrl === '') {
+    db.prepare(`UPDATE hubs SET banner_data = NULL WHERE id = ?`).run(hubId);
+    return { success: true, banner_data: null };
+  }
+  if (hubLevel(hubId) < 3) return { success: false, status: 403, error: 'Lobi bannerı Seviye 3\'te açılır. Lobiyi takviye et.' };
+  if (typeof dataUrl !== 'string' || !/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(dataUrl)) return { success: false, status: 400, error: 'Geçersiz görsel formatı.' };
+  if (dataUrl.length > HUB_BANNER_MAX_CHARS) return { success: false, status: 400, error: 'Banner çok büyük (en fazla ~2 MB).' };
+  const clean = stripImageMetadata(dataUrl);
+  db.prepare(`UPDATE hubs SET banner_data = ? WHERE id = ?`).run(clean, hubId);
+  return { success: true, banner_data: clean };
+}
+
 function setHubAtmosphere(hubId, userId, key) {
   const hub = db.prepare(`SELECT id, created_by, type FROM hubs WHERE id = ?`).get(hubId);
   if (!hub) return { success: false, status: 404, error: 'Lobi bulunamadı.' };
@@ -3611,6 +3633,7 @@ function getHubDetail(hubId, userId) {
     theme: (hasFeature(hub.created_by, 'lobby_theme') || boost.level >= 2) ? (hub.theme || 'default') : 'default',
     bg_image: (hasFeature(hub.created_by, 'lobby_image') || boost.level >= 2) ? (hub.bg_image || null) : null,
     atmosphere: hubAtmosphereEffective(hub),
+    banner_data: boost.level >= 3 ? (hub.banner_data || null) : null,
     boost,
     roles,
     members,
@@ -8229,6 +8252,7 @@ module.exports = {
   listMyBoosts,
   getHubBoostInfo,
   setHubAtmosphere,
+  setHubBanner,
   hubLevel,
   PROFILE_THEMES,
   updateProfileTheme,
