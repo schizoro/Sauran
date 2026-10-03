@@ -7715,7 +7715,7 @@ async function renderCzPremium(sub) {
         ${feat('🪙', 'Aylık 250 Sauran Coin', 'Plus\'taki 100 Coin\'in üstünde.', on ? 'on' : 'prem')}
         ${feat('🎞️', 'Hareketli (GIF) avatar', 'Profil fotoğrafın hareketli olabilir.', on ? 'on' : 'prem')}
         ${feat('📎', '100 MB dosya / video', 'Plus: 50 MB.', on ? 'on' : 'prem')}
-        ${feat('🎬', 'Hareketli banner, yüksek kalite yayın, Premium çıkartma/emoji paketleri', 'Yeni Premium içeriklere erken erişim de bu pakete dahil olacak.', 'soon')}
+        ${feat('🎬', 'Yüksek kalite yayın, Premium çıkartma/emoji paketleri', 'Yeni Premium içeriklere erken erişim de bu pakete dahil olacak.', 'soon')}
         <div class="atmo-actions" style="margin-top:12px;">
             <button id="cz-open-subs-btn" class="atmo-btn" type="button">Abonelikleri gör</button>
             <button id="cz-open-atmo-btn" class="atmo-btn atmo-btn-use" type="button">🌌 Atmosphere'lere git</button>
@@ -7838,12 +7838,14 @@ function atmoChips(a) {
     return chips.map((c) => `<span class="atmo-chip">${escapeHtml(c)}</span>`).join('');
 }
 function atmoCardHtml(a) {
-    const tier = a.tier === 'premium' ? '<span class="atmo-tier atmo-tier-premium">👑 Premium</span>' : '<span class="atmo-tier atmo-tier-plus">✦ Plus</span>';
+    const tier = a.tier === 'premium' ? '<span class="atmo-tier atmo-tier-premium">👑 Premium</span>'
+        : a.tier === 'coin' ? `<span class="atmo-tier atmo-tier-coin">🪙 ${a.price_coins}</span>`
+        : '<span class="atmo-tier atmo-tier-plus">✦ Plus</span>';
     const useBtn = a.active
         ? '<button class="atmo-btn atmo-btn-on" type="button" disabled>✓ Kullanılıyor</button>'
         : a.available
             ? `<button class="atmo-btn atmo-btn-use" type="button" data-atmo-act="use" data-key="${a.key}">Kullan</button>`
-            : `<button class="atmo-btn" type="button" disabled>${a.tier === 'premium' ? '👑 Premium gerekli' : '✦ Plus gerekli'}</button>`;
+            : `<button class="atmo-btn" type="button" disabled>${a.tier === 'coin' ? `🪙 ${a.price_coins} · Yakında` : a.tier === 'premium' ? '👑 Premium gerekli' : '✦ Plus gerekli'}</button>`;
     return `<article class="atmo-card${a.active ? ' active' : ''}" data-key="${a.key}">
         <div class="atmo-art" style="background:${a.art}"><span class="atmo-emoji" aria-hidden="true">${a.emoji}</span>${tier}</div>
         <div class="atmo-body">
@@ -7900,15 +7902,43 @@ document.getElementById('cz-sound-picker')?.addEventListener('click', async (e) 
     } catch (_) { showToast('Güncellenemedi.'); }
 });
 
-async function loadAtmosphereGrid() {
+const ATMO_FILTERS = [
+    ['all', 'Tümü', () => true],
+    ['free', 'Ücretsiz', (a) => a.tier === 'free'],
+    ['plus', '✦ Plus', (a) => a.tier === 'plus'],
+    ['premium', '👑 Premium', (a) => a.tier === 'premium'],
+    ['coin', '🪙 Coin', (a) => a.tier === 'coin'],
+    ['limited', 'Sınırlı', (a) => a.category === 'limited'],
+    ['seasonal', 'Sezonluk', (a) => a.category === 'seasonal']
+];
+let atmoFilter = 'all';
+function renderAtmoFilters() {
+    const box = document.getElementById('cz-atmo-filters');
+    if (!box || !atmoCatalog) return;
+    box.innerHTML = ATMO_FILTERS.map(([k, label, fn]) => {
+        const n = atmoCatalog.items.filter(fn).length;
+        return `<button type="button" role="tab" class="atmo-filter${atmoFilter === k ? ' on' : ''}" data-atmo-filter="${k}" aria-selected="${atmoFilter === k}">${label}<small>${n}</small></button>`;
+    }).join('');
+}
+document.getElementById('cz-atmo-filters')?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-atmo-filter]');
+    if (!b) return;
+    atmoFilter = b.dataset.atmoFilter;
+    loadAtmosphereGrid(true);
+});
+
+async function loadAtmosphereGrid(keepCatalog) {
     const grid = document.getElementById('cz-atmo-grid');
     if (!grid) return;
     grid.innerHTML = '<p class="hubset-hint">Yükleniyor…</p>';
-    const cat = await ensureAtmoCatalog(true);
+    const cat = await ensureAtmoCatalog(!keepCatalog);
     if (!cat) { grid.innerHTML = '<p class="hubset-hint">Atmosphere\'ler yüklenemedi.</p>'; return; }
+    renderAtmoFilters();
     const active = cat.items.find((a) => a.active);
+    const fn = (ATMO_FILTERS.find((f) => f[0] === atmoFilter) || ATMO_FILTERS[0])[2];
+    const shown = cat.items.filter(fn);
     grid.innerHTML = (active ? '<button id="atmo-clear-btn" class="atmo-clear" type="button">✕ Atmosphere\'i kaldır (ayrı seçimlerin korunur)</button>' : '')
-        + cat.items.map(atmoCardHtml).join('');
+        + (shown.length ? shown.map(atmoCardHtml).join('') : '<p class="hubset-hint atmo-empty">Bu kategoride henüz Atmosphere yok. Yenileri eklendikçe burada görünecek.</p>');
     const tog = document.getElementById('cz-profile-sound-toggle');
     if (tog) tog.checked = cat.profileSoundOn !== false;
     renderSoundPicker();
@@ -8267,7 +8297,7 @@ async function loadSubscriptions() {
                 <li><span class="subs-ic">💎</span><span>Her ay <b>3 Lobi Takviyesi</b> <small>(lobi seviyesi yükselir; Seviye 3'te lobi Atmosphere + sesi)</small></span></li>
                 <li><span class="subs-ic">🌌</span><span><b>Premium Atmosphere</b> paketleri <small>(Cyber Gaming, Cosmic…)</small></span></li>
                 <li><span class="subs-ic">🎞️</span><span><b>Animasyonlu (GIF)</b> profil fotoğrafı</span></li>
-                <li class="subs-soon"><span class="subs-ic">🎬</span><span>Hareketli banner, yüksek kalite yayın, Premium çıkartma/emoji paketleri, erken erişim <small>(yakında)</small></span></li>
+                <li class="subs-soon"><span class="subs-ic">🎬</span><span>Yüksek kalite yayın, Premium çıkartma/emoji paketleri, erken erişim <small>(yakında)</small></span></li>
             </ul>
             ${subsStatusHtml(premium, false)}
         </div>`;

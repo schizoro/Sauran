@@ -2521,6 +2521,7 @@ const { ATMOSPHERES, SOUND_KEYS, getAtmosphere } = require('./atmosphere');
 
 function atmosphereAllowed(userId, atmo) {
   if (!atmo) return false;
+  if (atmo.tier === 'coin') return false; // Coin satın alma henüz açık değil
   return atmo.tier === 'premium' ? hasActivePremium(userId) : hasActivePlus(userId);
 }
 
@@ -2535,7 +2536,7 @@ function listAtmospheresFor(userId) {
   const active = effectiveAtmosphere(userId);
   return ATMOSPHERES.map((a) => ({
     key: a.key, label: a.label, emoji: a.emoji, desc: a.desc, art: a.art, tier: a.tier, category: a.category,
-    price_coins: a.price_coins, bundle: a.bundle, sound: a.sound,
+    price_coins: a.price_coins, purchasable: Boolean(a.purchasable), bundle: a.bundle, sound: a.sound,
     available: atmosphereAllowed(userId, a), active: a.key === active
   }));
 }
@@ -2550,6 +2551,7 @@ function applyAtmosphere(userId, key) {
   const atmo = getAtmosphere(value);
   if (!atmo) return { success: false, error: 'Geçersiz Atmosphere.' };
   if (!atmosphereAllowed(userId, atmo)) {
+    if (atmo.tier === 'coin') return { success: false, error: 'Bu Atmosphere Coin ile alınacak; satın alma yakında.' };
     return { success: false, error: atmo.tier === 'premium' ? 'Bu Atmosphere yalnızca Sauran Premium abonelerine açık.' : 'Bu Atmosphere yalnızca Sauran Plus/Premium abonelerine açık.' };
   }
   const b = atmo.bundle;

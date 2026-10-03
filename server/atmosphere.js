@@ -2,7 +2,8 @@
 
 // Sauran Atmosphere = Görsel tema + Ses + Animasyon + Efekt (tek paket). Saf veri; veritabanı/ağ kodu yok.
 // Genişletilebilir: yeni paket eklemek = diziye bir nesne eklemek. `category`: included | limited | seasonal | coin.
-// tier: 'plus' (Plus ve Premium) | 'premium' (yalnızca Premium). price_coins: ileride Coin ile satış için (null = satılık değil).
+// tier: 'plus' (Plus ve Premium) | 'premium' (yalnızca Premium) | 'coin' (Coin ile alınır; satın alma açılana kadar `purchasable` false).
+// category: included | coin | limited | seasonal (mağaza filtreleri). price_coins: Coin fiyatı (null = satılık değil).
 // bundle alanları mevcut kişiselleştirme sistemlerinin geçerli değerleridir (db.js ile aynı listeler).
 // sound: istemcideki ses motorunun tarif anahtarı (client/atmosphere-audio.js). Yeni lisanslı ses dosyası eklenirse `audio_url` alanı kullanılabilir.
 
@@ -38,6 +39,14 @@ const ATMOSPHERES = [
     bundle: { chat_theme: 'soft', bubble_style: 'round', profile_theme: 'sakura', name_effect: 'gradient', profile_effect: 'sakura' },
     sound: 'garden',
     hub_theme: 'ember'
+  },
+  {
+    key: 'cosmic-night', label: 'Cosmic Night', emoji: '🪐', tier: 'coin', category: 'coin', price_coins: 250, purchasable: false,
+    desc: 'Cosmic\'in sakin, derin gece versiyonu. Coin ile alınacak (satın alma yakında).',
+    art: 'linear-gradient(135deg,#02010a 0%,#1a1245 50%,#7c8cff 135%)',
+    bundle: { chat_theme: 'contrast', bubble_style: 'glass', profile_theme: 'midnight', name_effect: 'shimmer', profile_effect: 'stagelights' },
+    sound: 'cosmic',
+    hub_theme: 'aurora'
   }
 ];
 

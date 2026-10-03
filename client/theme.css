@@ -2484,3 +2484,10 @@ body.in-group[data-view="hub-detail"] .topbar-lobby-badge { display: none !impor
 .cz-sound-pick, .cz-sound-play { border: 0; background: none; color: var(--text-primary); font-size: 12.5px; font-weight: 600; padding: 8px 12px; cursor: pointer; }
 .cz-sound-pick:disabled { opacity: .5; cursor: default; }
 .cz-sound-play { padding: 8px 10px; color: var(--accent); border-left: 1px solid var(--border-soft); }
+.atmo-filters { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 8px; scrollbar-width: none; }
+.atmo-filters::-webkit-scrollbar { display: none; }
+.atmo-filter { flex: none; display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 999px; padding: 7px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; color: var(--text-secondary); background: var(--glass-1); box-shadow: 0 0 0 1px var(--border-soft); white-space: nowrap; }
+.atmo-filter small { font-size: 10.5px; opacity: .7; }
+.atmo-filter.on { color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-line); }
+.atmo-tier-coin { color: #ffd166; box-shadow: 0 0 0 1px rgba(255, 209, 102, .4); }
+.atmo-empty { grid-column: 1 / -1; padding: 18px 0; }

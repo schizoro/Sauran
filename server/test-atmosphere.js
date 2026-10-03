@@ -43,7 +43,7 @@ test('Atmosphere paketi mevcut kişiselleştirme alanlarını uygular; abonelik 
 
 test('listAtmospheresFor: available/active kullanıcıya göre', () => {
   const items = dbm.listAtmospheresFor(prem);
-  assert.ok(items.every((a) => a.available));
+  assert.ok(items.filter((a) => a.tier !== 'coin').every((a) => a.available));
   assert.strictEqual(items.find((a) => a.active).key, 'cyber');
   assert.ok(dbm.listAtmospheresFor(free).every((a) => !a.available && !a.active));
 });
@@ -112,6 +112,16 @@ test('Profil sesi: Atmosphere izlenir, seçim bunu ezer, kapalıyken/abonelik bi
   assert.strictEqual(dbm.setProfileSound(free, 'cyber').success, false);
   db.prepare(`UPDATE entitlements SET expires_at = '2000-01-01 00:00:00' WHERE user_id = ?`).run(p2);
   assert.strictEqual(dbm.effectiveProfileSound(p2), '');
+});
+
+test('Coin paketi listede fiyatıyla görünür ama satın alma açılana kadar kullanılamaz', () => {
+  const items = dbm.listAtmospheresFor(prem);
+  const c = items.find((a) => a.key === 'cosmic-night');
+  assert.ok(c);
+  assert.strictEqual(c.price_coins, 250);
+  assert.strictEqual(c.available, false);
+  assert.strictEqual(c.purchasable, false);
+  assert.strictEqual(dbm.applyAtmosphere(prem, 'cosmic-night').success, false);
 });
 
 console.log(`\n${passed} test geçti`);
