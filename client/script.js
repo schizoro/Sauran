@@ -7943,6 +7943,9 @@ async function setupProfileSound(profile) {
     const cat = await ensureAtmoCatalog();
     const a = cat && cat.get(profile.atmosphere);
     if (!a) return;
+    // Katalog yüklenirken profil kapatılmış olabilir: kapalı profilde ses asla başlamaz.
+    const modal = document.getElementById('other-profile-modal');
+    if (!modal || getComputedStyle(modal).display === 'none') return;
     box.style.display = '';
     btn.dataset.sound = a.sound;
     btn.textContent = '▶ Profil sesini dinle';
@@ -7962,6 +7965,9 @@ document.getElementById('op-sound-ask-yes')?.addEventListener('click', () => {
 document.getElementById('op-sound-ask-no')?.addEventListener('click', () => {
     atmoSetPref('autoplay', 'off'); document.getElementById('other-profile-sound-ask').style.display = 'none'; syncAtmoSettings();
 });
+// Profil sesi yalnızca profil penceresi açık VE sayfa görünürken çalar: sekme/uygulama arka plana geçince durur.
+document.addEventListener('visibilitychange', () => { if (document.hidden) stopAtmoSound('profile'); });
+window.addEventListener('pagehide', () => stopAtmoSound('profile'));
 (function watchOtherProfileClose() {
     const m = document.getElementById('other-profile-modal');
     if (m) new MutationObserver(() => { if (m.style.display === 'none') stopAtmoSound('profile'); }).observe(m, { attributes: true, attributeFilter: ['style'] });
