@@ -2673,7 +2673,7 @@ function getHubBoostInfo(hubId, viewerId) {
     GROUP BY users.id ORDER BY boosts DESC, MIN(b.created_at) ASC LIMIT 8
   `).all(hubId);
   return {
-    count, level, max_level: BOOST_LEVELS[BOOST_LEVELS.length - 1].level,
+    count, level, max_level: BOOST_LEVELS[BOOST_LEVELS.length - 1].level, at_max: count >= BOOST_LEVELS[BOOST_LEVELS.length - 1].at,
     next_at: next ? next.at : null, goal: next ? next.at : BOOST_LEVELS[BOOST_LEVELS.length - 1].at,
     levels: BOOST_LEVELS, boosters, my_boosts: mine, my_slots: viewerId ? userBoostSlots(viewerId) : { total: 0, used: 0, free: 0 }
   };
@@ -2687,6 +2687,8 @@ function boostHub(userId, hubId) {
   if (slots.total < 1) return { success: false, status: 403, error: 'Lobi Takviyesi Sauran Premium abonelerine açıktır (ya da hediye takviye gerekir).' };
   if (!isHubMember(hubId, userId) && hub.visibility !== 'discoverable') return { success: false, status: 403, error: 'Önce bu lobiye katılmalısın.' };
   if (slots.free < 1) return { success: false, status: 400, error: 'Boş takviyen kalmadı.' };
+  const top = BOOST_LEVELS[BOOST_LEVELS.length - 1];
+  if (hubBoostCount(hubId) >= top.at) return { success: false, status: 400, error: `Bu lobi zaten maksimum seviyede (Seviye ${top.level}). Takviyeni başka bir lobiye verebilirsin.` };
   db.prepare(`INSERT INTO hub_boosts (hub_id, user_id, source) VALUES (?, ?, ?)`).run(hubId, userId, slots.prem_free > 0 ? 'premium' : 'gift');
   return { success: true, boost: getHubBoostInfo(hubId, userId) };
 }

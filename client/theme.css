@@ -2533,3 +2533,13 @@ body.hubset-open .hub-fx > i { animation-play-state: paused; }
 .hub-emoji-item button:hover { color: var(--danger); }
 .atmo-early { position: absolute; top: 10px; right: 10px; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: rgba(8, 10, 14, .62); color: #ffd166; box-shadow: 0 0 0 1px rgba(255, 209, 102, .4); }
 .msg-reaction-picker .react-prem { box-shadow: 0 0 0 1px rgba(255, 209, 102, .35); border-radius: 8px; }
+
+/* ══ Takviye: lobi bilgi penceresinde ═══════════════════════════════════════════════════════════════ */
+.hub-info-boost { margin-top: 16px; padding: 12px; border-radius: 14px; background: var(--glass-1); box-shadow: 0 0 0 1px var(--border-soft); text-align: left; }
+.hib-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; font-weight: 650; color: var(--text-primary); }
+.hib-lvl { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.hib-bar { height: 6px; border-radius: 999px; background: var(--glass-2); overflow: hidden; margin: 8px 0; }
+.hib-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #6d5bd0, #4f7cff, #4fe3ff); }
+.hib-max, .bst-max { margin: 6px 0; font-size: 12.5px; line-height: 1.45; color: #ffd166; }
+.hib-btn { width: 100%; margin-top: 4px; height: 38px; border: 0; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 650; color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-line); }
+.hib-btn:hover { filter: brightness(1.12); }

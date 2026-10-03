@@ -8205,17 +8205,11 @@ async function renderHubEffect() {
 }
 
 
+// Takviye bilgisi/düğmesi artık sohbette değil, lobi bilgi penceresinde (shell.js). Burada yalnızca lobi sesi satırı kalır.
 function renderHubBoostStrip() {
     const strip = document.getElementById('hub-boost-strip');
     if (!strip) return;
-    const b = hubBoost();
-    if (!currentHub || !b || isGroupHub(currentHub)) { strip.style.display = 'none'; return; }
-    strip.style.display = '';
-    document.getElementById('hbs-count').textContent = b.next_at != null ? `${b.count} / ${b.next_at} Takviye` : `${b.count} Takviye`;
-    document.getElementById('hbs-level').textContent = `Seviye ${b.level}`;
-    const pct = b.next_at != null ? Math.max(4, Math.min(100, (b.count / Math.max(1, b.next_at)) * 100)) : 100;
-    document.getElementById('hbs-fill').style.width = pct + '%';
-    strip.dataset.level = b.level;
+    if (!currentHub || isGroupHub(currentHub) || !currentHub.atmosphere || currentHub.atmosphere === 'none') { strip.style.display = 'none'; return; }
     syncLobbySound();
 }
 
@@ -8226,6 +8220,12 @@ function lobbyAtmo() {
 
 // Lobi sesi: Seviye 3+ lobide, tercihlere göre (otomatik oynat / lobi seslerini kapat). Başka lobiye/ekrana geçince durur.
 async function syncLobbySound() {
+    await syncLobbySoundInner();
+    const strip = document.getElementById('hub-boost-strip');
+    const btn = document.getElementById('hbs-sound-btn'), ask = document.getElementById('hbs-sound-ask');
+    if (strip && btn && ask) strip.style.display = (btn.style.display !== 'none' || ask.style.display !== 'none') ? '' : 'none';
+}
+async function syncLobbySoundInner() {
     const btn = document.getElementById('hbs-sound-btn');
     const ask = document.getElementById('hbs-sound-ask');
     if (!btn) return;
@@ -8282,7 +8282,9 @@ async function renderBoostModal() {
         ? b.boosters.map((x) => `<span class="atmo-chip">💎 ${escapeHtml(x.username)}${x.boosts > 1 ? ' ×' + x.boosts : ''}</span>`).join('')
         : '<span class="hubset-hint">Henüz kimse takviye etmedi.</span>';
     let action;
-    if (!premium) {
+    if (b.at_max && premium) {
+        action = `<p class="bst-max">🏆 Bu lobi zaten maksimum seviyede (Seviye ${b.level}). Daha fazla takviye gerekmez; takviyeni başka bir lobiye verebilirsin.</p>${b.my_boosts > 0 ? '<div class="atmo-actions"><button id="boost-take-btn" class="atmo-btn" type="button">Takviyemi geri çek</button></div>' : ''}`;
+    } else if (!premium) {
         action = `<p class="hubset-hint">Lobi Takviyesi Sauran Premium abonelerine açıktır; her ay 3 takviye kazanırlar. Hediye takviye de kullanabilirsin.</p><button id="boost-open-subs" class="hub-create-image-btn" type="button">👑 Abonelikleri gör</button>`;
     } else {
         action = `<p class="hubset-hint">Takviyelerin: <b>${slots.free}</b> / ${slots.total} boş. Bu lobide: <b>${b.my_boosts}</b>.</p>
@@ -8295,7 +8297,7 @@ async function renderBoostModal() {
     body.innerHTML = `
         <div class="bst-top"><span class="bst-big">💎 ${b.count}${b.next_at != null ? ' / ' + goal : ''} Takviye</span><span class="bst-lvl">Seviye ${b.level}</span></div>
         <div class="bst-bar"><i style="width:${pct}%"></i></div>
-        <p class="hubset-hint">${b.next_at != null ? `Sonraki seviyeye ${Math.max(0, b.next_at - b.count)} takviye kaldı.` : 'En yüksek seviyedesin.'}</p>
+        <p class="hubset-hint">${b.next_at != null ? `Sonraki seviyeye ${Math.max(0, b.next_at - b.count)} takviye kaldı.` : 'Bu lobi en yüksek seviyede.'}</p>
         ${boostLevelsHtml(b)}
         <div class="cz-card-title" style="margin-top:12px;">Takviye edenler</div>
         <div class="atmo-chips">${boosters}</div>
@@ -8311,8 +8313,6 @@ async function refreshHubAfterBoost() {
         if (d.success) { currentHub = d.hub; renderHubDetail(); if (hubSettingsModal.style.display === 'flex') renderHubAtmosphereSection(); }
     } catch (_) {}
 }
-document.getElementById('hbs-info')?.addEventListener('click', openBoostModal);
-document.getElementById('hbs-cta')?.addEventListener('click', openBoostModal);
 document.getElementById('boost-close-btn')?.addEventListener('click', closeBoostModal);
 document.getElementById('boost-modal')?.addEventListener('click', async (e) => {
     if (e.target.id === 'boost-modal') { closeBoostModal(); return; }
@@ -8338,7 +8338,7 @@ function renderHubAtmosphereSection() {
     const b = hubBoost() || { count: 0, level: 1, next_at: 2, levels: [] };
     boostCard.innerHTML = `<div class="cz-card-title">Takviye</div>
         <div class="bst-top"><span class="bst-big">💎 ${b.count}${b.next_at != null ? ' / ' + b.next_at : ''} Takviye</span><span class="bst-lvl">Seviye ${b.level}</span></div>
-        <button id="hubset-boost-open" class="hub-create-image-btn" type="button">💎 Lobiyi takviye et / ayrıntılar</button>`;
+        ${b.at_max ? '<p class="bst-max">🏆 Lobi maksimum seviyede.</p>' : ''}<button id="hubset-boost-open" class="hub-create-image-btn" type="button">💎 ${b.at_max ? 'Takviye ayrıntıları' : 'Lobiyi takviye et / ayrıntılar'}</button>`;
     if (!currentHub.is_owner) { atmoCard.style.display = 'none'; return; }
     atmoCard.style.display = '';
     if (b.level < 3) {

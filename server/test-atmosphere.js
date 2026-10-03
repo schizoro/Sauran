@@ -294,6 +294,28 @@ test('Erken erişim: tarihe kadar yalnızca Premium; sonra normal kademe; hediye
   }
 });
 
+test('Maksimum seviyedeki lobiye takviye verilmez (uyarı) ve takviye harcanmaz; geri çekme serbest', () => {
+  const mo = user('t_mx_o', 'premium'), mg = user('t_mx_g', 'premium');
+  const hubM = dbm.createHub(mo, { name: 'Maksimum Lobi' }).id;
+  const join = (hid, uid) => db.prepare('INSERT OR IGNORE INTO hub_members (hub_id, user_id, role_id, permission_tier) VALUES (?, ?, NULL, ?)').run(hid, uid, 'member');
+  join(hubM, mg);
+  const ins = db.prepare('INSERT INTO hub_boosts (hub_id, user_id) VALUES (?, ?)');
+  const fill = [user('t_mx_1', 'premium'), user('t_mx_2', 'premium'), user('t_mx_3', 'premium'), user('t_mx_4', 'premium')];
+  fill.forEach((f, i) => { for (let k = 0; k < (i < 3 ? 3 : 1); k++) ins.run(hubM, f); }); // 10 takviye
+  assert.strictEqual(dbm.getHubBoostInfo(hubM, mg).at_max, true);
+  const before = dbm.listMyBoosts(mg).slots.free;
+  const r = dbm.boostHub(mg, hubM);
+  assert.strictEqual(r.success, false);
+  assert.match(r.error, /maksimum seviyede/);
+  assert.strictEqual(dbm.listMyBoosts(mg).slots.free, before); // yuva harcanmadı
+  const hub9 = dbm.createHub(mo, { name: 'Dokuz Lobi' }).id;
+  join(hub9, mg);
+  fill.forEach((f, i) => { for (let k = 0; k < (i < 3 ? 3 : 0); k++) ins.run(hub9, f); }); // 9 takviye
+  assert.strictEqual(dbm.getHubBoostInfo(hub9, mg).at_max, false);
+  assert.strictEqual(dbm.boostHub(mg, hub9).success, true); // 9 -> 10: son takviye verilebilir
+  assert.strictEqual(dbm.boostHub(mg, hub9).success, false); // artık maksimum
+});
+
 console.log(`\n${passed} test geçti`);
 try { db.close(); fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true }); } catch (_) { /* Windows dosya kilidi: geçici klasör bırakılabilir */ }
 process.exit(0);

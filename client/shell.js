@@ -206,6 +206,30 @@
             dl.append(dt, dd);
         });
         box.appendChild(dl);
+        const bst = hub.boost;
+        if (bst && hub.type !== 'group') {
+            const sec = document.createElement('div');
+            sec.className = 'hub-info-boost';
+            const top = document.createElement('div'); top.className = 'hib-top';
+            const t1 = document.createElement('span'); t1.textContent = '💎 ' + bst.count + (bst.next_at != null ? ' / ' + bst.next_at : '') + ' Takviye';
+            const t2 = document.createElement('span'); t2.className = 'hib-lvl'; t2.textContent = 'Seviye ' + bst.level;
+            top.append(t1, t2);
+            const bar = document.createElement('div'); bar.className = 'hib-bar';
+            const fill = document.createElement('i');
+            fill.style.width = (bst.next_at != null ? Math.max(4, Math.min(100, (bst.count / Math.max(1, bst.next_at)) * 100)) : 100) + '%';
+            bar.appendChild(fill);
+            sec.append(top, bar);
+            if (bst.at_max) {
+                const note = document.createElement('p'); note.className = 'hib-max'; note.textContent = '🏆 Bu lobi zaten maksimum seviyede.';
+                sec.appendChild(note);
+            }
+            const btn = document.createElement('button');
+            btn.type = 'button'; btn.className = 'hib-btn';
+            btn.textContent = bst.at_max ? 'Takviye ayrıntıları' : 'Bu Lobiyi Takviye Et';
+            btn.addEventListener('click', () => { closeHubInfo(); if (typeof openBoostModal === 'function') openBoostModal(); });
+            sec.appendChild(btn);
+            box.appendChild(sec);
+        }
         const close = document.createElement('button');
         close.type = 'button'; close.className = 'hub-info-close'; close.textContent = tr('close', 'Kapat');
         close.addEventListener('click', closeHubInfo);
