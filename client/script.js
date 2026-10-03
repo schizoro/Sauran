@@ -7680,25 +7680,45 @@ async function loadMarketModal() {
 }
 
 // =====================================================
-// PLUS ÖZELLİKLERİ (Plus'a ait tüm kişiselleştirmeler tek panelde; Market'te satılmaz)
+// ÖZELLEŞTİRME MERKEZİ — profil + sohbet kişiselleştirmesinin tek yeri.
+// Profil → "Profilini Özelleştir" ve Menü → "Özelleştirme" buraya açılır. (Eski "Plus Özellikleri" penceresinin yerine geçti.)
 // =====================================================
 
 const PLUS_ONLY_ITEM_KEYS = new Set(['plus']);
+const czScreen = document.getElementById('customize-screen');
+let czSection = 'look';
 
-async function loadPlusFeaturesModal() {
-    const status = document.getElementById('plusfx-status');
-    const grid = document.getElementById('plusfx-frame-grid');
-    status.textContent = '';
-    let plus = { active: false }, premium = { active: false };
+async function fetchSubscriptionState() {
     try {
         const s = await fetch('/api/me/subscription', { credentials: 'include' });
         const d = await s.json();
-        if (d.success) { plus = d.plus; premium = d.premium; }
+        if (d.success) return { plus: d.plus, premium: d.premium };
     } catch (_) {}
-    const active = plus.active || premium.active;
+    return { plus: { active: false }, premium: { active: false } };
+}
+
+function renderCzPremium(sub) {
+    const box = document.getElementById('cz-premium');
+    if (!box) return;
+    const on = sub.premium.active;
+    const feat = (ic, title, text, state) => `<div class="cz-feat"><span class="cz-feat-ic" aria-hidden="true">${ic}</span><span class="cz-feat-text"><strong>${title}</strong><small>${text}</small></span><span class="cz-chip ${state === 'on' ? 'cz-chip-on' : 'cz-chip-soon'}">${state === 'on' ? 'Aktif' : 'Yakında'}</span></div>`;
+    box.innerHTML = `
+        <div class="cz-prem-head">${on ? '<span class="subs-status subs-status-on" style="display:inline-block;">✓ Premium aktif</span>' : 'Premium aktif değil.'}</div>
+        ${feat('🪙', 'Aylık 250 Sauran Coin', 'Plus\'taki 100 Coin\'in üstünde.', on ? 'on' : 'soon')}
+        ${feat('🎞️', 'Hareketli (GIF) avatar', 'Profil fotoğrafın hareketli olabilir.', on ? 'on' : 'soon')}
+        ${feat('📎', '100 MB dosya / video', 'Plus: 50 MB.', on ? 'on' : 'soon')}
+        <button id="cz-open-subs-btn" class="hub-create-image-btn" type="button" style="margin-top:12px;">Abonelikleri gör</button>`;
+}
+
+async function loadCustomizeCenter() {
+    const status = document.getElementById('cz-status');
+    const grid = document.getElementById('plusfx-frame-grid');
+    status.textContent = '';
+    const sub = await fetchSubscriptionState();
+    const active = sub.plus.active || sub.premium.active;
     status.innerHTML = active
-        ? '<span class="subs-status subs-status-on" style="display:inline-block;">✓ Plus aktif</span>'
-        : 'Bu özellikleri kullanmak için Sauran Plus gerekir. Ayrıntılar Abonelikler bölümünde.';
+        ? '<span class="subs-status subs-status-on" style="display:inline-block;">✓ ' + (sub.premium.active ? 'Premium' : 'Plus') + ' aktif</span>'
+        : 'Bu özellikleri kullanmak için Sauran Plus gerekir. Ayrıntılar Premium bölümünde.';
     const r = await mkFetchFrames();
     const frames = r.status === 200 ? r.body.items.filter((i) => PLUS_ONLY_ITEM_KEYS.has(i.key)) : [];
     if (!frames.length) {
@@ -7714,15 +7734,51 @@ async function loadPlusFeaturesModal() {
     renderProfileThemePicker();
     renderNameEffectPicker();
     renderProfileEffectPicker();
+    renderCzPremium(sub);
 }
 
-document.getElementById('plusfx-open-btn')?.addEventListener('click', () => {
+function showCzSection(section) {
+    czSection = section;
+    czScreen.querySelectorAll('[data-cz-panel]').forEach((p) => { p.style.display = p.dataset.czPanel === section ? 'flex' : 'none'; });
+    czScreen.querySelectorAll('#cz-nav [data-cz-section]').forEach((b) => {
+        const act = b.dataset.czSection === section;
+        b.classList.toggle('active', act);
+        b.setAttribute('aria-current', act ? 'page' : 'false');
+    });
+    const names = { look: 'Görünüm', premium: 'Premium' };
+    document.getElementById('cz-eyebrow').textContent = 'Profil › Özelleştir › ' + (names[section] || '');
+    document.getElementById('cz-content').scrollTop = 0;
+}
+
+function openCustomizeCenter(section = 'look') {
     closeTopbarDropdown();
-    document.getElementById('plusfx-modal').style.display = 'flex';
-    loadPlusFeaturesModal();
+    const pm = document.getElementById('profile-modal');
+    if (pm) pm.style.display = 'none';
+    czScreen.style.display = 'flex';
+    document.body.classList.add('hubset-open');
+    showCzSection(section);
+    loadCustomizeCenter();
+}
+function closeCustomizeCenter() {
+    czScreen.style.display = 'none';
+    document.body.classList.remove('hubset-open');
+}
+
+document.getElementById('plusfx-open-btn')?.addEventListener('click', () => openCustomizeCenter('look'));
+document.getElementById('profile-customize-btn')?.addEventListener('click', () => openCustomizeCenter('look'));
+document.getElementById('cz-close-btn')?.addEventListener('click', closeCustomizeCenter);
+document.getElementById('cz-nav')?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-cz-section]');
+    if (b) showCzSection(b.dataset.czSection);
 });
-document.getElementById('plusfx-close-btn')?.addEventListener('click', () => { document.getElementById('plusfx-modal').style.display = 'none'; });
-document.getElementById('plusfx-modal')?.addEventListener('click', (e) => { if (e.target.id === 'plusfx-modal') e.currentTarget.style.display = 'none'; });
+document.getElementById('cz-edit-profile-btn')?.addEventListener('click', () => {
+    closeCustomizeCenter();
+    document.getElementById('profile-btn')?.click();
+});
+czScreen?.addEventListener('click', (e) => {
+    if (e.target.id === 'cz-open-subs-btn') { closeCustomizeCenter(); document.getElementById('subs-open-btn')?.click(); }
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && czScreen && czScreen.style.display === 'flex') closeCustomizeCenter(); });
 
 async function loadInventoryModal() {
     const state = document.getElementById('inventory-state');
@@ -7824,7 +7880,7 @@ document.addEventListener('click', async (e) => {
     }
     if (document.getElementById('market-modal').style.display === 'flex') loadMarketModal();
     if (document.getElementById('inventory-modal').style.display === 'flex') loadInventoryModal();
-    if (document.getElementById('plusfx-modal').style.display === 'flex') loadPlusFeaturesModal();
+    if (czScreen && czScreen.style.display === 'flex') loadCustomizeCenter();
 });
 
 

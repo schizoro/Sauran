@@ -338,7 +338,7 @@
                 <button id="market-open-btn" class="topbar-menu-item" type="button">🛍️ <span>Sauran Market</span></button>
                 <button id="inventory-open-btn" class="topbar-menu-item" type="button">🎒 <span>Kitaplığım</span></button>
                 <button id="subs-open-btn" class="topbar-menu-item" type="button">💎 <span>Abonelikler</span></button>
-                <button id="plusfx-open-btn" class="topbar-menu-item" type="button">✦ <span>Plus Özellikleri</span></button>
+                <button id="plusfx-open-btn" class="topbar-menu-item" type="button">✨ <span>Özelleştirme</span></button>
 
                 <button id="settings-btn" class="topbar-menu-item" title="Ayarlar" type="button">⚙️ <span data-i18n="menu-settings">Ayarlar</span></button>
 
@@ -1037,48 +1037,39 @@
         </div>
     </div>
 
-    <div id="plusfx-modal" class="modal-overlay" style="display:none;">
-        <div class="modal-box market-modal-box">
-            <div class="modal-header">
-                <span>✦ Plus Özellikleri</span>
-                <button id="plusfx-close-btn">✕</button>
-            </div>
-            <div class="market-modal-body">
-                <p class="mk-sub">Sauran Plus'a ait tüm kişiselleştirmeler burada. Plus ya da Premium aktifken hepsini kullanabilirsin.</p>
-                <div id="plusfx-status" class="mk-state" style="padding:4px 0 10px;"></div>
-                <div class="mk-section-title">🖼️ Plus Avatar Çerçevesi</div>
-                <div id="plusfx-frame-grid" class="mk-grid"></div>
-                <div class="mk-plus-sections">
-                    <div class="profile-field-block mk-plus-block">
-                        <span class="profile-field-label">Sohbet Teması <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
-                        <div id="chat-theme-picker" class="chat-theme-picker">
-                            <button type="button" class="chat-theme-option" data-theme="classic">
-                                <span class="chat-theme-swatch"></span>Klasik
-                            </button>
-                            <button type="button" class="chat-theme-option" data-theme="soft">
-                                <span class="chat-theme-swatch chat-theme-swatch-soft"></span>Yumuşak
-                            </button>
-                            <button type="button" class="chat-theme-option" data-theme="contrast">
-                                <span class="chat-theme-swatch chat-theme-swatch-contrast"></span>Kontrast
-                            </button>
+    <!-- Özelleştirme Merkezi: profil + sohbet kişiselleştirmesinin TEK yeri (eski "Plus Özellikleri" penceresi buraya taşındı). -->
+    <div id="customize-screen" class="hubset-screen cz-screen" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="cz-title">
+        <div class="hubset-shell">
+            <header class="hubset-topbar">
+                <span class="hubset-topbar-icon" aria-hidden="true">✨</span>
+                <div class="hubset-topbar-text">
+                    <span id="cz-eyebrow" class="hubset-eyebrow">Profil › Özelleştir</span>
+                    <h2 id="cz-title" class="hubset-title">Profilini Özelleştir</h2>
+                </div>
+                <button id="cz-close-btn" class="hubset-close" type="button" aria-label="Kapat" title="Kapat (Esc)">✕</button>
+            </header>
+            <div class="hubset-layout">
+                <nav id="cz-nav" class="hubset-nav" aria-label="Özelleştirme bölümleri">
+                    <button type="button" class="hubset-nav-btn" data-cz-section="look"><span aria-hidden="true">🎨</span><span>Görünüm</span></button>
+                    <button type="button" class="hubset-nav-btn" data-cz-section="premium"><span aria-hidden="true">👑</span><span>Premium</span></button>
+                </nav>
+                <main class="hubset-content" id="cz-content">
+                    <section class="hubset-panel" data-cz-panel="look">
+                        <div class="hubset-panel-head">
+                            <h3>Görünüm</h3>
+                            <p>Profilin ve sohbetlerin nasıl göründüğü. Plus ya da Premium aktifken hepsini kullanabilirsin.</p>
                         </div>
-                        <p id="chat-theme-hint" class="hubset-hint"></p>
-                    </div>
-
-                    <div class="profile-field-block mk-plus-block">
-                        <span class="profile-field-label">Mesaj Balonu <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
-                        <div id="bubble-style-picker" class="chat-theme-picker chat-theme-picker-wrap">
-                            <button type="button" class="chat-theme-option" data-bubble="default"><span class="bubble-swatch"></span>Klasik</button>
-                            <button type="button" class="chat-theme-option" data-bubble="round"><span class="bubble-swatch bubble-swatch-round"></span>Yuvarlak</button>
-                            <button type="button" class="chat-theme-option" data-bubble="glass"><span class="bubble-swatch bubble-swatch-glass"></span>Cam</button>
-                            <button type="button" class="chat-theme-option" data-bubble="outline"><span class="bubble-swatch bubble-swatch-outline"></span>Çerçeve</button>
-                            <button type="button" class="chat-theme-option" data-bubble="shadow"><span class="bubble-swatch bubble-swatch-shadow"></span>Gölge</button>
+                        <div id="cz-status" class="cz-status"></div>
+                        <div class="hubset-card">
+                            <div class="cz-card-title">Avatar ve profil</div>
+                            <p class="hubset-hint">Fotoğraf, kapak, ad ve Hakkımda'yı profil ekranından düzenlersin.</p>
+                            <button id="cz-edit-profile-btn" class="hub-create-image-btn" type="button">Profili düzenle</button>
+                            <div class="cz-card-title" style="margin-top:14px;">Avatar çerçevesi</div>
+                            <div id="plusfx-frame-grid" class="mk-grid"></div>
                         </div>
-                        <p id="bubble-style-hint" class="hubset-hint"></p>
-                    </div>
-
-
-                    <div class="profile-field-block mk-plus-block">
+                        <div class="hubset-card">
+                            <div class="cz-card-title">Profil efektleri</div>
+<div class="profile-field-block cz-block">
                         <span class="profile-field-label">Profil Teması <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
                         <div id="profile-theme-picker" class="chat-theme-picker chat-theme-picker-wrap">
                             <button type="button" class="chat-theme-option" data-ptheme="default"><span class="chat-theme-swatch"></span>Klasik</button>
@@ -1090,20 +1081,7 @@
                         </div>
                         <p id="profile-theme-hint" class="hubset-hint"></p>
                     </div>
-
-                    <div class="profile-field-block mk-plus-block">
-                        <span class="profile-field-label">İsim Efekti <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
-                        <div id="name-effect-picker" class="chat-theme-picker chat-theme-picker-wrap">
-                            <button type="button" class="chat-theme-option" data-nfx="none"><span class="nfx-preview">Ad</span>Yok</button>
-                            <button type="button" class="chat-theme-option" data-nfx="gradient"><span class="nfx-preview name-fx name-fx-gradient">Ad</span>Gradyan</button>
-                            <button type="button" class="chat-theme-option" data-nfx="glow"><span class="nfx-preview name-fx name-fx-glow">Ad</span>Parıltı</button>
-                            <button type="button" class="chat-theme-option" data-nfx="rainbow"><span class="nfx-preview name-fx name-fx-rainbow">Ad</span>Gökkuşağı</button>
-                            <button type="button" class="chat-theme-option" data-nfx="shimmer"><span class="nfx-preview name-fx name-fx-shimmer">Ad</span>Işıltı</button>
-                        </div>
-                        <p id="name-effect-hint" class="hubset-hint"></p>
-                    </div>
-
-                    <div class="profile-field-block mk-plus-block">
+<div class="profile-field-block cz-block">
                         <span class="profile-field-label">Profil Efekti <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
                         <div id="profile-effect-picker" class="chat-theme-picker">
                             <button type="button" class="chat-theme-option" data-effect="none">
@@ -1118,7 +1096,56 @@
                         </div>
                         <p id="profile-effect-hint" class="hubset-hint"></p>
                     </div>
-                </div>
+<div class="profile-field-block cz-block">
+                        <span class="profile-field-label">İsim Efekti <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
+                        <div id="name-effect-picker" class="chat-theme-picker chat-theme-picker-wrap">
+                            <button type="button" class="chat-theme-option" data-nfx="none"><span class="nfx-preview">Ad</span>Yok</button>
+                            <button type="button" class="chat-theme-option" data-nfx="gradient"><span class="nfx-preview name-fx name-fx-gradient">Ad</span>Gradyan</button>
+                            <button type="button" class="chat-theme-option" data-nfx="glow"><span class="nfx-preview name-fx name-fx-glow">Ad</span>Parıltı</button>
+                            <button type="button" class="chat-theme-option" data-nfx="rainbow"><span class="nfx-preview name-fx name-fx-rainbow">Ad</span>Gökkuşağı</button>
+                            <button type="button" class="chat-theme-option" data-nfx="shimmer"><span class="nfx-preview name-fx name-fx-shimmer">Ad</span>Işıltı</button>
+                        </div>
+                        <p id="name-effect-hint" class="hubset-hint"></p>
+                    </div>
+                        </div>
+                        <div class="hubset-card">
+                            <div class="cz-card-title">Sohbet</div>
+<div class="profile-field-block cz-block">
+                        <span class="profile-field-label">Sohbet Teması <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
+                        <div id="chat-theme-picker" class="chat-theme-picker">
+                            <button type="button" class="chat-theme-option" data-theme="classic">
+                                <span class="chat-theme-swatch"></span>Klasik
+                            </button>
+                            <button type="button" class="chat-theme-option" data-theme="soft">
+                                <span class="chat-theme-swatch chat-theme-swatch-soft"></span>Yumuşak
+                            </button>
+                            <button type="button" class="chat-theme-option" data-theme="contrast">
+                                <span class="chat-theme-swatch chat-theme-swatch-contrast"></span>Kontrast
+                            </button>
+                        </div>
+                        <p id="chat-theme-hint" class="hubset-hint"></p>
+                    </div>
+<div class="profile-field-block cz-block">
+                        <span class="profile-field-label">Mesaj Balonu <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></span>
+                        <div id="bubble-style-picker" class="chat-theme-picker chat-theme-picker-wrap">
+                            <button type="button" class="chat-theme-option" data-bubble="default"><span class="bubble-swatch"></span>Klasik</button>
+                            <button type="button" class="chat-theme-option" data-bubble="round"><span class="bubble-swatch bubble-swatch-round"></span>Yuvarlak</button>
+                            <button type="button" class="chat-theme-option" data-bubble="glass"><span class="bubble-swatch bubble-swatch-glass"></span>Cam</button>
+                            <button type="button" class="chat-theme-option" data-bubble="outline"><span class="bubble-swatch bubble-swatch-outline"></span>Çerçeve</button>
+                            <button type="button" class="chat-theme-option" data-bubble="shadow"><span class="bubble-swatch bubble-swatch-shadow"></span>Gölge</button>
+                        </div>
+                        <p id="bubble-style-hint" class="hubset-hint"></p>
+                    </div>
+                        </div>
+                    </section>
+                    <section class="hubset-panel" data-cz-panel="premium" style="display:none;">
+                        <div class="hubset-panel-head">
+                            <h3>Premium</h3>
+                            <p>Plus = kişiselleştirme. Premium = Sauran'ın gelişmiş, tam deneyimi.</p>
+                        </div>
+                        <div id="cz-premium" class="hubset-card"></div>
+                    </section>
+                </main>
             </div>
         </div>
     </div>
@@ -1820,6 +1847,12 @@
                         <button id="about-me-save-btn" class="about-btn about-btn-primary" type="button" data-i18n="save">Kaydet</button>
                     </div>
                 </div>
+
+                <button id="profile-customize-btn" class="profile-customize-btn liquid-glass" type="button">
+                    <span class="pcb-ic" aria-hidden="true">✨</span>
+                    <span class="pcb-text"><strong>Profilini Özelleştir</strong><small>Atmosphere, efektler, çerçeve ve daha fazlası</small></span>
+                    <span class="pcb-chev" aria-hidden="true">›</span>
+                </button>
 
                 <div class="profile-field-block">
                     <div class="about-label-row">
