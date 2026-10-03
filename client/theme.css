@@ -2543,3 +2543,28 @@ body.hubset-open .hub-fx > i { animation-play-state: paused; }
 .hib-max, .bst-max { margin: 6px 0; font-size: 12.5px; line-height: 1.45; color: #ffd166; }
 .hib-btn { width: 100%; margin-top: 4px; height: 38px; border: 0; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 650; color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-line); }
 .hib-btn:hover { filter: brightness(1.12); }
+
+/* ══ Lobi üyeleri: kart görünümü + Premium'a özel animasyonlu kartlar ═══════════════════════════════════════ */
+.hub-member-card { position: relative; gap: 12px; padding: 10px 12px; border-radius: 14px;
+  background: rgba(255, 255, 255, 0.045);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--mc, #5cc8ff) 20%, transparent), rgba(255, 255, 255, 0.04) 70%); }
+.hub-member-card .hub-member-avatar-wrap .msg-avatar-btn { width: 38px; height: 38px; font-size: 14px; }
+.hub-member-card .hub-member-dot { width: 11px; height: 11px; }
+.hub-member-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hub-member-card .hub-member-name { font-size: 13.5px; font-weight: 600; }
+.hub-member-sub { font-size: 11px; color: var(--text-tertiary, #8b93a1); }
+.hub-member-card > :not(.mc-fx) { position: relative; z-index: 1; }
+.member-prem { border-color: transparent; isolation: isolate; }
+.member-prem::before { content: ""; position: absolute; inset: 0; z-index: -2; border-radius: inherit; background: linear-gradient(110deg, #ffd166, #c084fc, #4fe3ff, #ffd166); background-size: 300% 300%; animation: mcBorder 6s linear infinite; }
+.member-prem::after { content: ""; position: absolute; inset: 1.5px; z-index: -1; border-radius: 12.5px; background: rgba(14, 19, 25, 0.96);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--mc, #c084fc) 24%, rgba(14, 19, 25, 0.96)), rgba(14, 19, 25, 0.96) 75%); }
+.mc-fx { position: absolute; inset: 1.5px; border-radius: 12.5px; overflow: hidden; pointer-events: none; z-index: 0; }
+.mc-shine { position: absolute; top: 0; bottom: 0; left: -40%; width: 40%; background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent); animation: mcShine 4.6s ease-in-out infinite; }
+.mc-spark { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #ffe8a3; box-shadow: 0 0 6px 1px rgba(255, 209, 102, 0.9); opacity: 0; animation: mcSpark 3.2s ease-in-out infinite; }
+.mc-spark-a { left: 22%; top: 70%; animation-delay: 0s; }
+.mc-spark-b { left: 58%; top: 28%; animation-delay: 1.1s; }
+.mc-spark-c { left: 86%; top: 62%; animation-delay: 2.1s; }
+@keyframes mcBorder { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+@keyframes mcShine { 0%, 55% { transform: translateX(0); opacity: 0; } 62% { opacity: 1; } 100% { transform: translateX(560%); opacity: 0; } }
+@keyframes mcSpark { 0%, 100% { opacity: 0; transform: translateY(0) scale(.6); } 40% { opacity: 1; transform: translateY(-5px) scale(1); } 70% { opacity: 0; transform: translateY(-10px) scale(.5); } }
+@media (prefers-reduced-motion: reduce) { .member-prem::before, .mc-shine, .mc-spark { animation: none; } .mc-spark { opacity: .5; } }

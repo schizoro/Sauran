@@ -316,6 +316,21 @@ test('Maksimum seviyedeki lobiye takviye verilmez (uyarı) ve takviye harcanmaz;
   assert.strictEqual(dbm.boostHub(mg, hub9).success, false); // artık maksimum
 });
 
+test('Premium üye kartı: üye listesinde yalnızca Premium (ya da hediye alan) için işaretlenir', () => {
+  const cO = user('t_card_o', 'premium'), cP = user('t_card_plus', 'plus'), cF = user('t_card_free', null), cG = user('t_card_gift', null), founder = user('t_card_f', null);
+  const hubC = dbm.createHub(cO, { name: 'Kart Lobisi' }).id;
+  const join = (uid) => db.prepare('INSERT OR IGNORE INTO hub_members (hub_id, user_id, role_id, permission_tier) VALUES (?, ?, NULL, ?)').run(hubC, uid, 'member');
+  [cP, cF, cG].forEach(join);
+  assert.strictEqual(dbm.giftProduct(founder, 't_card_gift', 'premium_card', 1).success, true);
+  const flag = (uid) => dbm.getHubDetail(hubC, cO).members.find((m) => m.user_id === uid).premium_card;
+  assert.strictEqual(flag(cO), true);
+  assert.strictEqual(flag(cP), false); // Plus yetmez
+  assert.strictEqual(flag(cF), false);
+  assert.strictEqual(flag(cG), true); // hediye
+  db.prepare(`UPDATE entitlements SET expires_at = '2000-01-01 00:00:00' WHERE user_id = ? AND product = 'premium'`).run(cO);
+  assert.strictEqual(flag(cO), false); // abonelik bitince kart sade
+});
+
 console.log(`\n${passed} test geçti`);
 try { db.close(); fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true }); } catch (_) { /* Windows dosya kilidi: geçici klasör bırakılabilir */ }
 process.exit(0);

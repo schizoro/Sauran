@@ -3709,6 +3709,7 @@ function getHubDetail(hubId, userId) {
   `).all(hubId).map((m) => {
     const { avatar_visibility, minor_until, ...rest } = m;
     if (!hasFeature(m.user_id, 'name_effect')) rest.name_effect = 'none';
+    rest.premium_card = hasFeature(m.user_id, 'premium_card');
     const masked = maskAvatarFor(userId, m.user_id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']);
     return presenceVisibleTo(userId, m.user_id, minor_until) ? masked : { ...masked, status: 'invisible' };
   });

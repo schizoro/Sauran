@@ -24,7 +24,8 @@ const FEATURES = {
   gif_banner:           { label: 'Hareketli (GIF) kapak fotoğrafı',  tier: 'plus' },
   premium_sticker_pack: { label: 'Premium çıkartma paketi',          tier: 'premium' },
   gif_avatar:           { label: 'Hareketli (GIF) profil fotoğrafı', tier: 'premium' },
-  premium_emoji_pack:   { label: 'Premium emoji paketi',             tier: 'premium' }
+  premium_emoji_pack:   { label: 'Premium emoji paketi',             tier: 'premium' },
+  premium_card:         { label: 'Premium üye kartı animasyonu',     tier: 'premium' }
 };
 
 module.exports = { FEATURES };

@@ -16199,14 +16199,18 @@ function renderHubMembers() {
 
         const divider = (idx > 0 && !isStaffTier(m) && isStaffTier(orderedMembers[idx - 1])) ? '<div class="hub-member-divider" role="separator"></div>' : '';
 
+        const cardColor = m.profile_color || getUserColor(m.username);
+        const subText = m.permission_tier === 'owner' ? 'Kurucu' : m.permission_tier === 'moderator' ? 'Moderatör' : (m.online ? t('hub-info-online') : '');
+        const premFx = m.premium_card ? '<span class="mc-fx" aria-hidden="true"><i class="mc-shine"></i><i class="mc-spark mc-spark-a"></i><i class="mc-spark mc-spark-b"></i><i class="mc-spark mc-spark-c"></i></span>' : '';
         return `
             ${divider}
-            <div class="hub-member-row" data-user-id="${m.user_id}" data-tier="${m.permission_tier}">
+            <div class="hub-member-row hub-member-card${m.premium_card ? ' member-prem' : ''}" style="--mc:${escapeAttr(cardColor)}" data-user-id="${m.user_id}" data-tier="${m.permission_tier}">
+                ${premFx}
                 <span class="hub-member-avatar-wrap">
                     ${avatar}
                     <span class="hub-member-dot" style="background:${m.online ? '#57f287' : '#4b5563'};"></span>
                 </span>
-                <span class="hub-member-name">${usernameCardHtml(m.username, m.plus_active, m.name_effect)}${tierBadge}</span>
+                <span class="hub-member-info"><span class="hub-member-name">${usernameCardHtml(m.username, m.plus_active, m.name_effect)}${tierBadge}</span>${subText ? `<span class="hub-member-sub">${escapeHtml(subText)}</span>` : ''}</span>
                 ${showMenu ? `
                     <div class="hub-member-menu-wrap">
                         <button class="hub-member-menu-btn" type="button">⋯</button>
