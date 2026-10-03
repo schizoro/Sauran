@@ -55,7 +55,11 @@
         document.body.appendChild(panel);
 
         panel.addEventListener('click', onPanelClick);
-        panel.querySelector('#ep-search-input').addEventListener('input', (e) => { state.query = e.target.value.trim().toLowerCase(); renderBody(); });
+        panel.querySelector('#ep-search-input').addEventListener('input', (e) => {
+            state.query = e.target.value.trim().toLowerCase();
+            if (state.tab === 'gif') { clearTimeout(gif.timer); gif.timer = setTimeout(loadGifs, 400); return; }
+            renderBody();
+        });
         document.addEventListener('click', (e) => {
             if (panel.style.display === 'none') return;
             if (e.target.closest('#emoji-panel, .composer-emoji-btn, .composer-attach-wrap')) return;
@@ -145,21 +149,42 @@
         return { html: secs.map(([id, t, inner]) => sectionHtml(id, t, inner)).join('') || '<p class="ep-note ep-empty">Sonuç yok.</p>', jumps: secs.map(([id, t]) => [id, t.slice(0, 1) === '✦' ? '✦' : t.slice(0, 1) === '♛' ? '♛' : '🧸']) };
     }
 
-    function renderBody() {
+    // ── GIF sekmesi (GIPHY, sunucu aracılığıyla) ──
+    const gif = { items: [], enabled: null, loading: false, q: '', timer: null, error: '' };
+    function renderGifTab() {
+        if (gif.enabled === false) return { html: `<div class="ep-gif-soon"><div class="ep-gif-ic">🎞️</div><h4>GIF'ler yakında</h4><p>GIF araması henüz etkin değil.</p></div>`, jumps: [] };
+        const grid = gif.items.map((g) => `<button type="button" class="ep-gif" data-gif="${escA(g.url)}" style="aspect-ratio:${g.w}/${g.h}"><img src="${escA(g.preview)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"></button>`).join('');
+        const msg = gif.loading ? '<p class="ep-note ep-empty">Yükleniyor…</p>' : gif.error ? `<p class="ep-note ep-empty">${esc(gif.error)}</p>` : (!gif.items.length && gif.enabled ? '<p class="ep-note ep-empty">Sonuç yok.</p>' : '');
+        return { html: `<div class="ep-gif-grid">${grid}</div>${msg}<p class="ep-gif-attr">Powered by GIPHY</p>`, jumps: [] };
+    }
+    async function loadGifs() {
+        gif.loading = true; gif.error = ''; renderBodyKeep();
+        try {
+            const r = await fetch('/api/gifs?q=' + encodeURIComponent(state.query), { credentials: 'include' });
+            const d = await r.json();
+            gif.enabled = d.enabled !== false;
+            gif.items = d.items || [];
+            gif.error = d.error || '';
+        } catch (_) { gif.items = []; gif.error = 'GIF servisine ulaşılamadı.'; }
+        gif.loading = false; renderBodyKeep();
+    }
+    function renderBodyKeep() { if (state.tab === 'gif') renderBody(true); }
+
+    function renderBody(keepSearch) {
         if (!panel) return;
         panel.querySelectorAll('[data-ep-tab]').forEach((b) => { const on = b.dataset.epTab === state.tab; b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });
         const search = panel.querySelector('.ep-search');
         const input = panel.querySelector('#ep-search-input');
-        search.style.display = state.tab === 'gif' ? 'none' : '';
-        input.placeholder = state.tab === 'stickers' ? 'Mükemmel çıkartmayı bul' : 'Mükemmel emojiyi bul';
+        search.style.display = state.tab === 'gif' && gif.enabled === false ? 'none' : '';
+        input.placeholder = state.tab === 'gif' ? "GIPHY'de GIF ara" : state.tab === 'stickers' ? 'Mükemmel çıkartmayı bul' : 'Mükemmel emojiyi bul';
         let out;
         if (state.tab === 'gif') {
-            out = { html: `<div class="ep-gif-soon"><div class="ep-gif-ic">🎞️</div><h4>GIF'ler yakında</h4><p>GIF arama sağlayıcısı henüz seçilmedi. Şimdilik hareketli emojilerini <b>Premium</b> ile Emoji sekmesinde kullanabilirsin.</p></div>`, jumps: [] };
+            out = renderGifTab();
         } else if (state.tab === 'stickers') out = renderStickerTab();
         else out = renderEmojiTab();
         const body = el('ep-body');
         body.innerHTML = out.html;
-        body.scrollTop = 0;
+        if (!keepSearch) body.scrollTop = 0;
         el('ep-jump').innerHTML = out.jumps.map(([id, label]) => `<button type="button" data-ep-jump="${id}">${label}</button>`).join('');
     }
 
@@ -174,9 +199,27 @@
         input.setSelectionRange(p, p);
     }
 
+    // GIF, adresi tek başına metin mesajı olarak gönderilir (mevcut gönderim akışı + sunucu doğrulaması aynen kullanılır).
+    function sendGif(url) {
+        const input = el(state.prefix + '-message-input');
+        const form = input && input.closest('form');
+        if (!input || !form) return;
+        const draft = input.value;
+        input.value = url;
+        closePanel();
+        form.requestSubmit();
+        setTimeout(() => { if (input.value === url) input.value = draft; else if (!input.value) input.value = draft; }, 50);
+    }
+
     function onPanelClick(e) {
         const tab = e.target.closest('[data-ep-tab]');
-        if (tab) { state.tab = tab.dataset.epTab; state.query = ''; panel.querySelector('#ep-search-input').value = ''; renderBody(); return; }
+        if (tab) {
+            state.tab = tab.dataset.epTab; state.query = ''; panel.querySelector('#ep-search-input').value = ''; renderBody();
+            if (state.tab === 'gif') loadGifs();
+            return;
+        }
+        const g = e.target.closest('[data-gif]');
+        if (g) { sendGif(g.dataset.gif); return; }
         const jump = e.target.closest('[data-ep-jump]');
         if (jump) { const sec = el('ep-sec-' + jump.dataset.epJump); const body = el('ep-body'); if (sec) body.scrollTo({ top: sec.offsetTop - body.offsetTop - 4, behavior: 'smooth' }); return; }
         if (e.target.closest('[data-ep-add]')) {

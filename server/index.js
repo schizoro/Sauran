@@ -351,7 +351,7 @@ const CSP_REPORT_ONLY = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' https://*.daily.co",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  "img-src 'self' data: blob: https://*.giphy.com",
   "media-src 'self' data: blob:",
   "font-src 'self' data:",
   "connect-src 'self' https://*.daily.co wss://*.daily.co wss: https://*.wss.daily.co",
@@ -2371,6 +2371,43 @@ app.post('/api/hubs/:id/emojis', contentWriteLimiter, async (req, res) => {
   } catch (error) { console.error('Lobi emoji ekleme hatası:', error); return res.status(500).json({ success: false, error: 'Eklenemedi.' }); }
 });
 // ── Kişisel emojiler (Plus: statik, Premium: hareketli de) ──
+// GIF arama (GIPHY): anahtar yalnızca sunucuda; GIPHY_API_KEY yoksa istemciye "yakında" döner.
+const gifCache = new Map(); // anahtar → { t, body }  (60 sn; kota korunur)
+app.get('/api/gifs', async (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const key = process.env.GIPHY_API_KEY;
+  if (!key) return res.json({ success: true, enabled: false, items: [] });
+  try {
+    const q = String(req.query.q || '').trim().slice(0, 60);
+    const offset = Math.max(0, Math.min(Number(req.query.offset) || 0, 200));
+    const cacheKey = `${q}|${offset}`;
+    const hit = gifCache.get(cacheKey);
+    if (hit && Date.now() - hit.t < 60000) return res.json(hit.body);
+    const url = new URL(`https://api.giphy.com/v1/gifs/${q ? 'search' : 'trending'}`);
+    url.searchParams.set('api_key', key);
+    if (q) url.searchParams.set('q', q);
+    url.searchParams.set('limit', '24');
+    url.searchParams.set('offset', String(offset));
+    url.searchParams.set('rating', 'pg-13');
+    url.searchParams.set('lang', 'tr');
+    const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    if (!r.ok) return res.json({ success: true, enabled: true, items: [], error: 'GIF servisi şu an yanıt vermiyor.' });
+    const j = await r.json();
+    const items = (j.data || []).map((g) => {
+      const id = String(g.id || '');
+      const small = g.images && (g.images.fixed_width_small || g.images.fixed_width);
+      const full = g.images && (g.images.fixed_height || g.images.original);
+      if (!/^[A-Za-z0-9]+$/.test(id) || !small || !small.url || !full || !full.url) return null;
+      return { id, preview: small.url, url: full.url, w: Number(small.width) || 100, h: Number(small.height) || 100 };
+    }).filter(Boolean).filter((g) => /^https:\/\/media[0-9]*\.giphy\.com\//.test(g.url) && /^https:\/\/media[0-9]*\.giphy\.com\//.test(g.preview));
+    const body = { success: true, enabled: true, items, next: offset + 24 };
+    gifCache.set(cacheKey, { t: Date.now(), body });
+    if (gifCache.size > 200) gifCache.delete(gifCache.keys().next().value);
+    return res.json(body);
+  } catch (error) { return res.json({ success: true, enabled: true, items: [], error: 'GIF servisine ulaşılamadı.' }); }
+});
+
 app.get('/api/me/emojis', (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;

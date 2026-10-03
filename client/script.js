@@ -9393,7 +9393,7 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
 
     } else {
 
-        body = `<span class="dm-msg-content">${hubEmojiHtml(escapeHtml(msg.content), msg.emoji_map)}</span>`;
+        body = `<span class="dm-msg-content">${gifMessageHtml(msg.content) || hubEmojiHtml(escapeHtml(msg.content), msg.emoji_map)}</span>`;
 
     }
 
@@ -16896,7 +16896,16 @@ function hubEmojiHtml(html, emojiMap) {
     return html.replace(/:([a-z0-9_]{2,20}):/g, (m, name) => map.has(name) ? `<img class="hub-emoji" src="${escapeAttr(map.get(name))}" alt="${m}" title="${m}">` : m);
 }
 
+const GIF_URL_RE = /^https:\/\/media[0-9]*\.giphy\.com\/media\/[A-Za-z0-9_\-\/.]+\.(?:gif|webp)(?:\?[A-Za-z0-9_=&\-.]*)?$/;
+function gifMessageHtml(content) {
+    const c = String(content || '').trim();
+    if (c.length > 300 || !GIF_URL_RE.test(c)) return null;
+    return `<img class="chat-gif" src="${escapeAttr(c)}" alt="GIF" loading="lazy" decoding="async" referrerpolicy="no-referrer">`;
+}
+
 function renderMentionText(content, mentions, emojiMap) {
+    const gifHtml = gifMessageHtml(content);
+    if (gifHtml) return gifHtml;
     let html = hubEmojiHtml(escapeHtml(content || ''), emojiMap);
     if (!mentions) return html;
     const names = (mentions.users || []).map((u) => ({ name: u.username, me: u.id === currentUser?.id }));
