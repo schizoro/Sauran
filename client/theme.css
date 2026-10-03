@@ -2674,3 +2674,39 @@ body .hub-member-menu, body .sticker-picker, body .emoji-panel, body .hub-emoji-
 .hub-welcome-box h3 { margin: 0 0 10px; }
 .hub-welcome-msg { margin: 0 0 16px; font-size: 14px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; color: var(--text-secondary); }
 .hub-welcome-ok { border: 0; border-radius: 999px; padding: 10px 28px; font-weight: 700; cursor: pointer; background: var(--accent, #5cc8ff); color: #06121a; }
+
+/* ══ Canlı önizleme sayfası (Özelleştirme seçenekleri) ══════════════════════════════════════════════ */
+.chat-theme-option.pv-locked { opacity: .62; position: relative; }
+.chat-theme-option.pv-locked::after { content: "🔒"; position: absolute; top: 4px; right: 4px; font-size: 11px; }
+.pv-overlay { z-index: 460; align-items: center; justify-content: center; }
+.pv-sheet { width: min(420px, calc(100vw - 24px)); max-height: 92vh; overflow-y: auto; padding: 14px 16px 16px; border-radius: 22px; background: #0e1319 !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.pv-handle { display: none; width: 40px; height: 4px; border-radius: 4px; background: var(--border-soft-strong); margin: 0 auto 10px; }
+.pv-stage { border-radius: 16px; background: #05080b; padding: 14px; margin-bottom: 14px; box-shadow: inset 0 0 0 1px var(--border-soft); overflow: hidden; }
+.pv-profile.profile-modal-box { position: relative; inset: auto; transform: none; width: 100%; max-width: none; margin: 0; padding: 18px 16px; border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; animation: none; background-color: #0e1319; }
+.pv-avatar { position: relative; width: 84px; height: 84px; border-radius: 50%; overflow: visible; background: var(--bg-surface-3); display: grid; place-items: center; font-size: 32px; font-weight: 700; }
+.pv-avatar > img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.pv-initial { color: var(--text-primary); }
+.pv-name { font-size: 19px; font-weight: 700; }
+.pv-about { align-self: stretch; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.05); font-size: 12.5px; }
+.pv-about span { color: var(--text-secondary); }
+.pv-chat { display: flex; flex-direction: column; gap: 12px; }
+.pv-msg { display: flex; gap: 9px; align-items: flex-start; }
+.pv-msg-av { flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--bg-surface-3); display: grid; place-items: center; font-weight: 700; font-size: 14px; overflow: hidden; }
+.pv-msg-av img { width: 100%; height: 100%; object-fit: cover; }
+.pv-msg b { font-size: 13px; }
+.pv-msg .hub-msg-bubble { margin-top: 3px; display: inline-block; max-width: 100%; }
+.pv-cardstage { display: grid; place-items: center; padding: 6px 0; }
+.pv-cardstage .cz-card-prev { width: 100%; max-width: 300px; transform: scale(1.15); transform-origin: center; }
+.pv-info .pv-kicker { font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-tertiary); }
+.pv-info h3 { margin: 4px 0 6px; font-size: 19px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pv-info p { margin: 0 0 14px; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
+.pv-actions { display: flex; gap: 8px; }
+.pv-btn { flex: 1; border: 0; border-radius: 999px; padding: 13px 16px; font-size: 14px; font-weight: 700; cursor: pointer; background: var(--accent, #5cc8ff); color: #06121a; }
+.pv-btn-up { background: linear-gradient(135deg, #7c5cff, #ff6fb5); color: #fff; }
+.pv-btn-ghost { background: var(--glass-1); color: var(--text-primary); flex: 0 0 auto; }
+.pv-btn:disabled { opacity: .6; cursor: default; flex: 1; }
+@media (max-width: 720px) {
+  .pv-overlay { align-items: flex-end; }
+  .pv-sheet { width: 100%; border-radius: 22px 22px 0 0; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+  .pv-handle { display: block; }
+}
