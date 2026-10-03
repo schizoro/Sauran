@@ -170,6 +170,17 @@ test('Lobi emojileri: Seviye 4 şartı, yalnızca sahip, ad/format/boyut/yuva de
   assert.deepStrictEqual(dbm.getHubDetail(hub3, o3).emojis, []); // Seviye 4 altında gizli
 });
 
+test('Premium çıkartmalar: yalnızca Premium gönderebilir; Plus ve ücretsiz reddedilir; geçersiz kimlik reddedilir', () => {
+  const sOwner = user('t_stk_o', 'premium'), sPlus = user('t_stk_p', 'plus'), sFree = user('t_stk_f', null);
+  const hubS = dbm.createHub(sOwner, { name: 'Çıkartma Lobisi' }).id;
+  const send = (uid, uname, id) => dbm.createHubSticker(hubS, uid, uname, id);
+  assert.strictEqual(send(sOwner, 't_stk_o', 'prem-dragon').success, true);
+  assert.strictEqual(send(sPlus, 't_stk_p', 'prem-dragon').success, false);
+  assert.strictEqual(send(sFree, 't_stk_f', 'prem-dragon').success, false);
+  assert.strictEqual(send(sPlus, 't_stk_p', 'plus-cat').success, true); // Plus seti hâlâ çalışır
+  assert.strictEqual(send(sOwner, 't_stk_o', 'prem-yok').success, false);
+});
+
 console.log(`\n${passed} test geçti`);
 try { db.close(); fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true }); } catch (_) { /* Windows dosya kilidi: geçici klasör bırakılabilir */ }
 process.exit(0);

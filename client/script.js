@@ -49,13 +49,21 @@ const PLUS_STICKERS = [
     { id: 'plus-ghost', emoji: '👻' }
 ];
 
+// Sauran Premium çıkartma seti (prem-*): yalnızca Premium; sunucu da aynı kuralı uygular.
+const PREMIUM_STICKERS = [
+    { id: 'prem-dragon', emoji: '🐲' }, { id: 'prem-phoenix', emoji: '🔥' }, { id: 'prem-wolf', emoji: '🐺' },
+    { id: 'prem-lion', emoji: '🦁' }, { id: 'prem-owl', emoji: '🦉' }, { id: 'prem-turtle', emoji: '🐢' },
+    { id: 'prem-robot', emoji: '🤖' }, { id: 'prem-alien', emoji: '👽' }, { id: 'prem-astronaut', emoji: '🧑‍🚀' },
+    { id: 'prem-king', emoji: '🤴' }, { id: 'prem-snowman', emoji: '⛄' }, { id: 'prem-flame', emoji: '🔥' }
+];
+
 function stickerEmoji(id) {
-    return STICKERS.find((s) => s.id === id)?.emoji || PLUS_STICKERS.find((s) => s.id === id)?.emoji || '❔';
+    return STICKERS.find((s) => s.id === id)?.emoji || PLUS_STICKERS.find((s) => s.id === id)?.emoji || PREMIUM_STICKERS.find((s) => s.id === id)?.emoji || '❔';
 }
 
 // Sauran Plus çıkartmaları SVG karakter (stickers.js); klasik çıkartmalar emoji olarak kalır.
 function stickerInnerHtml(id) {
-    if (typeof plusStickerSvg === 'function' && id && id.startsWith('plus-')) {
+    if (typeof plusStickerSvg === 'function' && id && (id.startsWith('plus-') || id.startsWith('prem-'))) {
         const svg = plusStickerSvg(id);
         if (svg) return svg;
     }
@@ -68,7 +76,7 @@ function userHasFeature(key) {
 }
 
 function stickerIsPlus(id) {
-    return Boolean(id && id.startsWith('plus-'));
+    return Boolean(id && (id.startsWith('plus-') || id.startsWith('prem-')));
 }
 
 // =====================================================
@@ -7723,7 +7731,8 @@ async function renderCzPremium(sub) {
         ${feat('🎞️', 'Hareketli (GIF) avatar', 'Profil fotoğrafın hareketli olabilir.', on ? 'on' : 'prem')}
         ${feat('📎', '100 MB dosya / video', 'Plus: 50 MB.', on ? 'on' : 'prem')}
         ${feat('📺', 'Yüksek kalite ekran paylaşımı', 'Plus\'tan daha yüksek bit hızı tavanı; ağın elverdiği ölçüde daha net görüntü.', on ? 'on' : 'prem')}
-        ${feat('🎬', 'Premium çıkartma/emoji paketleri', 'Yeni Premium içeriklere erken erişim de bu pakete dahil olacak.', 'soon')}
+        ${feat('🧸', '12 Premium hareketli çıkartma', 'Ejderha, Anka kuşu, Aslan, Astronot ve daha fazlası.', on ? 'on' : 'prem')}
+        ${feat('🎬', 'Premium emoji paketleri ve erken erişim', 'Yeni Premium içeriklere erken erişim bu pakete dahil olacak.', 'soon')}
         <div class="atmo-actions" style="margin-top:12px;">
             <button id="cz-open-subs-btn" class="atmo-btn" type="button">Abonelikleri gör</button>
             <button id="cz-open-atmo-btn" class="atmo-btn atmo-btn-use" type="button">🌌 Atmosphere'lere git</button>
@@ -8483,7 +8492,8 @@ async function loadSubscriptions() {
                 <li><span class="subs-ic">🌌</span><span><b>Premium Atmosphere</b> paketleri <small>(Cyber Gaming, Cosmic…)</small></span></li>
                 <li><span class="subs-ic">🎞️</span><span><b>Animasyonlu (GIF)</b> profil fotoğrafı</span></li>
                 <li><span class="subs-ic">📺</span><span><b>Yüksek kalite ekran paylaşımı</b> <small>(Plus'tan daha yüksek bit hızı)</small></span></li>
-                <li class="subs-soon"><span class="subs-ic">🎬</span><span>Premium çıkartma/emoji paketleri, erken erişim <small>(yakında)</small></span></li>
+                <li><span class="subs-ic">🧸</span><span><b>12 Premium hareketli çıkartma</b> <small>(Ejderha, Anka kuşu, Aslan, Astronot…)</small></span></li>
+                <li class="subs-soon"><span class="subs-ic">🎬</span><span>Premium emoji paketleri, erken erişim <small>(yakında)</small></span></li>
             </ul>
             ${subsStatusHtml(premium, false)}
         </div>`;
@@ -10255,6 +10265,28 @@ function wireStickerPicker(prefix, onPick) {
         btn.addEventListener('click', () => {
             if (!userHasFeature('sticker_pack')) {
                 showToast('Hareketli çıkartmalar Sauran Plus abonelerine açıktır.');
+                return;
+            }
+            picker.style.display = 'none';
+            onPick(sticker.id);
+        });
+        picker.appendChild(btn);
+    });
+
+    const premLabel = document.createElement('div');
+    premLabel.className = 'sticker-picker-label';
+    premLabel.innerHTML = '<span class="subs-premium-badge" style="margin-left:0;">♛ PREMIUM</span> Premium çıkartmalar';
+    picker.appendChild(premLabel);
+
+    PREMIUM_STICKERS.forEach((sticker) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'sticker-plus-btn sticker-prem-btn';
+        btn.innerHTML = stickerInnerHtml(sticker.id);
+        btn.title = 'Sauran Premium';
+        btn.addEventListener('click', () => {
+            if (!currentUser?.premium_active) {
+                showToast('Premium çıkartmalar Sauran Premium abonelerine açıktır.');
                 return;
             }
             picker.style.display = 'none';

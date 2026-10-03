@@ -206,6 +206,85 @@
         D[k].mouth2 = t.mouth2;
     });
 
+
+    // ── Sauran Premium çıkartma seti (prem-*): Plus setinden farklı, daha büyük karakterler; hepsinde altın pırıltı işareti ──
+    const PSTAR = `<path class="stk-twinkle" d="M101 12 L103.4 18 L109.6 18.4 L104.8 22.4 L106.4 28.6 L101 25.2 L95.6 28.6 L97.2 22.4 L92.4 18.4 L98.6 18Z" fill="#ffd84d" stroke="#e0a526" stroke-width="1"/>`;
+    const PD = {
+        'prem-dragon': {
+            c: '#5fd38d', k: '#2f9b62', eyes: 'dot', mouth: 'open', wave: 'r', body: 'bob',
+            back: `<path class="stk-ear stk-ear-l" d="M32 62 L4 34 L9 66 L3 80 L30 78Z" fill="#8fe8b4" stroke="#2f9b62" stroke-width="1.6" stroke-linejoin="round"/><path class="stk-ear stk-ear-r" d="M88 62 L116 34 L111 66 L117 80 L90 78Z" fill="#8fe8b4" stroke="#2f9b62" stroke-width="1.6" stroke-linejoin="round"/><path class="stk-tail" d="M80 102 Q108 102 108 80 Q98 94 80 92Z" fill="#5fd38d" stroke="#2f9b62" stroke-width="1.6" stroke-linejoin="round"/>`,
+            under: `<ellipse cx="60" cy="66" rx="17" ry="11" fill="#c9f5da"/>`,
+            nose: `<circle cx="54" cy="60" r="1.8" fill="#2b2b3a"/><circle cx="66" cy="60" r="1.8" fill="#2b2b3a"/>`,
+            front: `<g class="stk-horn">${tri('M40 26 L35 6 L51 20Z', '#ffd84d', '', 'stroke="#e0a526" stroke-width="1.4"')}${tri('M80 26 L85 6 L69 20Z', '#ffd84d', '', 'stroke="#e0a526" stroke-width="1.4"')}</g>${PSTAR}`
+        },
+        'prem-phoenix': {
+            c: '#ff7a3d', k: '#d4471a', eyes: 'star', mouth: 'none', wave: 'both', body: 'float',
+            back: `<path class="stk-ear stk-ear-l" d="M30 58 Q2 40 8 14 Q14 40 36 46Z" fill="#ffb02e" stroke="#d4471a" stroke-width="1.6" stroke-linejoin="round"/><path class="stk-ear stk-ear-r" d="M90 58 Q118 40 112 14 Q106 40 84 46Z" fill="#ffb02e" stroke="#d4471a" stroke-width="1.6" stroke-linejoin="round"/><g class="stk-flame"><path d="M44 100 Q60 124 76 100 Q66 108 60 96 Q54 108 44 100Z" fill="#ff5a1f"/></g>`,
+            under: `<ellipse cx="60" cy="66" rx="15" ry="10" fill="#ffd9a8"/>`,
+            nose: `<path d="M55 57 L65 57 L60 67Z" fill="#ffd84d" stroke="#e0a526" stroke-width="1.4" stroke-linejoin="round"/>`,
+            front: `<g class="stk-flame"><path d="M60 -2 Q50 12 58 20 Q60 12 66 18 Q72 8 60 -2Z" fill="#ffb02e" stroke="#ff7a1a" stroke-width="1.2"/><path d="M48 10 Q40 20 46 26 Q50 18 54 22Z" fill="#ff7a3d"/><path d="M72 10 Q80 20 74 26 Q70 18 66 22Z" fill="#ff7a3d"/></g>${PSTAR}`
+        },
+        'prem-wolf': {
+            c: '#9aa3b5', k: '#6b7488', eyes: 'dot', mouth: 'smile', wave: 'r', body: 'sway',
+            back: `<g class="stk-ear stk-ear-l">${tri('M30 46 L26 6 L56 28Z', '#9aa3b5', '', 'stroke="#6b7488" stroke-width="1.6"')}${tri('M33 36 L31 16 L47 28Z', '#5d667b')}</g><g class="stk-ear stk-ear-r">${tri('M90 46 L94 6 L64 28Z', '#9aa3b5', '', 'stroke="#6b7488" stroke-width="1.6"')}${tri('M87 36 L89 16 L73 28Z', '#5d667b')}</g><path class="stk-tail" d="M82 100 Q108 98 106 72 Q100 90 82 92Z" fill="#9aa3b5" stroke="#6b7488" stroke-width="1.6"/>`,
+            under: `<ellipse cx="60" cy="65" rx="19" ry="13" fill="#e9edf5"/><path d="M26 54 Q36 62 40 74 M94 54 Q84 62 80 74" fill="none" stroke="#e9edf5" stroke-width="5" stroke-linecap="round"/>`,
+            nose: `<ellipse cx="60" cy="58" rx="5.4" ry="3.8" fill="#2b2b3a"/>`, front: PSTAR
+        },
+        'prem-lion': {
+            c: '#f2b94a', k: '#c78a1c', eyes: 'dot', mouth: 'smile', wave: 'both', body: 'bob',
+            back: `<g class="stk-mane">${[[60, 19], [88, 27], [99, 52], [90, 79], [60, 89], [30, 79], [21, 52], [32, 27]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="15" fill="#c7761c" stroke="#9e5a10" stroke-width="1.4"/>`).join('')}</g>`,
+            under: `<circle cx="38" cy="26" r="8" fill="#f2b94a" stroke="#c78a1c" stroke-width="1.4"/><circle cx="82" cy="26" r="8" fill="#f2b94a" stroke="#c78a1c" stroke-width="1.4"/><ellipse cx="60" cy="65" rx="16" ry="11" fill="#fff0c9"/>`,
+            nose: `<path d="M55 57 L65 57 L60 63Z" fill="#8a4b2a" stroke-linejoin="round"/>`, front: PSTAR
+        },
+        'prem-owl': {
+            c: '#9a7550', k: '#6e5035', eyes: 'dot', mouth: 'none', wave: 'both', body: 'bob',
+            back: `<g class="stk-ear stk-ear-l">${tri('M32 38 L30 8 L52 24Z', '#9a7550', '', 'stroke="#6e5035" stroke-width="1.6"')}</g><g class="stk-ear stk-ear-r">${tri('M88 38 L90 8 L68 24Z', '#9a7550', '', 'stroke="#6e5035" stroke-width="1.6"')}</g>`,
+            under: `<circle cx="47" cy="52" r="14" fill="#f6e9d3" stroke="#6e5035" stroke-width="1.6"/><circle cx="73" cy="52" r="14" fill="#f6e9d3" stroke="#6e5035" stroke-width="1.6"/><path d="M40 20 Q60 30 80 20" fill="none" stroke="#6e5035" stroke-width="2" opacity=".5"/>`,
+            nose: `<path d="M55 60 L65 60 L60 71Z" fill="#ffb02e" stroke="#d98a00" stroke-width="1.4" stroke-linejoin="round"/>`,
+            belly: '#e9d5b3', front: PSTAR
+        },
+        'prem-turtle': {
+            c: '#6dcf7f', k: '#3a9a50', eyes: 'happy', mouth: 'smile', wave: 'r', body: 'sway',
+            back: `<ellipse cx="60" cy="86" rx="36" ry="28" fill="#3f8f55" stroke="#2c6a3d" stroke-width="2"/><path d="M60 62 L60 108 M30 76 L90 76 M32 98 L88 98" stroke="#2c6a3d" stroke-width="2" fill="none" opacity=".7"/><path class="stk-tail" d="M92 100 L108 106 L94 108Z" fill="#6dcf7f" stroke="#3a9a50" stroke-width="1.4"/>`,
+            under: `<ellipse cx="60" cy="66" rx="14" ry="9" fill="#d3f5db"/>`, front: PSTAR
+        },
+        'prem-robot': {
+            c: '#b8c4d9', k: '#7f8ca6', eyes: 'star', mouth: 'none', wave: 'r', body: 'bob',
+            head: `<rect x="26" y="20" width="68" height="62" rx="16" fill="#b8c4d9" stroke="#7f8ca6" stroke-width="2"/>`,
+            under: `<rect x="34" y="30" width="52" height="34" rx="10" fill="#27324d"/>`,
+            nose: `<rect x="46" y="68" width="28" height="7" rx="3.5" fill="#2b2b3a"/><path d="M52 68 L52 75 M60 68 L60 75 M68 68 L68 75" stroke="#b8c4d9" stroke-width="1.4"/>`,
+            front: `<g class="stk-ear stk-ear-r"><path d="M60 20 L60 8" stroke="#7f8ca6" stroke-width="3" stroke-linecap="round"/><circle class="stk-pulse" cx="60" cy="6" r="5" fill="#ff4d7a" stroke="#d6335f" stroke-width="1.2"/></g>${PSTAR}`
+        },
+        'prem-alien': {
+            c: '#9be15d', k: '#6aa832', eyes: 'none', mouth: 'o', wave: 'both', body: 'float',
+            back: `<g class="stk-ear stk-ear-l"><path d="M44 24 Q36 10 28 6" stroke="#6aa832" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="27" cy="5" r="5" fill="#d9ff9e" stroke="#6aa832" stroke-width="1.4"/></g><g class="stk-ear stk-ear-r"><path d="M76 24 Q84 10 92 6" stroke="#6aa832" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="93" cy="5" r="5" fill="#d9ff9e" stroke="#6aa832" stroke-width="1.4"/></g>`,
+            front: `<ellipse cx="44" cy="52" rx="10" ry="13" transform="rotate(-16 44 52)" fill="#1b1b2a"/><ellipse cx="76" cy="52" rx="10" ry="13" transform="rotate(16 76 52)" fill="#1b1b2a"/><circle cx="41" cy="46" r="3.2" fill="#fff"/><circle cx="73" cy="46" r="3.2" fill="#fff"/>${PSTAR}`
+        },
+        'prem-astronaut': {
+            c: '#f4f6fb', k: '#aab3c8', eyes: 'star', mouth: 'smile', wave: 'both', body: 'float',
+            under: `<ellipse cx="60" cy="52" rx="27" ry="23" fill="#27324d" stroke="#aab3c8" stroke-width="2"/><ellipse cx="50" cy="42" rx="9" ry="4" fill="#fff" opacity=".32" transform="rotate(-22 50 42)"/>`,
+            back: `<rect x="40" y="62" width="40" height="36" rx="12" fill="#cfd6e6" stroke="#aab3c8" stroke-width="1.6"/>`,
+            front: `<circle cx="34" cy="86" r="4" fill="#ff7a3d"/><circle cx="46" cy="86" r="4" fill="#4f9cff"/>${PSTAR}`
+        },
+        'prem-king': {
+            c: '#ffd36b', k: '#e0a526', eyes: 'happy', mouth: 'smile', wave: 'r', body: 'bob',
+            back: `<path d="M30 70 Q16 100 24 116 L96 116 Q104 100 90 70Z" fill="#d6334f" stroke="#a9203a" stroke-width="1.6" stroke-linejoin="round"/>`,
+            front: `<g class="stk-bow"><path d="M36 26 L40 6 L51 18 L60 2 L69 18 L80 6 L84 26Z" fill="#ffd84d" stroke="#d99a00" stroke-width="2" stroke-linejoin="round"/><circle cx="60" cy="10" r="3" fill="#ff4d7a"/><circle cx="42" cy="12" r="2.4" fill="#4f9cff"/><circle cx="78" cy="12" r="2.4" fill="#4f9cff"/></g>${PSTAR}`
+        },
+        'prem-snowman': {
+            c: '#f1f6ff', k: '#b9c8e0', arm: '#7a5230', foot: '#7a5230', eyes: 'dot', mouth: 'smile', wave: 'both', body: 'sway',
+            nose: `<path d="M57 55 L82 61 L57 65Z" fill="#ff8a3d" stroke="#e0651a" stroke-width="1.2" stroke-linejoin="round"/>`,
+            front: `<path d="M38 80 Q60 92 82 80 L80 90 Q60 102 40 90Z" fill="#e0405a" stroke="#b92c44" stroke-width="1.2"/><rect x="36" y="14" width="48" height="7" rx="3" fill="#2b2b3a"/><rect x="44" y="-2" width="32" height="18" rx="4" fill="#2b2b3a"/><rect x="44" y="9" width="32" height="4" fill="#e0405a"/>${PSTAR}`
+        },
+        'prem-flame': {
+            c: '#ff8a3d', k: '#e0501a', eyes: 'dot', mouth: 'open', noBody: true, noFeet: true, noArms: true, body: 'float', fy: 8,
+            head: `<path class="stk-flame" d="M60 6 Q94 36 90 64 Q86 92 60 92 Q34 92 30 64 Q26 36 60 6Z" fill="#ff8a3d" stroke="#e0501a" stroke-width="2" stroke-linejoin="round"/>`,
+            under: `<path d="M60 36 Q78 54 76 70 Q74 86 60 86 Q46 86 44 70 Q42 54 60 36Z" fill="#ffd24d"/>`, front: PSTAR
+        }
+    };
+    Object.assign(D, PD);
+    window.PREMIUM_STICKER_IDS = Object.keys(PD);
+
     // Hangi hayvanlar karanlık yüz üzerinde (panda göz çevresi) — gözler beyaz noktalı kalır, ek işlem gerekmez.
 
     function arm(side, fill, cls, y, stroke) {

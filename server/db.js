@@ -4718,12 +4718,21 @@ const PLUS_STICKER_EMOJIS = {
   'plus-coffee': '☕', 'plus-pizza': '🍕', 'plus-cake': '🎂', 'plus-gamepad': '🎮', 'plus-bulb': '💡', 'plus-ghost': '👻'
 };
 const PLUS_STICKERS = Object.keys(PLUS_STICKER_EMOJIS);
+// Sauran Premium çıkartma seti (yalnızca Premium; görünüm istemcide, sunucu yalnızca kimlik + yedek emoji bilir).
+const PREMIUM_STICKER_EMOJIS = {
+  'prem-dragon': '🐲', 'prem-phoenix': '🔥', 'prem-wolf': '🐺', 'prem-lion': '🦁', 'prem-owl': '🦉', 'prem-turtle': '🐢',
+  'prem-robot': '🤖', 'prem-alien': '👽', 'prem-astronaut': '🧑‍🚀', 'prem-king': '🤴', 'prem-snowman': '⛄', 'prem-flame': '🔥'
+};
+const PREMIUM_STICKERS = Object.keys(PREMIUM_STICKER_EMOJIS);
 
 function stickerEmoji(id) {
-  return STICKER_EMOJIS[id] || PLUS_STICKER_EMOJIS[id] || '❔';
+  return STICKER_EMOJIS[id] || PLUS_STICKER_EMOJIS[id] || PREMIUM_STICKER_EMOJIS[id] || '❔';
 }
 
 function validateStickerFor(userId, stickerId) {
+  if (PREMIUM_STICKERS.includes(stickerId)) {
+    return hasActivePremium(userId) ? null : 'Bu çıkartma yalnızca Sauran Premium abonelerine açık.';
+  }
   if (PLUS_STICKERS.includes(stickerId)) {
     return hasFeature(userId, 'sticker_pack') ? null : 'Bu çıkartma yalnızca Sauran Plus abonelerine (ya da hediye edilenlere) açık.';
   }
