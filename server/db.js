@@ -353,6 +353,9 @@ if (!db.prepare(`PRAGMA table_info(hub_boosts)`).all().some((c) => c.name === 's
   // 'premium' = aylık Premium takviyesi (abonelik bitince düşer) | 'gift' = hediye takviye (kalıcı, abonelikten bağımsız)
   db.exec(`ALTER TABLE hub_boosts ADD COLUMN source TEXT NOT NULL DEFAULT 'premium'`);
 }
+for (const [col, def] of [['announcement', 'TEXT'], ['welcome_message', 'TEXT'], ['accent_color', 'TEXT'], ['content_updated_at', 'DATETIME']]) {
+  if (!db.prepare(`PRAGMA table_info(hubs)`).all().some((c) => c.name === col)) db.exec(`ALTER TABLE hubs ADD COLUMN ${col} ${def}`);
+}
 if (!db.prepare(`PRAGMA table_info(hub_emojis)`).all().some((c) => c.name === 'animated')) {
   db.exec(`ALTER TABLE hub_emojis ADD COLUMN animated INTEGER NOT NULL DEFAULT 0`);
 }
@@ -2693,7 +2696,7 @@ function setProfileSoundOn(userId, on) {
 }
 
 // ── Lobi Takviyesi ────────────────────────────────────────────────────────────────────────────────
-const { PREMIUM_MONTHLY_BOOSTS, BOOST_COOLDOWN_HOURS, BOOST_LEVELS, levelForBoosts, HUB_EMOJI_SLOTS, HUB_STICKER_SLOTS } = require('./atmosphere');
+const { PREMIUM_MONTHLY_BOOSTS, BOOST_COOLDOWN_HOURS, BOOST_LEVELS, levelForBoosts, HUB_EMOJI_SLOTS, HUB_STICKER_SLOTS, HUB_VOICE_ROOMS_L4, HUB_VOICE_PARTICIPANTS_L4 } = require('./atmosphere');
 
 // Premium takviyeleri yalnızca kullanıcı hâlâ Premium ise sayılır (abonelik bitince düşer); hediye takviyeler kalıcıdır.
 function hubBoostCount(hubId) {
@@ -2789,6 +2792,44 @@ function setHubBanner(hubId, userId, dataUrl) {
   const clean = stripImageMetadata(dataUrl);
   db.prepare(`UPDATE hubs SET banner_data = ? WHERE id = ?`).run(clean, hubId);
   return { success: true, has_banner: true };
+}
+
+// ── Seviye 4: duyuru panosu, karşılama mesajı, vurgu rengi ──
+function setHubContent(hubId, userId, input) {
+  const hub = db.prepare(`SELECT id, created_by, type FROM hubs WHERE id = ?`).get(hubId);
+  if (!hub) return { success: false, status: 404, error: 'Lobi bulunamadı.' };
+  if (hub.type === 'group') return { success: false, status: 400, error: 'Bu işlem gruplarda kullanılamaz.' };
+  if (hub.created_by !== userId) return { success: false, status: 403, error: 'Sadece Lobi sahibi değiştirebilir.' };
+  if (hubLevel(hubId) < 4) return { success: false, status: 403, error: 'Bu özellik Seviye 4\'te açılır.' };
+  const clean = (v, max, label) => {
+    if (v === undefined) return { skip: true };
+    const t = v === null ? '' : String(v).replace(/\r\n/g, '\n').trim();
+    if (t.length > max) return { error: `${label} en fazla ${max} karakter olabilir.` };
+    return { value: t || null };
+  };
+  const a = clean(input && input.announcement, 500, 'Duyuru'), w = clean(input && input.welcome_message, 300, 'Karşılama mesajı');
+  if (a.error || w.error) return { success: false, status: 400, error: a.error || w.error };
+  if (!a.skip) db.prepare(`UPDATE hubs SET announcement = ?, content_updated_at = datetime('now') WHERE id = ?`).run(a.value, hubId);
+  if (!w.skip) db.prepare(`UPDATE hubs SET welcome_message = ?, content_updated_at = datetime('now') WHERE id = ?`).run(w.value, hubId);
+  const row = db.prepare(`SELECT announcement, welcome_message, content_updated_at FROM hubs WHERE id = ?`).get(hubId);
+  return { success: true, ...row };
+}
+function setHubAccent(hubId, userId, color) {
+  const hub = db.prepare(`SELECT id, created_by, type FROM hubs WHERE id = ?`).get(hubId);
+  if (!hub) return { success: false, status: 404, error: 'Lobi bulunamadı.' };
+  if (hub.type === 'group') return { success: false, status: 400, error: 'Bu işlem gruplarda kullanılamaz.' };
+  if (hub.created_by !== userId) return { success: false, status: 403, error: 'Sadece Lobi sahibi değiştirebilir.' };
+  if (hubLevel(hubId) < 4) return { success: false, status: 403, error: 'Vurgu rengi Seviye 4\'te açılır.' };
+  if (color === null || color === undefined || color === '') { db.prepare(`UPDATE hubs SET accent_color = NULL WHERE id = ?`).run(hubId); return { success: true, accent_color: null }; }
+  if (typeof color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(color)) return { success: false, status: 400, error: 'Geçersiz renk.' };
+  db.prepare(`UPDATE hubs SET accent_color = ? WHERE id = ?`).run(color.toLowerCase(), hubId);
+  return { success: true, accent_color: color.toLowerCase() };
+}
+// Seviye 4 sesli oda sınırları
+function maxVoiceRoomsForHub(hubId) { return hubLevel(hubId) >= 4 ? HUB_VOICE_ROOMS_L4 : 5; }
+function maxVoiceParticipantsForRoom(roomId) {
+  const row = db.prepare(`SELECT hub_id FROM hub_voice_rooms WHERE id = ?`).get(roomId);
+  return row && hubLevel(row.hub_id) >= 4 ? HUB_VOICE_PARTICIPANTS_L4 : 25;
 }
 
 const HUB_EMOJI_MAX_CHARS = 320_000; // sıkıştırılmış hareketli WebP en fazla ~220 KB
@@ -3880,6 +3921,11 @@ function getHubDetail(hubId, userId) {
     has_banner: boost.level >= 3 && Boolean(hub.banner_data),
     emojis: boost.level >= 4 ? listHubEmojis(hubId) : [],
     emoji_slots: HUB_EMOJI_SLOTS,
+    announcement: boost.level >= 4 ? (hub.announcement || null) : null,
+    welcome_message: boost.level >= 4 ? (hub.welcome_message || null) : null,
+    accent_color: boost.level >= 4 ? (hub.accent_color || null) : null,
+    content_updated_at: boost.level >= 4 ? (hub.content_updated_at || null) : null,
+    voice_limits: { rooms: maxVoiceRoomsForHub(hubId), participants: boost.level >= 4 ? HUB_VOICE_PARTICIPANTS_L4 : 25 },
     boost,
     roles,
     members,
@@ -5120,8 +5166,9 @@ function createVoiceRoom(hubId, userId, name) {
   if (!name) return { success: false, error: 'Oda adı gerekli.' };
 
   const roomCount = db.prepare(`SELECT COUNT(*) AS count FROM hub_voice_rooms WHERE hub_id = ?`).get(hubId).count;
-  if (roomCount >= MAX_VOICE_ROOMS_PER_HUB) {
-    return { success: false, error: `Bir lobide en fazla ${MAX_VOICE_ROOMS_PER_HUB} sesli oda olabilir.` };
+  const roomLimit = maxVoiceRoomsForHub(hubId);
+  if (roomCount >= roomLimit) {
+    return { success: false, error: `Bir lobide en fazla ${roomLimit} sesli oda olabilir${roomLimit < HUB_VOICE_ROOMS_L4 ? ' (Seviye 4\'te ' + HUB_VOICE_ROOMS_L4 + ')' : ''}.` };
   }
 
   const info = db.prepare(`INSERT INTO hub_voice_rooms (hub_id, name, created_by) VALUES (?, ?, ?)`).run(hubId, name, userId);
@@ -8729,6 +8776,10 @@ module.exports = {
   updateNotificationPreferences,
   markNotificationRead,
   MAX_VOICE_ROOM_PARTICIPANTS,
+  maxVoiceParticipantsForRoom,
+  maxVoiceRoomsForHub,
+  setHubContent,
+  setHubAccent,
   MAX_VOICE_ROOMS_PER_HUB,
   getHubPushInfo,
   savePushSubscription,

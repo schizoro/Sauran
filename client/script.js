@@ -8125,6 +8125,7 @@ function hubBoost() { return (currentHub && currentHub.boost) || null; }
 // ── Lobiye özel emojiler (Seviye 4) ──
 function renderHubEmojiUi() { /* eski seçici kalktı: birleşik emoji paneli (emoji-panel.js) */ }
 function renderHubEmojiManager() {
+    if (typeof renderHubL4Card === 'function') renderHubL4Card();
     if (typeof renderHubStickerManager === 'function') renderHubStickerManager();
     const box = document.getElementById('hubset-emoji-card');
     if (!box || !currentHub) return;
@@ -14656,6 +14657,8 @@ function renderHubDetail() {
     renderHubBoostStrip();
     renderHubEffect();
     renderHubEmojiUi();
+    if (typeof applyHubAccent === 'function') applyHubAccent();
+    if (typeof maybeShowHubWelcome === 'function') maybeShowHubWelcome();
 
 }
 

@@ -193,6 +193,13 @@
             const p = document.createElement('p'); p.className = 'hub-info-desc'; p.textContent = String(hub.description);
             box.appendChild(p);
         }
+        if (hub.announcement && String(hub.announcement).trim()) {
+            const ann = document.createElement('div'); ann.className = 'hub-info-announce';
+            const at = document.createElement('div'); at.className = 'hia-title'; at.textContent = '📌 Duyuru panosu';
+            const ap = document.createElement('p'); ap.textContent = String(hub.announcement);
+            ann.append(at, ap);
+            box.appendChild(ann);
+        }
         const rows = [
             [tr('hub-info-owner', 'Sahibi'), owner ? owner.username : (hub.is_owner ? tr('voice-room-you', 'Sen') : '—')],
             [tr('hub-info-members', 'Üye'), String(members.length)],

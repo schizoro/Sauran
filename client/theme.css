@@ -2664,3 +2664,13 @@ body .hub-member-menu, body .sticker-picker, body .emoji-panel, body .hub-emoji-
 .ep-stk-in img { width: 100%; height: 100%; object-fit: contain; }
 .ep-stk-manage { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 .ep-stk-item img { width: 44px; height: 44px; }
+
+/* ══ Seviye 4: duyuru panosu, karşılama ═════════════════════════════════════════════════════════════ */
+.hub-info-announce { margin: 12px 0; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft, rgba(92,200,255,.12)); box-shadow: inset 0 0 0 1px var(--accent-line, rgba(92,200,255,.3)); }
+.hub-info-announce .hia-title { font-size: 12px; font-weight: 700; margin-bottom: 4px; color: var(--accent, #5cc8ff); }
+.hub-info-announce p { margin: 0; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: var(--text-primary); }
+.hub-welcome-box { max-width: 380px; text-align: center; padding: 26px 22px 20px; }
+.hub-welcome-ic { font-size: 40px; margin-bottom: 6px; }
+.hub-welcome-box h3 { margin: 0 0 10px; }
+.hub-welcome-msg { margin: 0 0 16px; font-size: 14px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; color: var(--text-secondary); }
+.hub-welcome-ok { border: 0; border-radius: 999px; padding: 10px 28px; font-weight: 700; cursor: pointer; background: var(--accent, #5cc8ff); color: #06121a; }

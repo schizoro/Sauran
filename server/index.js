@@ -152,6 +152,9 @@ const {
   listBlockedUsers,
   createReport,
   MAX_VOICE_ROOM_PARTICIPANTS,
+  maxVoiceParticipantsForRoom,
+  setHubContent,
+  setHubAccent,
   getHubPushInfo,
   savePushSubscription,
   removePushSubscription,
@@ -2549,6 +2552,30 @@ app.put('/api/hubs/:id/atmosphere', contentWriteLimiter, (req, res) => {
   } catch (error) { console.error('Lobi Atmosphere hatası:', error); return res.status(500).json({ success: false, error: 'Uygulanamadı.' }); }
 });
 
+app.put('/api/hubs/:id/content', contentWriteLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const hubId = Number(req.params.id);
+    const result = setHubContent(hubId, user.id, req.body || {});
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    io.to(`hub:${hubId}`).emit('hub_boost_changed', { hub_id: hubId, content: true });
+    return res.json(result);
+  } catch (error) { console.error('Lobi içerik hatası:', error); return res.status(500).json({ success: false, error: 'Kaydedilemedi.' }); }
+});
+
+app.put('/api/hubs/:id/accent', contentWriteLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const hubId = Number(req.params.id);
+    const result = setHubAccent(hubId, user.id, req.body && req.body.color);
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    io.to(`hub:${hubId}`).emit('hub_boost_changed', { hub_id: hubId, accent: true });
+    return res.json(result);
+  } catch (error) { console.error('Lobi vurgu rengi hatası:', error); return res.status(500).json({ success: false, error: 'Kaydedilemedi.' }); }
+});
+
 app.put('/api/hubs/:id/slow-mode', contentWriteLimiter, (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
@@ -3472,7 +3499,7 @@ app.post('/api/hubs/:id/voice-rooms/:roomId/join', async (req, res) => {
   if (block) return res.status(403).json({ success: false, error: voiceBlockMessage(block), voice_block: block });
 
   if (isVoiceRoomFull(roomId, user.id)) {
-    return res.status(409).json({ success: false, error: `Bu oda dolu (en fazla ${MAX_VOICE_ROOM_PARTICIPANTS} kişi).` });
+    return res.status(409).json({ success: false, error: `Bu oda dolu (en fazla ${maxVoiceParticipantsForRoom(roomId)} kişi).` });
   }
 
   if (!daily.isConfigured()) {
@@ -4111,7 +4138,7 @@ function broadcastVoiceRoom(hubId, roomId, change) {
 function isVoiceRoomFull(roomId, userId) {
   const members = voiceRoomParticipants.get(roomId);
   if (!members || members.has(userId)) return false;
-  return members.size >= MAX_VOICE_ROOM_PARTICIPANTS;
+  return members.size >= maxVoiceParticipantsForRoom(roomId);
 }
 
 function findUserVoiceRoom(userId) {
@@ -5287,7 +5314,7 @@ io.on('connection', (socket) => {
       if (block) return reply({ success: false, error: voiceBlockMessage(block), voice_block: block });
 
       if (isVoiceRoomFull(roomId, socket.userId)) {
-        return reply({ success: false, error: `Bu oda dolu (en fazla ${MAX_VOICE_ROOM_PARTICIPANTS} kişi).` });
+        return reply({ success: false, error: `Bu oda dolu (en fazla ${maxVoiceParticipantsForRoom(roomId)} kişi).` });
       }
 
       const previous = findUserVoiceRoom(socket.userId);

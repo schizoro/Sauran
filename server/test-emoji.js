@@ -198,6 +198,35 @@ test('Lobi çıkartması: Seviye 4, yalnızca sahip, 5 yuva; yalnızca o lobide 
   assert.strictEqual(dbm.listStickerPalette(member, id).hub.length, 0); // üye değil → liste boş
 });
 
+test('Seviye 4 lobi: duyuru/karşılama/vurgu rengi yalnızca sahip + Seviye 4; sesli oda sınırları 5→8, 25→50', async () => {
+  const owner = user('l4_owner', 'premium'), other = user('l4_other', null);
+  const id = dbm.createHub(owner, { name: 'L4Lobi' }).id;
+  assert.strictEqual(dbm.setHubContent(id, owner, { announcement: 'x' }).success, false); // Seviye 1
+  assert.strictEqual(dbm.setHubAccent(id, owner, '#ff0000').success, false);
+  for (let i = 0; i < 5; i++) assert.strictEqual(dbm.createVoiceRoom(id, owner, 'Oda' + i).success, i < 5);
+  assert.strictEqual(dbm.createVoiceRoom(id, owner, 'Fazla').success, false); // 5 sınır
+  assert.strictEqual(dbm.maxVoiceRoomsForHub(id), 5);
+  const ins = db.prepare('INSERT INTO hub_boosts (hub_id, user_id) VALUES (?, ?)');
+  [1, 2, 3, 4].forEach((i) => { const b = user('l4b' + i, 'premium'); for (let k = 0; k < (i < 4 ? 3 : 1); k++) ins.run(id, b); });
+  assert.strictEqual(dbm.hubLevel(id), 4);
+  assert.strictEqual(dbm.setHubContent(id, other, { announcement: 'x' }).success, false); // sahip değil
+  assert.strictEqual(dbm.setHubContent(id, owner, { announcement: 'a'.repeat(501) }).success, false);
+  const r = dbm.setHubContent(id, owner, { announcement: '  Merhaba  ', welcome_message: 'Hoş geldin' });
+  assert.ok(r.success && r.announcement === 'Merhaba');
+  assert.strictEqual(dbm.setHubAccent(id, owner, 'kirmizi').success, false);
+  assert.strictEqual(dbm.setHubAccent(id, owner, '#FF8800').accent_color, '#ff8800');
+  const d = dbm.getHubDetail(id, owner);
+  assert.ok(d.announcement === 'Merhaba' && d.welcome_message === 'Hoş geldin' && d.accent_color === '#ff8800');
+  assert.deepStrictEqual(d.voice_limits, { rooms: 8, participants: 50 });
+  for (let i = 0; i < 3; i++) assert.strictEqual(dbm.createVoiceRoom(id, owner, 'Ek' + i).success, true);
+  assert.strictEqual(dbm.createVoiceRoom(id, owner, 'Fazla2').success, false); // 8 sınır
+  const roomId = dbm.getVoiceRooms ? null : null; void roomId;
+  // Seviye düşünce gizlenir
+  db.prepare(`UPDATE entitlements SET expires_at = '2000-01-01 00:00:00' WHERE user_id = (SELECT user_id FROM hub_boosts WHERE hub_id = ? LIMIT 1)`).run(id);
+  const d2 = dbm.getHubDetail(id, owner);
+  if (d2.boost.level < 4) assert.ok(d2.announcement === null && d2.accent_color === null);
+});
+
 (async () => {
   for (const [name, fn] of tests) {
     await fn();
