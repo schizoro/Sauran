@@ -2374,3 +2374,16 @@ body.in-group[data-view="hub-detail"] .topbar-lobby-badge { display: none !impor
 #hub-message-input, #dm-message-input, #hub-message-input:focus, #dm-message-input:focus, #hub-message-input:focus-visible, #dm-message-input:focus-visible {
   outline: none !important; box-shadow: none !important; border: 0 !important; border-radius: 0; background: transparent; -webkit-appearance: none; appearance: none;
 }
+
+/* ══ Masaüstü: küçültülmüş arama çubuğu — düzeni aşağı itmeyen, üstte ortalı küçük cam hap ══
+   (Telefonda tam genişlikli şerit kalır. Eskiden tüm sayfaya 42px üst boşluk ekleyip ray/içeriği taşırıyordu.) */
+@media (min-width: 901px) {
+  body.call-mini-active { padding-top: 0; }
+  .call-mini-bar {
+    left: 50%; right: auto; top: 10px; transform: translateX(-50%); width: auto; min-width: 280px; max-width: min(460px, calc(100vw - 280px)); height: 40px;
+    padding: 6px 8px 6px 14px; border: 0; border-radius: 999px; background: var(--glass-2);
+    -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.35); backdrop-filter: blur(var(--blur-2)) saturate(1.35);
+    box-shadow: var(--hi), 0 0 0 1px rgba(87, 242, 135, 0.45), 0 10px 28px -10px rgba(0, 0, 0, 0.6);
+  }
+  .call-mini-name { max-width: 220px; }
+}
