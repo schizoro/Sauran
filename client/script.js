@@ -4740,7 +4740,14 @@ async function startScreenShareWithFps(fps, quality) {
         '60': { low: { maxBitrate: 600000, maxFramerate: 15, scaleResolutionDownBy: 2 }, medium: { maxBitrate: 1200000, maxFramerate: 30, scaleResolutionDownBy: 1 }, high: { maxBitrate: 2500000, maxFramerate: 60, scaleResolutionDownBy: 1 } },
         '15': { low: { maxBitrate: 400000, maxFramerate: 15, scaleResolutionDownBy: 2 }, medium: { maxBitrate: 800000, maxFramerate: 15, scaleResolutionDownBy: 1 }, high: { maxBitrate: 1500000, maxFramerate: 15, scaleResolutionDownBy: 1 } }
     };
-    if (fps === '30' || !layers[fps]) {
+    // Premium: aynı akıcılık seçenekleri, daha yüksek bit hızı tavanıyla (Daily doğrulayıcısı bu katmanları kabul eder).
+    if (currentUser?.premium_active) {
+        const q = { low: { maxBitrate: 600000, maxFramerate: 15, scaleResolutionDownBy: 2 }, medium: { maxBitrate: 1200000, maxFramerate: 30, scaleResolutionDownBy: 1 } };
+        layers['30'] = { ...q, high: { maxBitrate: 5000000, maxFramerate: 30, scaleResolutionDownBy: 1 } };
+        layers['60'] = { ...q, high: { maxBitrate: 6000000, maxFramerate: 60, scaleResolutionDownBy: 1 } };
+        layers['15'] = { low: { maxBitrate: 400000, maxFramerate: 15, scaleResolutionDownBy: 2 }, medium: { maxBitrate: 800000, maxFramerate: 15, scaleResolutionDownBy: 1 }, high: { maxBitrate: 3000000, maxFramerate: 15, scaleResolutionDownBy: 1 } };
+    }
+    if ((fps === '30' && !currentUser?.premium_active) || !layers[fps]) {
         await callFrame.startScreenShare({ ...muteOpts, screenVideoSendSettings: { maxQuality: quality } });
         return;
     }
@@ -7715,7 +7722,8 @@ async function renderCzPremium(sub) {
         ${feat('🪙', 'Aylık 250 Sauran Coin', 'Plus\'taki 100 Coin\'in üstünde.', on ? 'on' : 'prem')}
         ${feat('🎞️', 'Hareketli (GIF) avatar', 'Profil fotoğrafın hareketli olabilir.', on ? 'on' : 'prem')}
         ${feat('📎', '100 MB dosya / video', 'Plus: 50 MB.', on ? 'on' : 'prem')}
-        ${feat('🎬', 'Yüksek kalite yayın, Premium çıkartma/emoji paketleri', 'Yeni Premium içeriklere erken erişim de bu pakete dahil olacak.', 'soon')}
+        ${feat('📺', 'Yüksek kalite ekran paylaşımı', 'Plus\'tan daha yüksek bit hızı tavanı; ağın elverdiği ölçüde daha net görüntü.', on ? 'on' : 'prem')}
+        ${feat('🎬', 'Premium çıkartma/emoji paketleri', 'Yeni Premium içeriklere erken erişim de bu pakete dahil olacak.', 'soon')}
         <div class="atmo-actions" style="margin-top:12px;">
             <button id="cz-open-subs-btn" class="atmo-btn" type="button">Abonelikleri gör</button>
             <button id="cz-open-atmo-btn" class="atmo-btn atmo-btn-use" type="button">🌌 Atmosphere'lere git</button>
@@ -8474,7 +8482,8 @@ async function loadSubscriptions() {
                 <li><span class="subs-ic">💎</span><span>Her ay <b>3 Lobi Takviyesi</b> <small>(lobi seviyesi yükselir; Seviye 3'te lobi Atmosphere + sesi)</small></span></li>
                 <li><span class="subs-ic">🌌</span><span><b>Premium Atmosphere</b> paketleri <small>(Cyber Gaming, Cosmic…)</small></span></li>
                 <li><span class="subs-ic">🎞️</span><span><b>Animasyonlu (GIF)</b> profil fotoğrafı</span></li>
-                <li class="subs-soon"><span class="subs-ic">🎬</span><span>Yüksek kalite yayın, Premium çıkartma/emoji paketleri, erken erişim <small>(yakında)</small></span></li>
+                <li><span class="subs-ic">📺</span><span><b>Yüksek kalite ekran paylaşımı</b> <small>(Plus'tan daha yüksek bit hızı)</small></span></li>
+                <li class="subs-soon"><span class="subs-ic">🎬</span><span>Premium çıkartma/emoji paketleri, erken erişim <small>(yakında)</small></span></li>
             </ul>
             ${subsStatusHtml(premium, false)}
         </div>`;
