@@ -25,7 +25,16 @@
         } catch (_) { /* depolama yok */ }
     }
 
+    async function loadStickers() {
+        const hubId = state.prefix === 'hub' && typeof currentHub !== 'undefined' && currentHub ? currentHub.id : '';
+        try {
+            const d = await (await fetch('/api/me/stickers' + (hubId ? `?hub_id=${hubId}` : ''), { credentials: 'include' })).json();
+            state.stk = d.success ? d : { permissions: {}, mine: [], hub: [] };
+        } catch (_) { state.stk = { permissions: {}, mine: [], hub: [] }; }
+    }
+
     async function loadData() {
+        loadStickers().then(() => { if (state.tab === 'stickers') renderBody(true); });
         const hubId = state.prefix === 'hub' && typeof currentHub !== 'undefined' && currentHub ? currentHub.id : '';
         try {
             const r = await fetch('/api/me/emojis' + (hubId ? `?hub_id=${hubId}` : ''), { credentials: 'include' });
@@ -141,12 +150,19 @@
         const premOk = typeof userHasFeature === 'function' && userHasFeature('premium_sticker_pack');
         const q = state.query;
         const f = (list) => list.filter((s) => !q || s.id.includes(q));
+        const stk = state.stk || { permissions: {}, mine: [], hub: [] };
+        const custom = (list) => list.filter((c) => !q || c.name.includes(q)).map((c) => `<button type="button" class="ep-item ep-stk" data-sticker="${escA(c.sid)}" title="${escA(c.name)}"><span class="ep-stk-in"><img src="${escA(c.url)}" alt="" loading="lazy" decoding="async"></span></button>`).join('');
+        const addBtn = !q && stk.permissions && stk.permissions.personal ? '<button type="button" class="ep-item ep-add" data-ep-add="stk" title="Yeni çıkartma ekle">＋</button>' : '';
+        const mineInner = custom(stk.mine || []) + addBtn;
+        const lockedNote = !q && !(stk.permissions && stk.permissions.personal) ? '<p class="ep-note">Kendi çıkartmanı oluşturmak <b>Sauran Plus</b>\'a özel. <button type="button" class="ep-link" data-ep-add="stk">Ayrıntılar</button></p>' : '';
         const secs = [
+            ...(mineInner || lockedNote ? [['mine', '👤 Çıkartmalarım', mineInner, lockedNote]] : []),
+            ...(custom(stk.hub || []) ? [['hubst', '🏠 Bu lobi', custom(stk.hub || [])]] : []),
             ['std', 'Klasik', f(STICKERS).map((s) => btn(s, true)).join('')],
             ['plus', '✦ Plus', f(PLUS_STICKERS).map((s) => btn(s, plusOk)).join('')],
             ['prem', '♛ Premium', f(PREMIUM_STICKERS).map((s) => btn(s, premOk)).join('')]
-        ].filter((s) => s[2]);
-        return { html: secs.map(([id, t, inner]) => sectionHtml(id, t, inner)).join('') || '<p class="ep-note ep-empty">Sonuç yok.</p>', jumps: secs.map(([id, t]) => [id, t.slice(0, 1) === '✦' ? '✦' : t.slice(0, 1) === '♛' ? '♛' : '🧸']) };
+        ].filter((s) => s[2] || s[3]);
+        return { html: secs.map(([id, t, inner, note]) => (note ? `<section class="ep-sec" id="ep-sec-${id}"><h4>${t}</h4>${note}</section>` : sectionHtml(id, t, inner))).join('') || '<p class="ep-note ep-empty">Sonuç yok.</p>', jumps: secs.map(([id, t]) => [id, id === 'mine' ? '👤' : id === 'hubst' ? '🏠' : t.slice(0, 1) === '✦' ? '✦' : t.slice(0, 1) === '♛' ? '♛' : '🧸']) };
     }
 
     // ── GIF sekmesi (GIPHY, sunucu aracılığıyla) ──
@@ -222,10 +238,13 @@
         if (g) { sendGif(g.dataset.gif); return; }
         const jump = e.target.closest('[data-ep-jump]');
         if (jump) { const sec = el('ep-sec-' + jump.dataset.epJump); const body = el('ep-body'); if (sec) body.scrollTo({ top: sec.offsetTop - body.offsetTop - 4, behavior: 'smooth' }); return; }
-        if (e.target.closest('[data-ep-add]')) {
+        const addBtn = e.target.closest('[data-ep-add]');
+        if (addBtn) {
+            const stkTarget = addBtn.dataset.epAdd === 'stk';
             closePanel();
-            if (!(state.data && state.data.permissions && state.data.permissions.personal)) { showToast('Kendi emojini oluşturmak Sauran Plus abonelerine açıktır.'); }
-            if (typeof openCustomizeCenter === 'function') { openCustomizeCenter('look'); setTimeout(() => { el('cz-emoji-card')?.scrollIntoView({ block: 'start' }); }, 1000); }
+            const perms = stkTarget ? (state.stk && state.stk.permissions) : (state.data && state.data.permissions);
+            if (!(perms && perms.personal)) { showToast(stkTarget ? 'Kendi çıkartmanı oluşturmak Sauran Plus abonelerine açıktır.' : 'Kendi emojini oluşturmak Sauran Plus abonelerine açıktır.'); }
+            if (typeof openCustomizeCenter === 'function') { openCustomizeCenter('look'); setTimeout(() => { el(stkTarget ? 'cz-sticker-card' : 'cz-emoji-card')?.scrollIntoView({ block: 'start' }); }, 1000); }
             return;
         }
         const stk = e.target.closest('[data-sticker]');
@@ -250,7 +269,7 @@
     window.openEmojiPanel = openPanel;
 
     // ── Emoji yükleme: istemci önce büyük statik görselleri küçültür (yükleme hafiflesin); asıl sıkıştırma sunucuda ──
-    window.prepareEmojiUpload = function (file) {
+    window.prepareEmojiUpload = function (file, maxSide) {
         return new Promise((resolve, reject) => {
             if (!file) { reject(new Error('Dosya seçilmedi.')); return; }
             if (file.size > 5 * 1024 * 1024) { reject(new Error('Dosya çok büyük (en fazla 5 MB).')); return; }
@@ -258,7 +277,7 @@
             const img = new Image();
             const url = URL.createObjectURL(file);
             img.onload = () => {
-                const max = 256, ratio = Math.min(1, max / Math.max(img.width, img.height));
+                const max = maxSide || 256, ratio = Math.min(1, max / Math.max(img.width, img.height));
                 const c = document.createElement('canvas');
                 c.width = Math.max(1, Math.round(img.width * ratio)); c.height = Math.max(1, Math.round(img.height * ratio));
                 c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
@@ -327,5 +346,88 @@
             el('cz-emoji-name').value = '';
             window.renderPersonalEmojiCard();
         } catch (err) { showToast(err.message || 'Eklenemedi.'); }
+    });
+
+    // ── Çıkartma yönetimi: kişisel (Özelleştirme Merkezi) ve lobi (Lobi Ayarları, Seviye 4) ──
+    function stickerGridHtml(list, delAttr) {
+        return `<div class="hub-emoji-grid ep-stk-manage">${list.map((e) => `<span class="hub-emoji-item ep-stk-item"><img src="${escA(e.url)}" alt=""><span class="ep-meta"><b>${esc(e.name)}</b><small>${e.animated ? '🎞️ hareketli · ' : ''}${kb(e.bytes || 0)}</small></span><button type="button" ${delAttr}="${e.id}" aria-label="Sil">✕</button></span>`).join('') || '<span class="hubset-hint">Henüz çıkartma yok.</span>'}</div>`;
+    }
+    window.renderPersonalStickerCard = async function () {
+        const box = el('cz-sticker-card');
+        if (!box) return;
+        let d;
+        try { d = await (await fetch('/api/me/stickers', { credentials: 'include' })).json(); } catch (_) { return; }
+        if (!d || !d.success) return;
+        const p = d.permissions || {};
+        if (!p.personal) {
+            box.innerHTML = `<div class="cz-card-title">Çıkartmalarım <span class="plus-badge plus-badge-sm" style="margin-left:6px;">✦ PLUS</span></div>
+                <p class="hubset-hint">Kendi çıkartmalarını oluştur (herhangi bir fotoğraf; otomatik küçültülür) ve sohbette gönder. Plus: 5 çıkartma. Premium: 15 çıkartma + hareketli (GIF).</p>`;
+            return;
+        }
+        box.innerHTML = `<div class="cz-card-title">Çıkartmalarım <small class="ep-count">${d.mine.length} / ${p.limit}</small></div>
+            ${stickerGridHtml(d.mine, 'data-pstk-del')}
+            <div class="hub-bg-row" style="margin-top:10px;">
+                <input id="cz-stk-name" class="hub-name-input" type="text" maxlength="20" placeholder="isim (a-z, 0-9, _)" autocomplete="off" style="max-width:180px;">
+                <button id="cz-stk-pick" class="hub-create-image-btn" type="button">Görsel${p.animated ? ' / GIF' : ''} Seç</button>
+                <input type="file" id="cz-stk-input" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden>
+            </div>
+            <p class="hubset-hint">Yüklediğin görsel otomatik <b>256px WebP</b>'ye sıkıştırılır (en fazla 90 KB). ${p.animated ? 'Hareketli GIF/WebP çıkartmalar da sıkıştırılır (en fazla 300 KB).' : 'Hareketli (GIF) çıkartma <b>Premium</b>\'a özel; GIF yüklersen ilk kare kullanılır.'}</p>`;
+    };
+    window.renderHubStickerManager = async function () {
+        const box = el('hubset-sticker-card');
+        if (!box || typeof currentHub === 'undefined' || !currentHub) return;
+        if (!currentHub.is_owner) { box.style.display = 'none'; return; }
+        box.style.display = '';
+        const b = typeof hubBoost === 'function' ? (hubBoost() || { level: 1 }) : { level: 1 };
+        if (b.level < 4) { box.innerHTML = `<div class="cz-card-title">Lobi çıkartmaları</div><p class="hubset-hint">🔒 Seviye 4'te açılır (10 takviye). Açılınca lobine 5 özel çıkartma ekleyebilirsin; herkes bu lobide gönderebilir.</p>`; return; }
+        let d;
+        try { d = await (await fetch(`/api/me/stickers?hub_id=${currentHub.id}`, { credentials: 'include' })).json(); } catch (_) { return; }
+        const list = (d && d.hub) || [];
+        box.innerHTML = `<div class="cz-card-title">Lobi çıkartmaları <small class="ep-count">${list.length} / 5</small></div>
+            ${stickerGridHtml(list, 'data-hstk-del')}
+            <div class="hub-bg-row" style="margin-top:10px;">
+                <input id="hubset-stk-name" class="hub-name-input" type="text" maxlength="20" placeholder="isim (a-z, 0-9, _)" autocomplete="off" style="max-width:180px;">
+                <button id="hubset-stk-pick" class="hub-create-image-btn" type="button">Görsel Seç</button>
+                <input type="file" id="hubset-stk-input" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden>
+            </div>
+            <p class="hubset-hint">Görsel otomatik <b>256px WebP</b>'ye sıkıştırılır. Hareketli (GIF) lobi çıkartması için lobi sahibinin Premium'u gerekir.</p>`;
+    };
+    async function uploadSticker(url, nameInputId, file, after) {
+        const name = el(nameInputId).value.trim().toLowerCase();
+        try {
+            showToast('Çıkartma yükleniyor ve sıkıştırılıyor…');
+            const image_data = await window.prepareEmojiUpload(file, 384);
+            const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ name, image_data }) });
+            const d = await r.json();
+            if (!d.success) { showToast(d.error || 'Eklenemedi.'); return; }
+            showToast(`${name} eklendi (${window.emojiUploadSummary(d)})${d.note ? ' — ' + d.note : ''}`);
+            el(nameInputId).value = '';
+            after();
+        } catch (err) { showToast(err.message || 'Eklenemedi.'); }
+    }
+    const NAME_OK = /^[a-z0-9_]{2,20}$/;
+    document.addEventListener('click', async (e) => {
+        const pick = e.target.closest('#cz-stk-pick, #hubset-stk-pick');
+        if (pick) {
+            const nameId = pick.id === 'cz-stk-pick' ? 'cz-stk-name' : 'hubset-stk-name';
+            if (!NAME_OK.test((el(nameId).value || '').trim().toLowerCase())) { showToast('Önce çıkartma adını yaz (2-20 karakter: a-z, 0-9, _).'); return; }
+            el(pick.id === 'cz-stk-pick' ? 'cz-stk-input' : 'hubset-stk-input').click(); return;
+        }
+        const pd = e.target.closest('[data-pstk-del]');
+        if (pd) { const d = await (await fetch(`/api/me/stickers/${pd.dataset.pstkDel}`, { method: 'DELETE', credentials: 'include' })).json(); if (d.success) window.renderPersonalStickerCard(); return; }
+        const hd = e.target.closest('[data-hstk-del]');
+        if (hd && typeof currentHub !== 'undefined' && currentHub) {
+            const d = await (await fetch(`/api/hubs/${currentHub.id}/stickers/${hd.dataset.hstkDel}`, { method: 'DELETE', credentials: 'include' })).json();
+            if (d.success) window.renderHubStickerManager(); else showToast(d.error || 'Silinemedi.');
+        }
+    });
+    document.addEventListener('change', async (e) => {
+        if (e.target.id !== 'cz-stk-input' && e.target.id !== 'hubset-stk-input') return;
+        const file = e.target.files && e.target.files[0];
+        const isHub = e.target.id === 'hubset-stk-input';
+        e.target.value = '';
+        if (!file) return;
+        if (isHub) { if (typeof currentHub === 'undefined' || !currentHub) return; await uploadSticker(`/api/hubs/${currentHub.id}/stickers`, 'hubset-stk-name', file, window.renderHubStickerManager); }
+        else await uploadSticker('/api/me/stickers', 'cz-stk-name', file, window.renderPersonalStickerCard);
     });
 })();

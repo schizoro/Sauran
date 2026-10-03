@@ -46,7 +46,12 @@ const PLUS_STICKERS = [
     { id: 'plus-cake', emoji: '🎂' },
     { id: 'plus-gamepad', emoji: '🎮' },
     { id: 'plus-bulb', emoji: '💡' },
-    { id: 'plus-ghost', emoji: '👻' }
+    { id: 'plus-ghost', emoji: '👻' },
+    { id: 'plus-pig', emoji: '🐷' },
+    { id: 'plus-koala', emoji: '🐨' },
+    { id: 'plus-monkey', emoji: '🐵' },
+    { id: 'plus-duck', emoji: '🦆' },
+    { id: 'plus-tiger', emoji: '🐯' }
 ];
 
 // Sauran Premium çıkartma seti (prem-*): yalnızca Premium; sunucu da aynı kuralı uygular.
@@ -63,6 +68,8 @@ function stickerEmoji(id) {
 
 // Sauran Plus çıkartmaları SVG karakter (stickers.js); klasik çıkartmalar emoji olarak kalır.
 function stickerInnerHtml(id) {
+    const custom = typeof id === 'string' ? /^([uh])(\d{1,9})$/.exec(id) : null;
+    if (custom) return `<img class="stk-custom" src="/api/sticker/${custom[1]}/${custom[2]}" alt="Çıkartma" loading="lazy" decoding="async">`;
     if (typeof plusStickerSvg === 'function' && id && (id.startsWith('plus-') || id.startsWith('prem-'))) {
         const svg = plusStickerSvg(id);
         if (svg) return svg;
@@ -7807,6 +7814,7 @@ async function loadCustomizeCenter() {
     renderProfileEffectPicker();
     renderCardStyleCard();
     if (typeof renderPersonalEmojiCard === 'function') renderPersonalEmojiCard();
+    if (typeof renderPersonalStickerCard === 'function') renderPersonalStickerCard();
     await renderCzPremium(sub);
 }
 
@@ -8117,6 +8125,7 @@ function hubBoost() { return (currentHub && currentHub.boost) || null; }
 // ── Lobiye özel emojiler (Seviye 4) ──
 function renderHubEmojiUi() { /* eski seçici kalktı: birleşik emoji paneli (emoji-panel.js) */ }
 function renderHubEmojiManager() {
+    if (typeof renderHubStickerManager === 'function') renderHubStickerManager();
     const box = document.getElementById('hubset-emoji-card');
     if (!box || !currentHub) return;
     const b = hubBoost() || { level: 1 };

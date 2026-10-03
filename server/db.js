@@ -156,6 +156,32 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 `);
+// Kişisel ve lobiye özel çıkartmalar (büyük görsel; çıkartma olarak gönderilir, kimlik 'u<id>' / 'h<id>').
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_stickers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    image_data TEXT NOT NULL,
+    animated INTEGER NOT NULL DEFAULT 0,
+    bytes INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, name),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE TABLE IF NOT EXISTS hub_stickers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hub_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    image_data TEXT NOT NULL,
+    animated INTEGER NOT NULL DEFAULT 0,
+    bytes INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(hub_id, name),
+    FOREIGN KEY (hub_id) REFERENCES hubs(id) ON DELETE CASCADE
+  );
+`);
 // Lobiye özel emojiler (Seviye 4): mesajlarda :isim: ile kullanılır.
 db.exec(`
   CREATE TABLE IF NOT EXISTS hub_emojis (
@@ -2667,7 +2693,7 @@ function setProfileSoundOn(userId, on) {
 }
 
 // ── Lobi Takviyesi ────────────────────────────────────────────────────────────────────────────────
-const { PREMIUM_MONTHLY_BOOSTS, BOOST_COOLDOWN_HOURS, BOOST_LEVELS, levelForBoosts, HUB_EMOJI_SLOTS } = require('./atmosphere');
+const { PREMIUM_MONTHLY_BOOSTS, BOOST_COOLDOWN_HOURS, BOOST_LEVELS, levelForBoosts, HUB_EMOJI_SLOTS, HUB_STICKER_SLOTS } = require('./atmosphere');
 
 // Premium takviyeleri yalnızca kullanıcı hâlâ Premium ise sayılır (abonelik bitince düşer); hediye takviyeler kalıcıdır.
 function hubBoostCount(hubId) {
@@ -4893,7 +4919,8 @@ const PLUS_STICKER_EMOJIS = {
   'plus-fox': '🦊', 'plus-chick': '🐥', 'plus-penguin': '🐧', 'plus-frog': '🐸', 'plus-unicorn': '🦄',
   'plus-octopus': '🐙', 'plus-whale': '🐳', 'plus-donut': '🍩', 'plus-strawberry': '🍓', 'plus-teddy': '🧸',
   'plus-star': '⭐', 'plus-rainbow': '🌈', 'plus-clover': '🍀', 'plus-sparkle-heart': '💖', 'plus-balloon': '🎈',
-  'plus-coffee': '☕', 'plus-pizza': '🍕', 'plus-cake': '🎂', 'plus-gamepad': '🎮', 'plus-bulb': '💡', 'plus-ghost': '👻'
+  'plus-coffee': '☕', 'plus-pizza': '🍕', 'plus-cake': '🎂', 'plus-gamepad': '🎮', 'plus-bulb': '💡', 'plus-ghost': '👻',
+  'plus-pig': '🐷', 'plus-koala': '🐨', 'plus-monkey': '🐵', 'plus-duck': '🦆', 'plus-tiger': '🐯'
 };
 const PLUS_STICKERS = Object.keys(PLUS_STICKER_EMOJIS);
 // Sauran Premium çıkartma seti (yalnızca Premium; görünüm istemcide, sunucu yalnızca kimlik + yedek emoji bilir).
@@ -4903,11 +4930,102 @@ const PREMIUM_STICKER_EMOJIS = {
 };
 const PREMIUM_STICKERS = Object.keys(PREMIUM_STICKER_EMOJIS);
 
+// ── Kişisel / lobi çıkartmaları ───────────────────────────────────────────────────────────────────
+const PERSONAL_STICKER_LIMIT_PLUS = 5, PERSONAL_STICKER_LIMIT_PREMIUM = 15;
+const CUSTOM_STICKER_ID_RE = /^([uh])(\d{1,9})$/;
+function stickerPermissions(userId) {
+  const animated = hasFeature(userId, 'animated_sticker');
+  return { personal: hasFeature(userId, 'personal_sticker'), animated, limit: animated ? PERSONAL_STICKER_LIMIT_PREMIUM : PERSONAL_STICKER_LIMIT_PLUS };
+}
+function stickerRow(kind, e) { return { id: e.id, sid: kind + e.id, name: e.name, animated: Boolean(e.animated), bytes: e.bytes, url: `/api/sticker/${kind}/${e.id}` }; }
+function listUserStickers(userId) {
+  return db.prepare(`SELECT id, name, animated, bytes FROM user_stickers WHERE user_id = ? ORDER BY id ASC`).all(userId).map((e) => stickerRow('u', e));
+}
+function listHubStickers(hubId) {
+  if (hubLevel(hubId) < 4) return [];
+  return db.prepare(`SELECT id, name, animated, bytes FROM hub_stickers WHERE hub_id = ? ORDER BY id ASC LIMIT ?`).all(hubId, HUB_STICKER_SLOTS).map((e) => stickerRow('h', e));
+}
+function checkStickerInput(name, compressed) {
+  const n = String(name || '').trim().toLowerCase();
+  if (!HUB_EMOJI_NAME_RE.test(n)) return { error: 'Çıkartma adı 2-20 karakter; yalnızca küçük harf, rakam ve alt çizgi.' };
+  if (!compressed || typeof compressed.data !== 'string' || !/^data:image\/webp;base64,/.test(compressed.data)) return { error: 'Geçersiz görsel.' };
+  return { n };
+}
+function addUserSticker(userId, name, compressed) {
+  const perms = stickerPermissions(userId);
+  if (!perms.personal) return { success: false, status: 403, error: 'Kendi çıkartmanı oluşturmak Sauran Plus/Premium aboneliği (ya da hediye) gerektirir.' };
+  const chk = checkStickerInput(name, compressed);
+  if (chk.error) return { success: false, status: 400, error: chk.error };
+  if (compressed.animated && !perms.animated) return { success: false, status: 403, error: 'Hareketli çıkartma Sauran Premium\'a özeldir.' };
+  if (db.prepare(`SELECT COUNT(*) AS c FROM user_stickers WHERE user_id = ?`).get(userId).c >= perms.limit) return { success: false, status: 400, error: `Çıkartma yuvaların dolu (${perms.limit}).` };
+  if (db.prepare(`SELECT 1 FROM user_stickers WHERE user_id = ? AND name = ?`).get(userId, chk.n)) return { success: false, status: 400, error: 'Bu adda bir çıkartman zaten var.' };
+  db.prepare(`INSERT INTO user_stickers (user_id, name, image_data, animated, bytes) VALUES (?, ?, ?, ?, ?)`).run(userId, chk.n, compressed.data, compressed.animated ? 1 : 0, compressed.bytes || 0);
+  return { success: true, stickers: listUserStickers(userId) };
+}
+function removeUserSticker(userId, id) {
+  db.prepare(`DELETE FROM user_stickers WHERE id = ? AND user_id = ?`).run(id, userId);
+  return { success: true, stickers: listUserStickers(userId) };
+}
+function addHubSticker(hubId, userId, name, compressed) {
+  const hub = db.prepare(`SELECT id, created_by, type FROM hubs WHERE id = ?`).get(hubId);
+  if (!hub) return { success: false, status: 404, error: 'Lobi bulunamadı.' };
+  if (hub.type === 'group') return { success: false, status: 400, error: 'Bu işlem gruplarda kullanılamaz.' };
+  if (hub.created_by !== userId) return { success: false, status: 403, error: 'Sadece Lobi sahibi çıkartma ekleyebilir.' };
+  if (hubLevel(hubId) < 4) return { success: false, status: 403, error: 'Lobi çıkartmaları Seviye 4\'te açılır.' };
+  const chk = checkStickerInput(name, compressed);
+  if (chk.error) return { success: false, status: 400, error: chk.error };
+  if (compressed.animated && !hasFeature(userId, 'animated_sticker')) return { success: false, status: 403, error: 'Hareketli çıkartma Sauran Premium\'a özeldir.' };
+  if (db.prepare(`SELECT COUNT(*) AS c FROM hub_stickers WHERE hub_id = ?`).get(hubId).c >= HUB_STICKER_SLOTS) return { success: false, status: 400, error: `Çıkartma yuvaları dolu (${HUB_STICKER_SLOTS}).` };
+  if (db.prepare(`SELECT 1 FROM hub_stickers WHERE hub_id = ? AND name = ?`).get(hubId, chk.n)) return { success: false, status: 400, error: 'Bu adda bir çıkartma zaten var.' };
+  db.prepare(`INSERT INTO hub_stickers (hub_id, name, image_data, animated, bytes, created_by) VALUES (?, ?, ?, ?, ?, ?)`).run(hubId, chk.n, compressed.data, compressed.animated ? 1 : 0, compressed.bytes || 0, userId);
+  return { success: true, stickers: listHubStickers(hubId) };
+}
+function removeHubSticker(hubId, userId, id) {
+  const hub = db.prepare(`SELECT created_by FROM hubs WHERE id = ?`).get(hubId);
+  if (!hub) return { success: false, status: 404, error: 'Lobi bulunamadı.' };
+  if (hub.created_by !== userId) return { success: false, status: 403, error: 'Sadece Lobi sahibi çıkartma silebilir.' };
+  db.prepare(`DELETE FROM hub_stickers WHERE id = ? AND hub_id = ?`).run(id, hubId);
+  return { success: true, stickers: listHubStickers(hubId) };
+}
+function listStickerPalette(userId, hubId = null) {
+  const perms = stickerPermissions(userId);
+  const member = hubId && db.prepare(`SELECT 1 FROM hub_members WHERE hub_id = ? AND user_id = ?`).get(hubId, userId);
+  return { permissions: perms, mine: perms.personal ? listUserStickers(userId) : [], hub: member ? listHubStickers(hubId) : [] };
+}
+function getStickerImage(kind, id, viewerId) {
+  if (!viewerId) return null;
+  if (kind === 'h') {
+    const row = db.prepare(`SELECT hub_id, image_data FROM hub_stickers WHERE id = ?`).get(id);
+    return row && hubLevel(row.hub_id) >= 4 ? row.image_data : null;
+  }
+  if (kind === 'u') {
+    const row = db.prepare(`SELECT user_id, image_data, animated FROM user_stickers WHERE id = ?`).get(id);
+    if (!row || !hasFeature(row.user_id, 'personal_sticker')) return null;
+    if (row.animated && !hasFeature(row.user_id, 'animated_sticker')) return null;
+    return row.image_data;
+  }
+  return null;
+}
+
 function stickerEmoji(id) {
   return STICKER_EMOJIS[id] || PLUS_STICKER_EMOJIS[id] || PREMIUM_STICKER_EMOJIS[id] || '❔';
 }
 
-function validateStickerFor(userId, stickerId) {
+function validateStickerFor(userId, stickerId, hubId = null) {
+  const custom = typeof stickerId === 'string' ? CUSTOM_STICKER_ID_RE.exec(stickerId) : null;
+  if (custom) {
+    const sid = Number(custom[2]);
+    if (custom[1] === 'u') {
+      const row = db.prepare(`SELECT user_id, animated FROM user_stickers WHERE id = ?`).get(sid);
+      if (!row || row.user_id !== userId) return 'Geçersiz çıkartma.';
+      if (!hasFeature(userId, 'personal_sticker')) return 'Kendi çıkartmaların Sauran Plus/Premium aboneliği gerektirir.';
+      if (row.animated && !hasFeature(userId, 'animated_sticker')) return 'Hareketli çıkartma Sauran Premium\'a özeldir.';
+      return null;
+    }
+    const row = db.prepare(`SELECT hub_id FROM hub_stickers WHERE id = ?`).get(sid);
+    if (!row || !hubId || row.hub_id !== hubId || hubLevel(hubId) < 4) return 'Bu lobi çıkartması burada kullanılamaz.';
+    return null;
+  }
   if (PREMIUM_STICKERS.includes(stickerId)) {
     return hasFeature(userId, 'premium_sticker_pack') ? null : 'Bu çıkartma yalnızca Sauran Premium abonelerine (ya da hediye edilenlere) açık.';
   }
@@ -4918,7 +5036,7 @@ function validateStickerFor(userId, stickerId) {
 }
 
 function createHubSticker(hubId, userId, username, stickerId) {
-  const stickerError = validateStickerFor(userId, stickerId);
+  const stickerError = validateStickerFor(userId, stickerId, hubId);
   if (stickerError) return { success: false, error: stickerError };
 
   const payload = JSON.stringify({ id: stickerId });
@@ -8431,6 +8549,15 @@ module.exports = {
   createHubVoiceMessage,
   createHubFileMessage,
   createHubSticker,
+  stickerPermissions,
+  listUserStickers,
+  listHubStickers,
+  addUserSticker,
+  removeUserSticker,
+  addHubSticker,
+  removeHubSticker,
+  listStickerPalette,
+  getStickerImage,
   STICKERS,
   createHubPoll,
   voteHubPoll,

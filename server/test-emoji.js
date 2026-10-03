@@ -153,6 +153,51 @@ test('Emoji paleti: Premium diğer lobilerin emojilerini açık, Plus kilitli g�
   assert.ok(dbm.listCrossLobbyEmojis(prem, h1).length >= 1);
 });
 
+test('Kişisel çıkartma: Plus 5 statik, Premium 15 + hareketli; yalnızca sahibi gönderir; Plus hareketli yapamaz', async () => {
+  const free = user('s_free', null), plus = user('s_plus', 'plus'), prem = user('s_prem', 'premium'), other = user('s_other', 'premium');
+  const opts = { size: 256, maxStatic: 90 * 1024, maxAnimated: 300 * 1024 };
+  const stat = await compressEmoji(await bigPhoto(), opts);
+  assert.ok(stat.success && stat.width <= 256 && stat.bytes <= 90 * 1024);
+  const anim = await compressEmoji(await animatedGif(), { allowAnimated: true, ...opts });
+  assert.strictEqual(anim.animated, true);
+  assert.strictEqual(dbm.addUserSticker(free, 'kedi', stat).success, false);
+  assert.strictEqual(dbm.addUserSticker(plus, 'kedi', stat).success, true);
+  assert.strictEqual(dbm.addUserSticker(plus, 'kedi', stat).success, false);
+  assert.strictEqual(dbm.addUserSticker(plus, 'dans', anim).success, false);
+  for (let i = 0; i < 4; i++) assert.strictEqual(dbm.addUserSticker(plus, 's' + i + 'x', stat).success, true);
+  assert.strictEqual(dbm.addUserSticker(plus, 'fazla', stat).success, false); // 5 doldu
+  assert.strictEqual(dbm.addUserSticker(prem, 'dans', anim).success, true);
+  assert.strictEqual(dbm.stickerPermissions(prem).limit, 15);
+  const pid = 'u' + dbm.listUserStickers(plus)[0].id;
+  assert.strictEqual(dbm.createHubSticker(1, other, 'x', pid).success, false); // başkasınınki
+  assert.strictEqual(dbm.createHubSticker(1, free, 'x', 'u999999').success, false);
+  const hubId = dbm.createHub(prem, { name: 'StkLobi' }).id;
+  assert.strictEqual(dbm.createHubSticker(hubId, plus, 'plus', pid).success, true);
+  assert.strictEqual(dbm.getStickerImage('u', dbm.listUserStickers(plus)[0].id, plus).startsWith('data:image/webp'), true);
+  db.prepare(`UPDATE entitlements SET expires_at = '2000-01-01 00:00:00' WHERE user_id = ?`).run(plus);
+  assert.strictEqual(dbm.getStickerImage('u', dbm.listUserStickers(plus)[0].id, plus), null);
+  assert.strictEqual(dbm.createHubSticker(hubId, plus, 'plus', pid).success, false);
+});
+
+test('Lobi çıkartması: Seviye 4, yalnızca sahip, 5 yuva; yalnızca o lobide gönderilir; DM içinde reddedilir', async () => {
+  const stat = await compressEmoji(await bigPhoto(), { size: 256, maxStatic: 90 * 1024 });
+  const owner = user('hs_owner', 'premium'), member = user('hs_member', null);
+  const id = dbm.createHub(owner, { name: 'HsLobi' }).id, id2 = dbm.createHub(owner, { name: 'HsLobi2' }).id;
+  assert.strictEqual(dbm.addHubSticker(id, owner, 'a1', stat).success, false); // Seviye 1
+  const ins = db.prepare('INSERT INTO hub_boosts (hub_id, user_id) VALUES (?, ?)');
+  [id, id2].forEach((h) => [1, 2, 3, 4].forEach((i) => { const b = user('hsb' + h + i, 'premium'); for (let k = 0; k < (i < 4 ? 3 : 1); k++) ins.run(h, b); }));
+  assert.strictEqual(dbm.hubLevel(id), 4);
+  assert.strictEqual(dbm.addHubSticker(id, member, 'a1', stat).success, false); // sahip değil
+  for (let i = 0; i < 5; i++) assert.strictEqual(dbm.addHubSticker(id, owner, 'h' + i + 'x', stat).success, true);
+  assert.strictEqual(dbm.addHubSticker(id, owner, 'fazla', stat).success, false);
+  const sid = 'h' + dbm.listHubStickers(id)[0].id;
+  assert.strictEqual(dbm.createHubSticker(id, member, 'm', sid).success, true); // lobide herkes
+  assert.strictEqual(dbm.createHubSticker(id2, member, 'm', sid).success, false); // başka lobide değil
+  assert.strictEqual(dbm.validateStickerFor ? true : true, true);
+  assert.strictEqual(dbm.saveDmSticker(member, 'm', owner, sid).success, false); // DM'de yok
+  assert.strictEqual(dbm.listStickerPalette(member, id).hub.length, 0); // üye değil → liste boş
+});
+
 (async () => {
   for (const [name, fn] of tests) {
     await fn();

@@ -27,6 +27,8 @@ const FEATURES = {
   premium_emoji_pack:   { label: 'Premium emoji paketi',             tier: 'premium' },
   premium_card:         { label: 'Premium üye kartı animasyonu',     tier: 'premium' },
   personal_emoji:       { label: 'Kişisel emoji oluşturma',          tier: 'plus' },
+  personal_sticker:     { label: 'Kişisel çıkartma oluşturma',        tier: 'plus' },
+  animated_sticker:     { label: 'Hareketli çıkartma oluşturma',      tier: 'premium' },
   animated_emoji:       { label: 'Hareketli (GIF) emoji oluşturma',  tier: 'premium' },
   cross_lobby_emoji:    { label: 'Başka lobilerin emojilerini kullanma', tier: 'premium' }
 };

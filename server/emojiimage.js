@@ -16,7 +16,7 @@ const ALLOWED_FORMATS = ['jpeg', 'png', 'webp', 'gif', 'avif', 'heif', 'tiff'];
 function toDataUrl(buf) { return 'data:image/webp;base64,' + buf.toString('base64'); }
 
 // buffer: ham dosya. allowAnimated: hareketli çıktıya izin var mı (Premium). Dönüş: { success, data, animated, bytes, width, height, note } | { success:false, error }
-async function compressEmoji(buffer, { allowAnimated = false } = {}) {
+async function compressEmoji(buffer, { allowAnimated = false, size = 128, maxStatic = OUT_MAX_STATIC, maxAnimated = OUT_MAX_ANIMATED } = {}) {
   if (!Buffer.isBuffer(buffer) || !buffer.length) return { success: false, error: 'Boş görsel.' };
   if (buffer.length > MAX_INPUT_ANIMATED || (buffer.length > MAX_INPUT_STATIC && !allowAnimated)) return { success: false, error: 'Görsel çok büyük.' };
 
@@ -33,12 +33,12 @@ async function compressEmoji(buffer, { allowAnimated = false } = {}) {
 
   try {
     if (isAnimatedSource && allowAnimated) {
-      for (const [size, quality] of [[128, 65], [112, 50], [96, 40], [80, 30]]) {
+      for (const [dim, quality] of [[size, 65], [Math.round(size * 0.875), 50], [Math.round(size * 0.75), 40], [Math.round(size * 0.625), 30]]) {
         const out = await sharp(buffer, { animated: true, pages: Math.min(frames, MAX_FRAMES), limitInputPixels: PIXEL_LIMIT })
-          .resize(size, size, { fit: 'inside', withoutEnlargement: true })
+          .resize(dim, dim, { fit: 'inside', withoutEnlargement: true })
           .webp({ quality, effort: 4, loop: 0 })
           .toBuffer({ resolveWithObject: true });
-        if (out.data.length <= OUT_MAX_ANIMATED) {
+        if (out.data.length <= maxAnimated) {
           const m = await sharp(out.data, { animated: true }).metadata();
           return { success: true, data: toDataUrl(out.data), animated: (m.pages || 1) > 1, bytes: out.data.length, width: out.info.width, height: m.pageHeight || out.info.height, original_bytes: buffer.length, note: null };
         }
@@ -50,10 +50,10 @@ async function compressEmoji(buffer, { allowAnimated = false } = {}) {
     for (const quality of [82, 70, 58, 45, 35]) {
       const out = await sharp(buffer, { limitInputPixels: PIXEL_LIMIT })
         .rotate()
-        .resize(128, 128, { fit: 'inside', withoutEnlargement: true })
+        .resize(size, size, { fit: 'inside', withoutEnlargement: true })
         .webp({ quality, effort: 4 })
         .toBuffer({ resolveWithObject: true });
-      if (out.data.length <= OUT_MAX_STATIC) {
+      if (out.data.length <= maxStatic) {
         return {
           success: true, data: toDataUrl(out.data), animated: false, bytes: out.data.length, width: out.info.width, height: out.info.height, original_bytes: buffer.length,
           note: isAnimatedSource ? 'Hareketli görsel: yalnızca ilk kare kullanıldı (hareketli emoji Sauran Premium\'a özel).' : null

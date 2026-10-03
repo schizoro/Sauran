@@ -198,6 +198,37 @@
         'plus-bulb': { alt: 'star', mouth2: 'open' },
         'plus-ghost': { body: 'float', wave: 'both', alt: 'star' }
     };
+
+    // ── Plus: Yeni hayvan dostlar (domuz, koala, maymun, ördek, kaplan) ──
+    Object.assign(D, {
+        'plus-pig': {
+            c: '#ffb3c7', k: '#e07a99', eyes: 'dot', mouth: 'none', wave: 'r', body: 'bob',
+            back: `<g class="stk-ear stk-ear-l">${tri('M32 36 L30 10 L52 26Z', '#ffb3c7')}</g><g class="stk-ear stk-ear-r">${tri('M88 36 L90 10 L68 26Z', '#ffb3c7')}</g>`,
+            nose: `<ellipse cx="60" cy="61" rx="10" ry="7.5" fill="#ff8fae" stroke="#e07a99" stroke-width="1.4"/><circle cx="56" cy="61" r="1.8" fill="#b84a6b"/><circle cx="64" cy="61" r="1.8" fill="#b84a6b"/>`
+        },
+        'plus-koala': {
+            c: '#b9bfcc', k: '#8a91a1', eyes: 'dot', mouth: 'smile', wave: 'both', body: 'sway',
+            back: `<g class="stk-ear stk-ear-l"><circle cx="28" cy="28" r="14" fill="#b9bfcc" stroke="#8a91a1" stroke-width="1.6"/><circle cx="28" cy="28" r="8" fill="#e6e9f0"/></g><g class="stk-ear stk-ear-r"><circle cx="92" cy="28" r="14" fill="#b9bfcc" stroke="#8a91a1" stroke-width="1.6"/><circle cx="92" cy="28" r="8" fill="#e6e9f0"/></g>`,
+            nose: `<ellipse cx="60" cy="57" rx="6" ry="8" fill="#3b3f4d"/>`
+        },
+        'plus-monkey': {
+            c: '#b57c4a', k: '#835325', eyes: 'dot', mouth: 'smile', wave: 'both', body: 'hop',
+            back: `<g class="stk-ear stk-ear-l"><circle cx="24" cy="52" r="11" fill="#b57c4a" stroke="#835325" stroke-width="1.6"/><circle cx="24" cy="52" r="6" fill="#f2c7a0"/></g><g class="stk-ear stk-ear-r"><circle cx="96" cy="52" r="11" fill="#b57c4a" stroke="#835325" stroke-width="1.6"/><circle cx="96" cy="52" r="6" fill="#f2c7a0"/></g>`,
+            under: `<path d="M60 36 Q74 30 82 44 Q90 62 76 76 Q60 84 44 76 Q30 62 38 44 Q46 30 60 36Z" fill="#f2c7a0"/>`,
+            nose: `<circle cx="56" cy="60" r="1.6" fill="#835325"/><circle cx="64" cy="60" r="1.6" fill="#835325"/>`
+        },
+        'plus-duck': {
+            c: '#ffe14d', k: '#e0b81c', eyes: 'dot', mouth: 'none', wave: 'both', body: 'bob',
+            nose: `<ellipse cx="60" cy="62" rx="14" ry="7" fill="#ff9d2e" stroke="#d97a0a" stroke-width="1.4"/><path d="M48 62 Q60 66 72 62" fill="none" stroke="#d97a0a" stroke-width="1.2"/>`,
+            front: `<path class="stk-ear" d="M56 20 Q54 8 60 6 Q58 14 64 12 Q64 18 62 20Z" fill="#ffe14d" stroke="#e0b81c" stroke-width="1.2" stroke-linejoin="round"/>`
+        },
+        'plus-tiger': {
+            c: '#ffa83d', k: '#d6761a', eyes: 'dot', mouth: 'cat', wave: 'r', body: 'bob',
+            back: `<g class="stk-ear stk-ear-l">${tri('M30 40 L33 10 L54 28Z', '#ffa83d')}${tri('M35 33 L36 19 L47 28Z', '#fff2d9')}</g><g class="stk-ear stk-ear-r">${tri('M90 40 L87 10 L66 28Z', '#ffa83d')}${tri('M85 33 L84 19 L73 28Z', '#fff2d9')}</g>`,
+            under: `<path d="M60 20 L60 33 M44 24 L48 35 M76 24 L72 35 M28 50 L40 52 M92 50 L80 52" stroke="#8a3f0a" stroke-width="3.2" stroke-linecap="round" fill="none"/><ellipse cx="60" cy="66" rx="16" ry="11" fill="#fff2d9"/>`,
+            nose: `<path d="M57 57 L63 57 L60 61Z" fill="#ff7f9a"/>`
+        }
+    });
     Object.keys(D).forEach((k) => {
         const t = TUNE[k] || {};
         D[k].wave = t.wave;

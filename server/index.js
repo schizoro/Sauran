@@ -49,6 +49,13 @@ const {
   createHubVoiceMessage,
   createHubFileMessage,
   createHubSticker,
+  stickerPermissions,
+  addUserSticker,
+  removeUserSticker,
+  addHubSticker,
+  removeHubSticker,
+  listStickerPalette,
+  getStickerImage,
   STICKERS,
   createHubPoll,
   voteHubPoll,
@@ -390,7 +397,7 @@ const jsonSmall = express.json({ limit: '1mb' });
 const jsonImage = express.json({ limit: '12mb' });
 const jsonFile = express.json({ limit: '140mb' });
 const { compressEmoji, decodeImageDataUrl } = require('./emojiimage');
-const IMAGE_BODY_PATHS = [/^\/api\/me\/emojis\/?$/, /^\/api\/hubs\/\d+\/emojis\/?$/, /^\/api\/profile\/(avatar|banner)\/?$/, /^\/api\/hubs\/?$/, /^\/api\/hubs\/\d+\/?$/, /^\/api\/hubs\/\d+\/banner\/?$/];
+const IMAGE_BODY_PATHS = [/^\/api\/me\/emojis\/?$/, /^\/api\/hubs\/\d+\/emojis\/?$/, /^\/api\/me\/stickers\/?$/, /^\/api\/hubs\/\d+\/stickers\/?$/, /^\/api\/profile\/(avatar|banner)\/?$/, /^\/api\/hubs\/?$/, /^\/api\/hubs\/\d+\/?$/, /^\/api\/hubs\/\d+\/banner\/?$/];
 const FILE_BODY_PATHS = [/^\/api\/hubs\/\d+\/(file|voice|share)\/?$/];
 
 app.use((req, res, next) => {
@@ -2445,6 +2452,70 @@ app.get('/api/emoji/:kind/:id', (req, res) => {
   const user = getUserFromRequest(req);
   if (!user) return res.status(401).end();
   const image = getEmojiImage(req.params.kind, Number(req.params.id), user.id);
+  const match = image && /^data:(image\/(?:png|webp|gif));base64,(.+)$/s.exec(image);
+  if (!match) return res.status(404).end();
+  res.set('Content-Type', match[1]);
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.set('Cache-Control', 'private, max-age=604800, immutable');
+  return res.send(Buffer.from(match[2], 'base64'));
+});
+
+// ── Kişisel / lobi çıkartmaları (Plus: statik 5, Premium: 15 + hareketli; lobi: Seviye 4, 5 yuva) ──
+const STICKER_COMPRESS = { size: 256, maxStatic: 90 * 1024, maxAnimated: 300 * 1024 };
+app.get('/api/me/stickers', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try { return res.json({ success: true, ...listStickerPalette(user.id, req.query.hub_id ? Number(req.query.hub_id) : null) }); }
+  catch (error) { console.error('Çıkartma paleti hatası:', error); return res.status(500).json({ success: false, error: 'Yüklenemedi.' }); }
+});
+app.post('/api/me/stickers', contentWriteLimiter, async (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const perms = stickerPermissions(user.id);
+    if (!perms.personal) return res.status(403).json({ success: false, error: 'Kendi çıkartmanı oluşturmak Sauran Plus/Premium aboneliği (ya da hediye) gerektirir.' });
+    const buf = decodeImageDataUrl(req.body && req.body.image_data);
+    if (!buf) return res.status(400).json({ success: false, error: 'Geçersiz görsel formatı.' });
+    const compressed = await compressEmoji(buf, { allowAnimated: perms.animated, ...STICKER_COMPRESS });
+    if (!compressed.success) return res.status(400).json({ success: false, error: compressed.error });
+    const result = addUserSticker(user.id, req.body && req.body.name, compressed);
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    return res.json({ ...result, note: compressed.note || null, original_bytes: compressed.original_bytes, bytes: compressed.bytes });
+  } catch (error) { console.error('Kişisel çıkartma ekleme hatası:', error); return res.status(500).json({ success: false, error: 'Eklenemedi.' }); }
+});
+app.delete('/api/me/stickers/:id', contentWriteLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try { return res.json(removeUserSticker(user.id, Number(req.params.id))); }
+  catch (error) { console.error('Kişisel çıkartma silme hatası:', error); return res.status(500).json({ success: false, error: 'Silinemedi.' }); }
+});
+app.post('/api/hubs/:id/stickers', contentWriteLimiter, async (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const hubId = Number(req.params.id);
+    const buf = decodeImageDataUrl(req.body && req.body.image_data);
+    if (!buf) return res.status(400).json({ success: false, error: 'Geçersiz görsel formatı.' });
+    const compressed = await compressEmoji(buf, { allowAnimated: stickerPermissions(user.id).animated, ...STICKER_COMPRESS });
+    if (!compressed.success) return res.status(400).json({ success: false, error: compressed.error });
+    const result = addHubSticker(hubId, user.id, req.body && req.body.name, compressed);
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    return res.json({ ...result, note: compressed.note || null });
+  } catch (error) { console.error('Lobi çıkartma ekleme hatası:', error); return res.status(500).json({ success: false, error: 'Eklenemedi.' }); }
+});
+app.delete('/api/hubs/:id/stickers/:stickerId', contentWriteLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const result = removeHubSticker(Number(req.params.id), user.id, Number(req.params.stickerId));
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    return res.json(result);
+  } catch (error) { console.error('Lobi çıkartma silme hatası:', error); return res.status(500).json({ success: false, error: 'Silinemedi.' }); }
+});
+app.get('/api/sticker/:kind/:id', (req, res) => {
+  const user = getUserFromRequest(req);
+  if (!user) return res.status(401).end();
+  const image = getStickerImage(req.params.kind, Number(req.params.id), user.id);
   const match = image && /^data:(image\/(?:png|webp|gif));base64,(.+)$/s.exec(image);
   if (!match) return res.status(404).end();
   res.set('Content-Type', match[1]);

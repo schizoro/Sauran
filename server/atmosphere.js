@@ -54,13 +54,14 @@ const ATMOSPHERES = [
 // Premium aboneler ayda PREMIUM_MONTHLY_BOOSTS takviye kazanır; takviye bir lobiye verilerek seviyesini yükseltir.
 // `at`: bu seviyeye ulaşmak için gereken toplam takviye. `soon: true` = henüz yapılmadı (arayüz "Yakında" gösterir).
 const PREMIUM_MONTHLY_BOOSTS = 3;
+const HUB_STICKER_SLOTS = 5; // Seviye 4: lobiye özel çıkartma yuvası sayısı
 const HUB_EMOJI_SLOTS = 10; // Seviye 4: lobiye özel emoji yuvası sayısı
 const BOOST_COOLDOWN_HOURS = 24; // takviyeyi geri çekince o yuva 24 saat boşalmaz (lobiler arası hızlı kaydırmayı önler)
 const BOOST_LEVELS = [
   { level: 1, at: 0, title: 'Standart lobi', perks: [] },
   { level: 2, at: 2, title: 'Özel görünüm', perks: [{ text: 'Özel lobi teması' }, { text: 'Özel lobi arka planı' }] },
   { level: 3, at: 7, title: 'Atmosphere', perks: [{ text: 'Lobi Atmosphere + lobi sesi' }, { text: 'Hareketli lobi bannerı (GIF)' }, { text: 'Özel lobi görsel efektleri' }] },
-  { level: 4, at: 10, title: 'Gelişmiş lobi', perks: [{ text: 'Lobiye özel emoji yuvaları (10 adet, :isim: ile kullanılır)' }, { text: 'Gelişmiş sesli oda özellikleri', soon: true }, { text: 'Özel animasyonlar', soon: true }, { text: 'Daha fazla kişiselleştirme', soon: true }, { text: 'Özel lobi içerikleri', soon: true }] }
+  { level: 4, at: 10, title: 'Gelişmiş lobi', perks: [{ text: 'Lobiye özel emoji yuvaları (10 adet, :isim: ile kullanılır)' }, { text: 'Lobiye özel çıkartma yuvaları (5 adet)' }, { text: 'Gelişmiş sesli oda özellikleri', soon: true }, { text: 'Özel animasyonlar', soon: true }, { text: 'Daha fazla kişiselleştirme', soon: true }, { text: 'Özel lobi içerikleri', soon: true }] }
 ];
 function levelForBoosts(count) {
   let lvl = 1;
@@ -74,4 +75,4 @@ function getAtmosphere(key) {
   return ATMOSPHERES.find((a) => a.key === key) || null;
 }
 
-module.exports = { ATMOSPHERES, SOUND_KEYS, getAtmosphere, PREMIUM_MONTHLY_BOOSTS, BOOST_COOLDOWN_HOURS, BOOST_LEVELS, levelForBoosts, HUB_EMOJI_SLOTS };
+module.exports = { ATMOSPHERES, SOUND_KEYS, getAtmosphere, PREMIUM_MONTHLY_BOOSTS, BOOST_COOLDOWN_HOURS, BOOST_LEVELS, levelForBoosts, HUB_EMOJI_SLOTS, HUB_STICKER_SLOTS };
