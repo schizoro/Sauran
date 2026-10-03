@@ -7776,7 +7776,6 @@ document.getElementById('cz-cardstyle-card')?.addEventListener('click', async (e
         if (!d.success) { showToast(d.error || 'Güncellenemedi.'); return; }
         currentUser.card_style = d.card_style;
         renderCardStyleCard();
-    if (typeof renderPersonalEmojiCard === 'function') renderPersonalEmojiCard();
         showToast('Üye kartı güncellendi.');
         if (currentHub) refreshHubAfterBoost();
     } catch (_) { showToast('Güncellenemedi.'); }
@@ -7807,6 +7806,7 @@ async function loadCustomizeCenter() {
     renderNameEffectPicker();
     renderProfileEffectPicker();
     renderCardStyleCard();
+    if (typeof renderPersonalEmojiCard === 'function') renderPersonalEmojiCard();
     await renderCzPremium(sub);
 }
 

@@ -182,7 +182,7 @@
         if (e.target.closest('[data-ep-add]')) {
             closePanel();
             if (!(state.data && state.data.permissions && state.data.permissions.personal)) { showToast('Kendi emojini oluşturmak Sauran Plus abonelerine açıktır.'); }
-            if (typeof openCustomizeCenter === 'function') { openCustomizeCenter('look'); setTimeout(() => { el('cz-emoji-card')?.scrollIntoView({ block: 'start' }); }, 400); }
+            if (typeof openCustomizeCenter === 'function') { openCustomizeCenter('look'); setTimeout(() => { el('cz-emoji-card')?.scrollIntoView({ block: 'start' }); }, 1000); }
             return;
         }
         const stk = e.target.closest('[data-sticker]');
