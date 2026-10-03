@@ -28,4 +28,21 @@ const FEATURES = {
   premium_card:         { label: 'Premium üye kartı animasyonu',     tier: 'premium' }
 };
 
-module.exports = { FEATURES };
+// Premium üye kartı stilleri (premium_card özelliğiyle seçilir; Hediye Aracı'nda ayrı ürün gerekmez — özellik zaten giftable).
+// group: classic | cute (pembe, sevimli) | strong (sert, güçlü). Yeni stil = buraya satır + client/theme.css'te .cs-<key> kuralı.
+const CARD_STYLES = [
+  { key: 'classic', label: 'Klasik Premium', group: 'classic', emoji: '✦' },
+  { key: 'rose',    label: 'Pembe Gül',      group: 'cute',    emoji: '💗' },
+  { key: 'teddy',   label: 'Ayıcık',         group: 'cute',    emoji: '🧸' },
+  { key: 'bunny',   label: 'Tavşan',         group: 'cute',    emoji: '🐰' },
+  { key: 'sakura',  label: 'Sakura',         group: 'cute',    emoji: '🌸' },
+  { key: 'candy',   label: 'Şeker',          group: 'cute',    emoji: '🍭' },
+  { key: 'fire',    label: 'Alev',           group: 'strong',  emoji: '🔥' },
+  { key: 'thunder', label: 'Şimşek',         group: 'strong',  emoji: '⚡' },
+  { key: 'steel',   label: 'Çelik',          group: 'strong',  emoji: '🛡️' },
+  { key: 'frost',   label: 'Buz',            group: 'strong',  emoji: '❄️' },
+  { key: 'dragon',  label: 'Ejderha',        group: 'strong',  emoji: '🐉' }
+];
+const CARD_STYLE_KEYS = CARD_STYLES.map((c) => c.key);
+
+module.exports = { FEATURES, CARD_STYLES, CARD_STYLE_KEYS };

@@ -90,6 +90,8 @@ const {
   effectiveAtmosphere,
   listAtmospheresFor,
   setProfileSoundOn,
+  setCardStyle,
+  effectiveCardStyle,
   setProfileSound,
   effectiveProfileSound,
   getProfileSoundChoice,
@@ -999,7 +1001,7 @@ app.get('/api/me', (req, res) => {
 
     const plusActive = hasActivePlus(user.id);
     const themeOk = hasFeature(user.id, 'chat_theme'), bubbleOk = hasFeature(user.id, 'bubble_style');
-    return res.json({ success: true, user: { ...user, avatar_frame: getEquippedCosmetics(user.id).avatar_frame, plus_active: plusActive, chat_theme: themeOk ? (user.chat_theme || 'classic') : 'classic', profile_color: user.profile_color || null, bubble_style: bubbleOk ? (user.bubble_style || 'default') : 'default', profile_effect: hasFeature(user.id, 'profile_effect') ? (user.profile_effect || 'none') : 'none', profile_theme: hasFeature(user.id, 'profile_theme') ? (user.profile_theme || 'default') : 'default', name_effect: hasFeature(user.id, 'name_effect') ? (user.name_effect || 'none') : 'none', atmosphere: effectiveAtmosphere(user.id), profile_sound: effectiveProfileSound(user.id), profile_sound_on: user.profile_sound_on !== 0, features: listFeatures(user.id), premium_active: hasActivePremium(user.id) } });
+    return res.json({ success: true, user: { ...user, avatar_frame: getEquippedCosmetics(user.id).avatar_frame, plus_active: plusActive, chat_theme: themeOk ? (user.chat_theme || 'classic') : 'classic', profile_color: user.profile_color || null, bubble_style: bubbleOk ? (user.bubble_style || 'default') : 'default', profile_effect: hasFeature(user.id, 'profile_effect') ? (user.profile_effect || 'none') : 'none', profile_theme: hasFeature(user.id, 'profile_theme') ? (user.profile_theme || 'default') : 'default', name_effect: hasFeature(user.id, 'name_effect') ? (user.name_effect || 'none') : 'none', atmosphere: effectiveAtmosphere(user.id), profile_sound: effectiveProfileSound(user.id), card_style: effectiveCardStyle(user.id), profile_sound_on: user.profile_sound_on !== 0, features: listFeatures(user.id), premium_active: hasActivePremium(user.id) } });
 
   } catch (error) {
     console.error('Session kontrol hatası:', error);
@@ -1385,6 +1387,19 @@ app.put('/api/profile/atmosphere', (req, res) => {
   } catch (error) {
     console.error('Atmosphere uygulama hatası:', error);
     return res.status(500).json({ success: false, error: 'Uygulanamadı.' });
+  }
+});
+
+// Premium üye kartı stili (lobi üyeler panelinde). { card_style: 'rose' | ... | 'classic' }
+app.patch('/api/profile/card-style', (req, res) => {
+  try {
+    const user = getUserFromRequest(req);
+    if (!user) return res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
+    const r = setCardStyle(user.id, req.body && req.body.card_style);
+    return r.success ? res.json(r) : res.status(400).json(r);
+  } catch (error) {
+    console.error('Kart stili hatası:', error);
+    return res.status(500).json({ success: false, error: 'Güncellenemedi.' });
   }
 });
 

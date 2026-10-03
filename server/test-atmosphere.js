@@ -331,6 +331,26 @@ test('Premium üye kartı: üye listesinde yalnızca Premium (ya da hediye alan)
   assert.strictEqual(flag(cO), false); // abonelik bitince kart sade
 });
 
+test('Üye kartı stili: yalnızca Premium (premium_card) seçebilir; geçersiz reddedilir; abonelik bitince klasik', () => {
+  const { CARD_STYLES } = require('./features');
+  assert.ok(CARD_STYLES.filter((c) => c.group === 'cute').length >= 4 && CARD_STYLES.filter((c) => c.group === 'strong').length >= 4);
+  const kP = user('t_cs_p', 'premium'), kL = user('t_cs_l', 'plus'), kF = user('t_cs_f', null);
+  const hubK = dbm.createHub(kP, { name: 'Stil Lobisi' }).id;
+  db.prepare('INSERT OR IGNORE INTO hub_members (hub_id, user_id, role_id, permission_tier) VALUES (?, ?, NULL, ?)').run(hubK, kL, 'member');
+  assert.strictEqual(dbm.setCardStyle(kP, 'bunny').success, true);
+  assert.strictEqual(dbm.setCardStyle(kP, 'yok-stil').success, false);
+  assert.strictEqual(dbm.setCardStyle(kL, 'fire').success, false); // Plus yetmez
+  assert.strictEqual(dbm.setCardStyle(kF, 'fire').success, false);
+  const style = (uid) => dbm.getHubDetail(hubK, kP).members.find((m) => m.user_id === uid).card_style;
+  assert.strictEqual(style(kP), 'bunny');
+  assert.strictEqual(style(kL), '');
+  assert.strictEqual(dbm.setCardStyle(kP, 'classic').success, true);
+  assert.strictEqual(style(kP), 'classic');
+  dbm.setCardStyle(kP, 'dragon');
+  db.prepare(`UPDATE entitlements SET expires_at = '2000-01-01 00:00:00' WHERE user_id = ? AND product = 'premium'`).run(kP);
+  assert.strictEqual(style(kP), ''); // abonelik bitti: stil görünmez
+});
+
 console.log(`\n${passed} test geçti`);
 try { db.close(); fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true }); } catch (_) { /* Windows dosya kilidi: geçici klasör bırakılabilir */ }
 process.exit(0);

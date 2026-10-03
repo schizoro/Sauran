@@ -2568,3 +2568,35 @@ body.hubset-open .hub-fx > i { animation-play-state: paused; }
 @keyframes mcShine { 0%, 55% { transform: translateX(0); opacity: 0; } 62% { opacity: 1; } 100% { transform: translateX(560%); opacity: 0; } }
 @keyframes mcSpark { 0%, 100% { opacity: 0; transform: translateY(0) scale(.6); } 40% { opacity: 1; transform: translateY(-5px) scale(1); } 70% { opacity: 0; transform: translateY(-10px) scale(.5); } }
 @media (prefers-reduced-motion: reduce) { .member-prem::before, .mc-shine, .mc-spark { animation: none; } .mc-spark { opacity: .5; } }
+
+/* ══ Premium üye kartı stilleri (cs-*): renkler değişken, parçacıklar emoji ya da nokta ═════════════════════════ */
+.member-prem::before { background-image: linear-gradient(110deg, var(--b1, #ffd166), var(--b2, #c084fc), var(--b3, #4fe3ff), var(--b1, #ffd166)); }
+.member-prem::after { background: linear-gradient(135deg, color-mix(in srgb, var(--tint, var(--mc, #c084fc)) 24%, rgba(14, 19, 25, 0.96)), rgba(14, 19, 25, 0.96) 75%); }
+.cs-emoji .mc-spark { width: auto; height: auto; background: none; box-shadow: none; font-size: 12px; line-height: 1; }
+.cs-emoji .mc-spark::before { content: var(--sp); }
+.cs-rose   { --b1: #ff9ecb; --b2: #ff5fa8; --b3: #ffd1e6; --tint: #ff7eb6; --sp: '💗'; }
+.cs-teddy  { --b1: #f6c9a0; --b2: #ffb3c8; --b3: #fff0d9; --tint: #e8a47a; --sp: '🧸'; }
+.cs-bunny  { --b1: #e9d5ff; --b2: #ffc2e0; --b3: #ffffff; --tint: #f0a6d8; --sp: '🐰'; }
+.cs-sakura { --b1: #ffc1d9; --b2: #ff8fb8; --b3: #ffffff; --tint: #ff9ec4; --sp: '🌸'; }
+.cs-candy  { --b1: #ff9ad5; --b2: #7fe3ff; --b3: #fff29a; --tint: #c9a0ff; --sp: '🍭'; }
+.cs-fire   { --b1: #ff9f1c; --b2: #ff3d00; --b3: #ffd23f; --tint: #ff5a1f; }
+.cs-fire::before { animation-duration: 2.6s; }
+.cs-fire .mc-spark { background: #ffb347; box-shadow: 0 0 7px 1px rgba(255, 90, 0, 0.95); animation-duration: 1.7s; }
+.cs-thunder { --b1: #4fc3ff; --b2: #ffffff; --b3: #3a5bff; --tint: #3d7bff; --sp: '⚡'; }
+.cs-thunder::before { animation: mcBorder 2.4s linear infinite, mcFlicker 3.4s steps(1) infinite; }
+.cs-steel  { --b1: #c9d3e0; --b2: #6b7788; --b3: #eef3f9; --tint: #7f8da1; }
+.cs-steel::after { background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0 3px, transparent 3px 7px), linear-gradient(135deg, color-mix(in srgb, #7f8da1 22%, rgba(14, 19, 25, 0.96)), rgba(14, 19, 25, 0.96) 75%); }
+.cs-steel .mc-spark { display: none; }
+.cs-steel .mc-shine { background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.3), transparent); animation-duration: 3.4s; }
+.cs-frost  { --b1: #bdf3ff; --b2: #5ec8ff; --b3: #ffffff; --tint: #6fd3ff; --sp: '❄️'; }
+.cs-dragon { --b1: #2fd27a; --b2: #ffd166; --b3: #0e7a45; --tint: #1fbf6d; --sp: '🐉'; }
+@keyframes mcFlicker { 0%, 88%, 92%, 100% { filter: none; } 90% { filter: brightness(2.2); } 96% { filter: brightness(1.6); } }
+@media (prefers-reduced-motion: reduce) { .cs-thunder::before { animation: none; } }
+
+/* Özelleştirme Merkezi: stil önizlemeleri */
+.cz-card-group { margin: 12px 0 6px; font-size: 12px; font-weight: 650; color: var(--text-secondary); }
+.cz-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.cz-card-opt { border: 0; background: none; padding: 0; cursor: pointer; text-align: left; border-radius: 16px; }
+.cz-card-opt.selected { box-shadow: 0 0 0 2px var(--accent-line); }
+.cz-card-prev { display: flex; align-items: center; width: 100%; box-sizing: border-box; }
+.cz-card-prev-av { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; color: #0a0d11; background: var(--mc, #8b7cf0); }

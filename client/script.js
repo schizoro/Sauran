@@ -7731,6 +7731,7 @@ async function renderCzPremium(sub) {
         ${feat('🎞️', 'Hareketli (GIF) avatar', 'Profil fotoğrafın hareketli olabilir.', on ? 'on' : 'prem')}
         ${feat('📎', '100 MB dosya / video', 'Plus: 50 MB.', on ? 'on' : 'prem')}
         ${feat('📺', 'Yüksek kalite ekran paylaşımı', 'Plus\'tan daha yüksek bit hızı tavanı; ağın elverdiği ölçüde daha net görüntü.', on ? 'on' : 'prem')}
+        ${feat('🃏', 'Animasyonlu lobi üye kartı (10 stil)', 'Pembe & sevimli (Gül, Ayıcık, Tavşan…) ve sert & güçlü (Alev, Şimşek, Çelik…) kartlar.', on ? 'on' : 'prem')}
         ${feat('🧸', '12 Premium hareketli çıkartma', 'Ejderha, Anka kuşu, Aslan, Astronot ve daha fazlası.', on ? 'on' : 'prem')}
         ${feat('😍', '12 Premium tepki emojisi', 'Plus\'ın 12 ek emojisinin üstüne: 🐉 🦄 👑 💎 🌟 🚀 …', on ? 'on' : 'prem')}
         ${feat('⏳', 'Yeni içeriklere erken erişim', 'Yeni Atmosphere ve özellikler önce Premium\'a açılır.', on ? 'on' : 'prem')}
@@ -7739,6 +7740,46 @@ async function renderCzPremium(sub) {
             <button id="cz-open-atmo-btn" class="atmo-btn atmo-btn-use" type="button">🌌 Atmosphere'lere git</button>
         </div>`;
 }
+
+// ── Premium üye kartı stilleri (lobi Üyeler paneli) — liste server/features.js CARD_STYLES ile aynı ──
+const CARD_STYLES = [
+    { key: 'classic', label: 'Klasik Premium', group: 'classic', emoji: '✦' },
+    { key: 'rose', label: 'Pembe Gül', group: 'cute', emoji: '💗' }, { key: 'teddy', label: 'Ayıcık', group: 'cute', emoji: '🧸' },
+    { key: 'bunny', label: 'Tavşan', group: 'cute', emoji: '🐰' }, { key: 'sakura', label: 'Sakura', group: 'cute', emoji: '🌸' },
+    { key: 'candy', label: 'Şeker', group: 'cute', emoji: '🍭' },
+    { key: 'fire', label: 'Alev', group: 'strong', emoji: '🔥' }, { key: 'thunder', label: 'Şimşek', group: 'strong', emoji: '⚡' },
+    { key: 'steel', label: 'Çelik', group: 'strong', emoji: '🛡️' }, { key: 'frost', label: 'Buz', group: 'strong', emoji: '❄️' },
+    { key: 'dragon', label: 'Ejderha', group: 'strong', emoji: '🐉' }
+];
+const CARD_EMOJI_STYLES = new Set(['rose', 'teddy', 'bunny', 'sakura', 'candy', 'thunder', 'frost', 'dragon']);
+
+function renderCardStyleCard() {
+    const box = document.getElementById('cz-cardstyle-card');
+    if (!box || !currentUser) return;
+    const ok = userHasFeature('premium_card');
+    const active = currentUser.card_style || 'classic';
+    const groups = [['classic', '✦ Klasik'], ['cute', '🎀 Pembe & Sevimli'], ['strong', '⚡ Sert & Güçlü']];
+    const prev = (c) => `<button type="button" class="cz-card-opt${active === c.key && ok ? ' selected' : ''}" data-card-style="${c.key}" ${ok ? '' : 'title="Premium gerekli"'}>
+        <span class="hub-member-card member-prem cs-${c.key}${CARD_EMOJI_STYLES.has(c.key) ? ' cs-emoji' : ''} cz-card-prev" style="--mc:#8b7cf0"><span class="mc-fx" aria-hidden="true"><i class="mc-shine"></i><i class="mc-spark mc-spark-a"></i><i class="mc-spark mc-spark-b"></i><i class="mc-spark mc-spark-c"></i></span><span class="cz-card-prev-av">${escapeHtml((currentUser.username || '?').charAt(0).toUpperCase())}</span><span class="hub-member-info"><span class="hub-member-name">${escapeHtml(currentUser.username || '')}</span><span class="hub-member-sub">${escapeHtml(c.label)}</span></span></span>
+    </button>`;
+    box.innerHTML = `<div class="cz-card-title">Lobi üye kartı <span class="subs-premium-badge" style="margin-left:6px;">♛ PREMIUM</span></div>
+        <p class="hubset-hint">${ok ? 'Lobilerde Üyeler panelinde kartın böyle görünür.' : 'Üye kartı stilleri Sauran Premium abonelerine açıktır; önizleyebilirsin.'}</p>
+        ${groups.map(([g, label]) => `<div class="cz-card-group">${label}</div><div class="cz-card-grid">${CARD_STYLES.filter((c) => c.group === g).map(prev).join('')}</div>`).join('')}`;
+}
+document.getElementById('cz-cardstyle-card')?.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-card-style]');
+    if (!b) return;
+    if (!userHasFeature('premium_card')) { showToast('Üye kartı stilleri Sauran Premium abonelerine açıktır.'); return; }
+    try {
+        const r = await fetch('/api/profile/card-style', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ card_style: b.dataset.cardStyle }) });
+        const d = await r.json();
+        if (!d.success) { showToast(d.error || 'Güncellenemedi.'); return; }
+        currentUser.card_style = d.card_style;
+        renderCardStyleCard();
+        showToast('Üye kartı güncellendi.');
+        if (currentHub) refreshHubAfterBoost();
+    } catch (_) { showToast('Güncellenemedi.'); }
+});
 
 async function loadCustomizeCenter() {
     const status = document.getElementById('cz-status');
@@ -7764,6 +7805,7 @@ async function loadCustomizeCenter() {
     renderProfileThemePicker();
     renderNameEffectPicker();
     renderProfileEffectPicker();
+    renderCardStyleCard();
     await renderCzPremium(sub);
 }
 
@@ -8487,6 +8529,7 @@ async function loadSubscriptions() {
                 <li><span class="subs-ic">🌌</span><span><b>Premium Atmosphere</b> paketleri <small>(Cyber Gaming, Cosmic…)</small></span></li>
                 <li><span class="subs-ic">🎞️</span><span><b>Animasyonlu (GIF)</b> profil fotoğrafı</span></li>
                 <li><span class="subs-ic">📺</span><span><b>Yüksek kalite ekran paylaşımı</b> <small>(Plus'tan daha yüksek bit hızı)</small></span></li>
+                <li><span class="subs-ic">🃏</span><span><b>Animasyonlu lobi üye kartı</b> <small>(10 stil: Gül, Ayıcık, Tavşan, Alev, Şimşek, Çelik…)</small></span></li>
                 <li><span class="subs-ic">🧸</span><span><b>12 Premium hareketli çıkartma</b> <small>(Ejderha, Anka kuşu, Aslan, Astronot…)</small></span></li>
                 <li><span class="subs-ic">😍</span><span><b>12 Premium tepki emojisi</b> <small>(Plus'ın 12 ek emojisinin üstüne)</small></span></li>
                 <li><span class="subs-ic">⏳</span><span><b>Yeni içeriklere erken erişim</b> <small>(yeni Atmosphere ve özellikler önce Premium'a)</small></span></li>
@@ -16204,7 +16247,7 @@ function renderHubMembers() {
         const premFx = m.premium_card ? '<span class="mc-fx" aria-hidden="true"><i class="mc-shine"></i><i class="mc-spark mc-spark-a"></i><i class="mc-spark mc-spark-b"></i><i class="mc-spark mc-spark-c"></i></span>' : '';
         return `
             ${divider}
-            <div class="hub-member-row hub-member-card${m.premium_card ? ' member-prem' : ''}" style="--mc:${escapeAttr(cardColor)}" data-user-id="${m.user_id}" data-tier="${m.permission_tier}">
+            <div class="hub-member-row hub-member-card${m.premium_card ? ' member-prem cs-' + (m.card_style || 'classic') + (CARD_EMOJI_STYLES.has(m.card_style) ? ' cs-emoji' : '') : ''}" style="--mc:${escapeAttr(cardColor)}" data-user-id="${m.user_id}" data-tier="${m.permission_tier}">
                 ${premFx}
                 <span class="hub-member-avatar-wrap">
                     ${avatar}

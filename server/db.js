@@ -132,6 +132,10 @@ if (!userColumns.includes('profile_sound')) {
   // Profil sesi: '' = Atmosphere'inin sesini izle; aksi halde seçilen ses anahtarı (cyber/midnight/cosmic/garden).
   db.exec(`ALTER TABLE users ADD COLUMN profile_sound TEXT NOT NULL DEFAULT ''`);
 }
+if (!userColumns.includes('card_style')) {
+  // Premium üye kartı stili (lobi üyeler panelinde görünür). Boş = klasik. Abonelik bitince okuma anında boş sayılır.
+  db.exec(`ALTER TABLE users ADD COLUMN card_style TEXT NOT NULL DEFAULT ''`);
+}
 if (!userColumns.includes('profile_sound_on')) {
   // Atmosphere'in sesi profilimde (ziyaretçilere) çalsın mı? Sahip kapatabilir.
   db.exec(`ALTER TABLE users ADD COLUMN profile_sound_on INTEGER NOT NULL DEFAULT 1`);
@@ -2547,7 +2551,7 @@ function updateProfileEffect(userId, effect) {
 
 // ── Sauran Atmosphere ─────────────────────────────────────────────────────────────────────────────
 const { ATMOSPHERES, SOUND_KEYS, getAtmosphere } = require('./atmosphere');
-const { FEATURES } = require('./features');
+const { FEATURES, CARD_STYLE_KEYS } = require('./features');
 
 function ownsAtmosphere(userId, key) {
   return Boolean(db.prepare(`SELECT 1 FROM entitlements WHERE user_id = ? AND product = ? AND (expires_at IS NULL OR expires_at > datetime('now')) LIMIT 1`).get(userId, 'atmo:' + key));
@@ -2625,6 +2629,19 @@ function setProfileSound(userId, key) {
   if (value && !hasFeature(userId, 'profile_sound')) return { success: false, error: 'Profil sesi seçmek Sauran Plus/Premium aboneliği (ya da hediye) gerektirir.' };
   db.prepare(`UPDATE users SET profile_sound = ? WHERE id = ?`).run(value, userId);
   return { success: true, profile_sound: value };
+}
+
+function setCardStyle(userId, key) {
+  const value = String(key || 'classic');
+  if (!CARD_STYLE_KEYS.includes(value)) return { success: false, error: 'Geçersiz kart stili.' };
+  if (!hasFeature(userId, 'premium_card')) return { success: false, error: 'Üye kartı stilleri Sauran Premium aboneliği (ya da hediye) gerektirir.' };
+  db.prepare(`UPDATE users SET card_style = ? WHERE id = ?`).run(value === 'classic' ? '' : value, userId);
+  return { success: true, card_style: value };
+}
+function effectiveCardStyle(userId) {
+  if (!hasFeature(userId, 'premium_card')) return '';
+  const row = db.prepare(`SELECT card_style FROM users WHERE id = ?`).get(userId);
+  return row && CARD_STYLE_KEYS.includes(row.card_style) && row.card_style ? row.card_style : 'classic';
 }
 
 function setProfileSoundOn(userId, on) {
@@ -3700,7 +3717,7 @@ function getHubDetail(hubId, userId) {
   `).all(hubId);
 
   const members = db.prepare(`
-    SELECT hub_members.user_id, hub_members.role_id, hub_members.permission_tier, users.username, users.status, users.avatar_data, users.avatar_visibility, users.minor_until, users.profile_color, users.name_effect,
+    SELECT hub_members.user_id, hub_members.role_id, hub_members.permission_tier, users.username, users.card_style, users.status, users.avatar_data, users.avatar_visibility, users.minor_until, users.profile_color, users.name_effect,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) END) AS avatar_frame,
            EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) AS plus_active
     FROM hub_members
@@ -3710,6 +3727,7 @@ function getHubDetail(hubId, userId) {
     const { avatar_visibility, minor_until, ...rest } = m;
     if (!hasFeature(m.user_id, 'name_effect')) rest.name_effect = 'none';
     rest.premium_card = hasFeature(m.user_id, 'premium_card');
+    rest.card_style = rest.premium_card ? (CARD_STYLE_KEYS.includes(m.card_style) && m.card_style ? m.card_style : 'classic') : '';
     const masked = maskAvatarFor(userId, m.user_id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']);
     return presenceVisibleTo(userId, m.user_id, minor_until) ? masked : { ...masked, status: 'invisible' };
   });
@@ -8356,6 +8374,8 @@ module.exports = {
   effectiveAtmosphere,
   listAtmospheresFor,
   setProfileSoundOn,
+  setCardStyle,
+  effectiveCardStyle,
   setProfileSound,
   effectiveProfileSound,
   getProfileSoundChoice,
