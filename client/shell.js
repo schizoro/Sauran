@@ -176,6 +176,13 @@
         const box = document.createElement('div');
         box.className = 'modal-box hub-info-box';
         box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
+        if (hub.has_banner) {
+            const ban = document.createElement('div');
+            ban.className = 'hub-info-banner';
+            ban.style.backgroundImage = `url('/api/discover/lobbies/${hub.id}/banner${typeof hubBannerVer !== 'undefined' && hubBannerVer ? '?v=' + hubBannerVer : ''}')`;
+            ban.setAttribute('aria-hidden', 'true');
+            box.appendChild(ban);
+        }
         const head = document.createElement('div');
         head.className = 'hub-info-head';
         head.appendChild(lobbyAvatar(hub.image_data, hub.name, 'lobby-avatar hub-info-avatar'));

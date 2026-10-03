@@ -123,6 +123,7 @@ const {
   listDiscoverableHubs,
   getDiscoverableHubDetail,
   getDiscoverableHubImage,
+  getHubBannerImage,
   joinDiscoverableHub,
   listHubJoinRequests,
   decideHubJoinRequest,
@@ -2669,6 +2670,20 @@ app.get('/api/discover/lobbies/:id/image', discoverLimiter, (req, res) => {
   if (!match) return res.status(404).end();
 
   res.set('Content-Type', match[1]);
+  res.set('Cache-Control', 'private, max-age=300');
+  return res.send(Buffer.from(match[2], 'base64'));
+});
+
+app.get('/api/discover/lobbies/:id/banner', discoverLimiter, (req, res) => {
+  const user = requireDiscoverUser(req, res);
+  if (!user) return;
+
+  const image = getHubBannerImage(Number(req.params.id), user.id);
+  const match = image && /^data:(image\/(?:png|jpe?g|webp|gif));base64,(.+)$/s.exec(image);
+  if (!match) return res.status(404).end();
+
+  res.set('Content-Type', match[1]);
+  res.set('X-Content-Type-Options', 'nosniff');
   res.set('Cache-Control', 'private, max-age=300');
   return res.send(Buffer.from(match[2], 'base64'));
 });

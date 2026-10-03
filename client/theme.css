@@ -2511,11 +2511,15 @@ body.in-group[data-view="hub-detail"] .topbar-lobby-badge { display: none !impor
 @media (prefers-reduced-motion: reduce) { .hub-fx > i { animation: none; opacity: .15; } }
 body.hubset-open .hub-fx > i { animation-play-state: paused; }
 
-/* ══ Lobi bannerı (Seviye 3, GIF olabilir) ═══════════════════════════════════════════════════════════ */
-.hub-banner { position: relative; width: 100%; max-width: 860px; height: 120px; margin: 8px auto 0; border-radius: 18px; background: var(--glass-1) center / cover no-repeat; box-shadow: var(--hi), 0 0 0 1px var(--border-soft); overflow: hidden; flex: none; }
-.hub-banner::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, transparent 55%, rgba(8, 10, 14, .55)); }
-@media (max-width: 720px) { .hub-banner { height: 84px; border-radius: 14px; width: calc(100% - 20px); } }
+/* ══ Lobi bannerı (Seviye 3, GIF olabilir): lobi bilgi penceresi + Keşfet kartı/detayı (sohbetin üstünde DEĞİL) ═════════ */
 .hub-banner-preview { width: 160px !important; height: 40px !important; }
+.hub-info-banner { height: 104px; margin: -26px -24px 16px; border-radius: inherit; border-bottom-left-radius: 0; border-bottom-right-radius: 0; background: var(--glass-1) center / cover no-repeat; position: relative; }
+.hub-info-banner::after, .discover-card-banner::after, .discover-detail-banner::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, transparent 50%, rgba(8, 10, 14, .5)); border-radius: inherit; }
+.hub-info-box:has(.hub-info-banner) .hub-info-avatar { margin-top: -46px; position: relative; box-shadow: 0 0 0 4px var(--bg-app, #0a0d11); }
+.discover-card-banner { position: relative; height: 68px; margin: -16px -16px 2px; border-radius: 20px 20px 0 0; background: var(--glass-1) center / cover no-repeat; flex: none; }
+.discover-card.rank-1 .discover-card-banner, .discover-card[class*="rank-"] .discover-card-banner { margin-top: -16px; }
+.discover-detail-banner { position: relative; height: 128px; border-radius: 16px; background: var(--glass-1) center / cover no-repeat; flex: none; overflow: hidden; }
+@media (max-width: 900px) { body[data-view="discover"] .discover-card-banner { height: 52px; margin: -10px -8px 2px; border-radius: 16px 16px 0 0; } }
 
 /* ══ Lobiye özel emojiler (Seviye 4) ═════════════════════════════════════════════════════════════════ */
 .hub-emoji { width: 1.6em; height: 1.6em; vertical-align: -0.4em; object-fit: contain; }

@@ -8175,15 +8175,9 @@ document.getElementById('hubset-emoji-card')?.addEventListener('change', async (
     } catch (err) { showToast(err.message || 'Eklenemedi.'); }
 });
 
-// Lobi bannerı (Seviye 3): GIF olabilir. Sunucu seviye düşünce banner_data'yı zaten göndermez.
-function renderHubBanner() {
-    const el = document.getElementById('hub-banner');
-    if (!el) return;
-    const show = currentHub && currentHub.banner_data && !isGroupHub(currentHub);
-    el.style.display = show ? '' : 'none';
-    if (show) el.style.backgroundImage = cssImageUrl(currentHub.banner_data);
-    else el.style.backgroundImage = '';
-}
+// Lobi bannerı (Seviye 3, GIF olabilir): sohbetin üstünde DEĞİL; lobi bilgi penceresinde ve Keşfet kartı/detayında gösterilir.
+let hubBannerVer = 0; // yükleme sonrası önbelleği aşmak için
+function hubBannerUrl(id) { return `/api/discover/lobbies/${id}/banner${hubBannerVer ? '?v=' + hubBannerVer : ''}`; }
 
 // Lobi görsel efekti (Seviye 3 + Atmosphere): arka planda hafif, sohbeti engellemeyen bir katman. Az eleman, yalnızca transform/opacity.
 const HUB_FX_COUNT = { petals: 14, stars: 26, lights: 4 };
@@ -8355,9 +8349,9 @@ function renderHubAtmosphereSection() {
     ensureAtmoCatalog().then((cat) => {
         if (!cat) return;
         atmoCard.innerHTML = `<div class="cz-card-title">Lobi bannerı</div>
-            <div class="hub-bg-row"><span id="hubset-banner-preview" class="hub-bg-preview hub-banner-preview" style="${currentHub.banner_data ? 'background-image:' + cssImageUrl(currentHub.banner_data) : ''}"></span>
+            <div class="hub-bg-row"><span id="hubset-banner-preview" class="hub-bg-preview hub-banner-preview" style="${currentHub.has_banner ? `background-image:url('${hubBannerUrl(currentHub.id)}')` : ''}"></span>
                 <button id="hubset-banner-pick" class="hub-create-image-btn" type="button">Görsel / GIF Seç</button>
-                <button id="hubset-banner-clear" class="hub-create-image-btn" type="button" ${currentHub.banner_data ? '' : 'disabled'}>Kaldır</button>
+                <button id="hubset-banner-clear" class="hub-create-image-btn" type="button" ${currentHub.has_banner ? '' : 'disabled'}>Kaldır</button>
                 <input type="file" id="hubset-banner-input" accept="image/png,image/jpeg,image/webp,image/gif" hidden></div>
             <p class="hubset-hint">Lobinin üstünde görünür. GIF en fazla 2 MB.</p>
             <div class="cz-card-title" style="margin-top:14px;">Lobi Atmosphere ve sesi</div>
@@ -8386,7 +8380,8 @@ async function saveHubBanner(dataUrl) {
         const r = await fetch(`/api/hubs/${currentHub.id}/banner`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ banner_data: dataUrl }) });
         const d = await r.json();
         if (!d.success) { showToast(d.error || 'Yüklenemedi.'); return; }
-        showToast(dataUrl ? 'Lobi bannerı güncellendi.' : 'Lobi bannerı kaldırıldı.');
+        hubBannerVer = Date.now();
+        showToast(dataUrl ? 'Lobi bannerı güncellendi. Lobi bilgisinde ve Keşfet\'te görünür.' : 'Lobi bannerı kaldırıldı.');
         await refreshHubAfterBoost();
     } catch (_) { showToast('Yüklenemedi.'); }
 }
@@ -12996,6 +12991,7 @@ function buildDiscoverCard(lobby, rank) {
     const lang = lobby.language ? `<span>${escapeHtml(t('discover-lang-' + lobby.language))}</span>` : '';
 
     card.innerHTML = `
+        ${lobby.has_banner ? `<div class="discover-card-banner" style="background-image:url('/api/discover/lobbies/${lobby.id}/banner')" aria-hidden="true"></div>` : ''}
         <div class="discover-card-top">
             <span class="discover-card-avatar">${discoverAvatarHtml(lobby)}</span>
             <div style="min-width:0;">
@@ -13304,6 +13300,7 @@ function renderDiscoverDetail(lobby) {
     const rules = (lobby.rules || '').split('\n').map((l) => l.trim()).filter(Boolean);
 
     discoverDetailBody.innerHTML = `
+        ${lobby.has_banner ? `<div class="discover-detail-banner" style="background-image:url('/api/discover/lobbies/${lobby.id}/banner')" aria-hidden="true"></div>` : ''}
         <div class="discover-detail-top">
             <span class="discover-card-avatar">${discoverAvatarHtml(lobby)}</span>
             <div style="min-width:0;">
@@ -14656,7 +14653,6 @@ function renderHubDetail() {
     renderHubMembers();
     renderHubBoostStrip();
     renderHubEffect();
-    renderHubBanner();
     renderHubEmojiUi();
 
 }

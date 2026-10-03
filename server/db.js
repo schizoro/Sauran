@@ -2719,14 +2719,14 @@ function setHubBanner(hubId, userId, dataUrl) {
   if (hub.created_by !== userId) return { success: false, status: 403, error: 'Sadece Lobi sahibi banner seçebilir.' };
   if (dataUrl === null || dataUrl === undefined || dataUrl === '') {
     db.prepare(`UPDATE hubs SET banner_data = NULL WHERE id = ?`).run(hubId);
-    return { success: true, banner_data: null };
+    return { success: true, has_banner: false };
   }
   if (hubLevel(hubId) < 3) return { success: false, status: 403, error: 'Lobi bannerı Seviye 3\'te açılır. Lobiyi takviye et.' };
   if (typeof dataUrl !== 'string' || !/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(dataUrl)) return { success: false, status: 400, error: 'Geçersiz görsel formatı.' };
   if (dataUrl.length > HUB_BANNER_MAX_CHARS) return { success: false, status: 400, error: 'Banner çok büyük (en fazla ~2 MB).' };
   const clean = stripImageMetadata(dataUrl);
   db.prepare(`UPDATE hubs SET banner_data = ? WHERE id = ?`).run(clean, hubId);
-  return { success: true, banner_data: clean };
+  return { success: true, has_banner: true };
 }
 
 const HUB_EMOJI_MAX_CHARS = 140_000; // ~100 KB
@@ -3077,6 +3077,7 @@ const DISCOVER_SUMMARY_SELECT = `
   hubs.capacity, hubs.created_at, hubs.created_by, users.username AS owner_username,
   EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = hubs.created_by AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) AS owner_plus,
   CASE WHEN hubs.image_data IS NOT NULL AND hubs.image_data != '' THEN 1 ELSE 0 END AS has_image,
+  CASE WHEN hubs.banner_data IS NOT NULL AND hubs.banner_data != '' THEN 1 ELSE 0 END AS has_banner,
   (SELECT COUNT(*) FROM hub_members WHERE hub_members.hub_id = hubs.id) AS member_count,
   (SELECT MAX(messages.created_at) FROM messages WHERE messages.hub_id = hubs.id) AS last_activity,
   EXISTS(SELECT 1 FROM hub_members WHERE hub_members.hub_id = hubs.id AND hub_members.user_id = @uid) AS is_member,
@@ -3171,6 +3172,7 @@ function listDiscoverableHubs(userId, { q, category, language, join_policy, page
     ...r,
     description: r.description && r.description.length > 140 ? r.description.slice(0, 140).trimEnd() + '…' : r.description,
     has_image: Boolean(r.has_image),
+    has_banner: Boolean(r.has_banner) && hubLevel(r.id) >= 3,
     is_member: Boolean(r.is_member),
     liked_today: Boolean(r.liked_today),
     ...levelInfo(r.points_total)
@@ -3188,7 +3190,7 @@ function getDiscoverableHubDetail(hubId, userId) {
       AND NOT EXISTS (SELECT 1 FROM hub_bans WHERE hub_bans.hub_id = hubs.id AND hub_bans.user_id = @uid)
   `).get({ hubId, ...likeQueryParams(userId) });
   if (!row) return null;
-  return { ...row, has_image: Boolean(row.has_image), is_member: Boolean(row.is_member), is_owner: row.created_by === userId, liked_today: Boolean(row.liked_today), ...levelInfo(row.points_total), like_reason: likeBlockReason(hubId, userId, row), super_like: superLikeState(hubId, userId, row.created_by === userId) };
+  return { ...row, has_image: Boolean(row.has_image), has_banner: Boolean(row.has_banner) && hubLevel(row.id) >= 3, is_member: Boolean(row.is_member), is_owner: row.created_by === userId, liked_today: Boolean(row.liked_today), ...levelInfo(row.points_total), like_reason: likeBlockReason(hubId, userId, row), super_like: superLikeState(hubId, userId, row.created_by === userId) };
 }
 
 // Keşfet görseli (yalnızca keşfedilebilir Lobi ya da üye).
@@ -3197,6 +3199,15 @@ function getDiscoverableHubImage(hubId, userId) {
   if (!row || !row.image_data) return null;
   if (row.visibility !== 'discoverable' && !isHubMember(hubId, userId)) return null;
   return row.image_data;
+}
+
+// Lobi bannerı (Seviye 3): Keşfet görseliyle aynı erişim kuralı; seviye düşünce servis edilmez.
+function getHubBannerImage(hubId, userId) {
+  const row = db.prepare(`SELECT visibility, banner_data FROM hubs WHERE id = ?`).get(hubId);
+  if (!row || !row.banner_data) return null;
+  if (row.visibility !== 'discoverable' && !isHubMember(hubId, userId)) return null;
+  if (hubLevel(hubId) < 3) return null;
+  return row.banner_data;
 }
 
 const JOIN_REQUEST_RETENTION_DAYS = 30;
@@ -3713,7 +3724,8 @@ function getHubDetail(hubId, userId) {
     theme: (hasFeature(hub.created_by, 'lobby_theme') || boost.level >= 2) ? (hub.theme || 'default') : 'default',
     bg_image: (hasFeature(hub.created_by, 'lobby_image') || boost.level >= 2) ? (hub.bg_image || null) : null,
     atmosphere: hubAtmosphereEffective(hub),
-    banner_data: boost.level >= 3 ? (hub.banner_data || null) : null,
+    banner_data: undefined,
+    has_banner: boost.level >= 3 && Boolean(hub.banner_data),
     emojis: boost.level >= 4 ? listHubEmojis(hubId) : [],
     emoji_slots: HUB_EMOJI_SLOTS,
     boost,
@@ -8374,6 +8386,8 @@ module.exports = {
   listDiscoverableHubs,
   getDiscoverableHubDetail,
   getDiscoverableHubImage,
+  getHubBannerImage,
+  getHubBannerImage,
   joinDiscoverableHub,
   listHubJoinRequests,
   decideHubJoinRequest,

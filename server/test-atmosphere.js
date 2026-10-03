@@ -137,10 +137,13 @@ test('Lobi bannerı: Seviye 3 şartı, yalnızca sahip, GIF kabul, boyut sınır
   assert.strictEqual(dbm.setHubBanner(hub2, o2, 'data:text/html;base64,AAAA').success, false);
   assert.strictEqual(dbm.setHubBanner(hub2, o2, 'data:image/gif;base64,' + 'A'.repeat(3_100_000)).success, false); // çok büyük
   assert.strictEqual(dbm.setHubBanner(hub2, o2, gif).success, true);
-  assert.strictEqual(dbm.getHubDetail(hub2, o2).banner_data, gif);
+  assert.strictEqual(dbm.getHubDetail(hub2, o2).has_banner, true);
+  assert.strictEqual(dbm.getHubDetail(hub2, o2).banner_data, undefined); // ham veri istemciye gitmez
+  assert.strictEqual(dbm.getHubBannerImage(hub2, o2), gif);
   db.prepare(`UPDATE entitlements SET expires_at = '2000-01-01 00:00:00' WHERE user_id = ?`).run(boosters[0]);
   assert.strictEqual(dbm.hubLevel(hub2), 2);
-  assert.strictEqual(dbm.getHubDetail(hub2, o2).banner_data, null); // Seviye 3 altında gizli
+  assert.strictEqual(dbm.getHubDetail(hub2, o2).has_banner, false); // Seviye 3 altında gizli
+  assert.strictEqual(dbm.getHubBannerImage(hub2, o2), null); // servis de edilmez
   assert.strictEqual(dbm.setHubBanner(hub2, o2, null).success, true); // kaldırma her seviyede serbest
 });
 
