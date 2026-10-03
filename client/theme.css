@@ -2640,3 +2640,12 @@ body.hubset-open .hub-fx > i { animation-play-state: paused; }
 .ep-gif-soon p { font-size: 13px; line-height: 1.5; margin: 0; }
 .ep-meta { display: flex; flex-direction: column; min-width: 0; }
 .ep-meta small, .ep-count { font-size: 10.5px; color: var(--text-tertiary); font-weight: 500; }
+
+/* ══ Açılır menüler her yerde opak: temaya (body.theme-*) bağlı şeffaflık arkadaki metni göstermesin ══ */
+body .topbar-menu-dropdown, body .composer-attach-menu, body .msg-actions-menu, body .composer-attach-wrap .liquid-glass,
+body .hub-member-menu, body .sticker-picker, body .emoji-panel, body .hub-emoji-picker, body .ctx-menu, body .context-menu {
+  background: var(--bg-surface, #0e1319); background-image: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  box-shadow: 0 0 0 1px var(--border-soft-strong), 0 16px 40px -10px rgba(0, 0, 0, 0.75);
+  z-index: 420;
+}
