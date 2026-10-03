@@ -214,6 +214,7 @@ async function fetchImage(rawUrl) {
 // Metindeki ilk http(s) bağlantısı. <adres> biçiminde yazılan (önizlemesi istenmeyen) bağlantılar atlanır.
 function firstUrl(text) {
   const source = String(text || '');
+  if (/^\s*https:\/\/media[0-9]*\.giphy\.com\/media\//i.test(source)) return null; // GIF mesajı: kart gerekmez
   const re = /(<)?(https?:\/\/[^\s<>"']+)(>)?/gi;
   let m;
   while ((m = re.exec(source))) {

@@ -9305,6 +9305,7 @@ async function loadOlderMessages(kind) {
 function linkPreviewHtml(msg) {
     const lp = msg && msg.link_preview;
     if (!lp || !lp.url || !/^https?:\/\//i.test(lp.url)) return '';
+    if (gifMessageHtml(msg.content)) return '';
     const mine = currentUser && msg.user_id === currentUser.id && msg.id;
     const image = lp.image && /^[0-9a-f]{32}$/.test(lp.image)
         ? `<img class="link-preview-img" src="/api/link-preview/image/${lp.image}" alt="" loading="lazy" onerror="this.remove()">` : '';
