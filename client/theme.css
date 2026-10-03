@@ -2478,3 +2478,9 @@ body.in-group[data-view="hub-detail"] .topbar-lobby-badge { display: none !impor
 .bst-level.done .bst-at { color: #57f287; }
 .bst-level ul { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--text-secondary); line-height: 1.6; }
 .boost-modal-box { max-width: 520px; }
+.cz-sound-picker { display: flex; flex-wrap: wrap; gap: 8px; }
+.cz-sound-opt { display: inline-flex; border-radius: 999px; overflow: hidden; background: var(--glass-2); box-shadow: 0 0 0 1px var(--border-soft-strong); }
+.cz-sound-opt.selected { box-shadow: 0 0 0 2px var(--accent-line); background: var(--accent-soft); }
+.cz-sound-pick, .cz-sound-play { border: 0; background: none; color: var(--text-primary); font-size: 12.5px; font-weight: 600; padding: 8px 12px; cursor: pointer; }
+.cz-sound-pick:disabled { opacity: .5; cursor: default; }
+.cz-sound-play { padding: 8px 10px; color: var(--accent); border-left: 1px solid var(--border-soft); }

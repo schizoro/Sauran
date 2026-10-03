@@ -98,6 +98,22 @@ test('Takviyeci işareti üye listesinde', () => {
   assert.strictEqual(m.is_booster, true);
 });
 
+test('Profil sesi: Atmosphere izlenir, seçim bunu ezer, kapalıyken/abonelik bitince boş', () => {
+  const p2 = user('t_sound', 'plus');
+  assert.strictEqual(dbm.effectiveProfileSound(p2), '');
+  dbm.applyAtmosphere(p2, 'sakura');
+  assert.strictEqual(dbm.effectiveProfileSound(p2), 'garden');
+  assert.strictEqual(dbm.setProfileSound(p2, 'cosmic').success, true);
+  assert.strictEqual(dbm.effectiveProfileSound(p2), 'cosmic');
+  assert.strictEqual(dbm.setProfileSound(p2, 'bilinmeyen').success, false);
+  dbm.setProfileSoundOn(p2, false);
+  assert.strictEqual(dbm.effectiveProfileSound(p2), '');
+  dbm.setProfileSoundOn(p2, true);
+  assert.strictEqual(dbm.setProfileSound(free, 'cyber').success, false);
+  db.prepare(`UPDATE entitlements SET expires_at = '2000-01-01 00:00:00' WHERE user_id = ?`).run(p2);
+  assert.strictEqual(dbm.effectiveProfileSound(p2), '');
+});
+
 console.log(`\n${passed} test geçti`);
 try { db.close(); fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true }); } catch (_) { /* Windows dosya kilidi: geçici klasör bırakılabilir */ }
 process.exit(0);

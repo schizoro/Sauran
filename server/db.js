@@ -128,6 +128,10 @@ if (!userColumns.includes('atmosphere')) {
   // Sauran Atmosphere: kullanıcının seçtiği hazır paket (none = yok). Abonelik bitince okuma anında 'none' sayılır.
   db.exec(`ALTER TABLE users ADD COLUMN atmosphere TEXT NOT NULL DEFAULT 'none'`);
 }
+if (!userColumns.includes('profile_sound')) {
+  // Profil sesi: '' = Atmosphere'inin sesini izle; aksi halde seçilen ses anahtarı (cyber/midnight/cosmic/garden).
+  db.exec(`ALTER TABLE users ADD COLUMN profile_sound TEXT NOT NULL DEFAULT ''`);
+}
 if (!userColumns.includes('profile_sound_on')) {
   // Atmosphere'in sesi profilimde (ziyaretçilere) çalsın mı? Sahip kapatabilir.
   db.exec(`ALTER TABLE users ADD COLUMN profile_sound_on INTEGER NOT NULL DEFAULT 1`);
@@ -2513,7 +2517,7 @@ function updateProfileEffect(userId, effect) {
 }
 
 // ── Sauran Atmosphere ─────────────────────────────────────────────────────────────────────────────
-const { ATMOSPHERES, getAtmosphere } = require('./atmosphere');
+const { ATMOSPHERES, SOUND_KEYS, getAtmosphere } = require('./atmosphere');
 
 function atmosphereAllowed(userId, atmo) {
   if (!atmo) return false;
@@ -2560,6 +2564,29 @@ function applyAtmosphere(userId, key) {
     success: true, atmosphere: atmo.key,
     chat_theme: b.chat_theme, bubble_style: b.bubble_style, profile_theme: b.profile_theme, name_effect: b.name_effect, profile_effect: b.profile_effect
   };
+}
+
+// Ziyaretçilerin duyacağı ses anahtarı: seçilmiş ses, yoksa Atmosphere'in sesi; abonelik bitince ya da kapalıysa ''.
+function effectiveProfileSound(userId) {
+  if (!hasActivePlus(userId)) return '';
+  const row = db.prepare(`SELECT profile_sound, profile_sound_on FROM users WHERE id = ?`).get(userId);
+  if (!row || row.profile_sound_on === 0) return '';
+  if (row.profile_sound && SOUND_KEYS.includes(row.profile_sound)) return row.profile_sound;
+  const atmo = getAtmosphere(effectiveAtmosphere(userId));
+  return atmo ? atmo.sound : '';
+}
+
+function getProfileSoundChoice(userId) {
+  const row = db.prepare(`SELECT profile_sound FROM users WHERE id = ?`).get(userId);
+  return row ? row.profile_sound : '';
+}
+
+function setProfileSound(userId, key) {
+  const value = String(key || '');
+  if (value && !SOUND_KEYS.includes(value)) return { success: false, error: 'Geçersiz ses.' };
+  if (value && !hasActivePlus(userId)) return { success: false, error: 'Profil sesi seçmek Sauran Plus/Premium aboneliği gerektirir.' };
+  db.prepare(`UPDATE users SET profile_sound = ? WHERE id = ?`).run(value, userId);
+  return { success: true, profile_sound: value };
 }
 
 function setProfileSoundOn(userId, on) {
@@ -5697,6 +5724,7 @@ function getUserPublicProfile(viewerId, targetId) {
     activity: (isSelf || (viewerId != null && areFriends(viewerId, targetId))) ? freshActivity(user) : null,
     plus_active: hasActivePlus(targetId),
     atmosphere: visible && user.profile_sound_on !== 0 ? effectiveAtmosphere(targetId) : 'none',
+    profile_sound: visible ? effectiveProfileSound(targetId) : '',
     friendship_status: isSelf ? 'self' : friendship,
     blocked_by_me: blockedByMe
   };
@@ -8191,6 +8219,9 @@ module.exports = {
   effectiveAtmosphere,
   listAtmospheresFor,
   setProfileSoundOn,
+  setProfileSound,
+  effectiveProfileSound,
+  getProfileSoundChoice,
   boostHub,
   unboostHub,
   listMyBoosts,

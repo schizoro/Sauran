@@ -7809,7 +7809,7 @@ async function ensureAtmoCatalog(force) {
     try {
         const r = await fetch('/api/atmospheres', { credentials: 'include' });
         const d = await r.json();
-        if (d.success) { atmoCatalog = new Map(d.items.map((a) => [a.key, a])); atmoCatalog.profileSoundOn = d.profile_sound_on; atmoCatalog.items = d.items; }
+        if (d.success) { atmoCatalog = new Map(d.items.map((a) => [a.key, a])); atmoCatalog.profileSoundOn = d.profile_sound_on; atmoCatalog.items = d.items; atmoCatalog.soundChoice = d.profile_sound_choice || ''; atmoCatalog.isPlus = Boolean(d.is_plus); }
     } catch (_) {}
     return atmoCatalog;
 }
@@ -7869,6 +7869,37 @@ function setAtmoStage(key, stage) {
     if (btn) btn.textContent = stage === 'end' ? '▶ Önizle' : '■ Durdur';
 }
 
+const ATMO_SOUND_LABELS = { cyber: '🎮 Cyber', midnight: '🌙 Midnight', cosmic: '🌌 Cosmic', garden: '🌸 Garden' };
+function effectiveOwnSound() {
+    const cat = atmoCatalog; if (!cat) return '';
+    if (cat.soundChoice) return cat.soundChoice;
+    const a = cat.items.find((x) => x.active);
+    return a ? a.sound : '';
+}
+function renderSoundPicker() {
+    const box = document.getElementById('cz-sound-picker');
+    const cat = atmoCatalog;
+    if (!box || !cat) return;
+    const choice = cat.soundChoice || '';
+    const opts = [['', 'Atmosphere\'imi izle'], ...Object.entries(ATMO_SOUND_LABELS)];
+    box.innerHTML = opts.map(([k, label]) => `<span class="cz-sound-opt${choice === k ? ' selected' : ''}">
+        <button type="button" class="cz-sound-pick" data-sound-pick="${k}" ${!cat.isPlus && k ? 'disabled title="Plus gerekli"' : ''}>${escapeHtml(label)}</button>${k ? `<button type="button" class="cz-sound-play" data-sound-play="${k}" aria-label="Önizle">▶</button>` : ''}</span>`).join('');
+}
+document.getElementById('cz-sound-picker')?.addEventListener('click', async (e) => {
+    const play = e.target.closest('[data-sound-play]');
+    if (play) { playAtmoSound(play.dataset.soundPlay, 'preview'); return; }
+    const pick = e.target.closest('[data-sound-pick]');
+    if (!pick || pick.disabled) return;
+    try {
+        const r = await fetch('/api/profile/profile-sound', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ sound: pick.dataset.soundPick }) });
+        const d = await r.json();
+        if (!d.success) { showToast(d.error || 'Güncellenemedi.'); return; }
+        if (atmoCatalog) atmoCatalog.soundChoice = d.profile_sound;
+        renderSoundPicker();
+        const prev = document.getElementById('cz-profile-sound-preview'); if (prev) prev.disabled = !effectiveOwnSound();
+    } catch (_) { showToast('Güncellenemedi.'); }
+});
+
 async function loadAtmosphereGrid() {
     const grid = document.getElementById('cz-atmo-grid');
     if (!grid) return;
@@ -7880,8 +7911,9 @@ async function loadAtmosphereGrid() {
         + cat.items.map(atmoCardHtml).join('');
     const tog = document.getElementById('cz-profile-sound-toggle');
     if (tog) tog.checked = cat.profileSoundOn !== false;
+    renderSoundPicker();
     const prev = document.getElementById('cz-profile-sound-preview');
-    if (prev) prev.disabled = !active;
+    if (prev) prev.disabled = !effectiveOwnSound();
 }
 
 async function applyAtmosphereKey(key) {
@@ -7924,8 +7956,8 @@ document.getElementById('cz-profile-sound-toggle')?.addEventListener('change', a
     } catch (_) { showToast('Güncellenemedi.'); }
 });
 document.getElementById('cz-profile-sound-preview')?.addEventListener('click', () => {
-    const a = atmoCatalog && atmoCatalog.items.find((x) => x.active);
-    if (a) playAtmoSound(a.sound, 'preview');
+    const sound = effectiveOwnSound();
+    if (sound) playAtmoSound(sound, 'preview');
 });
 function closeAtmoOnLeave() { stopAtmoSound('preview'); }
 document.getElementById('cz-close-btn')?.addEventListener('click', closeAtmoOnLeave);
@@ -7939,18 +7971,17 @@ async function setupProfileSound(profile) {
     if (!box) return;
     stopAtmoSound('profile');
     box.style.display = 'none'; ask.style.display = 'none';
-    if (!profile || !profile.atmosphere || profile.atmosphere === 'none' || profile.friendship_status === 'self') return;
-    const cat = await ensureAtmoCatalog();
-    const a = cat && cat.get(profile.atmosphere);
-    if (!a) return;
-    // Katalog yüklenirken profil kapatılmış olabilir: kapalı profilde ses asla başlamaz.
+    const sound = profile && profile.profile_sound;
+    if (!sound || profile.friendship_status === 'self') return;
+    // Pencerenin gösterilmesi bu çağrıdan sonra tamamlanır; sonra kontrol et. Profil kapatılmışsa ses asla başlamaz.
+    await new Promise((r) => setTimeout(r, 60));
     const modal = document.getElementById('other-profile-modal');
     if (!modal || getComputedStyle(modal).display === 'none') return;
     box.style.display = '';
-    btn.dataset.sound = a.sound;
+    btn.dataset.sound = sound;
     btn.textContent = '▶ Profil sesini dinle';
     const pref = atmoPref('autoplay', null);
-    if (pref === 'on') playAtmoSound(a.sound, 'profile', (st) => { btn.textContent = st === 'end' ? '▶ Profil sesini dinle' : '■ Durdur'; });
+    if (pref === 'on') playAtmoSound(sound, 'profile', (st) => { btn.textContent = st === 'end' ? '▶ Profil sesini dinle' : '■ Durdur'; });
     else if (pref === null) ask.style.display = '';
 }
 document.getElementById('other-profile-sound-btn')?.addEventListener('click', (e) => {
