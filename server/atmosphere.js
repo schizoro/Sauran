@@ -14,7 +14,7 @@ const ATMOSPHERES = [
     art: 'linear-gradient(135deg,#0b1026 0%,#1b0f4a 45%,#00e5ff 130%)',
     bundle: { chat_theme: 'contrast', bubble_style: 'outline', profile_theme: 'midnight', name_effect: 'glow', profile_effect: 'stagelights' },
     sound: 'cyber',
-    hub_theme: 'aurora'
+    hub_theme: 'aurora', hub_effect: 'lights'
   },
   {
     key: 'midnight', label: 'Midnight Chill', emoji: '🌙', tier: 'plus', category: 'included', price_coins: null,
@@ -22,7 +22,7 @@ const ATMOSPHERES = [
     art: 'linear-gradient(135deg,#06081a 0%,#16224f 55%,#5a4fcf 130%)',
     bundle: { chat_theme: 'soft', bubble_style: 'glass', profile_theme: 'midnight', name_effect: 'shimmer', profile_effect: 'none' },
     sound: 'midnight',
-    hub_theme: 'aurora'
+    hub_theme: 'aurora', hub_effect: 'stars'
   },
   {
     key: 'cosmic', label: 'Cosmic', emoji: '🌌', tier: 'premium', category: 'included', price_coins: null,
@@ -30,7 +30,7 @@ const ATMOSPHERES = [
     art: 'linear-gradient(135deg,#05030f 0%,#2a0f55 50%,#d946ef 135%)',
     bundle: { chat_theme: 'soft', bubble_style: 'shadow', profile_theme: 'ocean', name_effect: 'gradient', profile_effect: 'stagelights' },
     sound: 'cosmic',
-    hub_theme: 'aurora'
+    hub_theme: 'aurora', hub_effect: 'stars'
   },
   {
     key: 'sakura', label: 'Sakura Garden', emoji: '🌸', tier: 'plus', category: 'included', price_coins: null,
@@ -38,7 +38,7 @@ const ATMOSPHERES = [
     art: 'linear-gradient(135deg,#2a0f22 0%,#7a2e5c 55%,#ffb7d5 135%)',
     bundle: { chat_theme: 'soft', bubble_style: 'round', profile_theme: 'sakura', name_effect: 'gradient', profile_effect: 'sakura' },
     sound: 'garden',
-    hub_theme: 'ember'
+    hub_theme: 'ember', hub_effect: 'petals'
   },
   {
     key: 'cosmic-night', label: 'Cosmic Night', emoji: '🪐', tier: 'coin', category: 'coin', price_coins: 250, purchasable: false,
@@ -46,7 +46,7 @@ const ATMOSPHERES = [
     art: 'linear-gradient(135deg,#02010a 0%,#1a1245 50%,#7c8cff 135%)',
     bundle: { chat_theme: 'contrast', bubble_style: 'glass', profile_theme: 'midnight', name_effect: 'shimmer', profile_effect: 'stagelights' },
     sound: 'cosmic',
-    hub_theme: 'aurora'
+    hub_theme: 'aurora', hub_effect: 'stars'
   }
 ];
 
@@ -58,7 +58,7 @@ const BOOST_COOLDOWN_HOURS = 24; // takviyeyi geri çekince o yuva 24 saat boşa
 const BOOST_LEVELS = [
   { level: 1, at: 0, title: 'Standart lobi', perks: [] },
   { level: 2, at: 2, title: 'Özel görünüm', perks: [{ text: 'Özel lobi teması' }, { text: 'Özel lobi arka planı' }] },
-  { level: 3, at: 7, title: 'Atmosphere', perks: [{ text: 'Lobi Atmosphere + lobi sesi' }, { text: 'Hareketli lobi bannerı', soon: true }, { text: 'Özel lobi görsel efektleri', soon: true }] },
+  { level: 3, at: 7, title: 'Atmosphere', perks: [{ text: 'Lobi Atmosphere + lobi sesi' }, { text: 'Hareketli lobi bannerı', soon: true }, { text: 'Özel lobi görsel efektleri' }] },
   { level: 4, at: 10, title: 'Gelişmiş lobi', perks: [{ text: 'Gelişmiş sesli oda özellikleri', soon: true }, { text: 'Özel animasyonlar', soon: true }, { text: 'Daha fazla kişiselleştirme', soon: true }, { text: 'Özel lobi içerikleri', soon: true }] }
 ];
 function levelForBoosts(count) {

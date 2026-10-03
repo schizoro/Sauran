@@ -2491,3 +2491,22 @@ body.in-group[data-view="hub-detail"] .topbar-lobby-badge { display: none !impor
 .atmo-filter.on { color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-line); }
 .atmo-tier-coin { color: #ffd166; box-shadow: 0 0 0 1px rgba(255, 209, 102, .4); }
 .atmo-empty { grid-column: 1 / -1; padding: 18px 0; }
+
+/* ══ Lobi görsel efektleri (Seviye 3 + lobi Atmosphere'i) — arka plan katmanı, sohbetin ARKASINDA, tıklamayı engellemez ═════ */
+.hub-fx { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.hub-fx > i { position: absolute; display: block; }
+.hub-fx-petals > i { top: -4%; width: 9px; height: 9px; border-radius: 0 70% 0 70%; background: linear-gradient(135deg, #ffc3e0, #f472b6); opacity: 0; animation: hubfxPetal var(--t) linear var(--d) infinite; transform: scale(var(--s)); }
+@keyframes hubfxPetal {
+  0% { transform: translate3d(0, 0, 0) rotate(0deg) scale(var(--s)); opacity: 0; }
+  8% { opacity: .55; }
+  92% { opacity: .45; }
+  100% { transform: translate3d(var(--x), 108vh, 0) rotate(420deg) scale(var(--s)); opacity: 0; }
+}
+.hub-fx-stars > i { width: 3px; height: 3px; border-radius: 50%; background: #fff; box-shadow: 0 0 6px 1px rgba(190, 200, 255, .8); opacity: .12; animation: hubfxTwinkle var(--t) ease-in-out var(--d) infinite; transform: scale(var(--s)); }
+@keyframes hubfxTwinkle { 0%, 100% { opacity: .1; } 50% { opacity: .75; } }
+.hub-fx-lights > i { bottom: 0; width: 7%; height: 62%; transform-origin: 50% 100%; opacity: .5; filter: blur(2px);
+  background: linear-gradient(to top, rgba(120, 190, 255, .45), rgba(160, 130, 255, .18) 45%, transparent 90%); animation: pfxSmokeSwayA var(--t) ease-in-out var(--d) infinite; }
+.hub-fx-lights > i:nth-child(1) { left: 12% !important; } .hub-fx-lights > i:nth-child(2) { left: 36% !important; }
+.hub-fx-lights > i:nth-child(3) { left: 62% !important; } .hub-fx-lights > i:nth-child(4) { left: 86% !important; }
+@media (prefers-reduced-motion: reduce) { .hub-fx > i { animation: none; opacity: .15; } }
+body.hubset-open .hub-fx > i { animation-play-state: paused; }

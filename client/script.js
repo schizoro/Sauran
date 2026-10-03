@@ -8053,6 +8053,32 @@ syncAtmoSettings();
 
 function hubBoost() { return (currentHub && currentHub.boost) || null; }
 
+// Lobi görsel efekti (Seviye 3 + Atmosphere): arka planda hafif, sohbeti engellemeyen bir katman. Az eleman, yalnızca transform/opacity.
+const HUB_FX_COUNT = { petals: 14, stars: 26, lights: 4 };
+async function renderHubEffect() {
+    const view = document.getElementById('hub-detail-view');
+    if (!view) return;
+    let layer = view.querySelector(':scope > .hub-fx');
+    const key = currentHub && currentHub.atmosphere && currentHub.atmosphere !== 'none' ? currentHub.atmosphere : null;
+    let fx = 'none';
+    if (key) { const cat = await ensureAtmoCatalog(); const a = cat && cat.get(key); fx = (a && a.hub_effect) || 'none'; }
+    if (!currentHub || fx === 'none' || isGroupHub(currentHub)) { if (layer) layer.remove(); return; }
+    if (layer && layer.dataset.fx === fx && layer.dataset.hub === String(currentHub.id)) return;
+    if (layer) layer.remove();
+    layer = document.createElement('div');
+    layer.className = 'hub-fx hub-fx-' + fx;
+    layer.dataset.fx = fx; layer.dataset.hub = String(currentHub.id);
+    layer.setAttribute('aria-hidden', 'true');
+    let html = '';
+    for (let i = 0; i < HUB_FX_COUNT[fx]; i++) {
+        const r = () => Math.random();
+        html += `<i style="left:${(r() * 96 + 2).toFixed(1)}%;${fx === 'stars' ? `top:${(r() * 92).toFixed(1)}%;` : ''}--d:${(r() * -12).toFixed(2)}s;--t:${(8 + r() * 8).toFixed(1)}s;--s:${(0.6 + r() * 0.9).toFixed(2)};--x:${((r() - 0.5) * 120).toFixed(0)}px"></i>`;
+    }
+    layer.innerHTML = html;
+    view.insertBefore(layer, view.firstChild);
+}
+
+
 function renderHubBoostStrip() {
     const strip = document.getElementById('hub-boost-strip');
     if (!strip) return;
@@ -14433,6 +14459,7 @@ function renderHubDetail() {
 
     renderHubMembers();
     renderHubBoostStrip();
+    renderHubEffect();
 
 }
 
