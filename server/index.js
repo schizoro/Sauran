@@ -86,6 +86,10 @@ const {
   updateChatTheme,
   updateProfileColor,
   updateProfileEffect,
+  applyAtmosphere,
+  effectiveAtmosphere,
+  listAtmospheresFor,
+  setProfileSoundOn,
   updateProfileTheme,
   updateNameEffect,
   updateBubbleStyle,
@@ -655,7 +659,7 @@ function getUserFromSessionToken(token) {
 
   const user = db.prepare(`
     SELECT users.id, users.username, users.email, users.about_me,
-           users.status, users.avatar_visibility, users.avatar_data, users.banner_data, users.chat_theme, users.profile_color, users.bubble_style, users.profile_effect, users.profile_theme, users.name_effect, users.activity_text, users.show_activity,
+           users.status, users.avatar_visibility, users.avatar_data, users.banner_data, users.chat_theme, users.profile_color, users.bubble_style, users.profile_effect, users.profile_theme, users.name_effect, users.profile_sound_on, users.activity_text, users.show_activity,
            users.minor_until, users.platform_role, users.dev_notice_seen, users.dev_notice_new, users.account_status,
            users.role_acceptance_pending, users.role_accepted_role, users.role_notice_kind, users.role_notice_at,
            sessions.expires_at
@@ -691,6 +695,8 @@ function getUserFromSessionToken(token) {
     profile_effect: user.profile_effect,
     profile_theme: user.profile_theme,
     name_effect: user.name_effect,
+    atmosphere: effectiveAtmosphere(user.id),
+    profile_sound_on: user.profile_sound_on !== 0,
     activity_text: user.activity_text || '',
     show_activity: user.show_activity !== 0,
     is_minor: isMinorUntil(user.minor_until),
@@ -979,7 +985,7 @@ app.get('/api/me', (req, res) => {
     }
 
     const plusActive = hasActivePlus(user.id);
-    return res.json({ success: true, user: { ...user, avatar_frame: getEquippedCosmetics(user.id).avatar_frame, plus_active: plusActive, chat_theme: plusActive ? (user.chat_theme || 'classic') : 'classic', profile_color: user.profile_color || null, bubble_style: plusActive ? (user.bubble_style || 'default') : 'default', profile_effect: hasFeature(user.id, 'profile_effect') ? (user.profile_effect || 'none') : 'none', profile_theme: hasFeature(user.id, 'profile_theme') ? (user.profile_theme || 'default') : 'default', name_effect: hasFeature(user.id, 'name_effect') ? (user.name_effect || 'none') : 'none', features: listFeatures(user.id), premium_active: hasActivePremium(user.id) } });
+    return res.json({ success: true, user: { ...user, avatar_frame: getEquippedCosmetics(user.id).avatar_frame, plus_active: plusActive, chat_theme: plusActive ? (user.chat_theme || 'classic') : 'classic', profile_color: user.profile_color || null, bubble_style: plusActive ? (user.bubble_style || 'default') : 'default', profile_effect: hasFeature(user.id, 'profile_effect') ? (user.profile_effect || 'none') : 'none', profile_theme: hasFeature(user.id, 'profile_theme') ? (user.profile_theme || 'default') : 'default', name_effect: hasFeature(user.id, 'name_effect') ? (user.name_effect || 'none') : 'none', atmosphere: effectiveAtmosphere(user.id), profile_sound_on: user.profile_sound_on !== 0, features: listFeatures(user.id), premium_active: hasActivePremium(user.id) } });
 
   } catch (error) {
     console.error('Session kontrol hatası:', error);
@@ -1342,6 +1348,44 @@ app.patch('/api/profile/name-effect', (req, res) => {
 });
 
 // "Şu an ne oynuyorum": metin ve paylaşım anahtarı. Yalnızca arkadaşlar görür (getUserPublicProfile / listFriends).
+// Sauran Atmosphere: hazır paketler (görsel + ses + efekt). Liste herkese açık değil; oturum gerekir (yetki durumu kullanıcıya göre).
+app.get('/api/atmospheres', (req, res) => {
+  try {
+    const user = getUserFromRequest(req);
+    if (!user) return res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
+    return res.json({ success: true, items: listAtmospheresFor(user.id), profile_sound_on: user.profile_sound_on !== 0 });
+  } catch (error) {
+    console.error('Atmosphere listesi hatası:', error);
+    return res.status(500).json({ success: false, error: 'Yüklenemedi.' });
+  }
+});
+
+// Tek tık Atmosphere seçimi: paketin görsel parçalarını mevcut alanlara uygular. { atmosphere: 'cyber' | 'none' }
+app.put('/api/profile/atmosphere', (req, res) => {
+  try {
+    const user = getUserFromRequest(req);
+    if (!user) return res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
+    const result = applyAtmosphere(user.id, req.body && req.body.atmosphere);
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (error) {
+    console.error('Atmosphere uygulama hatası:', error);
+    return res.status(500).json({ success: false, error: 'Uygulanamadı.' });
+  }
+});
+
+// Profilimde Atmosphere sesi ziyaretçilere çalsın mı?
+app.patch('/api/profile/profile-sound', (req, res) => {
+  try {
+    const user = getUserFromRequest(req);
+    if (!user) return res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
+    return res.json(setProfileSoundOn(user.id, Boolean(req.body && req.body.on)));
+  } catch (error) {
+    console.error('Profil sesi hatası:', error);
+    return res.status(500).json({ success: false, error: 'Güncellenemedi.' });
+  }
+});
+
 app.patch('/api/profile/activity', (req, res) => {
   try {
     const user = getUserFromRequest(req);

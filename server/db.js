@@ -124,6 +124,14 @@ if (!userColumns.includes('profile_effect')) {
   // Sauran Plus: profil penceresinde avatarın çevresinde animasyonlu efekt (none/aura/sparkle). Plus bitince 'none' döner.
   db.exec(`ALTER TABLE users ADD COLUMN profile_effect TEXT DEFAULT 'none'`);
 }
+if (!userColumns.includes('atmosphere')) {
+  // Sauran Atmosphere: kullanıcının seçtiği hazır paket (none = yok). Abonelik bitince okuma anında 'none' sayılır.
+  db.exec(`ALTER TABLE users ADD COLUMN atmosphere TEXT NOT NULL DEFAULT 'none'`);
+}
+if (!userColumns.includes('profile_sound_on')) {
+  // Atmosphere'in sesi profilimde (ziyaretçilere) çalsın mı? Sahip kapatabilir.
+  db.exec(`ALTER TABLE users ADD COLUMN profile_sound_on INTEGER NOT NULL DEFAULT 1`);
+}
 
 const VALID_STATUSES = ['active', 'idle', 'busy', 'invisible'];
 const VALID_VISIBILITIES = ['public', 'friends', 'private'];
@@ -2483,6 +2491,61 @@ function updateProfileEffect(userId, effect) {
   }
   db.prepare(`UPDATE users SET profile_effect = ? WHERE id = ?`).run(value, userId);
   return { success: true, profile_effect: value };
+}
+
+// ── Sauran Atmosphere ─────────────────────────────────────────────────────────────────────────────
+const { ATMOSPHERES, getAtmosphere } = require('./atmosphere');
+
+function atmosphereAllowed(userId, atmo) {
+  if (!atmo) return false;
+  return atmo.tier === 'premium' ? hasActivePremium(userId) : hasActivePlus(userId);
+}
+
+// Okuma anında geçerli Atmosphere: abonelik bitmişse (ya da paket kaldırılmışsa) 'none'.
+function effectiveAtmosphere(userId) {
+  const row = db.prepare(`SELECT atmosphere FROM users WHERE id = ?`).get(userId);
+  const atmo = row && row.atmosphere !== 'none' ? getAtmosphere(row.atmosphere) : null;
+  return atmo && atmosphereAllowed(userId, atmo) ? atmo.key : 'none';
+}
+
+function listAtmospheresFor(userId) {
+  const active = effectiveAtmosphere(userId);
+  return ATMOSPHERES.map((a) => ({
+    key: a.key, label: a.label, emoji: a.emoji, desc: a.desc, art: a.art, tier: a.tier, category: a.category,
+    price_coins: a.price_coins, bundle: a.bundle, sound: a.sound,
+    available: atmosphereAllowed(userId, a), active: a.key === active
+  }));
+}
+
+// Tek tık: paketin görsel parçalarını mevcut kişiselleştirme alanlarına uygular + paketi kaydeder.
+function applyAtmosphere(userId, key) {
+  const value = String(key || 'none');
+  if (value === 'none') {
+    db.prepare(`UPDATE users SET atmosphere = 'none' WHERE id = ?`).run(userId);
+    return { success: true, atmosphere: 'none' };
+  }
+  const atmo = getAtmosphere(value);
+  if (!atmo) return { success: false, error: 'Geçersiz Atmosphere.' };
+  if (!atmosphereAllowed(userId, atmo)) {
+    return { success: false, error: atmo.tier === 'premium' ? 'Bu Atmosphere yalnızca Sauran Premium abonelerine açık.' : 'Bu Atmosphere yalnızca Sauran Plus/Premium abonelerine açık.' };
+  }
+  const b = atmo.bundle;
+  const results = [
+    updateChatTheme(userId, b.chat_theme), updateBubbleStyle(userId, b.bubble_style), updateProfileTheme(userId, b.profile_theme),
+    updateNameEffect(userId, b.name_effect), updateProfileEffect(userId, b.profile_effect)
+  ];
+  const failed = results.find((r) => !r.success);
+  if (failed) return failed;
+  db.prepare(`UPDATE users SET atmosphere = ? WHERE id = ?`).run(atmo.key, userId);
+  return {
+    success: true, atmosphere: atmo.key,
+    chat_theme: b.chat_theme, bubble_style: b.bubble_style, profile_theme: b.profile_theme, name_effect: b.name_effect, profile_effect: b.profile_effect
+  };
+}
+
+function setProfileSoundOn(userId, on) {
+  db.prepare(`UPDATE users SET profile_sound_on = ? WHERE id = ?`).run(on ? 1 : 0, userId);
+  return { success: true, profile_sound_on: on ? 1 : 0 };
 }
 
 const ABOUT_ME_MAX_FREE = 300;
@@ -5492,7 +5555,7 @@ function confirmPasswordReset(email, code, newPassword) {
 
 function getUserPublicProfile(viewerId, targetId) {
   const user = db.prepare(`
-    SELECT id, username, status, about_me, avatar_data, banner_data, avatar_visibility, minor_until, profile_color, profile_effect, profile_theme, name_effect, activity_text, activity_at, show_activity, activity_auto
+    SELECT id, username, status, about_me, avatar_data, banner_data, avatar_visibility, minor_until, profile_color, profile_effect, profile_theme, name_effect, profile_sound_on, activity_text, activity_at, show_activity, activity_auto
     FROM users WHERE id = ?
   `).get(targetId);
 
@@ -5519,6 +5582,7 @@ function getUserPublicProfile(viewerId, targetId) {
     name_effect: hasFeature(targetId, 'name_effect') ? (user.name_effect || 'none') : 'none',
     activity: (isSelf || (viewerId != null && areFriends(viewerId, targetId))) ? freshActivity(user) : null,
     plus_active: hasActivePlus(targetId),
+    atmosphere: visible && user.profile_sound_on !== 0 ? effectiveAtmosphere(targetId) : 'none',
     friendship_status: isSelf ? 'self' : friendship,
     blocked_by_me: blockedByMe
   };
@@ -8009,6 +8073,10 @@ module.exports = {
   updateProfileColor,
   PROFILE_EFFECTS,
   updateProfileEffect,
+  applyAtmosphere,
+  effectiveAtmosphere,
+  listAtmospheresFor,
+  setProfileSoundOn,
   PROFILE_THEMES,
   updateProfileTheme,
   NAME_EFFECTS,

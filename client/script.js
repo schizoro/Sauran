@@ -7745,9 +7745,10 @@ function showCzSection(section) {
         b.classList.toggle('active', act);
         b.setAttribute('aria-current', act ? 'page' : 'false');
     });
-    const names = { look: 'Görünüm', premium: 'Premium' };
+    const names = { look: 'Görünüm', atmosphere: 'Atmosphere', premium: 'Premium' };
     document.getElementById('cz-eyebrow').textContent = 'Profil › Özelleştir › ' + (names[section] || '');
     document.getElementById('cz-content').scrollTop = 0;
+    if (section === 'atmosphere') loadAtmosphereGrid();
 }
 
 function openCustomizeCenter(section = 'look') {
@@ -7779,6 +7780,192 @@ czScreen?.addEventListener('click', (e) => {
     if (e.target.id === 'cz-open-subs-btn') { closeCustomizeCenter(); document.getElementById('subs-open-btn')?.click(); }
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && czScreen && czScreen.style.display === 'flex') closeCustomizeCenter(); });
+
+// =====================================================
+// SAURAN ATMOSPHERE — görsel tema + ses + animasyon + efekt (tek tık) ve ses akışı (Impact → Fade → Ambient)
+// =====================================================
+
+function atmoPref(key, def) { try { const v = localStorage.getItem('sauran_atmo_' + key); return v === null ? def : v; } catch (_) { return def; } }
+function atmoSetPref(key, val) { try { localStorage.setItem('sauran_atmo_' + key, String(val)); } catch (_) {} }
+function atmoVolume() { const v = parseFloat(atmoPref('volume', '0.6')); return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.6; }
+
+let atmoCatalog = null;      // key -> paket (sunucudan, giriş gerekir)
+let atmoContext = null;      // şu an çalan sesin bağlamı: 'preview' | 'profile' | 'lobby'
+async function ensureAtmoCatalog(force) {
+    if (atmoCatalog && !force) return atmoCatalog;
+    try {
+        const r = await fetch('/api/atmospheres', { credentials: 'include' });
+        const d = await r.json();
+        if (d.success) { atmoCatalog = new Map(d.items.map((a) => [a.key, a])); atmoCatalog.profileSoundOn = d.profile_sound_on; atmoCatalog.items = d.items; }
+    } catch (_) {}
+    return atmoCatalog;
+}
+function playAtmoSound(soundKey, context, onStage) {
+    if (!window.SauranAtmo) return null;
+    atmoContext = context;
+    return window.SauranAtmo.play(soundKey, { volume: atmoVolume(), onStage });
+}
+function stopAtmoSound(context) {
+    if (!window.SauranAtmo) return;
+    if (!context || atmoContext === context) { window.SauranAtmo.stop(); atmoContext = null; }
+}
+
+const ATMO_LABELS = {
+    bubble_style: { default: 'Klasik', round: 'Yuvarlak', glass: 'Cam', outline: 'Çerçeveli', shadow: 'Gölgeli' },
+    chat_theme: { classic: 'Klasik', soft: 'Yumuşak', contrast: 'Kontrast' },
+    name_effect: { none: '', gradient: 'Gradyan', glow: 'Parıltı', rainbow: 'Gökkuşağı', shimmer: 'Işıltı' },
+    profile_effect: { none: '', sakura: 'Sakura', stagelights: 'Sahne ışıkları' }
+};
+function atmoChips(a) {
+    const b = a.bundle || {};
+    const chips = [`💬 ${ATMO_LABELS.chat_theme[b.chat_theme] || ''} · ${ATMO_LABELS.bubble_style[b.bubble_style] || ''}`];
+    if (b.name_effect && b.name_effect !== 'none') chips.push(`🔤 ${ATMO_LABELS.name_effect[b.name_effect]}`);
+    if (b.profile_effect && b.profile_effect !== 'none') chips.push(`✨ ${ATMO_LABELS.profile_effect[b.profile_effect]}`);
+    chips.push('🎧 Özel ses');
+    return chips.map((c) => `<span class="atmo-chip">${escapeHtml(c)}</span>`).join('');
+}
+function atmoCardHtml(a) {
+    const tier = a.tier === 'premium' ? '<span class="atmo-tier atmo-tier-premium">👑 Premium</span>' : '<span class="atmo-tier atmo-tier-plus">✦ Plus</span>';
+    const useBtn = a.active
+        ? '<button class="atmo-btn atmo-btn-on" type="button" disabled>✓ Kullanılıyor</button>'
+        : a.available
+            ? `<button class="atmo-btn atmo-btn-use" type="button" data-atmo-act="use" data-key="${a.key}">Kullan</button>`
+            : `<button class="atmo-btn" type="button" disabled>${a.tier === 'premium' ? '👑 Premium gerekli' : '✦ Plus gerekli'}</button>`;
+    return `<article class="atmo-card${a.active ? ' active' : ''}" data-key="${a.key}">
+        <div class="atmo-art" style="background:${a.art}"><span class="atmo-emoji" aria-hidden="true">${a.emoji}</span>${tier}</div>
+        <div class="atmo-body">
+            <h4>${escapeHtml(a.label)}</h4>
+            <p>${escapeHtml(a.desc)}</p>
+            <div class="atmo-chips">${atmoChips(a)}</div>
+            <div class="atmo-stage" data-stage-for="${a.key}" aria-hidden="true"><span data-s="impact">IMPACT 🔊</span><span data-s="fade">FADE 🔉</span><span data-s="ambient">AMBIENT 🔈</span></div>
+            <div class="atmo-actions">
+                <button class="atmo-btn atmo-btn-preview" type="button" data-atmo-act="preview" data-key="${a.key}">▶ Önizle</button>
+                ${useBtn}
+                ${a.active ? '<button class="atmo-btn" type="button" data-atmo-act="custom">Özelleştir</button>' : ''}
+            </div>
+        </div>
+    </article>`;
+}
+function setAtmoStage(key, stage) {
+    const bar = document.querySelector(`.atmo-stage[data-stage-for="${key}"]`);
+    if (!bar) return;
+    const card = bar.closest('.atmo-card');
+    bar.classList.toggle('on', stage !== 'end');
+    bar.querySelectorAll('[data-s]').forEach((el) => el.classList.toggle('on', el.dataset.s === stage));
+    const btn = card && card.querySelector('[data-atmo-act="preview"]');
+    if (btn) btn.textContent = stage === 'end' ? '▶ Önizle' : '■ Durdur';
+}
+
+async function loadAtmosphereGrid() {
+    const grid = document.getElementById('cz-atmo-grid');
+    if (!grid) return;
+    grid.innerHTML = '<p class="hubset-hint">Yükleniyor…</p>';
+    const cat = await ensureAtmoCatalog(true);
+    if (!cat) { grid.innerHTML = '<p class="hubset-hint">Atmosphere\'ler yüklenemedi.</p>'; return; }
+    const active = cat.items.find((a) => a.active);
+    grid.innerHTML = (active ? '<button id="atmo-clear-btn" class="atmo-clear" type="button">✕ Atmosphere\'i kaldır (ayrı seçimlerin korunur)</button>' : '')
+        + cat.items.map(atmoCardHtml).join('');
+    const tog = document.getElementById('cz-profile-sound-toggle');
+    if (tog) tog.checked = cat.profileSoundOn !== false;
+    const prev = document.getElementById('cz-profile-sound-preview');
+    if (prev) prev.disabled = !active;
+}
+
+async function applyAtmosphereKey(key) {
+    try {
+        const r = await fetch('/api/profile/atmosphere', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ atmosphere: key }) });
+        const d = await r.json();
+        if (!d.success) { showToast(d.error || 'Uygulanamadı.'); return; }
+        currentUser.atmosphere = d.atmosphere;
+        if (key !== 'none') {
+            ['chat_theme', 'bubble_style', 'profile_theme', 'name_effect', 'profile_effect'].forEach((f) => { if (d[f] != null) currentUser[f] = d[f]; });
+            renderChatThemePicker(); renderBubbleStylePicker(); renderProfileThemePicker(); renderNameEffectPicker(); renderProfileEffectPicker();
+            renderProfile();
+        }
+        const a = atmoCatalog && atmoCatalog.get(key);
+        showToast(key === 'none' ? 'Atmosphere kaldırıldı.' : `${a ? a.emoji + ' ' + a.label : 'Atmosphere'} uygulandı.`);
+        loadAtmosphereGrid();
+    } catch (_) { showToast('Uygulanamadı.'); }
+}
+
+document.getElementById('cz-atmo-grid')?.addEventListener('click', (e) => {
+    if (e.target.closest('#atmo-clear-btn')) { applyAtmosphereKey('none'); return; }
+    const btn = e.target.closest('[data-atmo-act]');
+    if (!btn) return;
+    const act = btn.dataset.atmoAct, key = btn.dataset.key;
+    if (act === 'use') { applyAtmosphereKey(key); return; }
+    if (act === 'custom') { showCzSection('look'); return; }
+    if (act === 'preview') {
+        const a = atmoCatalog && atmoCatalog.get(key);
+        if (!a) return;
+        if (atmoContext === 'preview' && document.querySelector(`.atmo-stage[data-stage-for="${key}"].on`)) { stopAtmoSound('preview'); return; }
+        document.querySelectorAll('.atmo-stage.on').forEach((b) => setAtmoStage(b.dataset.stageFor, 'end'));
+        playAtmoSound(a.sound, 'preview', (stage) => setAtmoStage(key, stage));
+    }
+});
+document.getElementById('cz-profile-sound-toggle')?.addEventListener('change', async (e) => {
+    try {
+        await fetch('/api/profile/profile-sound', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ on: e.target.checked }) });
+        if (atmoCatalog) atmoCatalog.profileSoundOn = e.target.checked;
+        if (currentUser) currentUser.profile_sound_on = e.target.checked;
+    } catch (_) { showToast('Güncellenemedi.'); }
+});
+document.getElementById('cz-profile-sound-preview')?.addEventListener('click', () => {
+    const a = atmoCatalog && atmoCatalog.items.find((x) => x.active);
+    if (a) playAtmoSound(a.sound, 'preview');
+});
+function closeAtmoOnLeave() { stopAtmoSound('preview'); }
+document.getElementById('cz-close-btn')?.addEventListener('click', closeAtmoOnLeave);
+document.getElementById('cz-nav')?.addEventListener('click', closeAtmoOnLeave);
+
+// ── Profil sesi: başkasının profili açılınca (Impact → Fade → Ambient). Otomatik oynatma ilk seferde kullanıcıya sorulur. ──
+async function setupProfileSound(profile) {
+    const box = document.getElementById('other-profile-sound');
+    const btn = document.getElementById('other-profile-sound-btn');
+    const ask = document.getElementById('other-profile-sound-ask');
+    if (!box) return;
+    stopAtmoSound('profile');
+    box.style.display = 'none'; ask.style.display = 'none';
+    if (!profile || !profile.atmosphere || profile.atmosphere === 'none' || profile.friendship_status === 'self') return;
+    const cat = await ensureAtmoCatalog();
+    const a = cat && cat.get(profile.atmosphere);
+    if (!a) return;
+    box.style.display = '';
+    btn.dataset.sound = a.sound;
+    btn.textContent = '▶ Profil sesini dinle';
+    const pref = atmoPref('autoplay', null);
+    if (pref === 'on') playAtmoSound(a.sound, 'profile', (st) => { btn.textContent = st === 'end' ? '▶ Profil sesini dinle' : '■ Durdur'; });
+    else if (pref === null) ask.style.display = '';
+}
+document.getElementById('other-profile-sound-btn')?.addEventListener('click', (e) => {
+    const btn = e.currentTarget;
+    if (atmoContext === 'profile' && window.SauranAtmo && window.SauranAtmo.isPlaying()) { stopAtmoSound('profile'); btn.textContent = '▶ Profil sesini dinle'; return; }
+    if (btn.dataset.sound) playAtmoSound(btn.dataset.sound, 'profile', (st) => { btn.textContent = st === 'end' ? '▶ Profil sesini dinle' : '■ Durdur'; });
+});
+document.getElementById('op-sound-ask-yes')?.addEventListener('click', () => {
+    atmoSetPref('autoplay', 'on'); document.getElementById('other-profile-sound-ask').style.display = 'none';
+    syncAtmoSettings(); document.getElementById('other-profile-sound-btn').click();
+});
+document.getElementById('op-sound-ask-no')?.addEventListener('click', () => {
+    atmoSetPref('autoplay', 'off'); document.getElementById('other-profile-sound-ask').style.display = 'none'; syncAtmoSettings();
+});
+(function watchOtherProfileClose() {
+    const m = document.getElementById('other-profile-modal');
+    if (m) new MutationObserver(() => { if (m.style.display === 'none') stopAtmoSound('profile'); }).observe(m, { attributes: true, attributeFilter: ['style'] });
+})();
+
+// ── Ayarlar → Ses → Atmosphere sesleri ──
+function syncAtmoSettings() {
+    const ap = document.getElementById('settings-atmo-autoplay'), lm = document.getElementById('settings-atmo-lobby-mute'), vol = document.getElementById('settings-atmo-volume'), out = document.getElementById('settings-atmo-volume-out');
+    if (ap) ap.checked = atmoPref('autoplay', null) === 'on';
+    if (lm) lm.checked = atmoPref('lobby_mute', '0') === '1';
+    if (vol) { vol.value = Math.round(atmoVolume() * 100); if (out) out.textContent = vol.value; }
+}
+document.getElementById('settings-atmo-autoplay')?.addEventListener('change', (e) => atmoSetPref('autoplay', e.target.checked ? 'on' : 'off'));
+document.getElementById('settings-atmo-lobby-mute')?.addEventListener('change', (e) => { atmoSetPref('lobby_mute', e.target.checked ? '1' : '0'); if (e.target.checked) stopAtmoSound('lobby'); });
+document.getElementById('settings-atmo-volume')?.addEventListener('input', (e) => { atmoSetPref('volume', e.target.value / 100); const o = document.getElementById('settings-atmo-volume-out'); if (o) o.textContent = e.target.value; });
+document.getElementById('settings-btn')?.addEventListener('click', syncAtmoSettings);
+syncAtmoSettings();
 
 async function loadInventoryModal() {
     const state = document.getElementById('inventory-state');
@@ -8103,6 +8290,7 @@ function renderOtherProfile() {
 
     applyAvatarFrame(document.getElementById('other-profile-avatar-wrap'), profile.avatar_frame);
     applyProfileEffect(document.getElementById('other-profile-avatar-wrap'), profile.profile_effect);
+    setupProfileSound(profile);
     applyProfileTheme(document.querySelector('#other-profile-modal .profile-modal-box'), profile.profile_theme);
     otherProfileAvatarImg.src = hasAvatar ? profile.avatar_data : '';
     otherProfileAvatarImg.style.display = hasAvatar ? 'block' : 'none';

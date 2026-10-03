@@ -1051,6 +1051,7 @@
             <div class="hubset-layout">
                 <nav id="cz-nav" class="hubset-nav" aria-label="Özelleştirme bölümleri">
                     <button type="button" class="hubset-nav-btn" data-cz-section="look"><span aria-hidden="true">🎨</span><span>Görünüm</span></button>
+                    <button type="button" class="hubset-nav-btn" data-cz-section="atmosphere"><span aria-hidden="true">🌌</span><span>Atmosphere</span></button>
                     <button type="button" class="hubset-nav-btn" data-cz-section="premium"><span aria-hidden="true">👑</span><span>Premium</span></button>
                 </nav>
                 <main class="hubset-content" id="cz-content">
@@ -1136,6 +1137,22 @@
                         </div>
                         <p id="bubble-style-hint" class="hubset-hint"></p>
                     </div>
+                        </div>
+                    </section>
+                    <section class="hubset-panel" data-cz-panel="atmosphere" style="display:none;">
+                        <div class="hubset-panel-head">
+                            <h3>Atmosphere</h3>
+                            <p>Görsel tema + ses + animasyon + efekt — tek tıkla. Seçtikten sonra "Özelleştir" ile parçalarını değiştirebilirsin.</p>
+                        </div>
+                        <div id="cz-atmo-grid" class="cz-atmo-grid"></div>
+                        <div class="hubset-card">
+                            <div class="cz-card-title">Atmosphere sesi</div>
+                            <label class="notif-pref-row">
+                                <input type="checkbox" id="cz-profile-sound-toggle">
+                                <span><span>Profilimi ziyaret edenlere sesim çalsın</span><span class="settings-voice-hint">Kapatırsan profilin sessiz olur; görünüm değişmez.</span></span>
+                            </label>
+                            <button id="cz-profile-sound-preview" class="hub-create-image-btn" type="button">▶ Profil sesimi dinle</button>
+                            <p class="hubset-hint">Ses akışı: 0–3 sn güçlü giriş → 3–6 sn kademeli düşüş → 6 sn sonrası düşük seviyede sakin ambient. Sesler Sauran'a özgüdür; Spotify/YouTube bağlanmaz.</p>
                         </div>
                     </section>
                     <section class="hubset-panel" data-cz-panel="premium" style="display:none;">
@@ -1665,6 +1682,14 @@
                 <h3 id="other-profile-username" class="profile-modal-username"></h3>
                 <span id="other-profile-status-label" class="status-label"></span>
                 <span id="other-profile-activity" class="profile-activity" style="display:none;"></span>
+                <div id="other-profile-sound" class="op-sound" style="display:none;">
+                    <button id="other-profile-sound-btn" class="op-sound-btn liquid-glass" type="button">▶ Profil sesini dinle</button>
+                    <div id="other-profile-sound-ask" class="op-sound-ask" style="display:none;">
+                        <span>Atmosphere sesleri bundan sonra otomatik çalsın mı?</span>
+                        <button id="op-sound-ask-yes" type="button">Evet</button>
+                        <button id="op-sound-ask-no" type="button">Hayır</button>
+                    </div>
+                </div>
 
             </div>
 
@@ -2067,6 +2092,18 @@
                         <button id="settings-ptt-change" type="button" class="settings-unblock-btn" data-i18n="ptt-change">Değiştir</button>
                     </div>
                     <p id="settings-ptt-key-hint" class="settings-voice-hint" style="display:none;" data-i18n="ptt-key-hint">Harf ya da rakam tuşu seçersen, sohbete yazı yazarken bas-konuş çalışmaz. F tuşları, Ctrl, Alt, CapsLock ya da farenin yan tuşları her zaman çalışır. Telefonda ekrandaki düğmeyi kullan.</p>
+
+                    <div class="hub-settings-divider"></div>
+                    <span class="profile-field-label">Atmosphere sesleri</span>
+                    <label class="notif-pref-row">
+                        <input type="checkbox" id="settings-atmo-autoplay">
+                        <span><span>Profil/Lobi seslerini otomatik oynat</span><span class="settings-voice-hint">Bir profile ya da Atmosphere'li lobiye girdiğinde giriş sesi kendiliğinden çalar. Kapalıyken ▶ düğmesiyle dinlersin.</span></span>
+                    </label>
+                    <label class="notif-pref-row">
+                        <input type="checkbox" id="settings-atmo-lobby-mute">
+                        <span><span>Lobi seslerini tamamen kapat</span><span class="settings-voice-hint">Hiçbir lobinin Atmosphere sesi çalmaz.</span></span>
+                    </label>
+                    <label class="settings-atmo-vol"><span>Ses seviyesi</span><input type="range" id="settings-atmo-volume" min="0" max="100" step="5"><output id="settings-atmo-volume-out">60</output></label>
 
                 </div>
 
@@ -2492,6 +2529,7 @@
     </div>
 
     <script src="stickers.js"></script>
+    <script src="atmosphere-audio.js"></script>
     <script src="script.js"></script>
     <script src="shell.js"></script>
     <script>
