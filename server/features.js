@@ -25,7 +25,10 @@ const FEATURES = {
   premium_sticker_pack: { label: 'Premium çıkartma paketi',          tier: 'premium' },
   gif_avatar:           { label: 'Hareketli (GIF) profil fotoğrafı', tier: 'premium' },
   premium_emoji_pack:   { label: 'Premium emoji paketi',             tier: 'premium' },
-  premium_card:         { label: 'Premium üye kartı animasyonu',     tier: 'premium' }
+  premium_card:         { label: 'Premium üye kartı animasyonu',     tier: 'premium' },
+  personal_emoji:       { label: 'Kişisel emoji oluşturma',          tier: 'plus' },
+  animated_emoji:       { label: 'Hareketli (GIF) emoji oluşturma',  tier: 'premium' },
+  cross_lobby_emoji:    { label: 'Başka lobilerin emojilerini kullanma', tier: 'premium' }
 };
 
 // Premium üye kartı stilleri (premium_card özelliğiyle seçilir; Hediye Aracı'nda ayrı ürün gerekmez — özellik zaten giftable).

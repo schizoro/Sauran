@@ -7776,6 +7776,7 @@ document.getElementById('cz-cardstyle-card')?.addEventListener('click', async (e
         if (!d.success) { showToast(d.error || 'Güncellenemedi.'); return; }
         currentUser.card_style = d.card_style;
         renderCardStyleCard();
+    if (typeof renderPersonalEmojiCard === 'function') renderPersonalEmojiCard();
         showToast('Üye kartı güncellendi.');
         if (currentHub) refreshHubAfterBoost();
     } catch (_) { showToast('Güncellenemedi.'); }
@@ -8114,61 +8115,7 @@ syncAtmoSettings();
 function hubBoost() { return (currentHub && currentHub.boost) || null; }
 
 // ── Lobiye özel emojiler (Seviye 4) ──
-function renderHubEmojiUi() {
-    const btn = document.getElementById('hub-emoji-attach');
-    const has = Boolean(currentHub && currentHub.emojis && currentHub.emojis.length);
-    if (btn) btn.style.display = has ? '' : 'none';
-    const picker = document.getElementById('hub-emoji-picker');
-    if (picker && !has) picker.style.display = 'none';
-}
-function toggleHubEmojiPicker() {
-    const picker = document.getElementById('hub-emoji-picker');
-    if (!picker || !currentHub || !currentHub.emojis) return;
-    document.getElementById('hub-attach-menu').style.display = 'none';
-    if (picker.style.display !== 'none') { picker.style.display = 'none'; return; }
-    picker.innerHTML = currentHub.emojis.map((e) => `<button type="button" class="hub-emoji-pick" data-emoji="${escapeAttr(e.name)}" title=":${escapeAttr(e.name)}:"><img src="${escapeAttr(e.image_data)}" alt=":${escapeAttr(e.name)}:"></button>`).join('');
-    picker.style.display = 'flex';
-    clampPopupToViewport(picker);
-}
-document.getElementById('hub-emoji-picker')?.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-emoji]');
-    if (!b) return;
-    const input = document.getElementById('hub-message-input');
-    const token = `:${b.dataset.emoji}:`;
-    const pos = input.selectionStart != null ? input.selectionStart : input.value.length;
-    input.value = input.value.slice(0, pos) + token + ' ' + input.value.slice(input.selectionEnd != null ? input.selectionEnd : pos);
-    input.focus();
-    input.setSelectionRange(pos + token.length + 1, pos + token.length + 1);
-    document.getElementById('hub-emoji-picker').style.display = 'none';
-});
-document.addEventListener('click', (e) => {
-    const picker = document.getElementById('hub-emoji-picker');
-    if (picker && picker.style.display !== 'none' && !e.target.closest('#hub-emoji-picker, #hub-attach-btn, #hub-attach-menu')) picker.style.display = 'none';
-});
-
-function emojiFileToDataUrl(file) {
-    return new Promise((resolve, reject) => {
-        if (file.type === 'image/gif') {
-            if (file.size > 100 * 1024) { reject(new Error('GIF emoji en fazla 100 KB olabilir.')); return; }
-            readFileAsDataUrl(file).then(resolve, reject); return;
-        }
-        const img = new Image();
-        const url = URL.createObjectURL(file);
-        img.onload = () => {
-            const size = 96, c = document.createElement('canvas');
-            c.width = size; c.height = size;
-            const ratio = Math.min(size / img.width, size / img.height);
-            const w = img.width * ratio, h = img.height * ratio;
-            c.getContext('2d').drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
-            URL.revokeObjectURL(url);
-            let out = c.toDataURL('image/webp', 0.9);
-            if (!out.startsWith('data:image/webp')) out = c.toDataURL('image/png');
-            resolve(out);
-        };
-        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Görsel okunamadı.')); };
-        img.src = url;
-    });
-}
+function renderHubEmojiUi() { /* eski seçici kalktı: birleşik emoji paneli (emoji-panel.js) */ }
 function renderHubEmojiManager() {
     const box = document.getElementById('hubset-emoji-card');
     if (!box || !currentHub) return;
@@ -8181,13 +8128,13 @@ function renderHubEmojiManager() {
     }
     const list = currentHub.emojis || [];
     box.innerHTML = `<div class="cz-card-title">Lobi emojileri (${list.length} / ${currentHub.emoji_slots || 10})</div>
-        <div class="hub-emoji-grid">${list.map((e) => `<span class="hub-emoji-item"><img src="${escapeAttr(e.image_data)}" alt=""><b>:${escapeHtml(e.name)}:</b><button type="button" data-emoji-del="${e.id}" aria-label="Sil">✕</button></span>`).join('') || '<span class="hubset-hint">Henüz emoji yok.</span>'}</div>
+        <div class="hub-emoji-grid">${list.map((e) => `<span class="hub-emoji-item"><img src="${escapeAttr(e.url)}" alt=""><b>:${escapeHtml(e.name)}:</b><button type="button" data-emoji-del="${e.id}" aria-label="Sil">✕</button></span>`).join('') || '<span class="hubset-hint">Henüz emoji yok.</span>'}</div>
         <div class="hub-bg-row" style="margin-top:10px;">
             <input id="hubset-emoji-name" class="hub-name-input" type="text" maxlength="20" placeholder="isim (a-z, 0-9, _)" autocomplete="off" style="max-width:180px;">
             <button id="hubset-emoji-pick" class="hub-create-image-btn" type="button">Görsel Seç</button>
             <input type="file" id="hubset-emoji-input" accept="image/png,image/webp,image/gif,image/jpeg" hidden>
         </div>
-        <p class="hubset-hint">PNG/WebP/GIF; görsel 96×96'ya küçültülür (GIF en fazla 100 KB).</p>`;
+        <p class="hubset-hint">Yüklediğin görsel otomatik <b>128px WebP</b>'ye sıkıştırılır. Hareketli (GIF) lobi emojisi için lobi sahibinin Premium'u gerekir.</p>`;
 }
 document.getElementById('hubset-emoji-card')?.addEventListener('click', async (e) => {
     if (e.target.closest('#hubset-emoji-pick')) {
@@ -8209,11 +8156,11 @@ document.getElementById('hubset-emoji-card')?.addEventListener('change', async (
     if (!file) return;
     try {
         const name = document.getElementById('hubset-emoji-name').value.trim().toLowerCase();
-        const image_data = await emojiFileToDataUrl(file);
+        const image_data = await window.prepareEmojiUpload(file);
         const r = await fetch(`/api/hubs/${currentHub.id}/emojis`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ name, image_data }) });
         const d = await r.json();
         if (!d.success) { showToast(d.error || 'Eklenemedi.'); return; }
-        currentHub.emojis = d.emojis; showToast(`:${name}: eklendi.`); renderHubEmojiManager(); renderHubEmojiUi();
+        currentHub.emojis = d.emojis; showToast(`:${name}: eklendi${d.note ? ' — ' + d.note : ''}`); renderHubEmojiManager(); renderHubEmojiUi();
     } catch (err) { showToast(err.message || 'Eklenemedi.'); }
 });
 
@@ -9446,7 +9393,7 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
 
     } else {
 
-        body = `<span class="dm-msg-content">${escapeHtml(msg.content)}</span>`;
+        body = `<span class="dm-msg-content">${hubEmojiHtml(escapeHtml(msg.content), msg.emoji_map)}</span>`;
 
     }
 
@@ -10276,6 +10223,10 @@ function readFileAsDataUrl(file) {
 
 // prefix: 'hub' | 'dm' — bekler #{prefix}-sticker-picker elementinin var olduğunu.
 function wireStickerPicker(prefix, onPick) {
+    // Çıkartma seçimi artık birleşik emoji panelinde (emoji-panel.js); burada yalnızca gönderme işlevi kaydedilir.
+    window.stickerPickHandlers = window.stickerPickHandlers || {};
+    window.stickerPickHandlers[prefix] = onPick;
+    return;
 
     const picker = document.getElementById(`${prefix}-sticker-picker`);
     if (!picker) return;
@@ -10382,11 +10333,9 @@ function wireAttachMenu(prefix, onFile) {
     menu.querySelectorAll('[data-attach]').forEach((item) => {
         item.addEventListener('click', (event) => {
             menu.style.display = 'none';
-            if (item.dataset.attach === 'hubemoji') { toggleHubEmojiPicker(); return; }
             if (item.dataset.attach === 'sticker') {
                 event.stopPropagation();
-                const picker = document.getElementById(`${prefix}-sticker-picker`);
-                if (picker) { picker.style.display = 'grid'; clampPopupToViewport(picker); }
+                if (typeof openEmojiPanel === 'function') openEmojiPanel(prefix, 'stickers');
                 return;
             }
             inputs[item.dataset.attach]?.click();
@@ -16937,15 +16886,18 @@ function messageMentionsMe(msg) {
 }
 
 // Metin önce kaçışlanır; ardından YALNIZCA sunucunun çözdüğü bahsetmeler vurgulanır (rastgele @kelime vurgulanmaz).
-function hubEmojiHtml(html) {
+// :isim: → <img>. Sunucunun çözdüğü harita (kişisel/Premium çapraz-lobi dahil) + geçerli lobinin emojileri yedek olarak.
+function hubEmojiHtml(html, emojiMap) {
+    if (html.indexOf(':') === -1) return html;
+    const map = new Map(Object.entries(emojiMap || {}));
     const list = currentHub && currentHub.emojis;
-    if (!list || !list.length || html.indexOf(':') === -1) return html;
-    const map = new Map(list.map((e) => [e.name, e.image_data]));
+    if (list) list.forEach((e) => { if (!map.has(e.name)) map.set(e.name, e.url); });
+    if (!map.size) return html;
     return html.replace(/:([a-z0-9_]{2,20}):/g, (m, name) => map.has(name) ? `<img class="hub-emoji" src="${escapeAttr(map.get(name))}" alt="${m}" title="${m}">` : m);
 }
 
-function renderMentionText(content, mentions) {
-    let html = hubEmojiHtml(escapeHtml(content || ''));
+function renderMentionText(content, mentions, emojiMap) {
+    let html = hubEmojiHtml(escapeHtml(content || ''), emojiMap);
     if (!mentions) return html;
     const names = (mentions.users || []).map((u) => ({ name: u.username, me: u.id === currentUser?.id }));
     if (mentions.everyone) names.push({ name: 'everyone', me: true, everyone: true });
@@ -17026,7 +16978,7 @@ function renderHubMessageIntoWrap(wrap, msg) {
 
     } else {
 
-        body = `<div class="hub-msg-text">${renderMentionText(msg.content, msg.mentions)}</div>`;
+        body = `<div class="hub-msg-text">${renderMentionText(msg.content, msg.mentions, msg.emoji_map)}</div>`;
 
     }
 

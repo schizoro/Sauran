@@ -547,12 +547,11 @@
                                         <button type="button" data-attach="gallery">🖼️ <span data-i18n="attach-gallery">Galeriden Seç</span></button>
                                         <button type="button" data-attach="file">📎 <span data-i18n="attach-file">Dosya Seç</span></button>
                                         <button type="button" data-attach="sticker">😊 <span data-i18n="attach-sticker">Çıkartma</span></button>
-                                        <button type="button" data-attach="hubemoji" id="hub-emoji-attach" style="display:none;">🧩 Lobi emojisi</button>
                                     </div>
                                     <div id="hub-sticker-picker" class="sticker-picker liquid-glass" style="display:none;"></div>
-                                    <div id="hub-emoji-picker" class="sticker-picker hub-emoji-picker liquid-glass" style="display:none;"></div>
                                 </div>
                                 <input type="text" id="hub-message-input" autocomplete="off" placeholder="Bir mesaj yaz...">
+                                <button type="button" id="hub-emoji-btn" class="composer-icon-btn composer-emoji-btn" title="Emoji, GIF ve çıkartmalar" aria-label="Emoji, GIF ve çıkartmalar">😊</button>
                                 <button type="button" id="hub-voice-btn" class="mic-btn composer-icon-btn" title="Sesli mesaj gönder">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                                 </button>
@@ -1090,6 +1089,7 @@
                             <div id="plusfx-frame-grid" class="mk-grid"></div>
                         </div>
                         <div class="hubset-card" id="cz-cardstyle-card"></div>
+                        <div class="hubset-card" id="cz-emoji-card"></div>
                         <div class="hubset-card">
                             <div class="cz-card-title">Profil efektleri</div>
 <div class="profile-field-block cz-block">
@@ -1782,6 +1782,7 @@
                         <div id="dm-sticker-picker" class="sticker-picker liquid-glass" style="display:none;"></div>
                     </div>
                     <input type="text" id="dm-message-input" autocomplete="off" placeholder="Bir mesaj yaz...">
+                    <button type="button" id="dm-emoji-btn" class="composer-icon-btn composer-emoji-btn" title="Emoji, GIF ve çıkartmalar" aria-label="Emoji, GIF ve çıkartmalar">😊</button>
                     <button type="button" id="dm-voice-btn" class="mic-btn composer-icon-btn" title="Sesli mesaj gönder">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                     </button>
@@ -2566,6 +2567,7 @@
     <script src="stickers.js"></script>
     <script src="atmosphere-audio.js"></script>
     <script src="script.js"></script>
+    <script src="emoji-panel.js"></script>
     <script src="shell.js"></script>
     <script>
         // Tanıtım sayfasındaki "Kayıt Ol" bağlantısı (/app#kayit) doğrudan kayıt formunu açar.

@@ -103,6 +103,12 @@ const {
   setHubBanner,
   addHubEmoji,
   removeHubEmoji,
+  emojiPermissions,
+  listUserEmojis,
+  addUserEmoji,
+  removeUserEmoji,
+  listEmojiPalette,
+  getEmojiImage,
   hubLevel,
   updateProfileTheme,
   updateNameEffect,
@@ -383,7 +389,8 @@ app.disable('x-powered-by');
 const jsonSmall = express.json({ limit: '1mb' });
 const jsonImage = express.json({ limit: '12mb' });
 const jsonFile = express.json({ limit: '140mb' });
-const IMAGE_BODY_PATHS = [/^\/api\/profile\/(avatar|banner)\/?$/, /^\/api\/hubs\/?$/, /^\/api\/hubs\/\d+\/?$/, /^\/api\/hubs\/\d+\/banner\/?$/];
+const { compressEmoji, decodeImageDataUrl } = require('./emojiimage');
+const IMAGE_BODY_PATHS = [/^\/api\/me\/emojis\/?$/, /^\/api\/hubs\/\d+\/emojis\/?$/, /^\/api\/profile\/(avatar|banner)\/?$/, /^\/api\/hubs\/?$/, /^\/api\/hubs\/\d+\/?$/, /^\/api\/hubs\/\d+\/banner\/?$/];
 const FILE_BODY_PATHS = [/^\/api\/hubs\/\d+\/(file|voice|share)\/?$/];
 
 app.use((req, res, next) => {
@@ -2348,17 +2355,67 @@ app.put('/api/hubs/:id/banner', contentWriteLimiter, (req, res) => {
 });
 
 // Lobiye özel emojiler (Seviye 4): yalnızca sahip ekler/siler; mesajlarda :isim: ile kullanılır.
-app.post('/api/hubs/:id/emojis', contentWriteLimiter, (req, res) => {
+app.post('/api/hubs/:id/emojis', contentWriteLimiter, async (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
   try {
     const hubId = Number(req.params.id);
-    const result = addHubEmoji(hubId, user.id, req.body && req.body.name, req.body && req.body.image_data);
+    const buf = decodeImageDataUrl(req.body && req.body.image_data);
+    if (!buf) return res.status(400).json({ success: false, error: 'Geçersiz görsel formatı.' });
+    const compressed = await compressEmoji(buf, { allowAnimated: emojiPermissions(user.id).animated });
+    if (!compressed.success) return res.status(400).json({ success: false, error: compressed.error });
+    const result = addHubEmoji(hubId, user.id, req.body && req.body.name, compressed);
     if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
     io.to(`hub:${hubId}`).emit('hub_boost_changed', { hub_id: hubId, emojis: true });
-    return res.json(result);
+    return res.json({ ...result, note: compressed.note || null });
   } catch (error) { console.error('Lobi emoji ekleme hatası:', error); return res.status(500).json({ success: false, error: 'Eklenemedi.' }); }
 });
+// ── Kişisel emojiler (Plus: statik, Premium: hareketli de) ──
+app.get('/api/me/emojis', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const hubId = req.query.hub_id ? Number(req.query.hub_id) : null;
+    return res.json({ success: true, ...listEmojiPalette(user.id, hubId), mine: listUserEmojis(user.id) });
+  } catch (error) { console.error('Emoji paleti hatası:', error); return res.status(500).json({ success: false, error: 'Yüklenemedi.' }); }
+});
+
+app.post('/api/me/emojis', contentWriteLimiter, async (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const perms = emojiPermissions(user.id);
+    if (!perms.personal) return res.status(403).json({ success: false, error: 'Kişisel emoji oluşturmak Sauran Plus/Premium aboneliği (ya da hediye) gerektirir.' });
+    const buf = decodeImageDataUrl(req.body && req.body.image_data);
+    if (!buf) return res.status(400).json({ success: false, error: 'Geçersiz görsel formatı.' });
+    const compressed = await compressEmoji(buf, { allowAnimated: perms.animated });
+    if (!compressed.success) return res.status(400).json({ success: false, error: compressed.error });
+    const result = addUserEmoji(user.id, req.body && req.body.name, compressed);
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    return res.json({ ...result, note: compressed.note || null, original_bytes: compressed.original_bytes, bytes: compressed.bytes });
+  } catch (error) { console.error('Kişisel emoji ekleme hatası:', error); return res.status(500).json({ success: false, error: 'Eklenemedi.' }); }
+});
+
+app.delete('/api/me/emojis/:emojiId', contentWriteLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try { return res.json(removeUserEmoji(user.id, Number(req.params.emojiId))); }
+  catch (error) { console.error('Kişisel emoji silme hatası:', error); return res.status(500).json({ success: false, error: 'Silinemedi.' }); }
+});
+
+// Emoji görseli (id değişmez → uzun önbellek): kind 'h' = lobi emojisi, 'u' = kişisel emoji. Giriş şart.
+app.get('/api/emoji/:kind/:id', (req, res) => {
+  const user = getUserFromRequest(req);
+  if (!user) return res.status(401).end();
+  const image = getEmojiImage(req.params.kind, Number(req.params.id), user.id);
+  const match = image && /^data:(image\/(?:png|webp|gif));base64,(.+)$/s.exec(image);
+  if (!match) return res.status(404).end();
+  res.set('Content-Type', match[1]);
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.set('Cache-Control', 'private, max-age=604800, immutable');
+  return res.send(Buffer.from(match[2], 'base64'));
+});
+
 app.delete('/api/hubs/:id/emojis/:emojiId', contentWriteLimiter, (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;

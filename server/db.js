@@ -142,6 +142,20 @@ if (!userColumns.includes('profile_sound_on')) {
 }
 
 // Lobi Takviyesi: Premium kullanıcılar takviyelerini lobilere verir. removed_at = geri çekildi (yuva bir süre dolu sayılır).
+// Kişisel emojiler (Plus: statik, Premium: hareketli de): sahibi her yerde :isim: ile kullanır. Görseller sunucuda sıkıştırılmış WebP.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_emojis (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    image_data TEXT NOT NULL,
+    animated INTEGER NOT NULL DEFAULT 0,
+    bytes INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, name),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+`);
 // Lobiye özel emojiler (Seviye 4): mesajlarda :isim: ile kullanılır.
 db.exec(`
   CREATE TABLE IF NOT EXISTS hub_emojis (
@@ -312,6 +326,9 @@ if (!hubColumns.includes('banner_data')) {
 if (!db.prepare(`PRAGMA table_info(hub_boosts)`).all().some((c) => c.name === 'source')) {
   // 'premium' = aylık Premium takviyesi (abonelik bitince düşer) | 'gift' = hediye takviye (kalıcı, abonelikten bağımsız)
   db.exec(`ALTER TABLE hub_boosts ADD COLUMN source TEXT NOT NULL DEFAULT 'premium'`);
+}
+if (!db.prepare(`PRAGMA table_info(hub_emojis)`).all().some((c) => c.name === 'animated')) {
+  db.exec(`ALTER TABLE hub_emojis ADD COLUMN animated INTEGER NOT NULL DEFAULT 0`);
 }
 if (!hubColumns.includes('atmosphere')) {
   // Lobi Atmosphere'i (Seviye 3'te açılır; okuma anında seviyeye göre 'none' sayılabilir).
@@ -1443,7 +1460,7 @@ function getDeletedDmMessages(userId, token, limit = 50) {
   if (!room) return null;
 
   const rows = db.prepare(`
-    SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
+    SELECT messages.id, messages.hub_id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
@@ -1978,7 +1995,7 @@ function getReportTargetContext(targetType, targetId) {
 
     if (targetType === 'message') {
       const m = db.prepare(`
-        SELECT messages.id, messages.user_id, messages.username, messages.content, messages.kind, messages.payload,
+        SELECT messages.id, messages.hub_id, messages.user_id, messages.username, messages.content, messages.kind, messages.payload,
                messages.hub_id, messages.to_user_id, messages.created_at,
                hubs.name AS hub_name
         FROM messages LEFT JOIN hubs ON hubs.id = messages.hub_id
@@ -2748,13 +2765,15 @@ function setHubBanner(hubId, userId, dataUrl) {
   return { success: true, has_banner: true };
 }
 
-const HUB_EMOJI_MAX_CHARS = 140_000; // ~100 KB
+const HUB_EMOJI_MAX_CHARS = 320_000; // sıkıştırılmış hareketli WebP en fazla ~220 KB
 const HUB_EMOJI_NAME_RE = /^[a-z0-9_]{2,20}$/;
 function listHubEmojis(hubId) {
   if (hubLevel(hubId) < 4) return [];
-  return db.prepare(`SELECT id, name, image_data FROM hub_emojis WHERE hub_id = ? ORDER BY id ASC LIMIT ?`).all(hubId, HUB_EMOJI_SLOTS);
+  return db.prepare(`SELECT id, name, animated FROM hub_emojis WHERE hub_id = ? ORDER BY id ASC LIMIT ?`).all(hubId, HUB_EMOJI_SLOTS)
+    .map((e) => ({ id: e.id, name: e.name, animated: Boolean(e.animated), url: `/api/emoji/h/${e.id}` }));
 }
-function addHubEmoji(hubId, userId, name, dataUrl) {
+// image: sıkıştırılmış { data, animated } (önerilen, sunucu yolu) ya da düz data URL (statik; eski çağıranlar/testler için).
+function addHubEmoji(hubId, userId, name, image) {
   const hub = db.prepare(`SELECT id, created_by, type FROM hubs WHERE id = ?`).get(hubId);
   if (!hub) return { success: false, status: 404, error: 'Lobi bulunamadı.' };
   if (hub.type === 'group') return { success: false, status: 400, error: 'Bu işlem gruplarda kullanılamaz.' };
@@ -2762,14 +2781,17 @@ function addHubEmoji(hubId, userId, name, dataUrl) {
   if (hubLevel(hubId) < 4) return { success: false, status: 403, error: 'Lobi emojileri Seviye 4\'te açılır.' };
   const n = String(name || '').trim().toLowerCase();
   if (!HUB_EMOJI_NAME_RE.test(n)) return { success: false, status: 400, error: 'Emoji adı 2-20 karakter; yalnızca küçük harf, rakam ve alt çizgi.' };
+  const dataUrl = image && typeof image === 'object' ? image.data : image;
+  const animated = image && typeof image === 'object' ? Boolean(image.animated) : false;
   if (typeof dataUrl !== 'string' || !/^data:image\/(png|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(dataUrl)) return { success: false, status: 400, error: 'Geçersiz görsel formatı (PNG, WebP ya da GIF).' };
-  if (dataUrl.length > HUB_EMOJI_MAX_CHARS) return { success: false, status: 400, error: 'Emoji görseli çok büyük (en fazla ~100 KB).' };
+  if (dataUrl.length > HUB_EMOJI_MAX_CHARS) return { success: false, status: 400, error: 'Emoji görseli çok büyük.' };
+  if (animated && !hasFeature(userId, 'animated_emoji')) return { success: false, status: 403, error: 'Hareketli emoji Sauran Premium\'a özeldir.' };
   const count = db.prepare(`SELECT COUNT(*) AS c FROM hub_emojis WHERE hub_id = ?`).get(hubId).c;
   if (count >= HUB_EMOJI_SLOTS) return { success: false, status: 400, error: `Emoji yuvaları dolu (${HUB_EMOJI_SLOTS}).` };
   if (db.prepare(`SELECT 1 FROM hub_emojis WHERE hub_id = ? AND name = ?`).get(hubId, n)) return { success: false, status: 400, error: 'Bu adda bir emoji zaten var.' };
-  const clean = stripImageMetadata(dataUrl);
-  const info = db.prepare(`INSERT INTO hub_emojis (hub_id, name, image_data, created_by) VALUES (?, ?, ?, ?)`).run(hubId, n, clean, userId);
-  return { success: true, emoji: { id: Number(info.lastInsertRowid), name: n, image_data: clean }, emojis: listHubEmojis(hubId) };
+  const clean = animated || /^data:image\/webp/.test(dataUrl) ? dataUrl : stripImageMetadata(dataUrl);
+  const info = db.prepare(`INSERT INTO hub_emojis (hub_id, name, image_data, created_by, animated) VALUES (?, ?, ?, ?, ?)`).run(hubId, n, clean, userId, animated ? 1 : 0);
+  return { success: true, emoji: { id: Number(info.lastInsertRowid), name: n, animated, url: `/api/emoji/h/${Number(info.lastInsertRowid)}` }, emojis: listHubEmojis(hubId) };
 }
 function removeHubEmoji(hubId, userId, emojiId) {
   const hub = db.prepare(`SELECT id, created_by FROM hubs WHERE id = ?`).get(hubId);
@@ -2777,6 +2799,89 @@ function removeHubEmoji(hubId, userId, emojiId) {
   if (hub.created_by !== userId) return { success: false, status: 403, error: 'Sadece Lobi sahibi emoji silebilir.' };
   db.prepare(`DELETE FROM hub_emojis WHERE id = ? AND hub_id = ?`).run(emojiId, hubId);
   return { success: true, emojis: listHubEmojis(hubId) };
+}
+
+// ── Kişisel emojiler ──────────────────────────────────────────────────────────────────────────────
+const PERSONAL_EMOJI_LIMIT_PLUS = 10, PERSONAL_EMOJI_LIMIT_PREMIUM = 30;
+function emojiPermissions(userId) {
+  const animated = hasFeature(userId, 'animated_emoji');
+  return { personal: hasFeature(userId, 'personal_emoji'), animated, cross: hasFeature(userId, 'cross_lobby_emoji'), limit: animated ? PERSONAL_EMOJI_LIMIT_PREMIUM : PERSONAL_EMOJI_LIMIT_PLUS };
+}
+function listUserEmojis(userId) {
+  return db.prepare(`SELECT id, name, animated, bytes FROM user_emojis WHERE user_id = ? ORDER BY id ASC`).all(userId)
+    .map((e) => ({ id: e.id, name: e.name, animated: Boolean(e.animated), bytes: e.bytes, url: `/api/emoji/u/${e.id}` }));
+}
+// compressed: compressEmoji() çıktısı ({ data, animated, bytes })
+function addUserEmoji(userId, name, compressed) {
+  const perms = emojiPermissions(userId);
+  if (!perms.personal) return { success: false, status: 403, error: 'Kişisel emoji oluşturmak Sauran Plus/Premium aboneliği (ya da hediye) gerektirir.' };
+  const n = String(name || '').trim().toLowerCase();
+  if (!HUB_EMOJI_NAME_RE.test(n)) return { success: false, status: 400, error: 'Emoji adı 2-20 karakter; yalnızca küçük harf, rakam ve alt çizgi.' };
+  if (!compressed || typeof compressed.data !== 'string' || !/^data:image\/webp;base64,/.test(compressed.data)) return { success: false, status: 400, error: 'Geçersiz görsel.' };
+  if (compressed.animated && !perms.animated) return { success: false, status: 403, error: 'Hareketli emoji Sauran Premium\'a özeldir.' };
+  const count = db.prepare(`SELECT COUNT(*) AS c FROM user_emojis WHERE user_id = ?`).get(userId).c;
+  if (count >= perms.limit) return { success: false, status: 400, error: `Emoji yuvaların dolu (${perms.limit}).` };
+  if (db.prepare(`SELECT 1 FROM user_emojis WHERE user_id = ? AND name = ?`).get(userId, n)) return { success: false, status: 400, error: 'Bu adda bir emojin zaten var.' };
+  const info = db.prepare(`INSERT INTO user_emojis (user_id, name, image_data, animated, bytes) VALUES (?, ?, ?, ?, ?)`).run(userId, n, compressed.data, compressed.animated ? 1 : 0, compressed.bytes || 0);
+  return { success: true, emoji: { id: Number(info.lastInsertRowid), name: n, animated: Boolean(compressed.animated), url: `/api/emoji/u/${Number(info.lastInsertRowid)}` }, emojis: listUserEmojis(userId) };
+}
+function removeUserEmoji(userId, emojiId) {
+  db.prepare(`DELETE FROM user_emojis WHERE id = ? AND user_id = ?`).run(emojiId, userId);
+  return { success: true, emojis: listUserEmojis(userId) };
+}
+// Premium: üyesi olduğu (Seviye 4) diğer lobilerin emojileri
+function listCrossLobbyEmojis(userId, exceptHubId = null) {
+  if (!hasFeature(userId, 'cross_lobby_emoji')) return [];
+  const hubs = db.prepare(`SELECT hubs.id, hubs.name FROM hub_members INNER JOIN hubs ON hubs.id = hub_members.hub_id WHERE hub_members.user_id = ? AND hubs.type != 'group' ORDER BY hubs.id`).all(userId);
+  return hubs.filter((h) => h.id !== exceptHubId).map((h) => ({ hub_id: h.id, name: h.name, emojis: listHubEmojis(h.id) })).filter((h) => h.emojis.length);
+}
+// Tüm üyesi olduğu Seviye 4 lobilerin emojileri, kilit durumuyla (Premium değilse kilitli görünür; palet için)
+function listEmojiPalette(userId, currentHubId = null) {
+  const perms = emojiPermissions(userId);
+  const hubs = db.prepare(`SELECT hubs.id, hubs.name FROM hub_members INNER JOIN hubs ON hubs.id = hub_members.hub_id WHERE hub_members.user_id = ? AND hubs.type != 'group' ORDER BY hubs.id`).all(userId);
+  const lobbies = hubs.map((h) => ({ hub_id: h.id, name: h.name, current: h.id === currentHubId, locked: h.id !== currentHubId && !perms.cross, emojis: listHubEmojis(h.id) })).filter((h) => h.emojis.length);
+  return { permissions: perms, personal: perms.personal ? listUserEmojis(userId) : [], lobbies };
+}
+function getEmojiImage(kind, id, viewerId) {
+  if (!viewerId) return null;
+  if (kind === 'h') {
+    const row = db.prepare(`SELECT hub_id, image_data FROM hub_emojis WHERE id = ?`).get(id);
+    return row && hubLevel(row.hub_id) >= 4 ? row.image_data : null;
+  }
+  if (kind === 'u') {
+    const row = db.prepare(`SELECT user_id, image_data, animated FROM user_emojis WHERE id = ?`).get(id);
+    if (!row || !hasFeature(row.user_id, 'personal_emoji')) return null;
+    if (row.animated && !hasFeature(row.user_id, 'animated_emoji')) return null;
+    return row.image_data;
+  }
+  return null;
+}
+// Mesajdaki :isim: belirteçlerini göndericinin hakları ölçüsünde çözer: kişisel → bu lobi → (Premium) üyesi olduğu diğer lobiler.
+const EMOJI_TOKEN_RE = /:([a-z0-9_]{2,20}):/g;
+function resolveMessageEmojis(row) {
+  if (!row || !row.user_id || typeof row.content !== 'string' || row.content.indexOf(':') === -1 || row.kind === 'deleted') return null;
+  const names = [...new Set([...row.content.matchAll(EMOJI_TOKEN_RE)].map((m) => m[1]))].slice(0, 12);
+  if (!names.length) return null;
+  const perms = emojiPermissions(row.user_id);
+  const map = {};
+  for (const name of names) {
+    if (perms.personal) {
+      const e = db.prepare(`SELECT id, animated FROM user_emojis WHERE user_id = ? AND name = ?`).get(row.user_id, name);
+      if (e && (!e.animated || perms.animated)) { map[name] = `/api/emoji/u/${e.id}`; continue; }
+    }
+    if (row.hub_id && hubLevel(row.hub_id) >= 4) {
+      const e = db.prepare(`SELECT id FROM hub_emojis WHERE hub_id = ? AND name = ?`).get(row.hub_id, name);
+      if (e) { map[name] = `/api/emoji/h/${e.id}`; continue; }
+    }
+    if (perms.cross && row.hub_id) {
+      const e = db.prepare(`
+        SELECT hub_emojis.id, hub_emojis.hub_id FROM hub_emojis INNER JOIN hub_members ON hub_members.hub_id = hub_emojis.hub_id
+        WHERE hub_members.user_id = ? AND hub_emojis.name = ? ORDER BY hub_emojis.id LIMIT 4
+      `).all(row.user_id, name).find((x) => hubLevel(x.hub_id) >= 4);
+      if (e) map[name] = `/api/emoji/h/${e.id}`;
+    }
+  }
+  return Object.keys(map).length ? map : null;
 }
 
 function setHubAtmosphere(hubId, userId, key) {
@@ -3953,7 +4058,7 @@ function getDmMessagesPage(userId, otherUserId, { before, limit } = {}) {
 
 function getHubMessages(hubId, limit = 50, viewerId = null, beforeId = null) {
   const rows = db.prepare(`
-    SELECT messages.id, messages.user_id, messages.username, messages.content, messages.kind,
+    SELECT messages.id, messages.hub_id, messages.user_id, messages.username, messages.content, messages.kind,
            messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
@@ -3968,7 +4073,7 @@ function getHubMessages(hubId, limit = 50, viewerId = null, beforeId = null) {
 
 function getMessageById(id, viewerId = null) {
   return hydrateMessage(db.prepare(`
-    SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
+    SELECT messages.id, messages.hub_id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
@@ -3998,6 +4103,8 @@ function getReplyPreview(messageId) {
 
 function hydrateMessage(row, viewerId = null) {
   if (!row) return row;
+  const emojiMap = resolveMessageEmojis(row);
+  if (emojiMap) row.emoji_map = emojiMap;
 
   // Sauran Plus: sohbet teması yalnızca gönderenin aboneliği hâlâ aktifse uygulanır
   // (üyelik biterse geçmiş mesajlar da otomatik 'classic' görünür).
@@ -4445,13 +4552,13 @@ function searchScopeMessages({ viewerId, hubId = null, room = null, query, befor
 
   const rows = fts
     ? db.prepare(`
-        SELECT messages.id, messages.user_id, messages.username, messages.content, messages.kind, messages.created_at, users.avatar_data
+        SELECT messages.id, messages.hub_id, messages.user_id, messages.username, messages.content, messages.kind, messages.created_at, users.avatar_data
         FROM message_search JOIN messages ON messages.id = message_search.rowid LEFT JOIN users ON users.id = messages.user_id
         WHERE message_search MATCH ? AND ${where.join(' AND ')}
         ORDER BY messages.id DESC LIMIT ?
       `).all(fts, ...params, size + 1)
     : db.prepare(`
-        SELECT messages.id, messages.user_id, messages.username, messages.content, messages.kind, messages.created_at, users.avatar_data
+        SELECT messages.id, messages.hub_id, messages.user_id, messages.username, messages.content, messages.kind, messages.created_at, users.avatar_data
         FROM messages LEFT JOIN users ON users.id = messages.user_id
         WHERE ${where.join(' AND ')}
         ORDER BY messages.id DESC LIMIT ?
@@ -6381,7 +6488,7 @@ function createDmFileMessage(fromId, fromUsername, toId, file) {
 
 function getDmMessages(userId, otherUserId, limit = 50, beforeId = null) {
   const rows = db.prepare(`
-    SELECT messages.id, messages.user_id, messages.username, messages.content, messages.to_user_id,
+    SELECT messages.id, messages.hub_id, messages.user_id, messages.username, messages.content, messages.to_user_id,
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
@@ -8387,6 +8494,14 @@ module.exports = {
   setHubBanner,
   addHubEmoji,
   removeHubEmoji,
+  emojiPermissions,
+  listUserEmojis,
+  addUserEmoji,
+  removeUserEmoji,
+  listCrossLobbyEmojis,
+  listEmojiPalette,
+  getEmojiImage,
+  resolveMessageEmojis,
   hubLevel,
   PROFILE_THEMES,
   updateProfileTheme,

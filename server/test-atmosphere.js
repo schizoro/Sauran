@@ -159,7 +159,7 @@ test('Lobi emojileri: Seviye 4 şartı, yalnızca sahip, ad/format/boyut/yuva de
   assert.strictEqual(dbm.addHubEmoji(hub3, bs[0], 'kedi', png).success, false); // sahip değil
   assert.strictEqual(dbm.addHubEmoji(hub3, o3, 'Kedi!', png).success, false); // geçersiz ad
   assert.strictEqual(dbm.addHubEmoji(hub3, o3, 'kedi', 'data:image/svg+xml;base64,AAAA').success, false); // svg yok
-  assert.strictEqual(dbm.addHubEmoji(hub3, o3, 'kedi', 'data:image/png;base64,' + 'A'.repeat(150_000)).success, false); // çok büyük
+  assert.strictEqual(dbm.addHubEmoji(hub3, o3, 'kedi', 'data:image/png;base64,' + 'A'.repeat(400_000)).success, false); // çok büyük
   assert.strictEqual(dbm.addHubEmoji(hub3, o3, 'kedi', png).success, true);
   assert.strictEqual(dbm.addHubEmoji(hub3, o3, 'kedi', png).success, false); // yinelenen ad
   for (let i = 0; i < 9; i++) assert.strictEqual(dbm.addHubEmoji(hub3, o3, 'e' + i + 'x', png).success, true);
