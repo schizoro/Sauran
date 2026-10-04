@@ -2621,7 +2621,7 @@ function listAtmospheresFor(userId) {
   const active = effectiveAtmosphere(userId);
   return ATMOSPHERES.map((a) => ({
     key: a.key, label: a.label, emoji: a.emoji, desc: a.desc, art: a.art, tier: a.tier, category: a.category,
-    price_coins: a.price_coins, purchasable: Boolean(a.purchasable), bundle: a.bundle, sound: a.sound, hub_effect: a.hub_effect || 'none',
+    price_coins: a.price_coins, purchasable: Boolean(a.purchasable), bundle: a.bundle, sound: a.sound, hub_effect: a.hub_effect || 'none', hub_theme: a.hub_theme || 'default',
     early_access_until: a.early_access_until && Date.now() < new Date(a.early_access_until).getTime() ? a.early_access_until : null,
     available: atmosphereAllowed(userId, a), active: a.key === active
   }));

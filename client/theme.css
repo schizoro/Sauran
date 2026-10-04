@@ -2770,3 +2770,17 @@ body.st-open { overflow: hidden; }
 /* Mağaza performansı: ekran dışındaki kartlar çizilmez/animasyon harcamaz (79 kartlı ızgara) */
 .st-card { content-visibility: auto; contain-intrinsic-size: 160px 230px; }
 .st-card:not(:hover) .mc-fx i, .st-card:not(:hover) .pfx-mask i { animation-play-state: paused; }
+
+/* Paket önizlemesi (sekmeler + lobi) */
+.pv-tabs { display: flex; gap: 6px; padding: 4px; margin: 0 0 10px; border-radius: 999px; background: var(--glass-1); }
+.pv-tabs button { flex: 1; border: 0; background: none; padding: 9px 4px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer; }
+.pv-tabs button.on { background: var(--accent-soft); color: var(--accent); box-shadow: 0 0 0 1px var(--accent-line); }
+.pv-lobby.hub-detail-view { display: block !important; position: relative; height: 190px; border-radius: 14px; overflow: hidden; padding: 0; }
+.pv-lobby .hub-fx { z-index: 0; }
+.pv-lobby-bar { position: relative; z-index: 1; display: flex; justify-content: space-between; padding: 10px 14px; font-size: 13px; background: rgba(0,0,0,.28); }
+.pv-lobby-bar span { color: var(--text-tertiary); }
+.pv-lobby-msg { position: relative; z-index: 1; display: flex; gap: 8px; padding: 18px 14px; align-items: flex-start; }
+.pv-lobby-msg .hub-msg-bubble { font-size: 13px; }
+.st-bundle { flex-direction: column; gap: 10px; align-content: center; }
+.st-bundle-emoji { font-size: 40px; }
+.st-bundle .hub-msg-bubble { font-size: 11.5px; padding: 6px 11px; }

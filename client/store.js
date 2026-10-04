@@ -9,7 +9,7 @@
     const me = () => (typeof currentUser !== 'undefined' && currentUser) || {};
     const has = (f) => typeof userHasFeature === 'function' && userHasFeature(f);
 
-    const CATS = [['all', 'Tümü'], ['frame', 'Çerçeveler'], ['profile', 'Profil'], ['chat', 'Sohbet'], ['card', 'Üye kartları'], ['atmo', 'Atmosphere'], ['sticker', 'Çıkartmalar']];
+    const CATS = [['all', 'Tümü'], ['frame', 'Çerçeveler'], ['profile', 'Profil'], ['chat', 'Sohbet'], ['card', 'Üye kartları'], ['atmo', 'Paketler'], ['sticker', 'Çıkartmalar']];
     const PICKS = [
         { id: 'profile-theme-picker', cat: 'profile', kind: 'ptheme', attr: 'ptheme', def: 'default', feature: 'profile_theme', field: 'profile_theme', group: 'Profil teması' },
         { id: 'profile-effect-picker', cat: 'profile', kind: 'effect', attr: 'effect', def: 'none', feature: 'profile_effect', field: 'profile_effect', group: 'Profil efekti' },
@@ -78,8 +78,8 @@ const optLabel = (btn) => { const c = btn.cloneNode(true); c.querySelectorAll('.
         try {
             const cat = typeof ensureAtmoCatalog === 'function' ? await ensureAtmoCatalog(true) : null;
             if (cat && cat.items) cat.items.forEach((a) => {
-                items.push({ cat: 'atmo', id: 'atmo:' + a.key, title: a.label, sub: 'Atmosphere paketi', tier: a.tier === 'free' ? 'free' : a.tier, price: a.price_coins, owned: Boolean(a.available), active: Boolean(a.active), locked: !a.available, data: a,
-                    thumb: `<div class="st-atmo" style="background:${a.art}"><span aria-hidden="true">${a.emoji}</span></div>` });
+                items.push({ cat: 'atmo', id: 'atmo:' + a.key, title: a.label, sub: 'Paket · profil + sohbet + lobi + ses', tier: a.tier === 'free' ? 'free' : a.tier, price: a.price_coins, owned: Boolean(a.available), active: Boolean(a.active), locked: !a.available, data: a,
+                    thumb: `<div class="st-atmo st-bundle" style="background:${a.art}"><span class="st-bundle-emoji" aria-hidden="true">${a.emoji}</span><div class="hub-msg-bubble${a.bundle && a.bundle.chat_theme && a.bundle.chat_theme !== 'classic' ? ' chat-theme-' + a.bundle.chat_theme : ''}${a.bundle && a.bundle.bubble_style && a.bundle.bubble_style !== 'default' ? ' bubble-' + a.bundle.bubble_style : ''}">Merhaba! 👋</div></div>` });
             });
         } catch (_) { /* katalog yok */ }
         // Çıkartmalar
@@ -166,6 +166,26 @@ const optLabel = (btn) => { const c = btn.cloneNode(true); c.querySelectorAll('.
     function closeSheet() { const ov = $('pv-overlay'); if (ov) { ov.style.display = 'none'; ov.innerHTML = ''; } }
     function upgrade(tier) { closeSheet(); close(); document.getElementById('subs-open-btn')?.click(); void tier; }
 
+    // Paketin üç ayrı yüzü: profil, sohbet, lobi (paket neyi değiştiriyorsa, kendi hesabınla)
+    function bundleStage(a, tab) {
+        const b = a.bundle || {};
+        const u = me();
+        const name = u.username || 'Sen';
+        if (tab === 'profile') {
+            const nm = typeof usernameCardHtml === 'function' ? usernameCardHtml(name, true, b.name_effect || 'none') : esc(name);
+            return `<div class="pv-profile profile-modal-box" data-profile-theme="${escA(b.profile_theme || 'default')}"><div class="pv-avatar" id="st-bav" data-fx="${escA(b.profile_effect || 'none')}">${avatarInner()}</div><div class="pv-name">${nm}</div><div class="pv-about"><b>Hakkımda</b><span>Sauran'da oyun ve sohbet 🎮</span></div></div>`;
+        }
+        if (tab === 'chat') {
+            const cls = `${b.chat_theme && b.chat_theme !== 'classic' ? ' chat-theme-' + b.chat_theme : ''}${b.bubble_style && b.bubble_style !== 'default' ? ' bubble-' + b.bubble_style : ''}`;
+            return `<div class="pv-chat"><div class="pv-msg"><span class="pv-msg-av">M</span><div><b>Mert</b><div class="hub-msg-bubble">Akşam oyun var mı?</div></div></div><div class="pv-msg"><span class="pv-msg-av pv-me">${avatarInner()}</span><div><b>${esc(name)}</b><div class="hub-msg-bubble${cls}">Ben varım! Saat 9'da lobide 🎮</div></div></div></div>`;
+        }
+        const fx = a.hub_effect && a.hub_effect !== 'none' ? a.hub_effect : null;
+        const n = { petals: 14, stars: 26, lights: 4 }[fx] || 0;
+        let parts = '';
+        for (let i = 0; i < n; i++) { const r = Math.random; parts += `<i style="left:${(r() * 96 + 2).toFixed(1)}%;${fx === 'stars' ? `top:${(r() * 92).toFixed(1)}%;` : ''}--d:${(r() * -12).toFixed(2)}s;--t:${(8 + r() * 8).toFixed(1)}s;--s:${(0.6 + r() * 0.8).toFixed(2)}"></i>`; }
+        return `<div class="pv-lobby hub-detail-view" data-hub-theme="${escA(a.hub_theme || 'default')}">${fx ? `<div class="hub-fx hub-fx-${fx}" aria-hidden="true">${parts}</div>` : ''}<div class="pv-lobby-bar"><b># genel</b><span>4 kişi</span></div><div class="pv-lobby-msg"><span class="pv-msg-av">M</span><div class="hub-msg-bubble">Lobi bu paketle böyle görünür ✨</div></div></div>`;
+    }
+
     function openItem(it) {
         if (it.open) { it.open(); return; } // seçici düğmesine devret: ortak önizleme sayfası açılır
         const upLabel = it.tier === 'premium' ? '♛ Premium ile aç' : '✦ Plus ile aç';
@@ -188,10 +208,20 @@ const optLabel = (btn) => { const c = btn.cloneNode(true); c.querySelectorAll('.
         }
         if (it.cat === 'atmo') {
             const a = it.data;
-            const act = a.active ? '<button class="pv-btn pv-btn-ghost" disabled>Kullanılıyor ✓</button>' : a.available ? '<button class="pv-btn" data-a="use">Kullan</button>' : a.tier === 'coin' ? `<button class="pv-btn pv-btn-ghost" disabled>🪙 ${esc(a.price_coins)} · Yakında</button>` : `<button class="pv-btn pv-btn-up" data-a="up">${upLabel}</button>`;
-            const ov = sheetShell(`<div class="pv-stage"><div class="st-atmo st-atmo-big" style="background:${a.art}"><span aria-hidden="true">${a.emoji}</span></div></div>
-                <div class="pv-info"><div class="pv-kicker">Atmosphere paketi</div><h3>${esc(a.label)} ${tierBadge(it.tier, it.price)}</h3><p>${esc(a.desc || '')}</p></div>
-                <div class="pv-actions">${act}${a.sound ? '<button class="pv-btn pv-btn-ghost" data-a="snd">▶ Sesi dinle</button>' : ''}<button class="pv-btn pv-btn-ghost" data-a="close">Kapat</button></div>`);
+            const act = a.active ? '<button class="pv-btn pv-btn-ghost" disabled>Kullanılıyor ✓</button>' : a.available ? '<button class="pv-btn" data-a="use">Hepsini uygula</button>' : a.tier === 'coin' ? `<button class="pv-btn pv-btn-ghost" disabled>🪙 ${esc(a.price_coins)} · Yakında</button>` : `<button class="pv-btn pv-btn-up" data-a="up">${upLabel}</button>`;
+            const ov = sheetShell(`<div class="pv-tabs" role="tablist"><button type="button" data-t="profile" class="on">Profil</button><button type="button" data-t="chat">Sohbet</button><button type="button" data-t="lobby">Lobi</button></div>
+                <div class="pv-stage" id="st-bstage"></div>
+                <div class="pv-info"><div class="pv-kicker">Paket</div><h3>${esc(a.label)} ${tierBadge(it.tier, it.price)}</h3><p>${esc(a.desc || '')}</p><div class="atmo-chips" style="margin:-4px 0 12px;">${typeof atmoChips === 'function' ? atmoChips(a) : ''}</div></div>
+                <div class="pv-actions">${act}${a.sound ? '<button class="pv-btn pv-btn-ghost" data-a="snd">▶ Ses</button>' : ''}<button class="pv-btn pv-btn-ghost" data-a="close">Kapat</button></div>`);
+            const stage = ov.querySelector('#st-bstage');
+            const show = (t) => {
+                ov.querySelectorAll('.pv-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === t));
+                stage.innerHTML = bundleStage(a, t);
+                const av = stage.querySelector('#st-bav');
+                if (av && av.dataset.fx && typeof applyProfileEffect === 'function') applyProfileEffect(av, av.dataset.fx);
+            };
+            ov.querySelectorAll('.pv-tabs button').forEach((b) => b.addEventListener('click', () => show(b.dataset.t)));
+            show('profile');
             ov.querySelector('[data-a="close"]').onclick = closeSheet;
             ov.querySelector('[data-a="use"]')?.addEventListener('click', async () => { closeSheet(); if (typeof applyAtmosphereKey === 'function') await applyAtmosphereKey(a.key); refresh(); });
             ov.querySelector('[data-a="up"]')?.addEventListener('click', () => upgrade(it.tier));
