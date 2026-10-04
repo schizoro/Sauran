@@ -173,7 +173,7 @@
         if (gif.enabled === false) return { html: `<div class="ep-gif-soon"><div class="ep-gif-ic">🎞️</div><h4>GIF'ler yakında</h4><p>GIF araması henüz etkin değil.</p></div>`, jumps: [] };
         const grid = gif.items.map((g) => `<button type="button" class="ep-gif" data-gif="${escA(g.url)}" style="aspect-ratio:${g.w}/${g.h}"><img src="${escA(g.preview)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"></button>`).join('');
         const msg = gif.loading ? '<p class="ep-note ep-empty">Yükleniyor…</p>' : gif.error ? `<p class="ep-note ep-empty">${esc(gif.error)}</p>` : (!gif.items.length && gif.enabled ? '<p class="ep-note ep-empty">Sonuç yok.</p>' : '');
-        return { html: `<div class="ep-gif-grid">${grid}</div>${msg}<p class="ep-gif-attr">Powered by GIPHY</p>`, jumps: [] };
+        return { html: `<div class="ep-gif-grid">${grid}</div>${msg}`, jumps: [] };
     }
     async function loadGifs() {
         gif.loading = true; gif.error = ''; renderBodyKeep();
@@ -203,7 +203,11 @@
         const body = el('ep-body');
         body.innerHTML = out.html;
         if (!keepSearch) body.scrollTop = 0;
-        el('ep-jump').innerHTML = out.jumps.map(([id, label]) => `<button type="button" data-ep-jump="${id}">${label}</button>`).join('');
+        const jump = el('ep-jump');
+        const gifOn = state.tab === 'gif' && gif.enabled !== false;
+        jump.classList.toggle('ep-attr-bar', gifOn);
+        // GIF sekmesinde alt çubuk, kaydırmadan bağımsız her zaman görünen GIPHY atfıdır.
+        jump.innerHTML = gifOn ? '<span class="ep-gif-attr">Powered by GIPHY</span>' : out.jumps.map(([id, label]) => `<button type="button" data-ep-jump="${id}">${label}</button>`).join('');
     }
 
     function insertText(text) {
