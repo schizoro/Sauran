@@ -2794,3 +2794,30 @@ body.st-open { overflow: hidden; }
 .hub-list-tab-count { font-size: 12.5px; font-weight: 600; min-width: 24px; text-align: center; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.08); color: var(--text-secondary); }
 .hub-list-tab.on .hub-list-tab-count { background: var(--accent); color: #06121a; }
 @media (max-width: 480px) { .hub-list-tab { padding: 0 12px; font-size: 13.5px; } }
+
+/* ══ Telefon (dikey): sol ray yerine ekranın altında yüzen cam hap (pill) gezinme ═══════════════════════
+   Aynı düğmeler/işleyiciler kullanılır; yalnızca görünüm değişir. Yatay telefonda eski sol ray kalır. Sohbet/Keşfet ekranlarında ray zaten gizli. */
+@media (max-width: 720px) and (min-height: 501px) {
+  :root { --rail-w: 0px; }
+  .app-rail {
+    position: fixed !important; left: 12px !important; right: 12px !important; top: auto !important; bottom: calc(10px + env(safe-area-inset-bottom)) !important;
+    width: auto !important; height: 68px !important; padding: 7px 8px !important; gap: 2px !important; margin: 0 !important;
+    flex-direction: row !important; align-items: center !important; justify-content: space-between !important; overflow: visible !important;
+    border-radius: 999px !important; z-index: 210;
+    background: linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.05)), rgba(18, 26, 42, .78) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(1.5); backdrop-filter: blur(22px) saturate(1.5);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.28), inset 0 0 0 1px rgba(255,255,255,.12), 0 18px 40px -12px rgba(0,0,0,.75) !important;
+  }
+  .app-rail .app-rail-logo, .app-rail .rail-spacer, .app-rail #rail-friend, .app-rail #rail-notifications, .app-rail #rail-settings { display: none !important; }
+  .app-rail .rail-btn, .app-rail .rail-avatar { flex: 1 1 0 !important; width: auto !important; min-width: 0; height: 52px !important; border-radius: 999px !important; display: grid; place-items: center; margin: 0 !important; }
+  .app-rail .rail-btn svg { width: 24px; height: 24px; stroke-width: 1.7; }
+  .app-rail .rail-btn.on, .app-rail .rail-btn.active { background: rgba(255,255,255,.14) !important; box-shadow: inset 0 0 0 1px rgba(255,255,255,.14) !important; color: #fff; }
+  .app-rail .rail-avatar { order: 9; }
+  .app-rail [data-lbl]::after { display: none !important; }
+  .app-rail .rail-avatar { flex: 0 0 52px !important; width: 52px !important; }
+  /* çekmece (Lobiler / Arkadaşlar / Gruplar) pillin üstünde biter; pille çekmeceler arası geçilebilir */
+  .lobby-nav { bottom: calc(86px + env(safe-area-inset-bottom)) !important; }
+  /* içerik pillin altında kalmasın */
+  body:not([data-view="hub-detail"]):not([data-view="discover"]) .chat-area { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+  #hub-list-view { padding-bottom: calc(100px + env(safe-area-inset-bottom)) !important; }
+}
