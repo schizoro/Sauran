@@ -111,7 +111,8 @@ ear(212, 56, -15, 'earStraight', 'sway')
 ear(300, 56, 15, 'earFold', 'swayB')
 
 # dış yumuşak parıltı
-add(f'<circle cx="{CX}" cy="{CY}" r="{R}" fill="none" stroke="#ff9ec6" stroke-width="44" opacity=".42" filter="url(#blur8)"/>')
+add(f'<circle cx="{CX}" cy="{CY}" r="{R}" fill="none" stroke="#ff9ec6" stroke-width="62" opacity=".12"/>')
+add(f'<circle cx="{CX}" cy="{CY}" r="{R}" fill="none" stroke="#ff9ec6" stroke-width="50" opacity=".16"/>')
 # ana halka (gül-altın), kenar kabartması
 add(f'<circle cx="{CX}" cy="{CY}" r="{R}" fill="none" stroke="#8f2f5a" stroke-width="46" opacity=".6"/>')
 add(f'<circle cx="{CX}" cy="{CY}" r="{R}" fill="none" stroke="url(#gold)" stroke-width="40"/>')
@@ -225,6 +226,10 @@ for deg, r, s, dl in sp:
 
 add('</svg>')
 svg = chr(10).join(out).replace('__EARDEFS__', EARDEFS)
+# Performans: SVG süzgeçleri (bulanıklık/gölge) her karede yeniden çizim ister ve telefonlarda ekranı dondurur → hiç süzgeç yok.
+import re as _re
+svg = _re.sub(r'<filter id="[^"]+".*?</filter>', '', svg, flags=_re.S)
+svg = _re.sub(r' filter="url\(#[^)]+\)"', '', svg)
 if T is not None:
     svg = svg.replace('</style>', '.tw,.fl,.sway,.swayB{animation:none!important}</style>', 1)
 open(os.environ.get('ROSE_OUT') or r'C:\Users\7kmht\OneDrive\Masaüstü\Sauran\client\assets\frame-supporter-rose.svg', 'w', encoding='utf-8', newline='\n').write(svg)

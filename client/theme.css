@@ -2971,3 +2971,23 @@ body.drawer-friendlist .friends-directory { display: flex; flex-direction: colum
 .anim-off, .anim-off *, .anim-off::before, .anim-off::after, .anim-off *::before, .anim-off *::after { animation-play-state: paused !important; }
 /* Üzerinde kalıcı pencere açıkken (DM paneli üstü dahil) tüm pencereler DM panelinin üstünde açılır */
 .modal-overlay:not(.pv-overlay) { z-index: 230; }
+
+/* Performans: Supporter Rose çerçevesi listelerde SABİT sürümü kullanır (animasyonlu SVG her karede yeniden çizilir; telefonda sohbeti dondurabilir) */
+#hub-feed .sr-ring-img, #dm-feed .sr-ring-img, #dm-modal .sr-ring-img, #hub-member-list .sr-ring-img, #friends-sidebar-list .sr-ring-img, #friends-favorites .sr-ring-img, #fd-list .sr-ring-img,
+#notifications-list .sr-ring-img, .gift-wrap .sr-ring-img { content: url("assets/frame-supporter-rose-static.svg"); }
+#dm-modal .sr-highlight, #dm-modal .sf-highlight { display: none !important; }
+#dm-modal .sr-overlay::before, #dm-modal .sf-overlay::before { animation: none !important; }
+#dm-modal .pnp-dust, #dm-modal .pnc-dust { display: none !important; animation: none !important; }
+#dm-modal .pf-overlay *, #dm-modal .pf-dust, #dm-modal .pf-spark { animation: none !important; }
+
+/* Performans (iPhone/iPad): bulanık cam (backdrop-filter) iOS'ta tüm ekranı her karede yeniden çizdirir ve sohbeti dondurur.
+   Cam yüzeyler iOS'ta opak koyu zeminle çizilir; diğer platformlarda görünüm değişmez. */
+@supports (-webkit-touch-callout: none) {
+  .modal-box, .profile-modal-box, .dm-modal-box, .liquid-glass, .lobby-nav, .mnav, .dm-incoming-call-modal, .app-rail, .friends-sidebar,
+  .hub-composer, .topbar, .composer-attach-menu, .msg-actions-menu, .hub-member-menu {
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+  }
+  .dm-modal-box, .profile-modal-box { background: #0f131a !important; }
+  .lobby-nav, .mnav, .app-rail { background-color: #121a26 !important; }
+  .modal-overlay { background: rgba(0, 0, 0, .66); }
+}
