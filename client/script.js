@@ -6776,6 +6776,8 @@ function buildDeletedDmRowsHtml() {
 
 function renderFriendsSidebar(friends) {
 
+    window.__friendsCache = friends || [];
+    document.dispatchEvent(new Event('friends-updated'));
     renderFriendFavorites();
 
     if ((!friends || friends.length === 0) && (!deletedDmThreads || deletedDmThreads.length === 0)) {

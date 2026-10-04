@@ -344,7 +344,7 @@
     // ── Küçük ekran: lobi listesi çekmece ──────────────────────────────
     const toggle = $('lobby-nav-toggle');
     function closeDrawer() {
-        document.body.classList.remove('lobby-drawer-open', 'drawer-friends', 'drawer-groups');
+        document.body.classList.remove('lobby-drawer-open', 'drawer-friends', 'drawer-groups', 'drawer-friendlist');
         if (toggle) toggle.setAttribute('aria-expanded', 'false');
         document.querySelectorAll('#rail-lobbies, #rail-groups').forEach((b) => b.setAttribute('aria-expanded', 'false'));
     }
@@ -364,7 +364,7 @@
     }
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
     document.addEventListener('click', (e) => {
-        if (document.body.classList.contains('lobby-drawer-open') && !e.target.closest('#lobby-nav, #lobby-nav-toggle, #app-rail')) closeDrawer();
+        if (document.body.classList.contains('lobby-drawer-open') && !e.target.closest('#lobby-nav, #lobby-nav-toggle, #app-rail, #mnav')) closeDrawer();
         // Arkadaş satırına dokununca sohbet açılır; çekmece kapanır (küçük ekran).
         if (e.target.closest('#friends-sidebar-list .friends-sidebar-row')) closeDrawer();
         // Grup satırı / yeni grup / lobi satırı: çekmece kapanır (açılan pencere çekmecenin arkasında kalmasın).

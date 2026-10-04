@@ -2795,29 +2795,50 @@ body.st-open { overflow: hidden; }
 .hub-list-tab.on .hub-list-tab-count { background: var(--accent); color: #06121a; }
 @media (max-width: 480px) { .hub-list-tab { padding: 0 12px; font-size: 13.5px; } }
 
-/* ══ Telefon (dikey): sol ray yerine ekranın altında yüzen cam hap (pill) gezinme ═══════════════════════
-   Aynı düğmeler/işleyiciler kullanılır; yalnızca görünüm değişir. Yatay telefonda eski sol ray kalır. Sohbet/Keşfet ekranlarında ray zaten gizli. */
+/* ══ Telefon (dikey): sol ray yerine altta yüzen cam hap (pill) gezinme — #mnav (mobile-nav.js) ═══════════
+   Yatay telefonda ve tabletlerde eski sol ray kalır. Sohbet/Keşfet ekranlarında hap gizlidir (tam ekran içerik). */
+.mnav, .friends-directory { display: none; }
 @media (max-width: 720px) and (min-height: 501px) {
   :root { --rail-w: 0px; }
-  .app-rail {
-    position: fixed !important; left: 12px !important; right: 12px !important; top: auto !important; bottom: calc(10px + env(safe-area-inset-bottom)) !important;
-    width: auto !important; height: 68px !important; padding: 7px 8px !important; gap: 2px !important; margin: 0 !important;
-    flex-direction: row !important; align-items: center !important; justify-content: space-between !important; overflow: visible !important;
-    border-radius: 999px !important; z-index: 210;
-    background: linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.05)), rgba(18, 26, 42, .78) !important;
+  .app-rail { display: none !important; }
+  .mnav {
+    position: fixed; left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); height: 68px; z-index: 210;
+    display: flex; align-items: center; justify-content: space-between; gap: 2px; padding: 7px 8px; border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.05)), rgba(18, 26, 42, .78);
     -webkit-backdrop-filter: blur(22px) saturate(1.5); backdrop-filter: blur(22px) saturate(1.5);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.28), inset 0 0 0 1px rgba(255,255,255,.12), 0 18px 40px -12px rgba(0,0,0,.75) !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.28), inset 0 0 0 1px rgba(255,255,255,.12), 0 18px 40px -12px rgba(0,0,0,.75);
   }
-  .app-rail .app-rail-logo, .app-rail .rail-spacer, .app-rail #rail-friend, .app-rail #rail-notifications, .app-rail #rail-settings { display: none !important; }
-  .app-rail .rail-btn, .app-rail .rail-avatar { flex: 1 1 0 !important; width: auto !important; min-width: 0; height: 52px !important; border-radius: 999px !important; display: grid; place-items: center; margin: 0 !important; }
-  .app-rail .rail-btn svg { width: 24px; height: 24px; stroke-width: 1.7; }
-  .app-rail .rail-btn.on, .app-rail .rail-btn.active { background: rgba(255,255,255,.14) !important; box-shadow: inset 0 0 0 1px rgba(255,255,255,.14) !important; color: #fff; }
-  .app-rail .rail-avatar { order: 9; }
-  .app-rail [data-lbl]::after { display: none !important; }
-  .app-rail .rail-avatar { flex: 0 0 52px !important; width: 52px !important; }
-  /* çekmece (Lobiler / Arkadaşlar / Gruplar) pillin üstünde biter; pille çekmeceler arası geçilebilir */
+  body[data-view="hub-detail"] .mnav, body[data-view="discover"] .mnav { display: none; }
+  .mnav-btn { position: relative; flex: 1 1 0; min-width: 0; height: 52px; border: 0; border-radius: 999px; background: none; color: var(--text-secondary); display: grid; place-items: center; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .mnav-btn svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .mnav-btn.on { background: rgba(255,255,255,.14); color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); }
+  .mnav-avatar { flex: 0 0 52px; }
+  .mnav-av { width: 38px; height: 38px; border-radius: 50%; background: var(--bg-surface-3) center / cover no-repeat; display: grid; place-items: center; font-weight: 700; font-size: 15px; color: var(--text-primary); box-shadow: 0 0 0 2px rgba(255,255,255,.25); }
+  .mnav-dot { position: absolute; top: 9px; right: calc(50% - 20px); width: 10px; height: 10px; border-radius: 50%; background: #ff3b4e; box-shadow: 0 0 0 2px rgba(18, 26, 42, .9); }
+  /* çekmece (Gruplar / Mesajlar / Arkadaşlar) pillin üstünde biter */
   .lobby-nav { bottom: calc(86px + env(safe-area-inset-bottom)) !important; }
-  /* içerik pillin altında kalmasın */
   body:not([data-view="hub-detail"]):not([data-view="discover"]) .chat-area { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
   #hub-list-view { padding-bottom: calc(100px + env(safe-area-inset-bottom)) !important; }
+  /* Arkadaşlar çekmecesi: yalnızca arkadaş listesi + arama (mesajlaşma paneli ve lobi listesi gizli) */
+  body.drawer-friendlist .lobby-nav-head, body.drawer-friendlist #lobby-nav-list, body.drawer-friendlist .lobby-nav .friends-sidebar, body.drawer-friendlist .lobby-nav .friends-groups { display: none !important; }
+  body.drawer-friendlist .friends-directory { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 }
+.friends-directory { padding: 4px 4px 0; }
+.fd-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 10px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); font-weight: 700; }
+.fd-search { display: flex; align-items: center; gap: 8px; margin: 0 4px 10px; padding: 0 12px; border-radius: 12px; background: var(--glass-1); box-shadow: inset 0 0 0 1px var(--border-soft); }
+.fd-search svg { width: 17px; height: 17px; stroke: var(--text-tertiary); fill: none; stroke-width: 1.8; stroke-linecap: round; flex: none; }
+.fd-search input { flex: 1; min-width: 0; height: 42px; border: 0; background: none; outline: 0; color: var(--text-primary); font-size: 14px; }
+.fd-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding: 0 2px 8px; }
+.fd-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 10px; border: 0; border-radius: 12px; background: none; color: var(--text-primary); cursor: pointer; text-align: left; font-size: 14.5px; }
+.fd-row:hover, .fd-row:active { background: rgba(255,255,255,.07); }
+.fd-av { position: relative; flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; background: var(--user-color, #5b6cff); color: #fff; }
+.fd-av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.fd-st { position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px; border-radius: 50%; background: #4b5563; box-shadow: 0 0 0 2.5px #121a26; }
+.fd-st.on { background: #57f287; }
+.fd-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.fd-sub { font-size: 12px; color: var(--text-tertiary); }
+.fd-empty { padding: 26px 14px; text-align: center; color: var(--text-tertiary); font-size: 13.5px; line-height: 1.5; }
+/* Ana Menü üst satırı: Yeni Lobi / Yeni Arkadaş / Yeni Grup */
+#hub-list-header { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.hub-create-btn-alt { background: var(--glass-1) !important; color: var(--text-primary) !important; box-shadow: inset 0 0 0 1px var(--accent-line) !important; }
+@media (max-width: 480px) { #hub-list-header { flex-wrap: nowrap; gap: 6px; } #hub-list-header .hub-create-btn { flex: 1 1 0; min-width: 0; padding: 0 6px; font-size: 12.5px; white-space: nowrap; min-height: 40px; } }
