@@ -2767,3 +2767,6 @@ body.st-open { overflow: hidden; }
 .st-frame { width: 70px; height: 70px; border-radius: 50%; display: grid; place-items: center; font-size: 26px; font-weight: 700; position: relative; }
 .st-bigframe { display: grid; place-items: center; padding: 20px 0; }
 @media (max-width: 720px) { .st-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .st-thumb { height: 116px; } }
+/* Mağaza performansı: ekran dışındaki kartlar çizilmez/animasyon harcamaz (79 kartlı ızgara) */
+.st-card { content-visibility: auto; contain-intrinsic-size: 160px 230px; }
+.st-card:not(:hover) .mc-fx i, .st-card:not(:hover) .pfx-mask i { animation-play-state: paused; }
