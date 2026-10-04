@@ -14,52 +14,62 @@ def split(c, t):
     a = lerp(p0, p1); b = lerp(p1, p2); c2 = lerp(p2, p3)
     d = lerp(a, b); e = lerp(b, c2); f = lerp(d, e)
     return [p0, a, d, f], [f, e, c2, p3]
-def d_of(segs):
+def d_of(segs, z=True):
     d = 'M%g,%g' % segs[0][0]
     for sg in segs:
         d += ' C%g,%g %g,%g %g,%g' % (sg[1] + sg[2] + sg[3])
-    return d + 'Z'
+    return d + ('Z' if z else '')
 def straight(A, CAP, C):
     a1, a2 = split(A, .5)
     c1, rest = split(CAP, 1 / 3); c2, c3 = split(rest, .5)
     k1, k2 = split(C, .5)
     return [a1, a2, c1, c2, c3, k1, k2]
 OUT_STRAIGHT = straight([(-23,0),(-37,-48),(-36,-112),(-11,-146)], [(-11,-146),(-5,-154),(5,-154),(11,-146)], [(11,-146),(36,-112),(37,-48),(23,0)])
-OUT_BENT = [
-    [(-23,0),(-30,-26),(-20,-60),(-18,-90)],
-    [(-18,-90),(-18,-122),(8,-144),(36,-144)],
-    [(36,-144),(66,-144),(89,-122),(89,-90)],
-    [(89,-90),(89,-78),(89,-62),(89,-48)],
-    [(89,-48),(88,-30),(55,-30),(55,-48)],
-    [(55,-48),(55,-74),(52,-104),(36,-104)],
-    [(36,-104),(22,-104),(17,-50),(23,0)]]
+# Kulak TEK parça: kırılma çizgisinin (CREASE) üstündeki yarı, çizgi etrafında dikey çevrilip (scaleY 1 → -0.8) kulağın ÖNÜNE iner.
+# Çevrilen yarı kulağın arka yüzünü (beyaz) gösterir; iç pembe kısım çevrilirken solar. Ek kesik/boşluk yoktur (iki yarı aynı çizgide birleşir).
+import os, re
+CREASE = -100
+T = os.environ.get('ROSE_T')
+STK = 'stroke="#e77ca4" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"'
 IN_STRAIGHT = straight([(-12,-6),(-21,-48),(-20,-100),(-6,-130)], [(-6,-130),(-2,-137),(2,-137),(6,-130)], [(6,-130),(20,-100),(21,-48),(12,-6)])
-IN_BENT = [
-    [(-12,-6),(-17,-30),(-11,-62),(-9,-88)],
-    [(-9,-88),(-9,-116),(12,-134),(36,-134)],
-    [(36,-134),(62,-134),(80,-116),(80,-88)],
-    [(80,-88),(80,-78),(80,-66),(80,-56)],
-    [(80,-56),(79,-42),(63,-42),(63,-56)],
-    [(63,-56),(63,-92),(55,-114),(36,-114)],
-    [(36,-114),(20,-114),(10,-52),(12,-6)]]
-FOLD_T = 'keyTimes="0;0.45;0.56;0.8;0.9;1" calcMode="spline" keySplines=".4 0 .2 1;.4 0 .2 1;.4 0 .2 1;.3 0 .3 1;.4 0 .2 1" dur="9s" repeatCount="indefinite"'
-def anim(attr, vals):
-    return '<animate attributeName="%s" %s values="%s"/>' % (attr, FOLD_T, ';'.join(vals))
-dS, dB, iS, iB = d_of(OUT_STRAIGHT), d_of(OUT_BENT), d_of(IN_STRAIGHT), d_of(IN_BENT)
+dS = d_of(OUT_STRAIGHT)
+iS = d_of(IN_STRAIGHT)
 LINE1 = 'M-9,-26 C-13,-60 -11,-96 -4,-122'
 LINE2 = 'M-30,-70 C-26,-100 -18,-124 -8,-140'
-EARDEFS = f"""<g id="earStraight">
-  <path d="{dS}" fill="url(#earOut)" stroke="#e77ca4" stroke-width="2.2" stroke-linejoin="round"/>
-  <path d="{iS}" fill="url(#earIn)"/>
+EARBASE = f'<g id="earBase"><path d="{dS}" fill="url(#earOut)" {STK}/></g>'
+EARINNER = f"""<g id="earInner"><path d="{iS}" fill="url(#earIn)"/>
   <path d="{LINE1}" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".55"/>
-  <path d="{LINE2}" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".6"/>
-</g>
-<g id="earFold">
-  <path d="{dS}" fill="url(#earOut)" stroke="#e77ca4" stroke-width="2.2" stroke-linejoin="round">{anim('d', [dS, dS, dB, dB, dS, dS])}</path>
-  <path d="{iS}" fill="url(#earIn)">{anim('d', [iS, iS, iB, iB, iS, iS])}</path>
-  <path d="{LINE1}" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".55">{anim('opacity', ['.55', '.55', '0', '0', '.55', '.55'])}</path>
-  <path d="{LINE2}" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".6">{anim('opacity', ['.6', '.6', '0', '0', '.6', '.6'])}</path>
+  <path d="{LINE2}" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".6"/></g>"""
+CLIPS = f"""<clipPath id="earLow"><rect x="-80" y="{CREASE - 1}" width="160" height="{-CREASE + 30}"/></clipPath>
+<clipPath id="earUp"><rect x="-80" y="-220" width="160" height="{220 + CREASE + 1}"/></clipPath>"""
+EARSTRAIGHT = '<g id="earStraight"><use href="#earBase"/><use href="#earInner"/></g>'
+KT = 'keyTimes="0;0.45;0.56;0.8;0.9;1" calcMode="spline" keySplines=".4 0 .2 1;.4 0 .2 1;.4 0 .2 1;.3 0 .3 1;.4 0 .2 1" dur="9s" repeatCount="indefinite"'
+def tf(vals):
+    return '<animateTransform attributeName="transform" type="scale" ' + KT + ' values="' + ';'.join(vals) + '"/>'
+def op(kt, vals, dur='9s'):
+    return '<animate attributeName="opacity" keyTimes="' + kt + '" dur="' + dur + '" repeatCount="indefinite" values="' + vals + '"/>'
+def rot(vals):
+    return '<animateTransform attributeName="transform" type="rotate" ' + KT + ' values="' + ';'.join(vals) + '"/>'
+ROLL = f'<ellipse cx="0" cy="{CREASE}" rx="30" ry="3.4" fill="url(#earOut)" stroke="#e77ca4" stroke-width="1.8"'
+if T is None:
+    EARFOLD = f"""<g id="earFold">
+  <g clip-path="url(#earLow)"><use href="#earBase"/><use href="#earInner"/></g>
+  <g transform="translate(0 {CREASE})"><g>{rot(['0', '0', '7', '7', '0', '0'])}<g>{tf(['1 1', '1 1', '1 -0.85', '1 -0.85', '1 1', '1 1'])}
+    <g transform="translate(0 {-CREASE})"><g clip-path="url(#earUp)"><use href="#earBase"/>
+      <g opacity="1">{op('0;0.46;0.5;0.82;0.86;1', '1;1;0;0;1;1')}<use href="#earInner"/></g></g></g>
+  </g></g></g>
+  {ROLL} opacity="0">{op('0;0.5;0.56;0.8;0.85;1', '0;0;1;1;0;0')}</ellipse>
 </g>"""
+else:
+    t = float(T)
+    sc = 1 - 1.8 * t
+    EARFOLD = f"""<g id="earFold">
+  <g clip-path="url(#earLow)"><use href="#earBase"/><use href="#earInner"/></g>
+  <g transform="translate(0 {CREASE}) rotate({7*t:.2f}) scale(1 {1 - 1.85*t:.3f}) translate(0 {-CREASE})"><g clip-path="url(#earUp)"><use href="#earBase"/>
+    <g opacity="{1 if (1 - 1.85*t) > 0.1 else 0}"><use href="#earInner"/></g></g></g>
+  {ROLL} opacity="{max(0, min(1, (t - 0.55) / 0.3)):.2f}"/>
+</g>"""
+EARDEFS = EARBASE + "\n" + EARINNER + "\n" + CLIPS + "\n" + EARSTRAIGHT + "\n" + EARFOLD
 
 out = []
 add = out.append
@@ -78,8 +88,8 @@ add('''<defs>
 <filter id="blur8" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="9"/></filter>
 <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="2" stdDeviation="2.2" flood-color="#8a2a55" flood-opacity=".45"/></filter>
 __EARDEFS__
-<linearGradient id="earOut" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ffc3d8"/><stop offset=".45" stop-color="#fff0f5"/><stop offset="1" stop-color="#ffffff"/></linearGradient>
-<linearGradient id="earIn" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff86b3"/><stop offset=".6" stop-color="#ffb4cf"/><stop offset="1" stop-color="#ffd9e6"/></linearGradient>
+<linearGradient id="earOut" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="-150"><stop offset="0" stop-color="#ffc3d8"/><stop offset=".45" stop-color="#fff0f5"/><stop offset="1" stop-color="#ffffff"/></linearGradient>
+<linearGradient id="earIn" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="-140"><stop offset="0" stop-color="#ff86b3"/><stop offset=".6" stop-color="#ffb4cf"/><stop offset="1" stop-color="#ffd9e6"/></linearGradient>
 <path id="spark" d="M0,-10 C1.2,-3 3,-1.2 10,0 C3,1.2 1.2,3 0,10 C-1.2,3 -3,1.2 -10,0 C-3,-1.2 -1.2,-3 0,-10Z"/>
 <style>
 .tw{transform-box:fill-box;transform-origin:center;animation:tw 2.8s ease-in-out infinite}
@@ -215,5 +225,7 @@ for deg, r, s, dl in sp:
 
 add('</svg>')
 svg = chr(10).join(out).replace('__EARDEFS__', EARDEFS)
-open(r'C:\Users\7kmht\OneDrive\Masaüstü\Sauran\client\assets\frame-supporter-rose.svg', 'w', encoding='utf-8', newline='\n').write(svg)
+if T is not None:
+    svg = svg.replace('</style>', '.tw,.fl,.sway,.swayB{animation:none!important}</style>', 1)
+open(os.environ.get('ROSE_OUT') or r'C:\Users\7kmht\OneDrive\Masaüstü\Sauran\client\assets\frame-supporter-rose.svg', 'w', encoding='utf-8', newline='\n').write(svg)
 print(len(svg))
