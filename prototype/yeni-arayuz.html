@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sauran — Yeni Arayüz Prototipi</title>
+<style>
+:root {
+  --bg: #070a10; --panel: #0d1220; --panel-2: #121a2c; --panel-3: #18233a; --line: rgba(255,255,255,.07);
+  --text: #e8ecf5; --text-2: #a8b3c9; --text-3: #6f7c96;
+  --accent: #5cc8ff; --accent-2: #7c8cff; --accent-soft: rgba(92,200,255,.14); --accent-line: rgba(92,200,255,.38);
+  --good: #57f287; --gold: #ffd166; --radius: 16px;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; color: var(--text); background:
+  radial-gradient(900px 500px at 15% 10%, rgba(124,140,255,.22), transparent 60%),
+  radial-gradient(800px 500px at 90% 90%, rgba(92,200,255,.14), transparent 60%), var(--bg); overflow: hidden; }
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+.app { height: 100%; padding: 22px; display: grid; grid-template-columns: 260px minmax(0, 1fr) 300px; gap: 14px; }
+.card { background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.015)), var(--panel); border-radius: 20px; box-shadow: 0 0 0 1px var(--line), 0 24px 60px -30px rgba(0,0,0,.8); min-height: 0; }
+
+/* Sol sütun */
+.side { display: flex; flex-direction: column; padding: 16px 12px; overflow: hidden; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 14px; }
+.logo { width: 32px; height: 32px; border-radius: 10px; background: conic-gradient(from 210deg, var(--accent), var(--accent-2), #c46bff, var(--accent)); display: grid; place-items: center; box-shadow: 0 6px 18px -6px var(--accent); }
+.logo::after { content: ""; width: 12px; height: 12px; border-radius: 50%; background: var(--panel); }
+.brand b { font-size: 19px; letter-spacing: .01em; }
+.brand .newdm { margin-left: auto; width: 32px; height: 32px; border-radius: 10px; background: var(--panel-3); font-size: 15px; }
+.nav { display: flex; flex-direction: column; gap: 3px; }
+.nav button { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 12px; color: var(--text-2); font-size: 14px; text-align: left; position: relative; }
+.nav button:hover { background: rgba(255,255,255,.05); color: var(--text); }
+.nav button.on { background: linear-gradient(90deg, #1f5fd1, #2f7bff); color: #fff; box-shadow: 0 10px 24px -14px #2f7bff; }
+.nav .ic { width: 20px; text-align: center; font-size: 16px; }
+.badge { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #2f7bff; font-size: 11px; font-weight: 700; display: grid; place-items: center; color: #fff; }
+.nav .badge.gold { background: linear-gradient(135deg, #ffb347, #ffd166); color: #2a1c00; }
+.sec-title { margin: 18px 10px 8px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
+.dms { overflow-y: auto; display: flex; flex-direction: column; gap: 2px; min-height: 0; scrollbar-width: thin; }
+.dm { display: flex; align-items: center; gap: 11px; padding: 8px 10px; border-radius: 12px; font-size: 13.5px; color: var(--text-2); }
+.dm:hover, .dm.on { background: rgba(255,255,255,.06); color: var(--text); }
+.me { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 14px; background: var(--panel-2); }
+.me small { display: block; color: var(--text-3); font-size: 11px; }
+
+.av { position: relative; flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 14px; color: #fff; background: var(--c, #5b6cff); }
+.av::after { content: ""; position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; border-radius: 50%; background: var(--s, #4b5563); box-shadow: 0 0 0 2.5px var(--panel); }
+.av.on { --s: var(--good); } .av.away { --s: #faa61a; }
+.av.ring { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px #ff6ac1; }
+
+/* Orta: sohbet */
+.chat { display: flex; flex-direction: column; overflow: hidden; }
+.chat-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.chat-head h2 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.chat-head small { display: block; color: var(--text-3); font-size: 12px; font-weight: 400; margin-top: 1px; }
+.hash { width: 30px; height: 30px; border-radius: 9px; background: var(--panel-3); display: grid; place-items: center; color: var(--text-2); }
+.tools { margin-left: auto; display: flex; gap: 4px; }
+.tools button { width: 36px; height: 36px; border-radius: 10px; color: var(--text-2); font-size: 16px; }
+.tools button:hover { background: rgba(255,255,255,.07); color: var(--text); }
+.msgs { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 16px; scrollbar-width: thin; }
+.msg { display: flex; gap: 12px; align-items: flex-start; }
+.msg .av { width: 38px; height: 38px; }
+.meta { display: flex; align-items: baseline; gap: 8px; font-size: 13px; }
+.meta b { font-size: 14px; } .meta time { color: var(--text-3); font-size: 11.5px; }
+.bubble { margin-top: 3px; font-size: 14px; line-height: 1.5; color: var(--text); max-width: 560px; }
+.bubble.b-glass { padding: 8px 14px; border-radius: 16px; background: rgba(120,160,255,.12); box-shadow: inset 0 0 0 1px rgba(150,180,255,.25); }
+.fx-grad { background: linear-gradient(90deg, #ff7ac6, #7c8cff, #5cc8ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.plus, .prem { font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px; letter-spacing: .04em; }
+.plus { background: linear-gradient(135deg, #5b6cff, #8a5cff); color: #fff; }
+.prem { background: linear-gradient(135deg, #ffb347, #ffd166); color: #2a1c00; }
+.gif { margin-top: 6px; width: 260px; height: 150px; border-radius: 14px; background: linear-gradient(135deg, #ff7a59, #b93a8c 60%, #3b2a8f); position: relative; overflow: hidden; display: grid; place-items: center; font-size: 46px; box-shadow: 0 0 0 1px var(--line); }
+.gif::after { content: "GIF"; position: absolute; left: 8px; top: 8px; font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 6px; background: rgba(0,0,0,.5); }
+.gif i { position: absolute; inset: 0; background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.35), transparent 40%); animation: sweep 3.5s ease-in-out infinite; }
+@keyframes sweep { 50% { transform: translateX(40px) scale(1.2); opacity: .6; } }
+.sticker { margin-top: 4px; font-size: 76px; line-height: 1; filter: drop-shadow(0 6px 10px rgba(0,0,0,.4)); animation: bob 2.4s ease-in-out infinite; width: fit-content; }
+@keyframes bob { 50% { transform: translateY(-5px) rotate(-2deg); } }
+.react { display: flex; gap: 6px; margin-top: 6px; }
+.react span { padding: 3px 9px; border-radius: 999px; background: rgba(255,255,255,.06); font-size: 12.5px; box-shadow: inset 0 0 0 1px var(--line); }
+.react span.me { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.sys { align-self: center; font-size: 12px; color: var(--text-3); padding: 5px 12px; border-radius: 999px; background: rgba(255,255,255,.04); }
+.composer { padding: 12px 16px 16px; position: relative; }
+.cbox { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 16px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line); }
+.cbox:focus-within { box-shadow: inset 0 0 0 1px var(--accent-line); }
+.cbox input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; color: var(--text); font: inherit; font-size: 14px; padding: 8px 4px; }
+.cbtn { width: 38px; height: 38px; border-radius: 50%; background: var(--panel-3); font-size: 18px; flex: none; }
+.cbtn.send { background: linear-gradient(135deg, #2f7bff, #5cc8ff); color: #04121e; }
+.cbtn.plain { background: none; color: var(--text-2); }
+.cbtn.plain:hover { color: var(--text); }
+.epanel { position: absolute; left: 16px; right: 16px; bottom: 74px; max-width: 380px; border-radius: 18px; background: #0f1626; box-shadow: 0 0 0 1px var(--line), 0 24px 50px -16px rgba(0,0,0,.9); padding: 10px; display: none; flex-direction: column; gap: 8px; z-index: 5; }
+.epanel.open { display: flex; }
+.tabs { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--panel-2); }
+.tabs button { flex: 1; padding: 7px 4px; border-radius: 999px; font-size: 12.5px; font-weight: 600; color: var(--text-2); }
+.tabs button.on { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.egrid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; max-height: 150px; overflow-y: auto; }
+.egrid button { font-size: 22px; padding: 5px 0; border-radius: 8px; }
+.egrid button:hover { background: rgba(255,255,255,.08); }
+.egrid.stk { grid-template-columns: repeat(5, 1fr); } .egrid.stk button { font-size: 34px; }
+.egrid.gifs { grid-template-columns: repeat(2, 1fr); gap: 6px; } .egrid.gifs button { height: 70px; border-radius: 10px; font-size: 26px; color: #fff; }
+.attr { text-align: center; font-size: 10.5px; color: var(--text-3); font-weight: 600; }
+
+/* Sağ: lobi paneli */
+.right { display: flex; flex-direction: column; overflow-y: auto; scrollbar-width: thin; padding-bottom: 12px; }
+.right > * { flex: none; }
+.banner { height: 124px; margin: 12px; border-radius: 14px; position: relative; overflow: hidden; background: linear-gradient(180deg, #1a1c5e 0%, #4a3aa8 45%, #e58ab0 100%); }
+.banner svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.banner .lvl { position: absolute; right: 8px; top: 8px; font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 999px; background: rgba(0,0,0,.45); backdrop-filter: blur(6px); }
+.rname { padding: 0 16px; font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.rsub { padding: 2px 16px 0; font-size: 12.5px; color: var(--text-3); display: flex; align-items: center; gap: 6px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); display: inline-block; }
+.acts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 14px 12px 6px; }
+.acts button { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px; border-radius: 12px; background: var(--panel-2); font-size: 11.5px; color: var(--text-2); box-shadow: inset 0 0 0 1px var(--line); }
+.acts button:hover { background: var(--panel-3); color: var(--text); }
+.acts .i { font-size: 18px; }
+.boost { margin: 8px 12px 0; padding: 12px; border-radius: 14px; background: linear-gradient(135deg, rgba(124,140,255,.16), rgba(92,200,255,.08)); box-shadow: inset 0 0 0 1px rgba(124,140,255,.3); }
+.boost .top { display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 700; }
+.bar { height: 6px; border-radius: 6px; background: rgba(255,255,255,.08); margin-top: 8px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #7c8cff, #5cc8ff); }
+.announce { margin: 10px 12px 0; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); font-size: 12.5px; line-height: 1.5; }
+.announce b { display: block; color: var(--accent); font-size: 11.5px; margin-bottom: 3px; }
+.rt { display: flex; justify-content: space-between; align-items: center; padding: 16px 16px 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
+.vroom, .member { display: flex; align-items: center; gap: 10px; margin: 0 8px; padding: 8px 10px; border-radius: 12px; font-size: 13.5px; color: var(--text-2); }
+.vroom:hover, .member:hover { background: rgba(255,255,255,.05); color: var(--text); }
+.vroom.live { background: rgba(87,242,135,.08); color: var(--text); }
+.vroom .who { margin-left: auto; display: flex; }
+.vroom .who i { width: 20px; height: 20px; border-radius: 50%; margin-left: -6px; box-shadow: 0 0 0 2px var(--panel); background: var(--c); }
+.member.prem { background: linear-gradient(90deg, rgba(255,209,102,.13), rgba(255,106,193,.1)); box-shadow: inset 0 0 0 1px rgba(255,209,102,.3); position: relative; overflow: hidden; }
+.member.prem::after { content: ""; position: absolute; top: 0; bottom: 0; width: 40%; left: -50%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.18), transparent); animation: shine 3.4s ease-in-out infinite; }
+@keyframes shine { to { left: 120%; } }
+.member small { display: block; font-size: 11px; color: var(--text-3); }
+.member .chev { margin-left: auto; color: var(--text-3); }
+
+/* Hepsini "değiştir" şeridi */
+.proto-note { position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 20; font-size: 11.5px; padding: 6px 12px; border-radius: 999px; background: rgba(0,0,0,.6); color: var(--text-2); backdrop-filter: blur(6px); pointer-events: none; white-space: nowrap; }
+.drawer-btn, .back-btn { display: none; }
+
+@media (max-width: 1100px) {
+  .app { grid-template-columns: 220px minmax(0, 1fr); }
+  .right { position: fixed; top: 12px; right: 12px; bottom: 12px; width: min(320px, calc(100vw - 24px)); z-index: 30; transform: translateX(120%); transition: transform .25s; }
+  body.show-right .right { transform: none; }
+  .drawer-btn { display: grid; }
+}
+@media (max-width: 720px) {
+  .app { grid-template-columns: 1fr; padding: 0; gap: 0; height: 100%; }
+  .card { border-radius: 0; }
+  .side { position: fixed; left: 0; right: 0; bottom: 0; z-index: 25; height: auto; flex-direction: row; padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px)); border-radius: 18px 18px 0 0; }
+  .side .brand, .side .sec-title, .side .dms, .side .me { display: none; }
+  .nav { flex-direction: row; width: 100%; justify-content: space-around; }
+  .nav button { flex-direction: column; gap: 3px; padding: 7px 6px; font-size: 10.5px; flex: 1; align-items: center; text-align: center; }
+  .nav .badge { position: absolute; top: 2px; right: 14px; margin: 0; min-width: 16px; height: 16px; font-size: 9.5px; }
+  .chat { padding-bottom: 64px; }
+  .proto-note { display: none; }
+  .epanel { left: 8px; right: 8px; bottom: 74px; max-width: none; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- SOL -->
+  <aside class="card side">
+    <div class="brand"><span class="logo" aria-hidden="true"></span><b>Sauran</b><button class="newdm" title="Yeni mesaj">✎</button></div>
+    <nav class="nav" id="nav">
+      <button class="on" data-nav="lobby"><span class="ic">💬</span>Lobiler</button>
+      <button data-nav="discover"><span class="ic">🧭</span>Keşfet</button>
+      <button data-nav="friends"><span class="ic">👥</span>Arkadaşlar</button>
+      <button data-nav="store"><span class="ic">🛍️</span>Mağaza <span class="badge gold">Yeni</span></button>
+      <button data-nav="notif"><span class="ic">🔔</span>Bildirimler <span class="badge">3</span></button>
+      <button data-nav="settings"><span class="ic">⚙️</span>Ayarlar</button>
+    </nav>
+    <div class="sec-title">Direkt mesajlar</div>
+    <div class="dms" id="dms"></div>
+    <div class="me"><span class="av on" style="--c:#7c8cff">K</span><div><b style="font-size:13.5px">kursat</b><small>Premium · çevrimiçi</small></div></div>
+  </aside>
+
+  <!-- ORTA -->
+  <main class="card chat">
+    <header class="chat-head">
+      <span class="hash">#</span>
+      <h2 id="ch-title">genel<small id="ch-sub">Herkesin katıldığı genel sohbet kanalı</small></h2>
+      <div class="tools"><button title="Ara">🔍</button><button class="drawer-btn" id="drawer" title="Lobi paneli">👥</button><button title="Daha fazla">⋮</button></div>
+    </header>
+    <div class="msgs" id="msgs"></div>
+    <div class="composer">
+      <div class="epanel" id="epanel">
+        <div class="tabs"><button class="on" data-t="emoji">Emoji</button><button data-t="gif">GIF'ler</button><button data-t="stk">Çıkartmalar</button></div>
+        <div class="egrid" id="egrid"></div>
+        <div class="attr" id="eattr" style="display:none">Powered by GIPHY</div>
+      </div>
+      <form class="cbox" id="form" autocomplete="off">
+        <button type="button" class="cbtn" title="Ekle">＋</button>
+        <input id="inp" placeholder="Mesaj yaz…" aria-label="Mesaj">
+        <button type="button" class="cbtn plain" id="ebtn" title="Emoji, GIF, çıkartma">😊</button>
+        <button type="button" class="cbtn plain" title="Dosya">📎</button>
+        <button class="cbtn send" title="Gönder">➤</button>
+      </form>
+    </div>
+  </main>
+
+  <!-- SAĞ -->
+  <aside class="card right" id="right">
+    <div class="banner">
+      <svg viewBox="0 0 300 124" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><circle cx="228" cy="38" r="17" fill="#fff6d8" opacity=".95"/><circle cx="228" cy="38" r="30" fill="#fff6d8" opacity=".14"/><path d="M0 124 L0 88 L30 60 L48 80 L72 44 L100 84 L126 58 L156 90 L190 52 L226 88 L262 64 L300 92 L300 124Z" fill="#12123a" opacity=".92"/><path d="M0 124 L0 104 L40 84 L70 102 L110 80 L150 104 L196 82 L240 104 L300 88 L300 124Z" fill="#0b0b27"/></svg>
+      <span class="lvl">💎 Seviye 4</span>
+    </div>
+    <div class="rname">Gece Kulübü <span class="prem">TAKVİYELİ</span></div>
+    <div class="rsub"><span class="dot"></span> 12 çevrimiçi · 148 üye</div>
+    <div class="acts"><button><span class="i">👤＋</span>Davet et</button><button><span class="i">💎</span>Takviye</button><button><span class="i">⚙️</span>Ayarlar</button></div>
+    <div class="boost"><div class="top"><span>💎 10 takviye</span><span>Seviye 4 · maks.</span></div><div class="bar"><i></i></div></div>
+    <div class="announce"><b>📌 Duyuru panosu</b>Cuma 21:00 lobi turnuvası! Kayıt için #etkinlik kanalına yaz.</div>
+    <div class="rt"><span>Sesli odalar</span><span>＋</span></div>
+    <div id="vrooms"></div>
+    <div class="rt"><span>Üyeler</span><span id="mcount">148</span></div>
+    <div id="members"></div>
+  </aside>
+</div>
+<div class="proto-note">Prototip: bölümler tıklanabilir · mesaj yaz, 😊 panelini aç, sol listeden sohbeti değiştir</div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const colors = ['#5b6cff', '#ff7a59', '#2fbf8f', '#c46bff', '#ff5f8f', '#e0a526', '#2fa8ff'];
+const people = [
+  ['Ahmet', 'on', '#5b6cff'], ['Zeynep', 'on', '#ff5f8f'], ['Mert', 'away', '#2fbf8f'], ['Elif', 'off', '#c46bff'], ['Deniz', 'on', '#2fa8ff']
+];
+$('#dms').innerHTML = people.map(([n, s, c], i) => `<div class="dm${i === 0 ? '' : ''}" data-dm="${n}"><span class="av ${s}" style="--c:${c}">${n[0]}</span>${n}</div>`).join('');
+
+const lobbyMsgs = [
+  ['Kürşat', '#7c8cff', '15:24', 'Merhaba arkadaşlar! 👋', {nameFx: 1, prem: 1}],
+  ['Zeynep', '#ff5f8f', '15:26', 'Hoş geldin! 🎉', {plus: 1}],
+  ['Mert', '#2fbf8f', '15:27', 'Nasılsın? Proje hakkında konuştuk mu?'],
+  ['Kürşat', '#7c8cff', '15:28', 'Evet, bugün toplantı var. Detayları sonra paylaşırım.', {nameFx: 1, prem: 1, glass: 1}],
+  ['Elif', '#c46bff', '15:30', 'Harika! 👍', {react: [['👍', 3, 1], ['🔥', 2], ['💎', 1]]}],
+  ['Deniz', '#2fa8ff', '15:32', '', {gif: '🌅'}],
+  ['Zeynep', '#ff5f8f', '15:33', '', {sticker: '🐼'}]
+];
+const dmMsgs = n => [[n, '#5b6cff', '15:10', 'Selam! Akşam oyun var mı?'], ['Kürşat', '#7c8cff', '15:11', 'Varım, 9\'da lobide buluşalım 🎮', {nameFx: 1, prem: 1, glass: 1}]];
+
+function msgHtml([name, c, time, text, o = {}]) {
+  const tag = o.prem ? '<span class="prem">PREMIUM</span>' : o.plus ? '<span class="plus">PLUS</span>' : '';
+  const nm = o.nameFx ? `<b class="fx-grad">${name}</b>` : `<b>${name}</b>`;
+  const body = text ? `<div class="bubble${o.glass ? ' b-glass' : ''}">${text}</div>` : '';
+  const gif = o.gif ? `<div class="gif"><i></i>${o.gif}</div>` : '';
+  const stk = o.sticker ? `<div class="sticker">${o.sticker}</div>` : '';
+  const rx = o.react ? `<div class="react">${o.react.map(([e, n, m]) => `<span class="${m ? 'me' : ''}">${e} ${n}</span>`).join('')}</div>` : '';
+  return `<div class="msg"><span class="av ${o.prem ? 'ring' : ''}" style="--c:${c}">${name[0]}</span><div><div class="meta">${nm}${tag}<time>${time}</time></div>${body}${gif}${stk}${rx}</div></div>`;
+}
+function render(list) { const m = $('#msgs'); m.innerHTML = list.map(msgHtml).join(''); m.scrollTop = m.scrollHeight; }
+render(lobbyMsgs);
+
+$('#vrooms').innerHTML = [
+  ['🔊', 'Sohbet odası', ['#ff5f8f', '#2fbf8f', '#5b6cff'], true], ['🎮', 'Oyun odası', ['#e0a526'], true], ['🎧', 'Müzik odası', [], false]
+].map(([i, n, w, live]) => `<div class="vroom${live ? ' live' : ''}"><span>${i}</span>${n}<span class="who">${w.map(c => `<i style="--c:${c}"></i>`).join('')}</span></div>`).join('');
+$('#members').innerHTML = [
+  ['Kürşat', '#7c8cff', 'Kurucu', 'on', 1], ['Zeynep', '#ff5f8f', 'Moderatör', 'on'], ['Mert', '#2fbf8f', 'Çevrimiçi', 'on'], ['Elif', '#c46bff', 'Çevrimiçi', 'away']
+].map(([n, c, s, st, p]) => `<div class="member${p ? ' prem' : ''}"><span class="av ${st}" style="--c:${c}">${n[0]}</span><div>${n}<small>${s}</small></div><span class="chev">›</span></div>`).join('');
+
+// Sohbet değiştir
+document.querySelectorAll('.dm').forEach(el => el.addEventListener('click', () => {
+  document.querySelectorAll('.dm').forEach(d => d.classList.toggle('on', d === el));
+  document.querySelectorAll('#nav button').forEach(b => b.classList.remove('on'));
+  $('.hash').textContent = '@'; $('#ch-title').firstChild.textContent = el.dataset.dm; $('#ch-sub').textContent = 'Direkt mesaj';
+  render(dmMsgs(el.dataset.dm));
+}));
+document.querySelectorAll('#nav button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#nav button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.dm').forEach(d => d.classList.remove('on'));
+  if (b.dataset.nav === 'lobby') { $('.hash').textContent = '#'; $('#ch-title').firstChild.textContent = 'genel'; $('#ch-sub').textContent = 'Herkesin katıldığı genel sohbet kanalı'; render(lobbyMsgs); }
+  else { const t = b.textContent.replace(/Yeni|\d+/g, '').trim(); $('#msgs').innerHTML = `<div class="sys">${t} ekranı bu prototipte yok — asıl uygulamada burada açılır.</div>`; }
+}));
+
+// Gönder
+$('#form').addEventListener('submit', e => {
+  e.preventDefault();
+  const v = $('#inp').value.trim(); if (!v) return;
+  $('#msgs').insertAdjacentHTML('beforeend', msgHtml(['Kürşat', '#7c8cff', new Date().toTimeString().slice(0, 5), v.replace(/</g, '&lt;'), {nameFx: 1, prem: 1, glass: 1}]));
+  $('#inp').value = ''; $('#msgs').scrollTop = $('#msgs').scrollHeight;
+});
+
+// Emoji / GIF / Çıkartma paneli
+const E = {
+  emoji: '😀 😂 🥰 😎 🤩 😭 😡 🤔 👍 👏 🙏 🔥 💯 ❤️ ✨ 🎉 🎮 🏆 🌈 🍕 ☕ 🎂 💎 👑'.split(' '),
+  stk: ['🐼', '🦊', '🐰', '🐻', '🐸', '🦄', '🐙', '🐳', '🐲', '🦁'],
+  gif: [['🔥', '#ff7a59'], ['😂', '#7c8cff'], ['🎉', '#c46bff'], ['👏', '#2fbf8f']]
+};
+let tab = 'emoji';
+function drawPanel() {
+  const g = $('#egrid');
+  g.className = 'egrid' + (tab === 'stk' ? ' stk' : tab === 'gif' ? ' gifs' : '');
+  g.innerHTML = tab === 'gif' ? E.gif.map(([e, c]) => `<button data-g="${e}" style="background:${c}">${e}</button>`).join('') : E[tab].map(e => `<button data-e="${e}">${e}</button>`).join('');
+  $('#eattr').style.display = tab === 'gif' ? '' : 'none';
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
+}
+$('#ebtn').addEventListener('click', e => { e.stopPropagation(); $('#epanel').classList.toggle('open'); drawPanel(); });
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => { tab = b.dataset.t; drawPanel(); }));
+$('#egrid').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const t = new Date().toTimeString().slice(0, 5), who = ['Kürşat', '#7c8cff', t];
+  if (b.dataset.e) { $('#inp').value += b.dataset.e; $('#inp').focus(); return; }
+  const o = b.dataset.g ? {gif: b.dataset.g, nameFx: 1, prem: 1} : {sticker: b.textContent, nameFx: 1, prem: 1};
+  $('#msgs').insertAdjacentHTML('beforeend', msgHtml([...who, '', o])); $('#msgs').scrollTop = $('#msgs').scrollHeight; $('#epanel').classList.remove('open');
+});
+document.addEventListener('click', e => { if (!e.target.closest('#epanel')) $('#epanel').classList.remove('open'); });
+$('#drawer').addEventListener('click', e => { e.stopPropagation(); document.body.classList.toggle('show-right'); });
+document.addEventListener('click', e => { if (!e.target.closest('#right') && !e.target.closest('#drawer')) document.body.classList.remove('show-right'); });
+</script>
+</body>
+</html>
