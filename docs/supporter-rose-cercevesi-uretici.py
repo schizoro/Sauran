@@ -9,7 +9,7 @@ def pol(r, deg):
 
 out = []
 add = out.append
-add('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">')
+add('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -112 512 624" width="512" height="624">')
 add('''<defs>
 <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe9d6"/><stop offset=".25" stop-color="#ffa9ca"/><stop offset=".55" stop-color="#e2639a"/><stop offset=".78" stop-color="#ffc5a3"/><stop offset="1" stop-color="#c9507d"/></linearGradient>
 <linearGradient id="goldB" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0e0"/><stop offset=".4" stop-color="#ffb8d2"/><stop offset=".75" stop-color="#e07fa8"/><stop offset="1" stop-color="#ffd9bf"/></linearGradient>
@@ -23,15 +23,40 @@ add('''<defs>
 <filter id="blur2" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.6"/></filter>
 <filter id="blur8" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="9"/></filter>
 <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="2" stdDeviation="2.2" flood-color="#8a2a55" flood-opacity=".45"/></filter>
+<g id="earShape">
+  <path d="M-23,0 C-37,-48 -36,-112 -11,-146 C-5,-154 5,-154 11,-146 C36,-112 37,-48 23,0 Z" fill="url(#earOut)" stroke="#e77ca4" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="M-12,-6 C-21,-48 -20,-100 -6,-130 C-2,-137 2,-137 6,-130 C20,-100 21,-48 12,-6 Z" fill="url(#earIn)"/>
+  <path d="M-9,-26 C-13,-60 -11,-96 -4,-122" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".55"/>
+  <path d="M-30,-70 C-26,-100 -18,-124 -8,-140" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".6"/>
+</g>
+<linearGradient id="earOut" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ffc3d8"/><stop offset=".45" stop-color="#fff0f5"/><stop offset="1" stop-color="#ffffff"/></linearGradient>
+<linearGradient id="earIn" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff86b3"/><stop offset=".6" stop-color="#ffb4cf"/><stop offset="1" stop-color="#ffd9e6"/></linearGradient>
+<clipPath id="earLow"><rect x="-60" y="-77" width="120" height="102"/></clipPath>
+<clipPath id="earUp"><rect x="-60" y="-200" width="120" height="127"/></clipPath>
 <path id="spark" d="M0,-10 C1.2,-3 3,-1.2 10,0 C3,1.2 1.2,3 0,10 C-1.2,3 -3,1.2 -10,0 C-3,-1.2 -1.2,-3 0,-10Z"/>
 <style>
 .tw{transform-box:fill-box;transform-origin:center;animation:tw 2.8s ease-in-out infinite}
 @keyframes tw{0%,100%{opacity:.15;transform:scale(.45) rotate(0deg)}50%{opacity:1;transform:scale(1) rotate(45deg)}}
+.sway{animation:sway 5s ease-in-out infinite alternate}
+.swayB{animation:sway 6s ease-in-out -2s infinite alternate}
+@keyframes sway{from{transform:rotate(-2deg)}to{transform:rotate(2.5deg)}}
+.fold{animation:fold 8s ease-in-out infinite}
+@keyframes fold{0%,52%{transform:rotate(0)}60%{transform:rotate(82deg)}64%{transform:rotate(70deg)}80%{transform:rotate(76deg)}90%{transform:rotate(-7deg)}95%{transform:rotate(2deg)}100%{transform:rotate(0)}}
 .fl{transform-box:fill-box;transform-origin:center;animation:fl 4.6s ease-in-out infinite alternate}
 @keyframes fl{from{transform:translateY(-3px) rotate(-14deg)}to{transform:translateY(5px) rotate(18deg)}}
-@media (prefers-reduced-motion:reduce){.tw,.fl{animation:none;opacity:.85}}
+@media (prefers-reduced-motion:reduce){.tw,.fl{animation:none;opacity:.85}.fold,.sway,.swayB{animation:none}}
 </style>
 </defs>''')
+
+
+# ── tavşan kulakları (halkanın arkasında; tabanları halka bandıyla örtülür) ──
+def ear(bx, by, ang, fold, cls):
+    add(f'<g transform="translate({bx} {by}) rotate({ang})"><g class="{cls}" style="transform-origin:0 0">')
+    add('<g clip-path="url(#earLow)"><use href="#earShape"/></g>')
+    add('<g transform="translate(0 -75)"><g class="' + ('fold' if fold else '') + '" style="transform-origin:0 0"><g transform="translate(0 75)"><g clip-path="url(#earUp)"><use href="#earShape"/></g></g></g></g>')
+    add('</g></g>')
+ear(212, 56, -15, False, 'sway')
+ear(300, 56, 15, True, 'swayB')
 
 # dış yumuşak parıltı
 add(f'<circle cx="{CX}" cy="{CY}" r="{R}" fill="none" stroke="#ff9ec6" stroke-width="44" opacity=".42" filter="url(#blur8)"/>')
@@ -101,7 +126,7 @@ for deg, s in ((300, 13), (330, 10), (150, 13), (120, 10), (185, 9), (10, 9)):
 
 # üstte kurdele (fiyonk)
 bx, by = pol(R + 4, -90)
-add(f'<g transform="translate({bx:.1f} {by+4:.1f}) scale(1.12)" filter="url(#soft)">')
+add(f'<g transform="translate({bx:.1f} {by+4:.1f}) scale(0.9)" filter="url(#soft)">')
 add('<path d="M-6,4 C-34,-26 -66,-18 -58,6 C-52,26 -22,22 -6,6Z" fill="url(#ribbon)" stroke="#b83f6e" stroke-width="1.2"/>')
 add('<path d="M6,4 C34,-26 66,-18 58,6 C52,26 22,22 6,6Z" fill="url(#ribbon)" stroke="#b83f6e" stroke-width="1.2"/>')
 add('<path d="M-6,4 C-26,-10 -48,-8 -50,4" fill="none" stroke="#ffd1e2" stroke-width="2" opacity=".7"/>')

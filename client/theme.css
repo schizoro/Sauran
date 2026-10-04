@@ -2846,7 +2846,8 @@ body.st-open { overflow: hidden; }
 /* ══ Supporter Rose: bayan destekçilere özel gül-altın çiçekli çerçeve (assets/frame-supporter-rose.svg) ═══════════════ */
 .frame-supporter_rose { position: relative; cursor: pointer; }
 .sr-overlay { position: absolute; inset: -6%; pointer-events: none; z-index: 1; }
-.sr-overlay .sr-ring-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+/* görsel 512×624: üstteki 112 birim tavşan kulakları; halka kare kısmı (alt 512) avatarla hizalı kalır */
+.sr-overlay .sr-ring-img { position: absolute; left: 0; bottom: 0; width: 100%; height: auto; aspect-ratio: 512 / 624; }
 .sr-overlay::before {
   content: ''; position: absolute; inset: 6%; border-radius: 50%; z-index: -1;
   background: radial-gradient(circle, rgba(255, 150, 200, .42) 0%, rgba(255, 130, 185, .2) 58%, transparent 76%);
