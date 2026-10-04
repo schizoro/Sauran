@@ -2012,15 +2012,25 @@ function plusFrameOverlayHtml() {
         <span class="pf-spark"></span><span class="pf-spark"></span><span class="pf-spark"></span>
     </span>`;
 }
+// Supporter Rose: gül-altın halka, çiçek kümeleri, fiyonk ve inciler (assets/frame-supporter-rose.svg, vektör); pırıltılar SVG içinde
+// animasyonlu, dışarıda yumuşak gül parıltısı nabız atar ve küçük bir inci halka boyunca döner.
+function supporterRoseOverlayHtml() {
+    return `<span class="sr-overlay" aria-hidden="true">
+        <img src="assets/frame-supporter-rose.svg" class="sr-ring-img" alt="">
+        <span class="sr-highlight"></span>
+    </span>`;
+}
 function frameOverlayHtml(frameKey) {
+    if (frameKey === 'supporter_rose') return supporterRoseOverlayHtml();
     if (frameKey === 'supporter') return supporterFrameOverlayHtml();
     if (frameKey === 'plus') return plusFrameOverlayHtml();
     return '';
 }
 
-const AVATAR_FRAME_CLASSES = ['frame-ocean', 'frame-neon', 'frame-galaxy', 'frame-supporter', 'frame-plus'];
+const AVATAR_FRAME_CLASSES = ['frame-ocean', 'frame-neon', 'frame-galaxy', 'frame-supporter', 'frame-supporter_rose', 'frame-plus'];
 const AVATAR_FRAME_INFO = {
     supporter: { title: '👑 Sauran Supporter', text: "Sauran'ın geliştirme döneminde projeye destek veren özel topluluk üyelerine ait. Market'te satılmaz." },
+    supporter_rose: { title: '🌸 Supporter Rose', text: "Sauran'ın geliştirme döneminde projeye destek veren özel topluluk üyelerine ait, gül-altın çiçekli çerçeve. Market'te satılmaz." },
     plus: { title: '✦ Sauran Plus', text: 'Aktif Sauran Plus/Premium abonelerine otomatik açılan, yükselen ışıltı tozlu mor çerçeve.' },
     ocean: { title: '🌊 Ocean', text: 'Hafif dalga hissi veren mavi tonlu çerçeve.' },
     neon: { title: '⚡ Neon', text: 'Parlayan kenarlı neon çerçeve.' },
@@ -2045,7 +2055,7 @@ function usernameCardHtml(username, isPlus, nameEffect) {
 function applyAvatarFrame(el, frameKey) {
     if (!el) return;
     AVATAR_FRAME_CLASSES.forEach((c) => el.classList.remove(c));
-    el.querySelectorAll(':scope > .sf-overlay, :scope > .pf-overlay').forEach((n) => n.remove());
+    el.querySelectorAll(':scope > .sf-overlay, :scope > .pf-overlay, :scope > .sr-overlay').forEach((n) => n.remove());
     if (frameKey && frameKey !== 'classic') {
         el.classList.add('frame-' + frameKey);
         const overlay = frameOverlayHtml(frameKey);
@@ -7575,7 +7585,7 @@ function renderNotifications(notifications) {
 
 const GIFT_ICON_BY_KEY = {
     coin: '🪙', plus: '✦', premium: '👑',
-    ocean: '🌊', neon: '⚡', galaxy: '🌌', supporter: '👑',
+    ocean: '🌊', neon: '⚡', galaxy: '🌌', supporter: '👑', supporter_rose: '🌸',
     profile_theme: '🎨', profile_effect: '✨', name_effect: '🔤',
     avatar_frame: '🖼️', lobby_theme: '🏠', lobby_image: '🖼️',
     custom_emoji: '😊', sticker_pack: '🧩'
@@ -7654,6 +7664,9 @@ const RARITY_LABEL = { free: 'Ücretsiz', rare: 'Rare', epic: 'Epic', legendary:
 function mkPreviewHtml(item) {
     if (item.key === 'supporter') {
         return `<span class="sf-overlay" aria-hidden="true"><img src="assets/frame-supporter.png" class="sf-ring-img" alt="${escapeHtml(item.label)}"><span class="sf-highlight"></span></span>`;
+    }
+    if (item.key === 'supporter_rose') {
+        return `${escapeHtml(item.label.charAt(0))}${supporterRoseOverlayHtml()}`;
     }
     if (item.key === 'plus') {
         return `${escapeHtml(item.label.charAt(0))}${plusFrameOverlayHtml()}`;

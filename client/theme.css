@@ -2842,3 +2842,20 @@ body.st-open { overflow: hidden; }
 #hub-list-header { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .hub-create-btn-alt { background: var(--glass-1) !important; color: var(--text-primary) !important; box-shadow: inset 0 0 0 1px var(--accent-line) !important; }
 @media (max-width: 480px) { #hub-list-header { flex-wrap: nowrap; gap: 6px; } #hub-list-header .hub-create-btn { flex: 1 1 0; min-width: 0; padding: 0 6px; font-size: 12.5px; white-space: nowrap; min-height: 40px; } }
+
+/* ══ Supporter Rose: bayan destekçilere özel gül-altın çiçekli çerçeve (assets/frame-supporter-rose.svg) ═══════════════ */
+.frame-supporter_rose { position: relative; cursor: pointer; }
+.sr-overlay { position: absolute; inset: -6%; pointer-events: none; z-index: 1; }
+.sr-overlay .sr-ring-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.sr-overlay::before {
+  content: ''; position: absolute; inset: 6%; border-radius: 50%; z-index: -1;
+  background: radial-gradient(circle, rgba(255, 150, 200, .42) 0%, rgba(255, 130, 185, .2) 58%, transparent 76%);
+  animation: srGlowPulse 3.2s ease-in-out infinite; will-change: opacity;
+}
+.sr-highlight { position: absolute; inset: 0; animation: sfSpin 6.5s linear infinite; transform-origin: 50% 50%; will-change: transform; }
+.sr-highlight::before {
+  content: ''; position: absolute; top: 5%; left: 50%; width: 10%; height: 10%; margin-left: -5%; border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, rgba(255, 220, 238, .75) 42%, transparent 72%); filter: blur(1.2px);
+}
+@keyframes srGlowPulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sr-overlay::before, .sr-highlight { animation: none; } }

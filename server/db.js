@@ -3565,6 +3565,7 @@ const COSMETIC_ITEMS = {
   neon:      { slot: 'avatar_frame', label: 'Neon',             rarity: 'epic',      price: 300, purchasable: false, market_visible: true,  giftable: true,  description: 'Parlayan kenarlı neon çerçeve.' },
   galaxy:    { slot: 'avatar_frame', label: 'Galaxy',           rarity: 'legendary', price: 500, purchasable: false, market_visible: true,  giftable: true,  description: 'Yıldızların hafif hareket ettiği uzay temalı çerçeve.' },
   supporter: { slot: 'avatar_frame', label: 'Sauran Supporter', rarity: 'special',   price: null, purchasable: false, market_visible: false, giftable: true,  description: 'Sauran\'ın geliştirme döneminde projeye destek veren özel topluluk üyelerine ait. Market\'te satılmaz.' },
+  supporter_rose: { slot: 'avatar_frame', label: 'Supporter Rose', rarity: 'special', price: null, purchasable: false, market_visible: false, giftable: true, description: 'Sauran\'ın geliştirme döneminde projeye destek veren özel topluluk üyeleri için, gül-altın halkalı, çiçekli ve fiyonklu zarif çerçeve. Market\'te satılmaz.' },
   plus:      { slot: 'avatar_frame', label: 'Sauran Plus',      rarity: 'special',   price: null, purchasable: false, market_visible: false, giftable: false, description: 'Aktif Sauran Plus/Premium abonelerine otomatik açılır; mesaj balonundaki gibi yükselen mor ışıltı tozuyla.' }
 };
 
