@@ -2953,3 +2953,19 @@ body.drawer-friendlist .friends-directory { display: flex; flex-direction: colum
 .nc-empty-ic { width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; font-size: 34px; background: linear-gradient(135deg, rgba(47,123,255,.25), rgba(92,200,255,.12)); box-shadow: inset 0 0 0 1px rgba(92,200,255,.3); margin-bottom: 8px; }
 #notifications-modal .notifications-empty b { font-size: 16px; color: var(--text-primary); }
 #notifications-modal .notifications-empty small { font-size: 13px; color: var(--text-tertiary); }
+
+/* ══ Performans: kalabalık listelerde (mesajlar, üyeler, arkadaşlar) süs animasyonları kapalı ═══════════════════
+   Her Plus kullanıcı adı 4, her çerçeve 2-8 sürekli animasyon ekliyordu; tek sohbette yüzlerce animasyon ekranı donduruyordu.
+   Süsler profilde, üst çubukta ve büyük avatarlarda çalışmaya devam eder; listelerde sabit kalır. */
+#hub-feed .pnp-dust, #dm-feed .pnp-dust, #hub-member-list .pnp-dust, #friends-sidebar-list .pnp-dust, #friends-favorites .pnp-dust, #fd-list .pnp-dust,
+#hub-feed .pnc-dust, #dm-feed .pnc-dust, #hub-member-list .pnc-dust { display: none !important; animation: none !important; }
+#hub-feed .sr-highlight, #dm-feed .sr-highlight, #hub-member-list .sr-highlight, #friends-sidebar-list .sr-highlight,
+#hub-feed .sf-highlight, #dm-feed .sf-highlight, #hub-member-list .sf-highlight, #friends-sidebar-list .sf-highlight { display: none !important; }
+#hub-feed .sr-overlay::before, #dm-feed .sr-overlay::before, #hub-member-list .sr-overlay::before, #friends-sidebar-list .sr-overlay::before,
+#hub-feed .sf-overlay::before, #dm-feed .sf-overlay::before, #hub-member-list .sf-overlay::before, #friends-sidebar-list .sf-overlay::before { animation: none !important; }
+#hub-feed .pf-overlay *, #dm-feed .pf-overlay *, #hub-member-list .pf-overlay *, #friends-sidebar-list .pf-overlay * { animation: none !important; }
+#hub-feed .pf-dust, #dm-feed .pf-dust, #hub-member-list .pf-dust, #friends-sidebar-list .pf-dust, #hub-feed .pf-spark, #dm-feed .pf-spark, #hub-member-list .pf-spark, #friends-sidebar-list .pf-spark { display: none !important; }
+/* ekran dışındaki süslü öğeler durur (perf-chat.js .anim-off ekler) */
+.anim-off, .anim-off *, .anim-off::before, .anim-off::after, .anim-off *::before, .anim-off *::after { animation-play-state: paused !important; }
+/* Üzerinde kalıcı pencere açıkken (DM paneli üstü dahil) tüm pencereler DM panelinin üstünde açılır */
+.modal-overlay:not(.pv-overlay) { z-index: 230; }

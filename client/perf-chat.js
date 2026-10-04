@@ -27,4 +27,16 @@
             for (const m of muts) m.addedNodes.forEach((n) => { if (n.nodeType === 1) { if (n.matches && n.matches(SEL)) watch(n); else scan(n); } });
         }).observe(feed, { childList: true, subtree: true });
     });
+
+    // Üye listesindeki animasyonlu Premium kartlar: ekranda değilken durur (yüzlerce üyede sürekli animasyon yükünü keser)
+    (function pauseOffscreenCards() {
+        const list = document.getElementById('hub-member-list');
+        if (!list || !('IntersectionObserver' in window)) return;
+        const obs = new IntersectionObserver((entries) => entries.forEach((en) => en.target.classList.toggle('anim-off', !en.isIntersecting)), { root: null, rootMargin: '120px 0px' });
+        const SEL2 = '.hub-member-card.member-prem';
+        const watch2 = (el) => { if (!el.dataset.pcCard) { el.dataset.pcCard = '1'; obs.observe(el); } };
+        const scan2 = (root) => root.querySelectorAll && root.querySelectorAll(SEL2).forEach(watch2);
+        scan2(list);
+        new MutationObserver((muts) => { for (const m of muts) m.addedNodes.forEach((n) => { if (n.nodeType === 1) { if (n.matches && n.matches(SEL2)) watch2(n); else scan2(n); } }); }).observe(list, { childList: true, subtree: true });
+    })();
 })();
