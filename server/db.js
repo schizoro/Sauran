@@ -5036,7 +5036,10 @@ function removeHubSticker(hubId, userId, id) {
 function listStickerPalette(userId, hubId = null) {
   const perms = stickerPermissions(userId);
   const member = hubId && db.prepare(`SELECT 1 FROM hub_members WHERE hub_id = ? AND user_id = ?`).get(hubId, userId);
-  return { permissions: perms, mine: perms.personal ? listUserStickers(userId) : [], hub: member ? listHubStickers(hubId) : [] };
+  const cross = hasFeature(userId, 'cross_lobby_sticker');
+  const hubs = db.prepare(`SELECT hubs.id, hubs.name FROM hub_members INNER JOIN hubs ON hubs.id = hub_members.hub_id WHERE hub_members.user_id = ? AND hubs.type != 'group' ORDER BY hubs.id`).all(userId);
+  const lobbies = hubs.map((h) => ({ hub_id: h.id, name: h.name, current: h.id === hubId, locked: h.id !== hubId && !cross, stickers: listHubStickers(h.id) })).filter((h) => h.stickers.length);
+  return { permissions: { ...perms, cross }, mine: perms.personal ? listUserStickers(userId) : [], hub: member ? listHubStickers(hubId) : [], lobbies };
 }
 function getStickerImage(kind, id, viewerId) {
   if (!viewerId) return null;
@@ -5069,7 +5072,11 @@ function validateStickerFor(userId, stickerId, hubId = null) {
       return null;
     }
     const row = db.prepare(`SELECT hub_id FROM hub_stickers WHERE id = ?`).get(sid);
-    if (!row || !hubId || row.hub_id !== hubId || hubLevel(hubId) < 4) return 'Bu lobi çıkartması burada kullanılamaz.';
+    if (!row || hubLevel(row.hub_id) < 4) return 'Bu lobi çıkartması kullanılamıyor.';
+    if (hubId && row.hub_id === hubId) return null; // bulunduğu lobinin çıkartması herkese açık
+    // Başka lobinin çıkartması (lobide ya da DM'de): yalnızca Premium ve o lobinin üyesi
+    if (!hasFeature(userId, 'cross_lobby_sticker')) return 'Başka lobilerin çıkartmalarını kullanmak Sauran Premium\'a özeldir.';
+    if (!db.prepare(`SELECT 1 FROM hub_members WHERE hub_id = ? AND user_id = ?`).get(row.hub_id, userId)) return 'Bu çıkartmayı kullanmak için o lobinin üyesi olmalısın.';
     return null;
   }
   if (PREMIUM_STICKERS.includes(stickerId)) {

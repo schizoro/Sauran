@@ -153,18 +153,18 @@
         const q = state.query;
         const f = (list) => list.filter((s) => !q || s.id.includes(q));
         const stk = state.stk || { permissions: {}, mine: [], hub: [] };
-        const custom = (list) => list.filter((c) => !q || c.name.includes(q)).map((c) => `<button type="button" class="ep-item ep-stk" data-sticker="${escA(c.sid)}" title="${escA(c.name)}"><span class="ep-stk-in"><img src="${escA(c.url)}" alt="" loading="lazy" decoding="async"></span></button>`).join('');
+        const custom = (list, locked) => list.filter((c) => !q || c.name.includes(q)).map((c) => `<button type="button" class="ep-item ep-stk${locked ? ' ep-locked' : ''}" ${locked ? 'data-locked="1" data-xlobby="1"' : ''} data-sticker="${escA(c.sid)}" title="${escA(c.name)}"><span class="ep-stk-in"><img src="${escA(c.url)}" alt="" loading="lazy" decoding="async"></span>${locked ? '<i class="ep-lock" aria-hidden="true">🔒</i>' : ''}</button>`).join('');
         const addBtn = !q && stk.permissions && stk.permissions.personal ? '<button type="button" class="ep-item ep-add" data-ep-add="stk" title="Yeni çıkartma ekle">＋</button>' : '';
         const mineInner = custom(stk.mine || []) + addBtn;
         const lockedNote = !q && !(stk.permissions && stk.permissions.personal) ? '<p class="ep-note">Kendi çıkartmanı oluşturmak <b>Sauran Plus</b>\'a özel. <button type="button" class="ep-link" data-ep-add="stk">Ayrıntılar</button></p>' : '';
         const secs = [
             ...(mineInner || lockedNote ? [['mine', '👤 Çıkartmalarım', mineInner, lockedNote]] : []),
-            ...(custom(stk.hub || []) ? [['hubst', '🏠 Bu lobi', custom(stk.hub || [])]] : []),
+            ...(stk.lobbies || []).filter((l) => custom(l.stickers)).map((l) => ['hub' + l.hub_id, (l.current ? '🏠 ' : '🌐 ') + l.name + (l.current ? ' · bu lobi' : '') + (l.locked ? ' · 🔒 Premium' : ''), custom(l.stickers, l.locked)]),
             ['std', 'Klasik', f(STICKERS).map((s) => btn(s, true)).join('')],
             ['plus', '✦ Plus', f(PLUS_STICKERS).map((s) => btn(s, plusOk)).join('')],
             ['prem', '♛ Premium', f(PREMIUM_STICKERS).map((s) => btn(s, premOk)).join('')]
         ].filter((s) => s[2] || s[3]);
-        return { html: secs.map(([id, t, inner, note]) => (note ? `<section class="ep-sec" id="ep-sec-${id}"><h4>${t}</h4>${note}</section>` : sectionHtml(id, t, inner))).join('') || '<p class="ep-note ep-empty">Sonuç yok.</p>', jumps: secs.map(([id, t]) => [id, id === 'mine' ? '👤' : id === 'hubst' ? '🏠' : t.slice(0, 1) === '✦' ? '✦' : t.slice(0, 1) === '♛' ? '♛' : '🧸']) };
+        return { html: secs.map(([id, t, inner, note]) => (note ? `<section class="ep-sec" id="ep-sec-${id}"><h4>${t}</h4>${note}</section>` : sectionHtml(id, t, inner))).join('') || '<p class="ep-note ep-empty">Sonuç yok.</p>', jumps: secs.map(([id, t]) => [id, id === 'mine' ? '👤' : id.startsWith('hub') ? esc((t.replace(/^[^ ]+ /, '').charAt(0) || '?').toUpperCase()) : t.slice(0, 1) === '✦' ? '✦' : t.slice(0, 1) === '♛' ? '♛' : '🧸']) };
     }
 
     // ── GIF sekmesi (GIPHY, sunucu aracılığıyla) ──
@@ -251,7 +251,7 @@
         }
         const stk = e.target.closest('[data-sticker]');
         if (stk) {
-            if (stk.dataset.locked) { showToast(stk.dataset.sticker.startsWith('prem-') ? 'Premium çıkartmalar Sauran Premium abonelerine açıktır.' : 'Hareketli çıkartmalar Sauran Plus abonelerine açıktır.'); return; }
+            if (stk.dataset.locked) { showToast(stk.dataset.xlobby ? 'Başka lobilerin çıkartmalarını kullanmak Sauran Premium abonelerine açıktır.' : stk.dataset.sticker.startsWith('prem-') ? 'Premium çıkartmalar Sauran Premium abonelerine açıktır.' : 'Hareketli çıkartmalar Sauran Plus abonelerine açıktır.'); return; }
             const handler = window.stickerPickHandlers && window.stickerPickHandlers[state.prefix];
             if (handler) { closePanel(); handler(stk.dataset.sticker); }
             return;

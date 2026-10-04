@@ -196,6 +196,15 @@ test('Lobi çıkartması: Seviye 4, yalnızca sahip, 5 yuva; yalnızca o lobide 
   assert.strictEqual(dbm.validateStickerFor ? true : true, true);
   assert.strictEqual(dbm.saveDmSticker(member, 'm', owner, sid).success, false); // DM'de yok
   assert.strictEqual(dbm.listStickerPalette(member, id).hub.length, 0); // üye değil → liste boş
+  // Premium: üyesi olduğu başka lobinin çıkartmasını (lobide ve DM'de) kullanır; üye değilse kullanamaz
+  const prem = user('hs_prem', 'premium');
+  assert.strictEqual(dbm.createHubSticker(id2, prem, 'p', sid).success, false); // o lobinin üyesi değil
+  db.prepare('INSERT OR IGNORE INTO hub_members (hub_id, user_id, role_id, permission_tier) VALUES (?, ?, NULL, ?)').run(id, prem, 'member');
+  assert.strictEqual(dbm.createHubSticker(id2, prem, 'p', sid).success, true); // başka lobide
+  const pal = dbm.listStickerPalette(prem, id2);
+  assert.ok(pal.permissions.cross && pal.lobbies.some((l) => l.hub_id === id && !l.locked && !l.current));
+  const palFree = dbm.listStickerPalette(member, id2);
+  assert.ok(!palFree.permissions.cross);
 });
 
 test('Seviye 4 lobi: duyuru/karşılama/vurgu rengi yalnızca sahip + Seviye 4; sesli oda sınırları 5→8, 25→50', async () => {
