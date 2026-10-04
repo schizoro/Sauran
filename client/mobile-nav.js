@@ -22,8 +22,8 @@
         { key: 'profile', label: 'Profil', icon: null }
     ];
     nav.innerHTML = ITEMS.map((it) => it.key === 'profile'
-        ? `<button type="button" class="mnav-btn mnav-avatar" data-m="profile" aria-label="Profil"><span class="mnav-av" id="mnav-av"></span><i class="mnav-dot" id="mnav-profile-dot" style="display:none"></i></button>`
-        : `<button type="button" class="mnav-btn" data-m="${it.key}" aria-label="${it.label}" title="${it.label}">${it.icon()}<i class="mnav-dot" data-dot="${it.key}" style="display:none"></i></button>`).join('');
+        ? `<button type="button" class="mnav-btn mnav-avatar" data-m="profile" aria-label="Profil"><span class="mnav-av" id="mnav-av"></span><span class="mnav-lbl">Profil</span><i class="mnav-dot" id="mnav-profile-dot" style="display:none"></i></button>`
+        : `<button type="button" class="mnav-btn" data-m="${it.key}" aria-label="${it.label}" title="${it.label}">${it.icon()}<span class="mnav-lbl">${it.label}</span><i class="mnav-dot" data-dot="${it.key}" style="display:none"></i></button>`).join('');
     document.body.appendChild(nav);
 
     const body = document.body;

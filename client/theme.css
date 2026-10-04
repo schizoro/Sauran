@@ -2860,3 +2860,29 @@ body.st-open { overflow: hidden; }
 }
 @keyframes srGlowPulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .sr-overlay::before, .sr-highlight { animation: none; } }
+
+/* ══ Masaüstü / tablet: sol ray da telefondaki yeni gezinmeyle aynı (#mnav dikey cam ray) ═════════════════════
+   Gruplar · Keşfet · Ana Menü · Arkadaşlar (liste + arama) · Mesajlar · (altta) Profil. Eski .app-rail gizlenir; ızgaradaki ray sütunu aynen kalır. */
+.mnav-lbl { display: none; }
+body.drawer-friendlist .lobby-nav-head, body.drawer-friendlist #lobby-nav-list, body.drawer-friendlist .lobby-nav .friends-sidebar, body.drawer-friendlist .lobby-nav .friends-groups { display: none !important; }
+body.drawer-friendlist .friends-directory { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+@media (min-width: 721px) and (min-height: 501px) {
+  .app-rail { display: none !important; }
+  .mnav {
+    position: fixed; z-index: 210; left: 8px; top: 8px; bottom: 8px; width: 60px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 0; border-radius: 30px;
+    background: var(--glass-2); -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.35); backdrop-filter: blur(var(--blur-2)) saturate(1.35);
+    box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong), 0 16px 40px -14px rgba(0, 0, 0, 0.55);
+  }
+  .mnav-btn { position: relative; flex: none; width: 50px; height: 56px; border: 0; border-radius: 18px; background: none; color: var(--text-secondary); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; cursor: pointer; transition: .18s var(--ease); }
+  .mnav-btn:hover { background: var(--glass-1); color: var(--text-primary); }
+  .mnav-btn.on { background: var(--accent-soft); color: var(--accent); box-shadow: 0 0 0 1px var(--accent-line); }
+  .mnav-btn svg { width: 21px; height: 21px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .mnav-lbl { display: block; font-size: 9.5px; line-height: 1; font-weight: 600; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+  .mnav-avatar { margin-top: auto; height: 62px; }
+  .mnav-av { width: 34px; height: 34px; border-radius: 50%; background: var(--bg-surface-3) center / cover no-repeat; display: grid; place-items: center; font-weight: 700; font-size: 14px; color: var(--text-primary); box-shadow: 0 0 0 1px var(--border-soft-strong); }
+  .mnav-dot { position: absolute; top: 8px; right: 8px; width: 9px; height: 9px; border-radius: 50%; background: #ff3b4e; box-shadow: 0 0 0 2px rgba(18, 26, 42, .9); }
+}
+@media (min-width: 721px) and (max-width: 900px) and (min-height: 501px) {
+  body[data-view="hub-detail"] .mnav, body[data-view="discover"] .mnav { display: none; }
+}
+@media (max-width: 720px) { .mnav-lbl { display: none; } }
