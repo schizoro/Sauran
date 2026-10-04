@@ -10,7 +10,7 @@
         voice_muted: ['🔇', 'red'], voice_unmuted: ['🔈', 'green'], voice_kicked: ['👢', 'red'], voice_unblocked: ['🚪', 'green'],
         hub_mention: ['@', 'blue'], gift: ['🎁', 'gold'], platform_role_notice: ['🛡️', 'gold'], platform_role_revoked: ['⚖️', 'gray']
     };
-    let onlyNew = false;
+    let mode = 'all'; // all | unread | read
 
     function parseDate(s) {
         if (!s) return null;
@@ -34,6 +34,20 @@
         if (diff === 1) return 'Dün';
         if (diff < 7) return 'Bu hafta';
         return 'Daha önce';
+    }
+
+    // Süzgeç: Hepsi / Okunmamış (yanıt bekleyen ya da henüz okunmamış) / Okundu (soluklaşan kartlar)
+    function applyMode(box) {
+        if (!box) return;
+        box.classList.toggle('nc-only-unread', mode === 'unread');
+        box.classList.toggle('nc-only-read', mode === 'read');
+        box.querySelectorAll('.nc-filter button').forEach((b) => b.classList.toggle('on', b.dataset.ncf === mode));
+        // boş grup başlıkları gizlensin
+        box.querySelectorAll('.nc-group').forEach((g) => {
+            let n = g.nextElementSibling, any = false;
+            while (n && !n.classList.contains('nc-group')) { if (n.classList.contains('notification-card') && getComputedStyle(n).display !== 'none') any = true; n = n.nextElementSibling; }
+            g.style.display = any ? '' : 'none';
+        });
     }
 
     function decorateHeader(unread) {
@@ -101,11 +115,10 @@
         if (tb && !box.querySelector('.nc-filter')) {
             const f = document.createElement('div');
             f.className = 'nc-filter';
-            f.innerHTML = '<button type="button" data-ncf="all" class="on">Hepsi</button><button type="button" data-ncf="new">Yeni</button>';
+            f.innerHTML = '<button type="button" data-ncf="all">Hepsi</button><button type="button" data-ncf="unread">Okunmamış</button><button type="button" data-ncf="read">Okundu</button>';
             tb.insertAdjacentElement('afterend', f);
         }
-        box.classList.toggle('nc-only-new', onlyNew);
-        box.querySelectorAll('.nc-filter button').forEach((b) => b.classList.toggle('on', (b.dataset.ncf === 'new') === onlyNew));
+        applyMode(box);
         decorateHeader(unread);
         // boş durum
         const empty = box.querySelector('.notifications-empty');
@@ -126,9 +139,8 @@
     document.addEventListener('click', (e) => {
         const b = e.target.closest && e.target.closest('.nc-filter button');
         if (!b) return;
-        onlyNew = b.dataset.ncf === 'new';
-        const box = $('notifications-list');
-        if (box) { box.classList.toggle('nc-only-new', onlyNew); box.querySelectorAll('.nc-filter button').forEach((x) => x.classList.toggle('on', (x.dataset.ncf === 'new') === onlyNew)); }
+        mode = b.dataset.ncf;
+        applyMode($('notifications-list'));
     });
     // Kart okundu olunca (soluklaşınca) sayaç ve süzgeç güncellensin
     const box = $('notifications-list');
@@ -136,5 +148,6 @@
         const unread = box.querySelectorAll('.notification-card:not(.notification-seen)').length;
         box.querySelectorAll('.notification-card').forEach((c) => c.classList.toggle('nc-new', !c.classList.contains('notification-seen')));
         decorateHeader(unread);
+        applyMode(box);
     }).observe(box, { subtree: true, attributes: true, attributeFilter: ['class'] });
 })();

@@ -2920,7 +2920,9 @@ body.drawer-friendlist .friends-directory { display: flex; flex-direction: colum
 .nc-filter { display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.06); align-self: flex-start; }
 .nc-filter button { border: 0; background: none; padding: 7px 16px; border-radius: 999px; font-size: 12.5px; font-weight: 700; color: var(--text-secondary); cursor: pointer; }
 .nc-filter button.on { background: rgba(255,255,255,.14); color: #fff; }
-#notifications-modal .notifications-list.nc-only-new .notification-card.notification-seen, #notifications-modal .notifications-list.nc-only-new .nc-group { display: none !important; }
+#notifications-modal .notifications-list.nc-only-unread .notification-card.notification-seen { display: none !important; }
+#notifications-modal .notifications-list.nc-only-read .notification-card:not(.notification-seen) { display: none !important; }
+#notifications-modal .notifications-list.nc-only-read .notification-card.notification-seen { opacity: .85; }
 .nc-group { margin: 12px 4px 0; font-size: 11px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: var(--text-tertiary); }
 #notifications-modal .notification-card {
   position: relative; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; align-items: start; padding: 14px 14px 14px 12px; border: 0 !important; border-radius: 18px;
