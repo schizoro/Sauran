@@ -2597,7 +2597,7 @@ function updateProfileEffect(userId, effect) {
 
 // ── Sauran Atmosphere ─────────────────────────────────────────────────────────────────────────────
 const { ATMOSPHERES, SOUND_KEYS, getAtmosphere } = require('./atmosphere');
-const { FEATURES, CARD_STYLE_KEYS } = require('./features');
+const { FEATURES, FEATURE_GROUPS, FEATURE_META, CARD_STYLES, CARD_STYLE_KEYS } = require('./features');
 
 function ownsAtmosphere(userId, key) {
   return Boolean(db.prepare(`SELECT 1 FROM entitlements WHERE user_id = ? AND product = ? AND (expires_at IS NULL OR expires_at > datetime('now')) LIMIT 1`).get(userId, 'atmo:' + key));
@@ -3639,6 +3639,42 @@ const GIFT_PRODUCTS = {
 
 function listGiftProducts() {
   return Object.entries(GIFT_PRODUCTS).map(([key, p]) => ({ key, ...p }));
+}
+
+// ── Hediye Aracı görsel kataloğu: tüm ürünler kategori + ayrıntıyla (aracın ürün seçimi buradan) ──
+const GIFT_CATEGORY_ORDER = [
+  ['money', '💰', 'Para & Abonelik'],
+  ['frame', '🖼️', 'Avatar çerçeveleri'],
+  ['bundle', '🌌', 'Paketler (Atmosphere)'],
+  ...FEATURE_GROUPS.map(([id, icon, label]) => [id, icon, label])
+];
+function listGiftCatalog() {
+  const items = [];
+  const base = {
+    coin:    { icon: '🪙', desc: 'Sauran Coin bakiyesine ekler. Miktarı sen belirlersin.' },
+    plus:    { icon: '✦', desc: 'Sauran Plus aboneliği (gün). Profil teması, efekt, sohbet stilleri, kendi emojileri ve daha fazlası.' },
+    premium: { icon: '♛', desc: 'Sauran Premium aboneliği (gün). Plus\'ın her şeyi + animasyonlu kartlar, hareketli avatar, aylık takviye, Premium paketler.' },
+    boost:   { icon: '💎', desc: 'Hediye lobi takviyesi: kalıcıdır, aboneliğe bağlı değil; alıcı istediği lobiye verir.' }
+  };
+  for (const [key, meta] of Object.entries(base)) {
+    const p = GIFT_PRODUCTS[key];
+    items.push({ key, kind: 'product', cat: 'money', label: p.label, desc: meta.desc, icon: meta.icon, tier: key === 'premium' ? 'premium' : key === 'plus' ? 'plus' : 'free', enabled: p.enabled, unit: p.unit, min: p.min, max: p.max, details: [] });
+  }
+  for (const c of listCosmeticItems({ includeHidden: true }).filter((i) => i.giftable)) {
+    items.push({ key: c.key, kind: 'cosmetic', cat: 'frame', label: c.label, desc: c.description, icon: '🖼️', tier: c.rarity === 'special' ? 'special' : 'free', rarity: c.rarity, enabled: true, unit: 'adet', min: 1, max: 1, details: [c.market_visible ? 'Markette de satılır (' + (c.price == null ? '—' : c.price + ' Coin') + ')' : 'Marketten alınamaz — yalnızca hediye'] });
+  }
+  for (const a of ATMOSPHERES) {
+    const b = a.bundle || {};
+    const details = ['Profil: ' + [b.profile_theme, b.name_effect, b.profile_effect].filter((x) => x && x !== 'none').join(' · '), 'Sohbet: ' + [b.chat_theme, b.bubble_style].filter(Boolean).join(' · '), a.sound ? 'Özel ses' : null, a.hub_effect && a.hub_effect !== 'none' ? 'Lobi efekti: ' + a.hub_effect : null].filter(Boolean);
+    items.push({ key: 'atmo:' + a.key, kind: 'product', cat: 'bundle', label: a.label, desc: a.desc, icon: a.emoji, art: a.art, tier: a.tier, price_coins: a.price_coins, enabled: true, unit: 'paket', min: 1, max: 1, details });
+  }
+  for (const [key, f] of Object.entries(FEATURES)) {
+    const m = FEATURE_META[key] || {};
+    const details = [];
+    if (key === 'premium_card') details.push(...CARD_STYLES.map((c) => c.emoji + ' ' + c.label));
+    items.push({ key, kind: 'product', cat: m.group || 'other', label: f.label, desc: m.desc || 'Tek özellik hediyesi.', icon: m.icon || '✨', tier: f.tier, enabled: true, unit: 'adet', min: 1, max: 1, details });
+  }
+  return { categories: GIFT_CATEGORY_ORDER.map(([id, icon, label]) => ({ id, icon, label })), items };
 }
 
 function giftProduct(actorId, username, productKey, quantity, note) {
@@ -8643,6 +8679,7 @@ module.exports = {
   likeHub,
   COSMETIC_ITEMS,
   listCosmeticItems,
+  listGiftCatalog,
   ensureClassicFrame,
   listUserCosmetics,
   getEquippedCosmetics,

@@ -125,6 +125,7 @@ const {
   giftProduct,
   listRecentGifts,
   listCosmeticItems,
+  listGiftCatalog,
   listUserCosmetics,
   getEquippedCosmetics,
   grantCosmetic,
@@ -3064,6 +3065,11 @@ app.post('/api/admin/gifts/cosmetics', (req, res) => {
 });
 
 // ── Hediye Aracı (yalnızca kurucu) ──
+app.get('/api/admin/gifts/catalog', (req, res) => {
+  if (!requirePlatformRole(req, res, 'founder')) return;
+  res.json({ success: true, ...listGiftCatalog(), recent: listRecentGifts(30) });
+});
+
 app.get('/api/admin/gifts/products', (req, res) => {
   if (!requirePlatformRole(req, res, 'founder')) return;
   res.json({ success: true, products: listGiftProducts(), recent: listRecentGifts(30) });

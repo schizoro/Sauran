@@ -34,6 +34,39 @@ const FEATURES = {
   cross_lobby_sticker:  { label: 'Başka lobilerin çıkartmalarını kullanma', tier: 'premium' }
 };
 
+// Hediye Aracı görsel kataloğu için ayrıntılar (kategori, simge, açıklama). Yeni bir özellik eklerken buraya da bir satır ekle;
+// eklenmezse özellik "Diğer" kategorisinde adıyla yine görünür (hiçbir ürün kaybolmaz).
+const FEATURE_GROUPS = [
+  ['profile', '👤', 'Profil & Kimlik'],
+  ['chat', '💬', 'Sohbet'],
+  ['lobby', '🏠', 'Lobi'],
+  ['emoji', '😊', 'Emoji & Çıkartma'],
+  ['other', '✨', 'Diğer']
+];
+const FEATURE_META = {
+  profile_theme:        { group: 'profile', icon: '🎨', desc: 'Profil penceresinin renk teması (Gece, Gün Batımı, Orman, Sakura, Okyanus).' },
+  profile_effect:       { group: 'profile', icon: '🌸', desc: 'Profil avatarının çevresinde animasyonlu efekt (Sakura, Sahne Işıkları).' },
+  name_effect:          { group: 'profile', icon: '🔤', desc: 'Kullanıcı adına animasyonlu efekt (Gradyan, Parıltı, Gökkuşağı, Işıltı).' },
+  profile_sound:        { group: 'profile', icon: '🎧', desc: 'Profil açıldığında çalan sesi seçme.' },
+  gif_avatar:           { group: 'profile', icon: '🎞️', desc: 'Hareketli (GIF) profil fotoğrafı yükleyebilme.' },
+  gif_banner:           { group: 'profile', icon: '🖼️', desc: 'Hareketli (GIF) kapak fotoğrafı yükleyebilme.' },
+  premium_card:         { group: 'profile', icon: '🃏', desc: 'Lobi üye listesinde animasyonlu Premium üye kartı; 11 stil (Gül, Ayıcık, Tavşan, Alev, Şimşek, Ejderha…).' },
+  chat_theme:           { group: 'chat', icon: '🌙', desc: 'Sohbet teması (Yumuşak, Kontrast).' },
+  bubble_style:         { group: 'chat', icon: '💭', desc: 'Mesaj balonu stilleri (Yuvarlak, Cam, Çerçeve, Gölge).' },
+  lobby_theme:          { group: 'lobby', icon: '🎭', desc: 'Kendi lobisine tema seçebilme.' },
+  lobby_image:          { group: 'lobby', icon: '🏞️', desc: 'Kendi lobisine arka plan görseli koyabilme.' },
+  custom_emoji:         { group: 'emoji', icon: '🧩', desc: 'Lobi emojisi hakkı.' },
+  sticker_pack:         { group: 'emoji', icon: '🐱', desc: 'Plus hareketli çıkartma paketi (31 karakter).' },
+  premium_sticker_pack: { group: 'emoji', icon: '🐲', desc: 'Premium hareketli çıkartma paketi (12 büyük karakter).' },
+  premium_emoji_pack:   { group: 'emoji', icon: '👑', desc: 'Premium tepki emojileri (🐉 🦄 👑 💎 🌟 🚀 …).' },
+  personal_emoji:       { group: 'emoji', icon: '📷', desc: 'Kendi emojilerini yükleme (10 adet, otomatik sıkıştırılır).' },
+  animated_emoji:       { group: 'emoji', icon: '🎞️', desc: 'Hareketli (GIF) kendi emojisi; 30 emojiye kadar.' },
+  cross_lobby_emoji:    { group: 'emoji', icon: '🌐', desc: 'Üyesi olduğu başka lobilerin emojilerini her yerde kullanma.' },
+  personal_sticker:     { group: 'emoji', icon: '🖼️', desc: 'Kendi çıkartmalarını yükleme (5 adet).' },
+  animated_sticker:     { group: 'emoji', icon: '✨', desc: 'Hareketli kendi çıkartması; 15 çıkartmaya kadar.' },
+  cross_lobby_sticker:  { group: 'emoji', icon: '🌐', desc: 'Üyesi olduğu başka lobilerin çıkartmalarını kullanma.' }
+};
+
 // Premium üye kartı stilleri (premium_card özelliğiyle seçilir; Hediye Aracı'nda ayrı ürün gerekmez — özellik zaten giftable).
 // group: classic | cute (pembe, sevimli) | strong (sert, güçlü). Yeni stil = buraya satır + client/theme.css'te .cs-<key> kuralı.
 const CARD_STYLES = [
@@ -51,4 +84,4 @@ const CARD_STYLES = [
 ];
 const CARD_STYLE_KEYS = CARD_STYLES.map((c) => c.key);
 
-module.exports = { FEATURES, CARD_STYLES, CARD_STYLE_KEYS };
+module.exports = { FEATURES, FEATURE_GROUPS, FEATURE_META, CARD_STYLES, CARD_STYLE_KEYS };

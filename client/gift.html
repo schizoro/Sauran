@@ -8,104 +8,185 @@
 <link rel="stylesheet" href="theme.css">
 <style>
 html,body{height:auto!important;max-height:none!important}
-body{display:block!important;position:static!important;top:auto!important;overflow:visible!important;min-height:100vh;min-height:100dvh;margin:0;padding:20px;padding-bottom:60px;background:#0a0d11;color:#c5c6c7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
-.g-wrap{max-width:640px;margin:0 auto}
-.g-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
-.g-head h1{font-size:18px;color:#5cc8ff;margin:0}
+body{display:block!important;position:static!important;top:auto!important;overflow:visible!important;min-height:100vh;min-height:100dvh;margin:0;padding:18px;padding-bottom:80px;background:#0a0d11;color:#c5c6c7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+.g-wrap{max-width:1040px;margin:0 auto}
+.g-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.g-head h1{font-size:19px;color:#5cc8ff;margin:0}
 .g-head a{color:#c5c6c7;text-decoration:none;font-size:13px}
-.g-card{border-radius:18px;padding:18px;background:rgba(20,22,28,.55);backdrop-filter:blur(22px) saturate(180%);-webkit-backdrop-filter:blur(22px) saturate(180%);border:1px solid rgba(255,255,255,.08);margin-bottom:16px}
-.g-card label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin:12px 0 6px}
-.g-card input,.g-card select{width:100%;box-sizing:border-box;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);color:#e2f8f6;border-radius:10px;padding:10px 12px;font-size:14px;outline:none}
-.g-card select option{background:#12151a;color:#e2f8f6}
-.g-card select option:disabled{color:#5b6169}
-.g-btn{margin-top:16px;width:100%;padding:12px;border-radius:999px;border:1px solid rgba(92,200,255,.45);background:rgba(92,200,255,.14);color:#5cc8ff;font-weight:bold;font-size:14px;cursor:pointer}
+.g-card{border-radius:18px;padding:16px;background:rgba(20,22,28,.7);border:1px solid rgba(255,255,255,.08);margin-bottom:14px}
+.g-state{color:#ff7b72}
+/* gönderim paneli (sabit) */
+.g-panel{position:sticky;top:0;z-index:30;border-radius:18px;padding:14px;background:rgba(14,18,26,.96);border:1px solid rgba(92,200,255,.25);box-shadow:0 14px 34px -16px rgba(0,0,0,.9);margin-bottom:14px}
+.g-sel{display:flex;gap:12px;align-items:center;margin-bottom:12px;min-height:56px}
+.g-sel .g-th{width:56px;height:56px;flex:none;border-radius:12px}
+.g-sel .g-th{font-size:26px}.g-sel .g-fr{width:38px;height:38px;font-size:15px}
+.g-sel b{display:block;font-size:15px;color:#e8f6ff}
+.g-sel small{display:block;color:#8b97a8;font-size:12px;line-height:1.4;margin-top:2px}
+.g-none{color:#6b7280;font-size:13px}
+.g-form{display:grid;grid-template-columns:1.3fr .8fr 1.2fr auto;gap:10px;align-items:end}
+.g-form label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin:0 0 5px}
+.g-form input{width:100%;box-sizing:border-box;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);color:#e2f8f6;border-radius:10px;padding:10px 12px;font-size:14px;outline:none}
+.g-form input:disabled{opacity:.45}
+.g-btn{padding:11px 20px;border-radius:999px;border:1px solid rgba(92,200,255,.45);background:rgba(92,200,255,.16);color:#5cc8ff;font-weight:700;font-size:14px;cursor:pointer;white-space:nowrap}
 .g-btn:disabled{opacity:.4;cursor:default}
-.g-msg{font-size:13px;margin-top:10px;min-height:18px}
+.g-btn.armed{background:#5cc8ff;color:#04121e}
+.g-msg{font-size:13px;margin-top:8px;min-height:18px}
 .g-ok{color:#7ee787}.g-err{color:#ff7b72}
+@media(max-width:760px){.g-form{grid-template-columns:1fr 1fr}.g-form .g-btn{grid-column:1/-1}}
+/* filtreler */
+.g-filters{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.g-search{width:100%;box-sizing:border-box;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);color:#e2f8f6;border-radius:12px;padding:11px 14px;font-size:14px;outline:none}
+.g-chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.g-chips::-webkit-scrollbar{display:none}
+.g-chip{flex:none;border:0;border-radius:999px;padding:8px 13px;font-size:12.5px;font-weight:600;cursor:pointer;background:rgba(255,255,255,.06);color:#9aa6b8}
+.g-chip.on{background:rgba(92,200,255,.18);color:#5cc8ff;box-shadow:inset 0 0 0 1px rgba(92,200,255,.4)}
+.g-chip small{opacity:.7;margin-left:4px}
+/* ürün ızgarası */
+.g-sec h3{margin:20px 4px 10px;font-size:14px;color:#dfe8f5;display:flex;align-items:center;gap:8px}
+.g-sec h3 small{color:#6b7280;font-weight:500}
+.g-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.g-item{display:flex;flex-direction:column;text-align:left;border:0;border-radius:14px;overflow:hidden;cursor:pointer;background:#11171f;color:inherit;box-shadow:0 0 0 1px rgba(255,255,255,.07);padding:0}
+.g-item:hover{box-shadow:0 0 0 1px rgba(92,200,255,.4)}
+.g-item.sel{box-shadow:0 0 0 2px #5cc8ff}
+.g-item.off{opacity:.5}
+.g-th{position:relative;height:110px;display:grid;place-items:center;background:#070a0e;overflow:hidden;font-size:42px}
+.g-th.tier-plus{background:linear-gradient(135deg,#1d2a5e,#3b46a8)}
+.g-th.tier-premium{background:linear-gradient(135deg,#4b2380,#c0407f)}
+.g-th.tier-free{background:linear-gradient(135deg,#1a2e2a,#2a5a4e)}
+.g-th.tier-special{background:linear-gradient(135deg,#3a2a10,#8a5a1a)}
+.g-th.tier-coin{background:linear-gradient(135deg,#2a2410,#6a5a1a)}
+.g-fr{width:66px;height:66px;border-radius:50%;background:#7c8cff;display:grid;place-items:center;font-weight:700;font-size:24px;color:#fff;position:relative}
+.g-meta{padding:10px 11px 12px;display:flex;flex-direction:column;gap:5px}
+.g-name{font-weight:700;font-size:13.5px;color:#eaf2ff}
+.g-desc{font-size:11.8px;line-height:1.45;color:#8b97a8;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.g-badges{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
+.g-b{font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;letter-spacing:.02em}
+.g-b-plus{background:linear-gradient(135deg,#5b6cff,#8a5cff);color:#fff}
+.g-b-premium{background:linear-gradient(135deg,#ffb347,#ffd166);color:#2a1c00}
+.g-b-free{background:rgba(87,242,135,.16);color:#57f287}
+.g-b-special{background:rgba(255,120,170,.18);color:#ff9ac1}
+.g-b-coin{background:rgba(255,209,102,.16);color:#ffd166}
+.g-b-soft{background:rgba(255,255,255,.07);color:#9aa6b8;font-weight:500}
 .g-row{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid rgba(255,255,255,.06);font-size:13px}
 .g-row small{color:#6b7280}
+.g-empty{color:#6b7280;text-align:center;padding:30px 0}
 </style>
 </head>
 <body>
 <div class="g-wrap">
   <div class="g-head"><h1>🎁 Hediye Aracı</h1><a href="index.html">← Uygulamaya dön</a></div>
-  <div id="g-state" class="g-card" style="display:none"></div>
+  <div id="g-state" class="g-card g-state" style="display:none"></div>
   <div id="g-main" style="display:none">
-    <div class="g-card">
-      <label for="g-user">Alıcı kullanıcı adı</label>
-      <input id="g-user" autocomplete="off" autocapitalize="off">
+
+    <div class="g-panel" id="g-panel">
+      <div class="g-sel" id="g-sel"><span class="g-none">Aşağıdan bir ürüne dokun…</span></div>
+      <div class="g-form">
+        <div><label for="g-user">Alıcı kullanıcı adı</label><input id="g-user" autocomplete="off" autocapitalize="off"></div>
+        <div><label for="g-qty" id="g-qty-label">Miktar</label><input id="g-qty" type="number" min="1" step="1" value="1" disabled></div>
+        <div><label for="g-note">Not (isteğe bağlı)</label><input id="g-note" maxlength="200"></div>
+        <button id="g-send" class="g-btn" type="button" disabled>Hediye gönder</button>
+      </div>
       <div id="g-lookup" class="g-msg"></div>
-      <label for="g-product">Ürün</label>
-      <select id="g-product"></select>
-      <label for="g-qty" id="g-qty-label">Miktar</label>
-      <input id="g-qty" type="number" min="1" step="1" value="100">
-      <label for="g-note">Not (isteğe bağlı, kayıt için)</label>
-      <input id="g-note" maxlength="200">
-      <button id="g-send" class="g-btn" type="button">Hediye gönder</button>
       <div id="g-msg" class="g-msg"></div>
     </div>
-    <div class="g-card"><strong>Son hediyeler</strong><div id="g-recent"></div></div>
 
-    <div class="g-card">
-      <strong>🖼️ Kozmetik hediye et</strong> <span style="color:#6b7280;font-size:12px;">(Market'te satılmayanlar dahil — ör. Supporter)</span>
-      <label for="g-cos-user">Alıcı kullanıcı adı</label>
-      <input id="g-cos-user" autocomplete="off" autocapitalize="off">
-      <label for="g-cos-item">Ürün</label>
-      <select id="g-cos-item"></select>
-      <button id="g-cos-send" class="g-btn" type="button">Kozmetik gönder</button>
-      <div id="g-cos-msg" class="g-msg"></div>
+    <div class="g-filters">
+      <input id="g-search" class="g-search" type="search" placeholder="Ürün ara (ad, açıklama)…" autocomplete="off">
+      <div class="g-chips" id="g-cats"></div>
+      <div class="g-chips" id="g-tiers"></div>
     </div>
+
+    <div id="g-catalog"></div>
+
+    <div class="g-card" style="margin-top:22px"><strong>Son hediyeler</strong><div id="g-recent"></div></div>
   </div>
 </div>
 <script>
 (function(){
   const $=(i)=>document.getElementById(i);
-  let products=[], armed=false;
   const esc=(s)=>String(s==null?'':s).replace(/[&<>"']/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const api=async(u,m,b)=>{const r=await fetch(u,{method:m||'GET',headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined,credentials:'same-origin'});let d={};try{d=await r.json();}catch(_){}return{status:r.status,body:d};};
-  const pname=(k)=>{const p=products.find(x=>x.key===k);return p?p.label:k;};
-  function renderRecent(list){
-    $('g-recent').innerHTML=list.length?list.map(g=>`<div class="g-row"><span>${esc(g.recipient)} ← ${esc(pname(g.product))} × ${g.quantity}${g.note?`<br><small>${esc(g.note)}</small>`:''}</span><small>${esc(g.created_at)}</small></div>`).join(''):'<div class="g-row"><small>Henüz yok</small></div>';
+  const TIERS=[['all','Hepsi'],['free','Ücretsiz'],['plus','✦ Plus'],['premium','♛ Premium'],['special','Özel'],['coin','🪙 Coin']];
+  const TIER_LABEL={free:'Ücretsiz',plus:'✦ PLUS',premium:'♛ PREMIUM',special:'ÖZEL',coin:'🪙 COIN'};
+  let cats=[], items=[], sel=null, armed=false, fCat='all', fTier='all', fText='';
+
+  function thumb(it){
+    if(it.cat==='frame'){
+      const k=it.key;
+      let ov='';
+      if(k==='supporter') ov='<span class="sf-overlay" aria-hidden="true"><img src="assets/frame-supporter.png" class="sf-ring-img" alt=""><span class="sf-highlight"></span></span>';
+      else if(k==='supporter_rose') ov='<span class="sr-overlay" aria-hidden="true"><img src="assets/frame-supporter-rose.svg" class="sr-ring-img" alt=""><span class="sr-highlight"></span></span>';
+      return `<div class="g-th tier-special"><div class="g-fr profile-avatar-wrap frame-${esc(k)}">U${ov}</div></div>`;
+    }
+    if(it.art) return `<div class="g-th" style="background:${it.art}">${esc(it.icon)}</div>`;
+    return `<div class="g-th tier-${esc(it.tier)}">${esc(it.icon)}</div>`;
   }
-  function syncProduct(){
-    const p=products.find(x=>x.key===$('g-product').value); if(!p) return;
-    $('g-qty-label').textContent='Miktar ('+p.unit+')';
-    $('g-qty').min=p.min;$('g-qty').max=p.max;$('g-qty').disabled=p.min===p.max;
-    if(p.min===p.max)$('g-qty').value=p.min;
-    $('g-send').disabled=!p.enabled;
-    $('g-send').textContent=p.enabled?'Hediye gönder':'Yakında — şimdilik gönderilemez';
-    armed=false;
+  function badge(it){
+    const t=it.tier==='coin'&&it.price_coins?`🪙 ${it.price_coins}`:(TIER_LABEL[it.tier]||it.tier);
+    return `<span class="g-b g-b-${esc(it.tier)}">${esc(t)}</span>`;
+  }
+  function visible(){
+    const q=fText.trim().toLowerCase();
+    return items.filter((it)=>(fCat==='all'||it.cat===fCat)&&(fTier==='all'||it.tier===fTier)&&(!q||(it.label+' '+it.desc+' '+(it.details||[]).join(' ')+' '+it.key).toLowerCase().includes(q)));
+  }
+  function renderChips(){
+    const count=(f)=>items.filter(f).length;
+    $('g-cats').innerHTML=`<button class="g-chip${fCat==='all'?' on':''}" data-cat="all">Hepsi<small>${items.length}</small></button>`+cats.map((c)=>{const n=count((i)=>i.cat===c.id);return n?`<button class="g-chip${fCat===c.id?' on':''}" data-cat="${esc(c.id)}">${esc(c.icon)} ${esc(c.label)}<small>${n}</small></button>`:'';}).join('');
+    $('g-tiers').innerHTML=TIERS.map(([k,l])=>`<button class="g-chip${fTier===k?' on':''}" data-tier="${k}">${l}</button>`).join('');
+  }
+  function renderCatalog(){
+    const list=visible();
+    if(!list.length){$('g-catalog').innerHTML='<div class="g-empty">Eşleşen ürün yok.</div>';return;}
+    $('g-catalog').innerHTML=cats.map((c)=>{
+      const group=list.filter((i)=>i.cat===c.id); if(!group.length) return '';
+      return `<section class="g-sec"><h3>${esc(c.icon)} ${esc(c.label)} <small>${group.length} ürün</small></h3><div class="g-grid">${group.map((it)=>`
+        <button type="button" class="g-item${sel&&sel.key===it.key?' sel':''}${it.enabled?'':' off'}" data-key="${esc(it.key)}">
+          ${thumb(it)}
+          <div class="g-meta"><div class="g-name">${esc(it.label)}</div><div class="g-desc">${esc(it.desc)}</div>
+          <div class="g-badges">${badge(it)}${(it.details||[]).slice(0,3).map((d)=>`<span class="g-b g-b-soft">${esc(d)}</span>`).join('')}${(it.details||[]).length>3?`<span class="g-b g-b-soft">+${it.details.length-3}</span>`:''}</div></div>
+        </button>`).join('')}</div></section>`;
+    }).join('');
+  }
+  function renderSel(){
+    if(!sel){$('g-sel').innerHTML='<span class="g-none">Aşağıdan bir ürüne dokun…</span>';$('g-send').disabled=true;return;}
+    $('g-sel').innerHTML=`${thumb(sel).replace('g-th','g-th g-thsm')}<div><b>${esc(sel.label)} ${badge(sel)}</b><small>${esc(sel.desc)}${(sel.details||[]).length?'<br>'+esc(sel.details.join(' · ')):''}</small></div>`;
+    const fixed=sel.min===sel.max;
+    $('g-qty-label').textContent='Miktar ('+sel.unit+')';
+    $('g-qty').min=sel.min;$('g-qty').max=sel.max;$('g-qty').disabled=fixed;
+    if(fixed) $('g-qty').value=sel.min; else if(!Number($('g-qty').value)||Number($('g-qty').value)<sel.min) $('g-qty').value=({coin:100,plus:30,premium:30,boost:1})[sel.key]||sel.min;
+    $('g-send').disabled=!sel.enabled;
+    $('g-send').textContent=sel.enabled?'Hediye gönder':'Yakında — gönderilemez';
+    $('g-send').classList.remove('armed');armed=false;
+  }
+  function renderRecent(list){
+    const name=(k)=>{const p=items.find((x)=>x.key===k);return p?p.label:k;};
+    $('g-recent').innerHTML=list&&list.length?list.map((g)=>`<div class="g-row"><span>${esc(g.recipient)} ← ${esc(name(g.product))} × ${g.quantity}${g.note?`<br><small>${esc(g.note)}</small>`:''}</span><small>${esc(g.created_at)}</small></div>`).join(''):'<div class="g-row"><small>Henüz yok</small></div>';
   }
   async function init(){
-    const r=await api('/api/admin/gifts/products');
+    const r=await api('/api/admin/gifts/catalog');
     if(r.status!==200){$('g-state').style.display='block';$('g-state').textContent=r.status===401?'Giriş yapmalısın.':'Bu araç yalnızca kurucuya açıktır.';return;}
-    products=r.body.products;
-    $('g-product').innerHTML=products.map(p=>`<option value="${esc(p.key)}">${esc(p.label)}${p.enabled?'':' (yakında)'}</option>`).join('');
-    $('g-main').style.display='block';renderRecent(r.body.recent);syncProduct();
-    const c=await api('/api/admin/gifts/cosmetics/list');
-    if(c.status===200) $('g-cos-item').innerHTML=c.body.items.map(i=>`<option value="${esc(i.key)}">${esc(i.label)} (${esc(i.rarity)})</option>`).join('');
+    cats=r.body.categories;items=r.body.items;
+    $('g-main').style.display='block';
+    renderChips();renderCatalog();renderRecent(r.body.recent);
   }
-  let cosArmed=false;
-  $('g-cos-send').addEventListener('click',async()=>{
-    const username=$('g-cos-user').value.trim();
-    if(!cosArmed){cosArmed=true;$('g-cos-send').textContent=`Onayla: ${username} ← ${$('g-cos-item').selectedOptions[0]?.textContent||''}`;return;}
-    cosArmed=false;$('g-cos-send').textContent='Kozmetik gönder';$('g-cos-send').disabled=true;
-    const r=await api('/api/admin/gifts/cosmetics','POST',{username,item_key:$('g-cos-item').value});
-    $('g-cos-msg').className='g-msg '+(r.body.success?'g-ok':'g-err');
-    $('g-cos-msg').textContent=r.body.success?`Gönderildi: ${r.body.recipient} ← ${r.body.label}`:(r.body.error||'Gönderilemedi.');
-    $('g-cos-send').disabled=false;
-  });
-  $('g-product').addEventListener('change',syncProduct);
-  let lt;$('g-user').addEventListener('input',()=>{clearTimeout(lt);const v=$('g-user').value.trim();if(!v){$('g-lookup').textContent='';return;}lt=setTimeout(async()=>{const r=await api('/api/admin/gifts/lookup?username='+encodeURIComponent(v));$('g-lookup').className='g-msg '+(r.status===200?'g-ok':'g-err');$('g-lookup').textContent=r.status===200?`✓ ${r.body.username} — Coin bakiyesi: ${r.body.balance}`:'Kullanıcı bulunamadı.';},300);armed=false;});
+  $('g-catalog').addEventListener('click',(e)=>{const b=e.target.closest('[data-key]');if(!b)return;sel=items.find((i)=>i.key===b.dataset.key);renderSel();renderCatalog();$('g-panel').scrollIntoView({block:'nearest'});});
+  $('g-cats').addEventListener('click',(e)=>{const b=e.target.closest('[data-cat]');if(!b)return;fCat=b.dataset.cat;renderChips();renderCatalog();});
+  $('g-tiers').addEventListener('click',(e)=>{const b=e.target.closest('[data-tier]');if(!b)return;fTier=b.dataset.tier;renderChips();renderCatalog();});
+  $('g-search').addEventListener('input',()=>{fText=$('g-search').value;renderCatalog();});
+  let lt;$('g-user').addEventListener('input',()=>{armed=false;$('g-send').classList.remove('armed');if(sel)$('g-send').textContent='Hediye gönder';clearTimeout(lt);const v=$('g-user').value.trim();if(!v){$('g-lookup').textContent='';return;}lt=setTimeout(async()=>{const r=await api('/api/admin/gifts/lookup?username='+encodeURIComponent(v));$('g-lookup').className='g-msg '+(r.status===200?'g-ok':'g-err');$('g-lookup').textContent=r.status===200?`✓ ${r.body.username} — Coin bakiyesi: ${r.body.balance}`:'Kullanıcı bulunamadı.';},300);});
   $('g-send').addEventListener('click',async()=>{
-    const p=products.find(x=>x.key===$('g-product').value);const qty=Number($('g-qty').value);
-    if(!armed){armed=true;$('g-send').textContent=`Onayla: ${$('g-user').value.trim()} ← ${qty} ${p.unit} ${p.label}`;return;}
-    armed=false;$('g-send').disabled=true;
-    const r=await api('/api/admin/gifts','POST',{username:$('g-user').value.trim(),product:p.key,quantity:qty,note:$('g-note').value});
+    if(!sel)return;
+    const username=$('g-user').value.trim(), qty=Number($('g-qty').value);
+    if(!username){$('g-msg').className='g-msg g-err';$('g-msg').textContent='Önce alıcı kullanıcı adını yaz.';return;}
+    if(!armed){armed=true;$('g-send').classList.add('armed');$('g-send').textContent=`Onayla: ${username} ← ${sel.min===sel.max?'':qty+' '+sel.unit+' '}${sel.label}`;return;}
+    armed=false;$('g-send').classList.remove('armed');$('g-send').disabled=true;
+    let r;
+    if(sel.kind==='cosmetic') r=await api('/api/admin/gifts/cosmetics','POST',{username,item_key:sel.key});
+    else r=await api('/api/admin/gifts','POST',{username,product:sel.key,quantity:qty,note:$('g-note').value});
     $('g-msg').className='g-msg '+(r.body.success?'g-ok':'g-err');
-    $('g-msg').textContent=r.body.success?`Gönderildi: ${r.body.recipient} ← ${r.body.quantity} ${r.body.unit} ${r.body.label}`:(r.body.error||'Gönderilemedi.');
-    const l=await api('/api/admin/gifts/products');if(l.status===200)renderRecent(l.body.recent);
-    syncProduct();
+    $('g-msg').textContent=r.body.success?`Gönderildi: ${r.body.recipient} ← ${r.body.label}`:(r.body.error||'Gönderilemedi.');
+    const l=await api('/api/admin/gifts/catalog');if(l.status===200)renderRecent(l.body.recent);
+    renderSel();
   });
   init();
 })();

@@ -236,6 +236,22 @@ test('Seviye 4 lobi: duyuru/karşılama/vurgu rengi yalnızca sahip + Seviye 4; 
   if (d2.boost.level < 4) assert.ok(d2.announcement === null && d2.accent_color === null);
 });
 
+test('Hediye Aracı görsel kataloğu: tüm özellikler, paketler, çerçeveler ve temel ürünler kategorili listelenir (yeni kayıt kaybolmaz)', async () => {
+  const { FEATURES } = require('./features');
+  const { ATMOSPHERES } = require('./atmosphere');
+  const cat = dbm.listGiftCatalog();
+  const keys = new Set(cat.items.map((i) => i.key));
+  ['coin', 'plus', 'premium', 'boost'].forEach((k) => assert.ok(keys.has(k), 'eksik: ' + k));
+  Object.keys(FEATURES).forEach((k) => assert.ok(keys.has(k), 'özellik eksik: ' + k));
+  ATMOSPHERES.forEach((a) => assert.ok(keys.has('atmo:' + a.key), 'paket eksik: ' + a.key));
+  dbm.listCosmeticItems({ includeHidden: true }).filter((c) => c.giftable).forEach((c) => assert.ok(keys.has(c.key), 'çerçeve eksik: ' + c.key));
+  const ids = new Set(cat.categories.map((c) => c.id));
+  cat.items.forEach((i) => assert.ok(ids.has(i.cat), 'kategorisiz ürün: ' + i.key));
+  assert.ok(cat.items.every((i) => i.label && i.desc && i.tier), 'her ürünün ad/açıklama/seviye alanı olmalı');
+  assert.strictEqual(new Set(cat.items.map((i) => i.key)).size, cat.items.length, 'yinelenen anahtar');
+  assert.strictEqual(cat.items.find((i) => i.key === 'premium_card').details.length, 11); // 11 kart stili ayrıntıda
+});
+
 (async () => {
   for (const [name, fn] of tests) {
     await fn();
