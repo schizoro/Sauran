@@ -13,6 +13,7 @@
         { id: 'chat-theme-picker', cat: 'chat', feature: 'chat_theme', tier: 'Plus', attr: 'theme', def: 'classic', field: 'chat_theme', slot: 'theme', title: 'Sohbet teması' },
         { id: 'bubble-style-picker', cat: 'chat', feature: 'bubble_style', tier: 'Plus', attr: 'bubble', def: 'default', field: 'bubble_style', slot: 'bubble', title: 'Mesaj balonu' }
     ];
+const optLabel = (btn) => { const c = btn.cloneNode(true); c.querySelectorAll('.nfx-preview, .chat-theme-swatch, .bubble-swatch').forEach((n) => n.remove()); return (c.textContent || '').trim(); };
     let pass = false; // "Uygula" mevcut işleyiciyi çalıştırırken kendi yakalayıcımızı atlar
 
     // Kilitli seçenekler `disabled` ile gelir ve tıklama almaz; önizlenebilsinler diye işareti taşıyıp disabled'ı kaldırırız.
@@ -77,7 +78,7 @@
             ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
             document.body.appendChild(ov);
         }
-        const label = (btn.textContent || '').trim() || value;
+        const label = optLabel(btn) || value;
         const action = active ? '<button type="button" class="pv-btn pv-btn-ghost" disabled>Kullanımda ✓</button>'
             : locked ? `<button type="button" class="pv-btn pv-btn-up" data-pv="upgrade">✦ ${cfg.tier} ile aç</button>`
             : '<button type="button" class="pv-btn" data-pv="apply">Uygula</button>';
@@ -95,9 +96,9 @@
         if (cfg.cat === 'profile' && typeof applyProfileEffect === 'function') applyProfileEffect($('pv-avatar'), st.effect);
         ov.querySelector('[data-pv="close"]').addEventListener('click', close);
         const apply = ov.querySelector('[data-pv="apply"]');
-        if (apply) apply.addEventListener('click', () => { close(); pass = true; try { btn.click(); } finally { pass = false; } });
+        if (apply) apply.addEventListener('click', () => { close(); pass = true; try { btn.click(); } finally { pass = false; } setTimeout(() => document.dispatchEvent(new CustomEvent('pv-applied')), 700); });
         const up = ov.querySelector('[data-pv="upgrade"]');
-        if (up) up.addEventListener('click', () => { close(); if (typeof closeCustomizeCenter === 'function') closeCustomizeCenter(); document.getElementById('subs-open-btn')?.click(); });
+        if (up) up.addEventListener('click', () => { close(); if (typeof closeCustomizeCenter === 'function') closeCustomizeCenter(); if (typeof window.closeStore === 'function') window.closeStore(); document.getElementById('subs-open-btn')?.click(); });
     }
 
     // Üye kartı stili (Premium): düğmenin kendi kart önizlemesini büyütüp gösterir
@@ -120,8 +121,8 @@
             <div class="pv-actions">${action}<button type="button" class="pv-btn pv-btn-ghost" data-pv="close">Kapat</button></div></div>`;
         ov.style.display = 'flex';
         ov.querySelector('[data-pv="close"]').addEventListener('click', close);
-        ov.querySelector('[data-pv="apply"]')?.addEventListener('click', () => { close(); pass = true; try { btn.click(); } finally { pass = false; } });
-        ov.querySelector('[data-pv="upgrade"]')?.addEventListener('click', () => { close(); if (typeof closeCustomizeCenter === 'function') closeCustomizeCenter(); document.getElementById('subs-open-btn')?.click(); });
+        ov.querySelector('[data-pv="apply"]')?.addEventListener('click', () => { close(); pass = true; try { btn.click(); } finally { pass = false; } setTimeout(() => document.dispatchEvent(new CustomEvent('pv-applied')), 700); });
+        ov.querySelector('[data-pv="upgrade"]')?.addEventListener('click', () => { close(); if (typeof closeCustomizeCenter === 'function') closeCustomizeCenter(); if (typeof window.closeStore === 'function') window.closeStore(); document.getElementById('subs-open-btn')?.click(); });
     }
 
     // Yakalayıcı: seçeneğe tıklamak önce önizlemeyi açar
