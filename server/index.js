@@ -2407,8 +2407,11 @@ app.get('/api/gifs', async (req, res) => {
     const j = await r.json();
     const items = (j.data || []).map((g) => {
       const id = String(g.id || '');
-      const small = g.images && (g.images.fixed_width_small || g.images.fixed_width);
-      const full = g.images && (g.images.fixed_height || g.images.original);
+      const small0 = g.images && (g.images.fixed_width_small || g.images.fixed_width);
+      const full0 = g.images && (g.images.fixed_height || g.images.original);
+      // WebP sürümü varsa onu kullan: aynı görüntü GIF'in çok altında bayt (sohbette çok sayıda hareketli görsel takılma yapmasın)
+      const small = small0 && { ...small0, url: small0.webp || small0.url };
+      const full = full0 && { ...full0, url: full0.webp || full0.url };
       if (!/^[A-Za-z0-9]+$/.test(id) || !small || !small.url || !full || !full.url) return null;
       return { id, preview: small.url, url: full.url, w: Number(small.width) || 100, h: Number(small.height) || 100 };
     }).filter(Boolean).filter((g) => /^https:\/\/media[0-9]*\.giphy\.com\//.test(g.url) && /^https:\/\/media[0-9]*\.giphy\.com\//.test(g.preview));
