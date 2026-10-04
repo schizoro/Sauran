@@ -72,4 +72,42 @@ function decodeImageDataUrl(dataUrl) {
   return m ? Buffer.from(m[1], 'base64') : null;
 }
 
-module.exports = { compressEmoji, decodeImageDataUrl, OUT_MAX_STATIC, OUT_MAX_ANIMATED, MAX_FRAMES };
+// ── Profil fotoğrafı / kapak: sunucuda küçültülüp WebP'ye çevrilir. ──
+// Neden: Avatar ve kapak "data URL" olarak hemen her yanıtta (arkadaş listesi, üyeler, mesajlar, profil) gelir ve her <img> onu ayrı çözer.
+// Kırpılmamış 5 MB'lık hareketli GIF telefonda (özellikle iPhone) ekranı saniyelerce dondurur. Hareketli olanlar hafif hareketli WebP'ye indirilir.
+const PROFILE_LIMITS = {
+  avatar: { staticW: 320, animSizes: [[256, 55], [224, 45], [192, 36], [160, 30]], maxAnimated: 350 * 1024, maxStatic: 120 * 1024, frames: 60 },
+  banner: { staticW: 960, animSizes: [[720, 50], [600, 42], [480, 36], [400, 30]], maxAnimated: 700 * 1024, maxStatic: 300 * 1024, frames: 60 }
+};
+async function compressProfileImage(buffer, kind, { allowAnimated = false } = {}) {
+  const L = PROFILE_LIMITS[kind];
+  if (!L || !Buffer.isBuffer(buffer) || !buffer.length) return { success: false, error: 'Geçersiz görsel.' };
+  if (buffer.length > 6 * 1024 * 1024) return { success: false, error: 'Görsel çok büyük.' };
+  let meta;
+  try { meta = await sharp(buffer, { animated: true, limitInputPixels: PIXEL_LIMIT }).metadata(); } catch (_) { return { success: false, error: 'Görsel okunamadı.' }; }
+  if (!ALLOWED_FORMATS.includes(meta.format)) return { success: false, error: 'Desteklenmeyen görsel türü.' };
+  const frames = meta.pages || 1;
+  const animatedSource = frames > 1;
+  try {
+    if (animatedSource && allowAnimated) {
+      for (const [w, q] of L.animSizes) {
+        const out = await sharp(buffer, { animated: true, pages: Math.min(frames, L.frames), limitInputPixels: PIXEL_LIMIT })
+          .resize(w, kind === 'avatar' ? w : null, { fit: kind === 'avatar' ? 'cover' : 'inside', withoutEnlargement: true })
+          .webp({ quality: q, effort: 4, loop: 0 }).toBuffer();
+        if (out.length <= L.maxAnimated) return { success: true, data: toDataUrl(out), animated: true, bytes: out.length, original_bytes: buffer.length };
+      }
+      return { success: false, error: 'Hareketli görsel çok ağır; daha kısa ya da daha küçük bir GIF dene.' };
+    }
+    for (const q of [86, 74, 62, 50]) {
+      const out = await sharp(buffer, { limitInputPixels: PIXEL_LIMIT }).rotate()
+        .resize(L.staticW, kind === 'avatar' ? L.staticW : null, { fit: kind === 'avatar' ? 'cover' : 'inside', withoutEnlargement: true })
+        .webp({ quality: q, effort: 4 }).toBuffer();
+      if (out.length <= L.maxStatic) return { success: true, data: toDataUrl(out), animated: false, bytes: out.length, original_bytes: buffer.length, firstFrameOnly: animatedSource };
+    }
+    return { success: false, error: 'Görsel sıkıştırılamadı.' };
+  } catch (_) {
+    return { success: false, error: 'Görsel işlenemedi.' };
+  }
+}
+
+module.exports = { compressProfileImage, compressEmoji, decodeImageDataUrl, OUT_MAX_STATIC, OUT_MAX_ANIMATED, MAX_FRAMES };

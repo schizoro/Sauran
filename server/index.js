@@ -400,7 +400,7 @@ app.disable('x-powered-by');
 const jsonSmall = express.json({ limit: '1mb' });
 const jsonImage = express.json({ limit: '12mb' });
 const jsonFile = express.json({ limit: '140mb' });
-const { compressEmoji, decodeImageDataUrl } = require('./emojiimage');
+const { compressEmoji, compressProfileImage, decodeImageDataUrl } = require('./emojiimage');
 const IMAGE_BODY_PATHS = [/^\/api\/me\/emojis\/?$/, /^\/api\/hubs\/\d+\/emojis\/?$/, /^\/api\/me\/stickers\/?$/, /^\/api\/hubs\/\d+\/stickers\/?$/, /^\/api\/profile\/(avatar|banner)\/?$/, /^\/api\/hubs\/?$/, /^\/api\/hubs\/\d+\/?$/, /^\/api\/hubs\/\d+\/banner\/?$/];
 const FILE_BODY_PATHS = [/^\/api\/hubs\/\d+\/(file|voice|share)\/?$/];
 
@@ -1515,7 +1515,7 @@ app.patch('/api/profile/privacy', (req, res) => {
   }
 });
 
-app.patch('/api/profile/avatar', (req, res) => {
+app.patch('/api/profile/avatar', async (req, res) => {
   try {
     const user = getUserFromRequest(req);
 
@@ -1523,7 +1523,16 @@ app.patch('/api/profile/avatar', (req, res) => {
       return res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
     }
 
-    const result = updateAvatar(user.id, req.body.avatar_data ?? null);
+    let input = req.body.avatar_data ?? null;
+    if (input !== null) {
+      const buf = decodeImageDataUrl(input);
+      if (!buf) return res.status(400).json({ success: false, error: 'Geçersiz görsel formatı.' });
+      const allowAnimated = hasFeature(user.id, 'gif_avatar');
+      const c = await compressProfileImage(buf, 'avatar', { allowAnimated });
+      if (!c.success) return res.status(400).json({ success: false, error: c.error });
+      input = c.data;
+    }
+    const result = updateAvatar(user.id, input);
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -1537,7 +1546,7 @@ app.patch('/api/profile/avatar', (req, res) => {
   }
 });
 
-app.patch('/api/profile/banner', (req, res) => {
+app.patch('/api/profile/banner', async (req, res) => {
   try {
     const user = getUserFromRequest(req);
 
@@ -1545,7 +1554,15 @@ app.patch('/api/profile/banner', (req, res) => {
       return res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
     }
 
-    const result = updateBanner(user.id, req.body.banner_data ?? null);
+    let input = req.body.banner_data ?? null;
+    if (input !== null) {
+      const buf = decodeImageDataUrl(input);
+      if (!buf) return res.status(400).json({ success: false, error: 'Geçersiz görsel formatı.' });
+      const c = await compressProfileImage(buf, 'banner', { allowAnimated: hasFeature(user.id, 'gif_banner') });
+      if (!c.success) return res.status(400).json({ success: false, error: c.error });
+      input = c.data;
+    }
+    const result = updateBanner(user.id, input);
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -5494,6 +5511,26 @@ io.on('connection', (socket) => {
 // =====================================================
 
 const PORT = process.env.PORT || 3000;
+
+// Eski ağır avatar/kapak görselleri (kırpılmamış GIF'ler) arka planda, birkaç saniye arayla küçük partilerle yeniden kodlanır.
+async function slimStoredProfileImages() {
+  try {
+    const rows = db.prepare(`SELECT id, length(avatar_data) AS a, length(banner_data) AS b FROM users WHERE length(avatar_data) > 400000 OR length(banner_data) > 800000 LIMIT 10`).all();
+    for (const r of rows) {
+      for (const [kind, col, len, limit] of [['avatar', 'avatar_data', r.a, 400000], ['banner', 'banner_data', r.b, 800000]]) {
+        if (!len || len <= limit) continue;
+        const cur = db.prepare(`SELECT ${col} AS v FROM users WHERE id = ?`).get(r.id).v;
+        const buf = decodeImageDataUrl(cur);
+        if (!buf) continue;
+        const animatedOk = hasFeature(r.id, kind === 'avatar' ? 'gif_avatar' : 'gif_banner');
+        const c = await compressProfileImage(buf, kind, { allowAnimated: animatedOk });
+        if (c.success) db.prepare(`UPDATE users SET ${col} = ? WHERE id = ?`).run(c.data, r.id);
+      }
+    }
+    if (rows.length === 10) setTimeout(slimStoredProfileImages, 5000);
+  } catch (error) { console.error('Eski görseller hafifletilemedi:', error && error.message); }
+}
+setTimeout(slimStoredProfileImages, 8000);
 
 server.listen(PORT, () => {
   console.log(`Sauran sunucusu çalışıyor → http://localhost:${PORT}`);
