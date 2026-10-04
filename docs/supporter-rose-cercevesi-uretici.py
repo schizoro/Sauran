@@ -7,6 +7,60 @@ def pol(r, deg):
     a = math.radians(deg)
     return CX + r * math.cos(a), CY + r * math.sin(a)
 
+
+def split(c, t):
+    p0, p1, p2, p3 = c
+    lerp = lambda a, b: (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
+    a = lerp(p0, p1); b = lerp(p1, p2); c2 = lerp(p2, p3)
+    d = lerp(a, b); e = lerp(b, c2); f = lerp(d, e)
+    return [p0, a, d, f], [f, e, c2, p3]
+def d_of(segs):
+    d = 'M%g,%g' % segs[0][0]
+    for sg in segs:
+        d += ' C%g,%g %g,%g %g,%g' % (sg[1] + sg[2] + sg[3])
+    return d + 'Z'
+def straight(A, CAP, C):
+    a1, a2 = split(A, .5)
+    c1, rest = split(CAP, 1 / 3); c2, c3 = split(rest, .5)
+    k1, k2 = split(C, .5)
+    return [a1, a2, c1, c2, c3, k1, k2]
+OUT_STRAIGHT = straight([(-23,0),(-37,-48),(-36,-112),(-11,-146)], [(-11,-146),(-5,-154),(5,-154),(11,-146)], [(11,-146),(36,-112),(37,-48),(23,0)])
+OUT_BENT = [
+    [(-23,0),(-30,-26),(-20,-60),(-18,-90)],
+    [(-18,-90),(-18,-122),(8,-144),(36,-144)],
+    [(36,-144),(66,-144),(89,-122),(89,-90)],
+    [(89,-90),(89,-78),(89,-62),(89,-48)],
+    [(89,-48),(88,-30),(55,-30),(55,-48)],
+    [(55,-48),(55,-74),(52,-104),(36,-104)],
+    [(36,-104),(22,-104),(17,-50),(23,0)]]
+IN_STRAIGHT = straight([(-12,-6),(-21,-48),(-20,-100),(-6,-130)], [(-6,-130),(-2,-137),(2,-137),(6,-130)], [(6,-130),(20,-100),(21,-48),(12,-6)])
+IN_BENT = [
+    [(-12,-6),(-17,-30),(-11,-62),(-9,-88)],
+    [(-9,-88),(-9,-116),(12,-134),(36,-134)],
+    [(36,-134),(62,-134),(80,-116),(80,-88)],
+    [(80,-88),(80,-78),(80,-66),(80,-56)],
+    [(80,-56),(79,-42),(63,-42),(63,-56)],
+    [(63,-56),(63,-92),(55,-114),(36,-114)],
+    [(36,-114),(20,-114),(10,-52),(12,-6)]]
+FOLD_T = 'keyTimes="0;0.45;0.56;0.8;0.9;1" calcMode="spline" keySplines=".4 0 .2 1;.4 0 .2 1;.4 0 .2 1;.3 0 .3 1;.4 0 .2 1" dur="9s" repeatCount="indefinite"'
+def anim(attr, vals):
+    return '<animate attributeName="%s" %s values="%s"/>' % (attr, FOLD_T, ';'.join(vals))
+dS, dB, iS, iB = d_of(OUT_STRAIGHT), d_of(OUT_BENT), d_of(IN_STRAIGHT), d_of(IN_BENT)
+LINE1 = 'M-9,-26 C-13,-60 -11,-96 -4,-122'
+LINE2 = 'M-30,-70 C-26,-100 -18,-124 -8,-140'
+EARDEFS = f"""<g id="earStraight">
+  <path d="{dS}" fill="url(#earOut)" stroke="#e77ca4" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="{iS}" fill="url(#earIn)"/>
+  <path d="{LINE1}" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".55"/>
+  <path d="{LINE2}" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".6"/>
+</g>
+<g id="earFold">
+  <path d="{dS}" fill="url(#earOut)" stroke="#e77ca4" stroke-width="2.2" stroke-linejoin="round">{anim('d', [dS, dS, dB, dB, dS, dS])}</path>
+  <path d="{iS}" fill="url(#earIn)">{anim('d', [iS, iS, iB, iB, iS, iS])}</path>
+  <path d="{LINE1}" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".55">{anim('opacity', ['.55', '.55', '0', '0', '.55', '.55'])}</path>
+  <path d="{LINE2}" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".6">{anim('opacity', ['.6', '.6', '0', '0', '.6', '.6'])}</path>
+</g>"""
+
 out = []
 add = out.append
 add('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -112 512 624" width="512" height="624">')
@@ -23,16 +77,9 @@ add('''<defs>
 <filter id="blur2" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.6"/></filter>
 <filter id="blur8" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="9"/></filter>
 <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="2" stdDeviation="2.2" flood-color="#8a2a55" flood-opacity=".45"/></filter>
-<g id="earShape">
-  <path d="M-23,0 C-37,-48 -36,-112 -11,-146 C-5,-154 5,-154 11,-146 C36,-112 37,-48 23,0 Z" fill="url(#earOut)" stroke="#e77ca4" stroke-width="2.2" stroke-linejoin="round"/>
-  <path d="M-12,-6 C-21,-48 -20,-100 -6,-130 C-2,-137 2,-137 6,-130 C20,-100 21,-48 12,-6 Z" fill="url(#earIn)"/>
-  <path d="M-9,-26 C-13,-60 -11,-96 -4,-122" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".55"/>
-  <path d="M-30,-70 C-26,-100 -18,-124 -8,-140" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".6"/>
-</g>
+__EARDEFS__
 <linearGradient id="earOut" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ffc3d8"/><stop offset=".45" stop-color="#fff0f5"/><stop offset="1" stop-color="#ffffff"/></linearGradient>
 <linearGradient id="earIn" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff86b3"/><stop offset=".6" stop-color="#ffb4cf"/><stop offset="1" stop-color="#ffd9e6"/></linearGradient>
-<clipPath id="earLow"><rect x="-60" y="-77" width="120" height="102"/></clipPath>
-<clipPath id="earUp"><rect x="-60" y="-200" width="120" height="127"/></clipPath>
 <path id="spark" d="M0,-10 C1.2,-3 3,-1.2 10,0 C3,1.2 1.2,3 0,10 C-1.2,3 -3,1.2 -10,0 C-3,-1.2 -1.2,-3 0,-10Z"/>
 <style>
 .tw{transform-box:fill-box;transform-origin:center;animation:tw 2.8s ease-in-out infinite}
@@ -40,23 +87,18 @@ add('''<defs>
 .sway{animation:sway 5s ease-in-out infinite alternate}
 .swayB{animation:sway 6s ease-in-out -2s infinite alternate}
 @keyframes sway{from{transform:rotate(-2deg)}to{transform:rotate(2.5deg)}}
-.fold{animation:fold 8s ease-in-out infinite}
-@keyframes fold{0%,52%{transform:rotate(0)}60%{transform:rotate(82deg)}64%{transform:rotate(70deg)}80%{transform:rotate(76deg)}90%{transform:rotate(-7deg)}95%{transform:rotate(2deg)}100%{transform:rotate(0)}}
 .fl{transform-box:fill-box;transform-origin:center;animation:fl 4.6s ease-in-out infinite alternate}
 @keyframes fl{from{transform:translateY(-3px) rotate(-14deg)}to{transform:translateY(5px) rotate(18deg)}}
-@media (prefers-reduced-motion:reduce){.tw,.fl{animation:none;opacity:.85}.fold,.sway,.swayB{animation:none}}
+@media (prefers-reduced-motion:reduce){.tw,.fl{animation:none;opacity:.85}.sway,.swayB{animation:none}}
 </style>
 </defs>''')
 
 
-# ── tavşan kulakları (halkanın arkasında; tabanları halka bandıyla örtülür) ──
-def ear(bx, by, ang, fold, cls):
-    add(f'<g transform="translate({bx} {by}) rotate({ang})"><g class="{cls}" style="transform-origin:0 0">')
-    add('<g clip-path="url(#earLow)"><use href="#earShape"/></g>')
-    add('<g transform="translate(0 -75)"><g class="' + ('fold' if fold else '') + '" style="transform-origin:0 0"><g transform="translate(0 75)"><g clip-path="url(#earUp)"><use href="#earShape"/></g></g></g></g>')
-    add('</g></g>')
-ear(212, 56, -15, False, 'sway')
-ear(300, 56, 15, True, 'swayB')
+# ── tavşan kulakları (halkanın arkasında; tabanları halka bandıyla örtülür). Sağ kulak yarıdan öne doğru eğilip düzelir (SMIL şekil geçişi). ──
+def ear(bx, by, ang, ref, cls):
+    add(f'<g transform="translate({bx} {by}) rotate({ang})"><g class="{cls}" style="transform-origin:0 0"><use href="#{ref}"/></g></g>')
+ear(212, 56, -15, 'earStraight', 'sway')
+ear(300, 56, 15, 'earFold', 'swayB')
 
 # dış yumuşak parıltı
 add(f'<circle cx="{CX}" cy="{CY}" r="{R}" fill="none" stroke="#ff9ec6" stroke-width="44" opacity=".42" filter="url(#blur8)"/>')
@@ -172,6 +214,6 @@ for deg, r, s, dl in sp:
     add(f'<g transform="translate({x:.1f} {y:.1f}) scale({s/8:.2f})"><use href="#spark" fill="#fff" class="tw" style="animation-delay:{dl}s"/></g>')
 
 add('</svg>')
-svg = '\n'.join(out)
+svg = chr(10).join(out).replace('__EARDEFS__', EARDEFS)
 open(r'C:\Users\7kmht\OneDrive\Masaüstü\Sauran\client\assets\frame-supporter-rose.svg', 'w', encoding='utf-8', newline='\n').write(svg)
 print(len(svg))
