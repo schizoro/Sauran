@@ -121,36 +121,43 @@
     wrap('loadHubList', fetchHubs);
     wrap('switchToView', function () { renderNav(); syncMainState(); });
 
-    // Ana menü: "Lobilerim" / "Katıldığım lobiler" başlıkları açılır düğme; tıklayınca liste aşağı açılır
-    (function hubListAccordions() {
-        const groups = [['hub-list-grid-owned', 'owned'], ['hub-list-grid-joined', 'joined']];
-        groups.forEach(([gridId, key]) => {
+    // Ana menü: "Lobilerim" / "Katıldığım lobiler" iki SABİT sekme (sayfa kaydırılsa da en üstte kalır); seçilen listenin içeriği altında gösterilir.
+    (function hubListTabs() {
+        const groups = [['hub-list-grid-owned', 'owned', 'hubs-owned', 'Lobilerim'], ['hub-list-grid-joined', 'joined', 'hubs-joined', 'Katıldığım lobiler']];
+        const content = $('hub-list-content');
+        if (!content) return;
+        let active = 'owned';
+        try { const v = localStorage.getItem('sauran.menu.tab'); if (v === 'owned' || v === 'joined') active = v; } catch (_) {}
+        const bar = document.createElement('div');
+        bar.className = 'hub-list-tabs';
+        bar.setAttribute('role', 'tablist');
+        const entries = [];
+        groups.forEach(([gridId, key, i18n, label]) => {
             const grid = $(gridId);
             if (!grid || !grid.parentElement) return;
-            const title = grid.parentElement.querySelector('.hub-list-subtitle');
-            if (!title) return;
-            let open = false;
-            try { open = localStorage.getItem('sauran.menu.' + key) === '1'; } catch (_) {}
-            title.setAttribute('role', 'button');
-            title.setAttribute('tabindex', '0');
-            title.classList.add('hub-list-toggle');
-            const apply = () => {
-                title.setAttribute('aria-expanded', open ? 'true' : 'false');
-                grid.style.display = open ? '' : 'none';
-                title.classList.toggle('open', open);
-            };
-            const count = () => { title.setAttribute('data-count', String(grid.children.length)); };
-            const toggle = () => {
-                open = !open;
-                try { localStorage.setItem('sauran.menu.' + key, open ? '1' : '0'); } catch (_) {}
-                apply();
-            };
-            title.addEventListener('click', toggle);
-            title.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+            const section = grid.parentElement;
+            const sub = section.querySelector('.hub-list-subtitle');
+            if (sub) sub.style.display = 'none'; // başlık yerine sabit sekme düğmesi kullanılır
+            const btn = document.createElement('button');
+            btn.type = 'button'; btn.className = 'hub-list-tab'; btn.setAttribute('role', 'tab'); btn.dataset.tab = key;
+            btn.innerHTML = `<span data-i18n="${i18n}">${label}</span><b class="hub-list-tab-count">0</b>`;
+            const count = () => { btn.querySelector('b').textContent = String(grid.children.length); };
             new MutationObserver(count).observe(grid, { childList: true });
             count();
-            apply();
+            btn.addEventListener('click', () => { active = key; try { localStorage.setItem('sauran.menu.tab', key); } catch (_) {} apply(); });
+            bar.appendChild(btn);
+            entries.push({ key, btn, section });
         });
+        if (!entries.length) return;
+        function apply() {
+            entries.forEach((e) => {
+                e.section.style.display = e.key === active ? '' : 'none';
+                e.btn.classList.toggle('on', e.key === active);
+                e.btn.setAttribute('aria-selected', e.key === active ? 'true' : 'false');
+            });
+        }
+        content.insertBefore(bar, content.firstChild);
+        apply();
     })();
 
     // Lobi bilgi penceresi (üst çubuktaki lobi fotoğrafına tıklayınca)

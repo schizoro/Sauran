@@ -2785,3 +2785,12 @@ body.st-open { overflow: hidden; }
 .st-bundle { flex-direction: column; gap: 10px; align-content: center; }
 .st-bundle-emoji { font-size: 40px; }
 .st-bundle .hub-msg-bubble { font-size: 11.5px; padding: 6px 11px; }
+
+/* Ana menü: iki sabit sekme (Lobilerim / Katıldığım lobiler) — liste kaydırılsa da en üstte kalır */
+.hub-list-tabs { position: sticky; top: 0; z-index: 20; display: flex; gap: 8px; padding: 10px 0 12px; margin: 0 0 8px; background: var(--bg-app, #0a0d11); }
+.hub-list-tab { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 48px; padding: 0 16px; border: 0; border-radius: 14px; cursor: pointer; color: var(--text-secondary); font-size: 14.5px; font-weight: 600; background: var(--glass-1); box-shadow: var(--hi), 0 0 0 1px var(--border-soft); transition: background .18s; }
+.hub-list-tab:hover { background: rgba(255,255,255,.06); color: var(--text-primary); }
+.hub-list-tab.on { color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-line); }
+.hub-list-tab-count { font-size: 12.5px; font-weight: 600; min-width: 24px; text-align: center; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.08); color: var(--text-secondary); }
+.hub-list-tab.on .hub-list-tab-count { background: var(--accent); color: #06121a; }
+@media (max-width: 480px) { .hub-list-tab { padding: 0 12px; font-size: 13.5px; } }
