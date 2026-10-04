@@ -75,5 +75,17 @@
             if (goBack() && navigator.vibrate) { try { navigator.vibrate(8); } catch (_) { /* yoksay */ } }
         }
     }, { passive: true });
+    // Sağdan açılan yan pencere (Bildirimler): panelin üzerinde sağa doğru kaydırınca kapanır (liste dikey kaydırması etkilenmez)
+    (function sidePanelSwipe() {
+        const modal = $('notifications-modal');
+        if (!modal) return;
+        let px = 0, py = 0, pt = 0, on = false;
+        modal.addEventListener('touchstart', (e) => { const t = e.touches[0]; on = e.touches.length === 1; px = t.clientX; py = t.clientY; pt = Date.now(); }, { passive: true });
+        modal.addEventListener('touchend', (e) => {
+            if (!on) return; on = false;
+            const t = e.changedTouches[0];
+            if (t.clientX - px > 90 && Math.abs(t.clientY - py) < 45 && Date.now() - pt < 600) { const b = $('notifications-close-btn'); if (b) b.click(); }
+        }, { passive: true });
+    })();
     window.__swipeBack = goBack; // test/elle çağırma
 })();
