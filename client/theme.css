@@ -2991,3 +2991,77 @@ body.drawer-friendlist .friends-directory { display: flex; flex-direction: colum
   .lobby-nav, .mnav, .app-rail { background-color: #121a26 !important; }
   .modal-overlay { background: rgba(0, 0, 0, .66); }
 }
+
+
+/* ══ Profil kartı efektleri (fx-pack.js) ve isim plakaları ═══════════════════════════════════════════════════ */
+.profile-modal-box.has-pfxc, .st-prof, .pv-profile { position: relative; }
+.st-prof { overflow: hidden; }
+.pfxc { position: absolute; inset: 0; z-index: 4; pointer-events: none; overflow: hidden; border-radius: inherit; }
+.pfxc > svg { position: absolute; left: 0; width: 100%; display: block; }
+.pfxc .fxc-top { top: 0; height: clamp(44px, 9%, 78px); -webkit-mask-image: linear-gradient(to bottom, #000 45%, transparent); mask-image: linear-gradient(to bottom, #000 45%, transparent); }
+.pfxc .fxc-bot { bottom: 0; height: clamp(64px, 14%, 120px); -webkit-mask-image: linear-gradient(to top, #000 50%, transparent); mask-image: linear-gradient(to top, #000 50%, transparent); }
+.pfxc .fxc-full { top: 0; height: 100%; }
+.pfxc i { position: absolute; display: block; }
+
+/* Alev */
+.pfxc-flame::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 118%, rgba(255, 90, 20, .38), transparent 55%), radial-gradient(ellipse at 50% -18%, rgba(255, 60, 10, .26), transparent 50%); animation: fxGlow 2.2s ease-in-out infinite alternate; }
+.pfxc-flame .fxc-top { transform: scaleY(-1); -webkit-mask-image: linear-gradient(to top, #000 45%, transparent); mask-image: linear-gradient(to top, #000 45%, transparent); }
+.pfxc-flame .fl { transform-box: fill-box; transform-origin: 50% 100%; animation: fxFlick 1.2s ease-in-out infinite; }
+.pfxc-flame .fxc-ember { bottom: 0; width: 4px; height: 4px; border-radius: 50%; background: #ffd27a; box-shadow: 0 0 6px 2px rgba(255, 150, 40, .85); opacity: 0; animation: fxEmber var(--t) ease-out var(--d) infinite; }
+@keyframes fxFlick { 0%, 100% { transform: scaleY(.9) skewX(-2deg); } 50% { transform: scaleY(1.1) skewX(2deg); } }
+@keyframes fxGlow { from { opacity: .6; } to { opacity: 1; } }
+@keyframes fxEmber { 0% { transform: translate(0, 0) scale(1); opacity: 0; } 12% { opacity: 1; } 100% { transform: translate(var(--x), -260px) scale(.3); opacity: 0; } }
+
+/* Mürekkep */
+.pfxc-ink::before { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0, 0, 0, .55), transparent 28%, transparent 66%, rgba(0, 0, 0, .6)); }
+.pfxc-ink .dr { transform-box: fill-box; transform-origin: 50% 0; animation: fxDrip 5s ease-in-out infinite; }
+.pfxc-ink .fxc-smoke { bottom: -8%; width: 70%; height: 34%; border-radius: 50%; background: radial-gradient(ellipse, rgba(10, 8, 24, .85), rgba(40, 20, 80, .35) 55%, transparent 72%); animation: fxSmoke 8s ease-in-out infinite alternate; }
+.pfxc-ink .s1 { left: -15%; } .pfxc-ink .s2 { right: -18%; animation-duration: 10s; animation-delay: -3s; } .pfxc-ink .s3 { left: 20%; bottom: -14%; animation-duration: 12s; animation-delay: -6s; opacity: .8; }
+.pfxc-ink .fxc-ash { bottom: 4%; width: 3px; height: 3px; border-radius: 50%; background: rgba(210, 200, 255, .75); opacity: 0; animation: fxEmber var(--t) linear var(--d) infinite; }
+@keyframes fxDrip { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.2); } }
+@keyframes fxSmoke { from { transform: translateX(-6%) scale(1); } to { transform: translateX(8%) scale(1.12); } }
+
+/* Yıldırım */
+.pfxc-storm::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 50%, transparent 52%, rgba(70, 60, 210, .38) 100%); animation: fxGlow 1.8s ease-in-out infinite alternate; }
+.pfxc-storm .bo { opacity: 0; animation: fxBolt 6s linear infinite; }
+.pfxc-storm .arc { animation: fxArc 1.4s linear infinite; }
+.pfxc-storm .arc2 { animation-duration: 2.1s; animation-direction: reverse; }
+.pfxc-storm .fxc-spark { top: 6%; width: 4px; height: 4px; border-radius: 50%; background: #cfe0ff; box-shadow: 0 0 8px 2px rgba(120, 160, 255, .9); animation: fxTwinkle 1.6s ease-in-out var(--d) infinite; }
+.pfxc-storm .fxc-spark:nth-of-type(odd) { top: auto; bottom: 8%; }
+@keyframes fxBolt { 0%, 52%, 58%, 66%, 100% { opacity: 0; } 54% { opacity: 1; } 56% { opacity: .25; } 60% { opacity: .95; } 63% { opacity: .2; } }
+@keyframes fxArc { to { stroke-dashoffset: -68; } }
+@keyframes fxTwinkle { 0%, 100% { opacity: 0; transform: scale(.5); } 50% { opacity: 1; transform: scale(1.2); } }
+
+/* Tatlı */
+.pfxc-sweet::before { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 46px rgba(255, 140, 200, .5), inset 0 0 0 1.5px rgba(255, 190, 220, .55); }
+.pfxc-sweet .fxc-sw { bottom: -6%; font-style: normal; line-height: 1; text-shadow: 0 0 8px rgba(255, 140, 200, .7); opacity: 0; animation: fxSweet var(--t) ease-in var(--d) infinite; }
+@keyframes fxSweet { 0% { transform: translate(0, 0) rotate(-10deg); opacity: 0; } 10% { opacity: .95; } 55% { transform: translate(var(--x), -280px) rotate(10deg); } 100% { transform: translate(calc(var(--x) * -1), -560px) rotate(-8deg); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .pfxc *, .pfxc::before { animation: none !important; } .pfxc .fxc-ember, .pfxc .fxc-ash, .pfxc .fxc-sw { opacity: .6; } }
+
+/* İsim plakası: üye listesi satırının ve profil adının arkasında zemin (listelerde sabit; önizleme/profilde .plate-anim ışıltı) */
+.has-plate { position: relative; overflow: hidden; background-color: #101018; background-repeat: no-repeat; border-radius: 14px; }
+#other-profile-username.has-plate, #profile-username.has-plate, .pv-name.has-plate { display: inline-block; padding: 6px 18px; }
+.has-plate::after { content: ""; position: absolute; top: 0; bottom: 0; left: -45%; width: 38%; background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .22), transparent); opacity: 0; pointer-events: none; }
+.has-plate.plate-anim::after { opacity: 1; animation: plateShine 3.6s ease-in-out infinite; }
+@keyframes plateShine { 0%, 40% { transform: translateX(0); } 100% { transform: translateX(520%); } }
+.plate-flame { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 40' preserveAspectRatio='none'%3E%3Cpath d='M0 40C6 20 10 26 14 6C20 24 26 20 30 40ZM28 40C36 14 44 24 52 2C58 22 64 18 70 40ZM68 40C76 22 82 28 90 8C96 26 104 22 110 40Z' fill='%23ffc23a' opacity='.6'/%3E%3C/svg%3E"), linear-gradient(90deg, rgba(150, 18, 8, .96), rgba(255, 92, 18, .6) 62%, rgba(255, 190, 70, .2)) !important; background-position: right bottom, 0 0 !important; background-size: 52% 74%, 100% 100% !important; }
+.plate-ink { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 40' preserveAspectRatio='none'%3E%3Cg fill='%23020208'%3E%3Cpath d='M0 0H120V6C100 12 90 4 70 8C50 12 40 4 20 8C10 10 4 6 0 8Z'/%3E%3Crect x='12' y='4' width='5' height='20' rx='2.5'/%3E%3Ccircle cx='14.5' cy='26' r='4'/%3E%3Crect x='58' y='4' width='6' height='28' rx='3'/%3E%3Ccircle cx='61' cy='34' r='4.6'/%3E%3Crect x='98' y='4' width='5' height='16' rx='2.5'/%3E%3Ccircle cx='100.5' cy='22' r='3.8'/%3E%3C/g%3E%3C/svg%3E"), linear-gradient(90deg, #07070f, #181832 70%, #232350) !important; background-size: 100% 100%, 100% 100% !important; background-position: 0 0, 0 0 !important; }
+.plate-storm { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 40' preserveAspectRatio='none'%3E%3Cpolyline points='96,0 88,14 98,18 86,40' fill='none' stroke='%23eef4ff' stroke-width='2' stroke-linejoin='round'/%3E%3Cpolyline points='96,0 88,14 98,18 86,40' fill='none' stroke='%237fa6ff' stroke-opacity='.5' stroke-width='6' stroke-linejoin='round'/%3E%3C/svg%3E"), linear-gradient(90deg, #0d1240, #3a2a9a 62%, #1d6fff) !important; background-size: 100% 100%, 100% 100% !important; background-position: 0 0, 0 0 !important; }
+.plate-sweet { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 40'%3E%3Cg fill='%23ff6fa8' opacity='.55'%3E%3Cpath d='M92 14c-3-5-9-1-5 4 2 2 5 4 5 4s3-2 5-4c4-5-2-9-5-4z'/%3E%3Cpath d='M108 26c-2-3-6-1-3 2 1 1 3 3 3 3s2-2 3-3c3-3-1-5-3-2z'/%3E%3Cpath d='M74 8c-2-3-6-1-3 2 1 1 3 3 3 3s2-2 3-3c3-3-1-5-3-2z'/%3E%3C/g%3E%3C/svg%3E"), linear-gradient(90deg, #ff9ec6, #ffc4dc 62%, #fff0f6) !important; background-size: 100% 100%, 100% 100% !important; background-position: 0 0, 0 0 !important; }
+.plate-flame, .plate-ink, .plate-storm { color: #fff; }
+.plate-sweet { color: #5a1f3c; }
+.has-plate .hub-member-name, .has-plate .hub-member-sub { color: inherit; position: relative; z-index: 1; }
+.plate-sweet .hub-member-sub { opacity: .75; }
+.hub-member-row.has-plate.member-prem { background-color: #101018; }
+.hub-member-row.has-plate::before { z-index: 0; }
+
+/* yeni efekt/plaka seçici simgeleri ve mağaza küçük resimleri */
+.fx-sw { display: inline-grid; place-items: center; width: 34px; height: 24px; border-radius: 8px; font-size: 14px; background: rgba(255,255,255,.08); }
+.fx-sw-flame { background: linear-gradient(135deg, #9a1608, #ff8a1a); } .fx-sw-ink { background: linear-gradient(135deg, #05050c, #2c2c58); }
+.fx-sw-storm { background: linear-gradient(135deg, #1a2a9a, #7a5cff); } .fx-sw-sweet { background: linear-gradient(135deg, #ff9ec6, #ffd6ec); }
+.st-plate { width: 86%; padding: 14px 16px; font-weight: 700; font-size: 16px; text-align: left; }
+.st-plate > span { position: relative; z-index: 1; }
+.has-plate .plus-name-plate, .has-plate .plus-name-plate::before, .has-plate .plus-name-plate::after { background: none !important; box-shadow: none !important; border: 0 !important; }
+.has-plate .plus-name-plate .pnp-text { position: relative; z-index: 1; }
+.hub-member-card.has-plate { box-shadow: inset 0 0 0 1px rgba(255,255,255,.14) !important; }
+.hub-member-card.has-plate::before, .hub-member-card.has-plate .mc-fx { display: none !important; }

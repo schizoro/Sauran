@@ -13,6 +13,7 @@
     const PICKS = [
         { id: 'profile-theme-picker', cat: 'profile', kind: 'ptheme', attr: 'ptheme', def: 'default', feature: 'profile_theme', field: 'profile_theme', group: 'Profil teması' },
         { id: 'profile-effect-picker', cat: 'profile', kind: 'effect', attr: 'effect', def: 'none', feature: 'profile_effect', field: 'profile_effect', group: 'Profil efekti' },
+        { id: 'name-plate-picker', cat: 'profile', kind: 'plate', attr: 'plate', def: 'none', feature: 'name_plate', field: 'name_plate', group: 'İsim plakası' },
         { id: 'name-effect-picker', cat: 'profile', kind: 'nfx', attr: 'nfx', def: 'none', feature: 'name_effect', field: 'name_effect', group: 'İsim efekti' },
         { id: 'chat-theme-picker', cat: 'chat', kind: 'theme', attr: 'theme', def: 'classic', feature: 'chat_theme', field: 'chat_theme', group: 'Sohbet teması' },
         { id: 'bubble-style-picker', cat: 'chat', kind: 'bubble', attr: 'bubble', def: 'default', feature: 'bubble_style', field: 'bubble_style', group: 'Mesaj balonu' }
@@ -58,6 +59,7 @@ const optLabel = (btn) => { const c = btn.cloneNode(true); c.querySelectorAll('.
                 let thumb = '';
                 if (cfg.kind === 'ptheme') thumb = `<div class="st-prof profile-modal-box" data-profile-theme="${escA(key)}"><span class="st-av">${avatarInner()}</span></div>`;
                 else if (cfg.kind === 'effect') thumb = `<div class="st-prof st-prof-fx"><span class="st-av" data-fx="${escA(key)}">${avatarInner()}</span></div>`;
+                else if (cfg.kind === 'plate') thumb = `<div class="st-plate has-plate plate-anim plate-${escA(key)}"><span>${esc(u.username || 'Ad')}</span></div>`;
                 else if (cfg.kind === 'nfx') thumb = `<div class="st-nm">${typeof usernameCardHtml === 'function' ? usernameCardHtml(u.username || 'Ad', true, key) : esc(u.username || 'Ad')}</div>`;
                 else if (cfg.kind === 'theme') thumb = `<div class="st-chat"><div class="hub-msg-bubble">Selam! 👋</div><div class="hub-msg-bubble chat-theme-${escA(key)}">Akşam oyun var mı?</div></div>`;
                 else thumb = `<div class="st-chat"><div class="hub-msg-bubble">Selam! 👋</div><div class="hub-msg-bubble bubble-${escA(key)}">Akşam oyun var mı?</div></div>`;

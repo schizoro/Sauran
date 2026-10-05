@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sauran — Profil Efektleri ve İsim Plakaları Önizleme</title>
+<link rel="stylesheet" href="../client/style.css">
+<link rel="stylesheet" href="../client/theme.css">
+<style>
+html, body { height: auto !important; overflow: auto !important; }
+body { display: block !important; position: static !important; background: #080b0f; color: #e8ecf5; font-family: "Segoe UI", system-ui, sans-serif; padding: 24px; }
+h1 { font-size: 20px; margin: 0 0 4px; } p.sub { color: #8b97a8; margin: 0 0 20px; font-size: 13px; }
+.grid { display: flex; flex-wrap: wrap; gap: 22px; }
+.col { width: 300px; }
+.col h2 { font-size: 15px; margin: 0 0 10px; }
+.card { position: relative; width: 300px; height: 440px; border-radius: 22px; background: #0e1319; box-shadow: 0 0 0 1px rgba(255,255,255,.1); padding: 70px 20px 20px; box-sizing: border-box; text-align: center; }
+.av { width: 84px; height: 84px; border-radius: 50%; margin: 0 auto 10px; background: linear-gradient(135deg, #7c8cff, #5cc8ff); display: grid; place-items: center; font-size: 32px; font-weight: 700; color: #fff; }
+.nm { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+.box { margin-top: 18px; padding: 12px; border-radius: 14px; background: rgba(255,255,255,.05); text-align: left; font-size: 13px; color: #a8b3c9; }
+.plates { margin-top: 26px; display: flex; flex-direction: column; gap: 8px; max-width: 560px; }
+.plates .row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-weight: 700; }
+</style>
+</head>
+<body>
+<h1>Profil efektleri ve isim plakaları</h1>
+<p class="sub">Dört tema: Alev · Mürekkep · Yıldırım · Tatlı. Hepsi kodla çizilmiş özgün animasyonlardır.</p>
+<div class="grid" id="grid"></div>
+<h2 style="margin-top:28px;font-size:15px">İsim plakaları (üye listesinde sabit, profilde ışıltılı)</h2>
+<div class="plates" id="plates"></div>
+<script src="../client/fx-pack.js"></script>
+<script>
+const names = { flame: 'Alev', ink: 'Mürekkep', storm: 'Yıldırım', sweet: 'Tatlı' };
+const grid = document.getElementById('grid');
+Object.keys(names).forEach((k) => {
+  const col = document.createElement('div'); col.className = 'col';
+  col.innerHTML = `<h2>${names[k]}</h2><div class="card profile-modal-box"><div class="av">S</div><div class="nm"><span class="has-plate plate-anim plate-${k}" style="display:inline-block;padding:6px 18px">sauran_kullanici</span></div><div class="box"><b>Hakkımda</b><br>Sauran'da oyun ve sohbet 🎮</div></div>`;
+  grid.appendChild(col);
+  SauranFx.applyCard(col.querySelector('.card'), k);
+});
+const plates = document.getElementById('plates');
+Object.keys(names).forEach((k) => { plates.insertAdjacentHTML('beforeend', `<div class="row has-plate plate-${k}"><span style="position:relative;z-index:1">${names[k]} plakası — sauran_kullanici</span></div>`); });
+</script>
+</body>
+</html>

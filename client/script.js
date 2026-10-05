@@ -2146,6 +2146,10 @@ function renderProfile() {
 
     profileUsername.textContent =
         currentUser.username;
+    {
+        const plate = currentUser.name_plate && currentUser.name_plate !== 'none' && userHasFeature('name_plate') ? currentUser.name_plate : '';
+        profileUsername.className = 'profile-username' + (plate ? ' has-plate plate-anim plate-' + plate : '');
+    }
 
 
     // ------------------------------------------------
@@ -4869,6 +4873,38 @@ document.getElementById('activity-clear-btn')?.addEventListener('click', () => s
 document.getElementById('activity-show-toggle')?.addEventListener('change', (event) => saveActivity({ show_activity: event.target.checked }));
 
 // Sauran Plus: isim efekti (kullanıcı adı metninde animasyon). Aynı kilit deseni.
+// Sauran Plus: isim plakası (üye listesi ve profil adının arkasında animasyonlu zemin). Aynı kilit deseni.
+function renderNamePlatePicker() {
+    const picker = document.getElementById('name-plate-picker');
+    const hint = document.getElementById('name-plate-hint');
+    if (!picker || !currentUser) return;
+    const allowed = userHasFeature('name_plate');
+    const active = currentUser.name_plate || 'none';
+    picker.querySelectorAll('.chat-theme-option').forEach((btn) => {
+        const k = btn.dataset.plate;
+        btn.disabled = k !== 'none' && !allowed;
+        btn.classList.toggle('selected', k === active);
+        btn.title = btn.disabled ? 'Sauran Plus gerekli' : '';
+    });
+    if (hint) hint.textContent = allowed ? '' : 'İsim plakaları Sauran Plus abonelerine açıktır.';
+}
+document.getElementById('name-plate-picker')?.addEventListener('click', async (event) => {
+    const btn = event.target.closest('.chat-theme-option');
+    if (!btn || btn.disabled) return;
+    try {
+        const response = await fetch('/api/profile/name-plate', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ name_plate: btn.dataset.plate }) });
+        const data = await response.json();
+        if (!data.success) { showToast(data.error || 'Güncellenemedi.'); return; }
+        currentUser.name_plate = data.name_plate;
+        renderNamePlatePicker();
+        renderProfile();
+        if (currentHub) refreshHubAfterBoost();
+    } catch (error) {
+        console.error('İsim plakası güncellenemedi:', error);
+        showToast('Güncellenemedi.');
+    }
+});
+
 function renderNameEffectPicker() {
     const picker = document.getElementById('name-effect-picker');
     const hint = document.getElementById('name-effect-hint');
@@ -7826,6 +7862,7 @@ async function loadCustomizeCenter() {
     renderBubbleStylePicker();
     renderProfileThemePicker();
     renderNameEffectPicker();
+    renderNamePlatePicker();
     renderProfileEffectPicker();
     renderCardStyleCard();
     if (typeof renderPersonalEmojiCard === 'function') renderPersonalEmojiCard();
@@ -7911,7 +7948,7 @@ const ATMO_LABELS = {
     bubble_style: { default: 'Klasik', round: 'Yuvarlak', glass: 'Cam', outline: 'Çerçeveli', shadow: 'Gölgeli' },
     chat_theme: { classic: 'Klasik', soft: 'Yumuşak', contrast: 'Kontrast' },
     name_effect: { none: '', gradient: 'Gradyan', glow: 'Parıltı', rainbow: 'Gökkuşağı', shimmer: 'Işıltı' },
-    profile_effect: { none: '', sakura: 'Sakura', stagelights: 'Sahne ışıkları' }
+    profile_effect: { none: '', sakura: 'Sakura', stagelights: 'Sahne ışıkları', flame: 'Alev', ink: 'Mürekkep', storm: 'Yıldırım', sweet: 'Tatlı' }
 };
 function atmoChips(a) {
     const b = a.bundle || {};
@@ -8773,6 +8810,7 @@ function renderOtherProfile() {
         otherActivityEl.textContent = profile.activity ? `🎮 ${profile.activity}` : '';
     }
     otherProfileUsername.innerHTML = `${usernameCardHtml(profile.username, profile.plus_active, profile.name_effect)}${plusBadgeHtml(profile.plus_active)}`;
+    otherProfileUsername.className = (otherProfileUsername.className || '').replace(/\b(has-plate|plate-anim|plate-\w+)\b/g, '').trim() + (profile.name_plate && profile.name_plate !== 'none' ? ' has-plate plate-anim plate-' + profile.name_plate : '');
 
     // ÖNEMLİ: presence (gerçek bağlantı durumu) ile kullanıcının seçtiği
     // manuel durum birbirinden ayrı. Kullanıcı "Müsait" seçmiş olsa bile
@@ -16224,7 +16262,7 @@ function renderHubMembers() {
         const premFx = m.premium_card ? '<span class="mc-fx" aria-hidden="true"><i class="mc-shine"></i><i class="mc-spark mc-spark-a"></i><i class="mc-spark mc-spark-b"></i><i class="mc-spark mc-spark-c"></i></span>' : '';
         return `
             ${divider}
-            <div class="hub-member-row hub-member-card${m.premium_card ? ' member-prem cs-' + (m.card_style || 'classic') + (CARD_EMOJI_STYLES.has(m.card_style) ? ' cs-emoji' : '') : ''}" style="--mc:${escapeAttr(cardColor)}" data-user-id="${m.user_id}" data-tier="${m.permission_tier}">
+            <div class="hub-member-row hub-member-card${m.name_plate && m.name_plate !== 'none' ? ' has-plate plate-' + escapeAttr(m.name_plate) : ''}${m.premium_card ? ' member-prem cs-' + (m.card_style || 'classic') + (CARD_EMOJI_STYLES.has(m.card_style) ? ' cs-emoji' : '') : ''}" style="--mc:${escapeAttr(cardColor)}" data-user-id="${m.user_id}" data-tier="${m.permission_tier}">
                 ${premFx}
                 <span class="hub-member-avatar-wrap">
                     ${avatar}

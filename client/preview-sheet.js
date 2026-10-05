@@ -9,6 +9,7 @@
     const PICKERS = [
         { id: 'profile-theme-picker', cat: 'profile', feature: 'profile_theme', tier: 'Plus', attr: 'ptheme', def: 'default', field: 'profile_theme', slot: 'ptheme', title: 'Profil teması' },
         { id: 'profile-effect-picker', cat: 'profile', feature: 'profile_effect', tier: 'Plus', attr: 'effect', def: 'none', field: 'profile_effect', slot: 'effect', title: 'Profil efekti' },
+        { id: 'name-plate-picker', cat: 'profile', feature: 'name_plate', tier: 'Plus', attr: 'plate', def: 'none', field: 'name_plate', slot: 'plate', title: 'İsim plakası' },
         { id: 'name-effect-picker', cat: 'profile', feature: 'name_effect', tier: 'Plus', attr: 'nfx', def: 'none', field: 'name_effect', slot: 'nfx', title: 'İsim efekti' },
         { id: 'chat-theme-picker', cat: 'chat', feature: 'chat_theme', tier: 'Plus', attr: 'theme', def: 'classic', field: 'chat_theme', slot: 'theme', title: 'Sohbet teması' },
         { id: 'bubble-style-picker', cat: 'chat', feature: 'bubble_style', tier: 'Plus', attr: 'bubble', def: 'default', field: 'bubble_style', slot: 'bubble', title: 'Mesaj balonu' }
@@ -33,7 +34,7 @@ const optLabel = (btn) => { const c = btn.cloneNode(true); c.querySelectorAll('.
 
     function state() {
         const u = (typeof currentUser !== 'undefined' && currentUser) || {};
-        return { ptheme: u.profile_theme || 'default', effect: u.profile_effect || 'none', nfx: u.name_effect || 'none', theme: u.chat_theme || 'classic', bubble: u.bubble_style || 'default' };
+        return { ptheme: u.profile_theme || 'default', effect: u.profile_effect || 'none', nfx: u.name_effect || 'none', plate: u.name_plate || 'none', theme: u.chat_theme || 'classic', bubble: u.bubble_style || 'default' };
     }
 
     function avatarHtml() {
@@ -49,7 +50,7 @@ const optLabel = (btn) => { const c = btn.cloneNode(true); c.querySelectorAll('.
             const nameHtml = typeof usernameCardHtml === 'function' ? usernameCardHtml(name, true, st.nfx) : esc(name);
             return `<div class="pv-profile profile-modal-box" data-profile-theme="${esc(st.ptheme)}">
                 <div class="pv-avatar" id="pv-avatar">${avatarHtml()}</div>
-                <div class="pv-name">${nameHtml}</div>
+                <div class="pv-name${st.plate && st.plate !== 'none' ? ' has-plate plate-anim plate-' + esc(st.plate) : ''}">${nameHtml}</div>
                 <div class="pv-about"><b>Hakkımda</b><span>Sauran'da oyun ve sohbet 🎮</span></div>
             </div>`;
         }

@@ -13,6 +13,7 @@
 const FEATURES = {
   profile_theme:        { label: 'Profil teması',                    tier: 'plus' },
   profile_effect:       { label: 'Profil efekti',                    tier: 'plus' },
+  name_plate:           { label: 'İsim plakası (üye listesi zemini)', tier: 'plus' },
   name_effect:          { label: 'İsim efekti',                      tier: 'plus' },
   lobby_theme:          { label: 'Lobi teması',                      tier: 'plus' },
   lobby_image:          { label: 'Lobi görseli hakkı',               tier: 'plus' },
@@ -45,7 +46,8 @@ const FEATURE_GROUPS = [
 ];
 const FEATURE_META = {
   profile_theme:        { group: 'profile', icon: '🎨', desc: 'Profil penceresinin renk teması (Gece, Gün Batımı, Orman, Sakura, Okyanus).' },
-  profile_effect:       { group: 'profile', icon: '🌸', desc: 'Profil avatarının çevresinde animasyonlu efekt (Sakura, Sahne Işıkları).' },
+  profile_effect:       { group: 'profile', icon: '🌸', desc: 'Profil kartında animasyonlu efekt (Sakura, Sahne Işıkları, Alev, Mürekkep, Yıldırım, Tatlı).' },
+  name_plate:           { group: 'profile', icon: '🏷️', desc: 'Üye listesinde ve profilinde adının arkasında animasyonlu zemin (Alev, Mürekkep, Yıldırım, Tatlı).' },
   name_effect:          { group: 'profile', icon: '🔤', desc: 'Kullanıcı adına animasyonlu efekt (Gradyan, Parıltı, Gökkuşağı, Işıltı).' },
   profile_sound:        { group: 'profile', icon: '🎧', desc: 'Profil açıldığında çalan sesi seçme.' },
   gif_avatar:           { group: 'profile', icon: '🎞️', desc: 'Hareketli (GIF) profil fotoğrafı yükleyebilme.' },

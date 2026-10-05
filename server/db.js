@@ -120,6 +120,9 @@ if (!userColumns.includes('profile_theme')) {
   // Sauran Plus: profil penceresinin renk teması (default/midnight/sunset/forest/sakura/ocean).
   db.exec(`ALTER TABLE users ADD COLUMN profile_theme TEXT DEFAULT 'default'`);
 }
+if (!userColumns.includes('name_plate')) {
+  db.exec(`ALTER TABLE users ADD COLUMN name_plate TEXT DEFAULT 'none'`);
+}
 if (!userColumns.includes('profile_effect')) {
   // Sauran Plus: profil penceresinde avatarın çevresinde animasyonlu efekt (none/aura/sparkle). Plus bitince 'none' döner.
   db.exec(`ALTER TABLE users ADD COLUMN profile_effect TEXT DEFAULT 'none'`);
@@ -2583,7 +2586,22 @@ function updateProfileTheme(userId, theme) {
 }
 
 // Sauran Plus: profil penceresinde avatarın çevresinde animasyonlu efekt.
-const PROFILE_EFFECTS = ['none', 'sakura', 'stagelights'];
+const PROFILE_EFFECTS = ['none', 'sakura', 'stagelights', 'flame', 'ink', 'storm', 'sweet'];
+const NAME_PLATES = ['none', 'flame', 'ink', 'storm', 'sweet'];
+
+function updateNamePlate(userId, plate) {
+  const value = String(plate || 'none');
+  if (!NAME_PLATES.includes(value)) return { success: false, error: 'Geçersiz isim plakası.' };
+  if (value !== 'none' && !hasFeature(userId, 'name_plate')) {
+    return { success: false, error: 'İsim plakaları yalnızca Sauran Plus abonelerine (ya da hediye edilenlere) açık.' };
+  }
+  db.prepare(`UPDATE users SET name_plate = ? WHERE id = ?`).run(value, userId);
+  return { success: true, name_plate: value };
+}
+function effectiveNamePlate(userId) {
+  const row = db.prepare(`SELECT name_plate FROM users WHERE id = ?`).get(userId);
+  return row && row.name_plate && NAME_PLATES.includes(row.name_plate) && hasFeature(userId, 'name_plate') ? row.name_plate : 'none';
+}
 
 function updateProfileEffect(userId, effect) {
   const value = String(effect || 'none');
@@ -3936,6 +3954,7 @@ function getHubDetail(hubId, userId) {
     const { avatar_visibility, minor_until, ...rest } = m;
     if (!hasFeature(m.user_id, 'name_effect')) rest.name_effect = 'none';
     rest.premium_card = hasFeature(m.user_id, 'premium_card');
+    rest.name_plate = effectiveNamePlate(m.user_id);
     rest.card_style = rest.premium_card ? (CARD_STYLE_KEYS.includes(m.card_style) && m.card_style ? m.card_style : 'classic') : '';
     const masked = maskAvatarFor(userId, m.user_id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']);
     return presenceVisibleTo(userId, m.user_id, minor_until) ? masked : { ...masked, status: 'invisible' };
@@ -6188,6 +6207,7 @@ function getUserPublicProfile(viewerId, targetId) {
     profile_effect: (visible && hasFeature(targetId, 'profile_effect')) ? (user.profile_effect || 'none') : 'none',
     profile_theme: hasFeature(targetId, 'profile_theme') ? (user.profile_theme || 'default') : 'default',
     name_effect: hasFeature(targetId, 'name_effect') ? (user.name_effect || 'none') : 'none',
+    name_plate: effectiveNamePlate(targetId),
     activity: (isSelf || (viewerId != null && areFriends(viewerId, targetId))) ? freshActivity(user) : null,
     plus_active: hasActivePlus(targetId),
     atmosphere: visible && user.profile_sound_on !== 0 ? effectiveAtmosphere(targetId) : 'none',
@@ -8695,6 +8715,9 @@ module.exports = {
   updateChatTheme,
   updateProfileColor,
   PROFILE_EFFECTS,
+  NAME_PLATES,
+  updateNamePlate,
+  effectiveNamePlate,
   updateProfileEffect,
   applyAtmosphere,
   effectiveAtmosphere,
