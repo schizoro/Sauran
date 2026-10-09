@@ -76,7 +76,31 @@
         layer.innerHTML = build();
         box.appendChild(layer);
         box.classList.add('has-pfxc');
-        setRise(box, layer);
+        // Mağaza küçük resimlerinde (çok sayıda kart) CSS animasyonu kalır; ekran dışında duraklatılabilsin.
+        if (!box.classList.contains('st-prof')) setRise(box, layer);
+    }
+
+    // iOS Safari, @keyframes içindeki CSS değişkenini animasyon başladıktan sonra güncellemiyor (eski kısa mesafede kalıyor).
+    // Bu yüzden yükselme Web Animations API ile, mesafe doğrudan piksel olarak verilerek çalıştırılır.
+    function animateRise(layer, rise) {
+        if (layer._riseFor === rise) return;
+        layer._riseFor = rise;
+        const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        layer.querySelectorAll('.fxc-ember, .fxc-ash').forEach((el) => {
+            if (el._riseAnim) el._riseAnim.cancel();
+            if (reduce || typeof el.animate !== 'function') return;
+            const cs = el.style;
+            const dur = parseFloat(cs.getPropertyValue('--t')) * 1000 || 6000;
+            const delay = parseFloat(cs.getPropertyValue('--d')) * 1000 || 0;
+            const x = parseFloat(cs.getPropertyValue('--x')) || 0;
+            el.style.animation = 'none';
+            el._riseAnim = el.animate([
+                { transform: 'translate(0px, 0px) scale(1)', opacity: 0 },
+                { opacity: 1, offset: 0.1 },
+                { opacity: 0.9, offset: 0.85 },
+                { transform: `translate(${x}px, ${-rise}px) scale(.45)`, opacity: 0 }
+            ], { duration: dur, delay, iterations: Infinity, easing: el.classList.contains('fxc-ash') ? 'linear' : 'ease-out' });
+        });
     }
 
     // Yükselen parçacıklar kapak fotoğrafının hemen altına kadar çıksın: kutunun yüksekliğine göre mesafe.
@@ -89,6 +113,7 @@
             if (!h) return;
             const rise = Math.max(160, h * 0.96 - top);
             layer.style.setProperty('--rise', `${Math.round(rise)}px`);
+            animateRise(layer, Math.round(rise));
         };
         requestAnimationFrame(calc);
         setTimeout(calc, 400);
