@@ -85,11 +85,19 @@
             if (!layer.isConnected) return;
             const banner = box.querySelector('.profile-banner');
             const top = banner ? banner.offsetTop + banner.offsetHeight + 8 : 0;
-            const rise = Math.max(160, box.clientHeight * 0.96 - top);
+            const h = box.clientHeight || box.getBoundingClientRect().height;
+            if (!h) return;
+            const rise = Math.max(160, h * 0.96 - top);
             layer.style.setProperty('--rise', `${Math.round(rise)}px`);
         };
         requestAnimationFrame(calc);
         setTimeout(calc, 400);
+        setTimeout(calc, 1200);
+        // Pencere açılış animasyonu / içerik yüklenmesi sırasında kutunun boyu değişirse yeniden hesapla.
+        if (typeof ResizeObserver === 'function') {
+            const ro = new ResizeObserver(() => { if (!layer.isConnected) { ro.disconnect(); return; } calc(); });
+            ro.observe(box);
+        }
     }
 
     window.SauranFx = { EFFECTS, applyCard };
