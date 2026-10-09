@@ -24,7 +24,8 @@
     }
 
     function flame() {
-        return flames(9, 70, 128, 11, 'fxc-bot') + flames(6, 40, 70, 23, 'fxc-top') + particles(12, 5, 'fxc-ember');
+        // Üstte kapak fotoğrafını kapatan katman yok; yalnızca alttan alevler ve yükselen kıvılcımlar.
+        return flames(9, 70, 128, 11, 'fxc-bot') + particles(12, 5, 'fxc-ember');
     }
 
     function ink() {
@@ -35,7 +36,9 @@
         }
         const top = `<svg class="fxc-top" viewBox="0 0 400 150" preserveAspectRatio="none" aria-hidden="true"><g fill="#07070d" stroke="#32325a" stroke-width="1.4"><path d="M0,0 H400 V20 C360,34 330,12 290,24 C250,36 220,14 180,26 C140,36 110,12 70,24 C40,32 20,20 0,26Z"/>${drips}</g></svg>`;
         const smoke = '<i class="fxc-smoke s1"></i><i class="fxc-smoke s2"></i><i class="fxc-smoke s3"></i>';
-        return top + smoke + particles(8, 3, 'fxc-ash');
+        // Üstten sarkan damlalar (top) kapak fotoğrafını kapattığı için gösterilmez.
+        void top;
+        return smoke + particles(8, 3, 'fxc-ash');
     }
 
     function bolt(x, y, seed) {
@@ -73,6 +76,20 @@
         layer.innerHTML = build();
         box.appendChild(layer);
         box.classList.add('has-pfxc');
+        setRise(box, layer);
+    }
+
+    // Yükselen parçacıklar kapak fotoğrafının hemen altına kadar çıksın: kutunun yüksekliğine göre mesafe.
+    function setRise(box, layer) {
+        const calc = () => {
+            if (!layer.isConnected) return;
+            const banner = box.querySelector('.profile-banner');
+            const top = banner ? banner.offsetTop + banner.offsetHeight + 8 : 0;
+            const rise = Math.max(160, box.clientHeight * 0.96 - top);
+            layer.style.setProperty('--rise', `${Math.round(rise)}px`);
+        };
+        requestAnimationFrame(calc);
+        setTimeout(calc, 400);
     }
 
     window.SauranFx = { EFFECTS, applyCard };
