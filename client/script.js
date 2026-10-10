@@ -12294,10 +12294,23 @@ async function joinVoiceRoom(room) {
 
     } catch (error) {
         console.error('Sesli odaya katılınamadı:', error);
-        alert(error?.presenceError || 'Sesli odaya katılınamadı.');
+        alert(error?.presenceError || voiceJoinErrorMessage(error));
         leaveCall();
     }
 
+}
+
+// Katılım hatasının GERÇEK nedenini kullanıcıya (ve bana) gösterir: eskiden her hata "Sesli odaya katılınamadı." olarak görünüyordu.
+function voiceJoinErrorMessage(error) {
+    const raw = String((error && (error.errorMsg || error.message)) || error || '');
+    const name = String((error && error.name) || '');
+    if (/join-timeout/i.test(raw)) return 'Sesli odaya bağlanma zaman aşımına uğradı (20 sn). İnternet bağlantını ve mikrofon iznini kontrol edip tekrar dene.';
+    if (name === 'NotAllowedError' || /permission|denied|izin/i.test(raw)) return 'Mikrofon izni verilmedi. Telefonun Ayarlar bölümünden bu site/uygulama için mikrofona izin ver, sonra tekrar dene.';
+    if (name === 'NotFoundError' || /no (audio|microphone)|device not found/i.test(raw)) return 'Mikrofon bulunamadı. Bir mikrofonun bağlı olduğundan emin ol.';
+    if (name === 'NotReadableError' || /in use|could not start/i.test(raw)) return 'Mikrofon başka bir uygulama tarafından kullanılıyor. Diğer uygulamaları kapatıp tekrar dene.';
+    if (/DailyIframe yok/i.test(raw)) return 'Sesli sohbet bileşeni yüklenemedi. Sayfayı yenileyip tekrar dene.';
+    if (/network|fetch|failed to fetch|load failed/i.test(raw)) return 'Sunucuya ulaşılamadı. İnternet bağlantını kontrol edip tekrar dene.';
+    return 'Sesli odaya katılınamadı' + (raw ? ` (${raw.slice(0, 120)})` : '.');
 }
 
 
