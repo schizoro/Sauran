@@ -10159,7 +10159,7 @@ function startInlineEdit(wrap, msg, opts) {
 
     textEl.outerHTML = `
         <${isHub ? 'div' : 'span'} class="hub-msg-edit-box" data-edit-box>
-            <input type="text" value="${escapeAttr(msg.content)}" maxlength="500">
+            <input type="text" value="${escapeAttr(msg.content)}" maxlength="1000">
             <button class="msg-edit-save" type="button">${t('save')}</button>
             <button class="msg-edit-cancel" type="button">${t('cancel')}</button>
         </${isHub ? 'div' : 'span'}>

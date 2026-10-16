@@ -4556,7 +4556,7 @@ function editMessage(messageId, userId, newContent) {
   if (msg.user_id !== userId) return { success: false, error: 'Yalnızca kendi mesajını düzenleyebilirsin.' };
   if (!['text', 'dm'].includes(msg.kind)) return { success: false, error: 'Bu mesaj türü düzenlenemez.' };
 
-  newContent = String(newContent || '').trim().slice(0, 500);
+  newContent = String(newContent || '').trim().slice(0, 1000);
   if (!newContent) return { success: false, error: 'Boş mesaj gönderilemez.' };
 
   if (msg.hub_id) {

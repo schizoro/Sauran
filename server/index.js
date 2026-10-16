@@ -5291,8 +5291,8 @@ io.on('connection', (socket) => {
 
       if (!content || !hubId) return;
 
-      if (content.length > 500) {
-        socket.emit('message_error', 'Mesajınız çok uzun (Maksimum 500 karakter).', data?.client_id || null);
+      if (content.length > 1000) {
+        socket.emit('message_error', 'Mesajınız çok uzun (Maksimum 1000 karakter).', data?.client_id || null);
         return;
       }
 
