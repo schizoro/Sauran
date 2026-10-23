@@ -3562,7 +3562,7 @@ app.post('/api/hubs/:id/voice-rooms/:roomId/join', async (req, res) => {
 
   } catch (error) {
     console.error('Sesli oda başlatma hatası:', error);
-    res.status(500).json({ success: false, error: 'Sesli odaya katılınamadı.' });
+    res.status(500).json({ success: false, error: 'Sesli odaya katılınamadı (sunucu: ' + String(error && error.message || error).slice(0, 160) + ').' });
   }
 });
 
