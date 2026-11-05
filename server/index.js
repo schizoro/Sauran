@@ -622,11 +622,20 @@ if (require('./backup').isInsidePublicDir(process.env.DATA_DIR || path.join(__di
 // Kişisel veri taşıyan API yanıtları (dışa aktarım dahil) tarayıcı/proxy önbelleğine alınmaz.
 app.use('/api', (req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 
+// Statik dosyalar: tarayıcı saklar ama her açılışta "değişti mi?" diye sorar (ETag). Değişmediyse 304 döner, gövde inmez
+// (eskiden no-store yüzünden her açılışta ~420 KB JS/CSS yeniden iniyordu). Deploy sonrası yeni sürüm yine hemen gelir.
+// Sürüm numarası dosya adında olan kütüphaneler (vendor/*-x.y.z.js) asla değişmez: 1 yıl, yeniden sorulmadan.
 app.use(express.static(path.join(__dirname, '..', 'client'), {
-  etag: false,
-  lastModified: false,
-  setHeaders: (res) => {
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  etag: true,
+  lastModified: true,
+  setHeaders: (res, filePath) => {
+    if (/[\\/]vendor[\\/][^\\/]*-\d+\.\d+\.\d+[^\\/]*\.js$/.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else if (/\.html?$/.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    } else {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
   }
 }));
 
