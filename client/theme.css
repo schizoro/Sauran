@@ -3066,3 +3066,10 @@ body.drawer-friendlist .friends-directory { display: flex; flex-direction: colum
 .has-plate .plus-name-plate .pnp-text { position: relative; z-index: 1; }
 .hub-member-card.has-plate { box-shadow: inset 0 0 0 1px rgba(255,255,255,.14) !important; }
 .hub-member-card.has-plate::before, .hub-member-card.has-plate .mc-fx { display: none !important; }
+
+/* Ekran paylaşımı izlenirken arka plandaki sürekli animasyonlar duraklatılır (izleyicide kare düşmesi/donma). */
+body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.watching-share .hub-feed *::after, body.watching-share #hub-member-list *, body.watching-share #hub-member-list *::before, body.watching-share #hub-member-list *::after, body.watching-share .pfxc, body.watching-share .pfxc::before, body.watching-share .pfxc::after, body.watching-share .pfxc * { animation-play-state: paused !important; }
+
+/* Bildirimler (eski alert kutuları dahil): satır sonları korunur, dokununca kapanır. */
+.toast { pointer-events: auto; cursor: pointer; white-space: pre-line; max-width: min(520px, 92vw); background: rgba(18, 24, 32, 0.96); box-shadow: 0 0 0 1px var(--border-soft-strong), 0 10px 30px rgba(0, 0, 0, 0.55); }
+.toast-container { left: 12px; right: 12px; transform: none; }

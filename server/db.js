@@ -7781,7 +7781,7 @@ function suspendAccount({ actorId, targetId, internalReason, userReason }) {
   if (internal.error) return { success: false, status: 400, error: internal.error };
 
   // Kullanıcıya gösterilecek metin: tek satır, kontrol karakterleri temizlenir, isteğe bağlı.
-  let shown = typeof userReason === 'string' ? userReason.replace(/[ -]+/g, ' ').replace(/\s+/g, ' ').trim() : '';
+  let shown = typeof userReason === 'string' ? userReason.replace(/[\x00-\x1F\x7F]+/g, ' ').replace(/\s+/g, ' ').trim() : '';
   if (shown.length > USER_REASON_MAX) {
     return { success: false, status: 400, error: `Kullanıcı gerekçesi en fazla ${USER_REASON_MAX} karakter olabilir.` };
   }

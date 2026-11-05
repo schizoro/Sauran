@@ -1309,7 +1309,7 @@ async function submitLogin2fa() {
             return;
         }
         if (data.recovery_used) {
-            alert(`Bir kurtarma kodu kullandın. Kalan kurtarma kodu: ${data.recovery_remaining}. Azaldıysa Ayarlar > Güvenlik'ten yenile.`);
+            showNotice(`Bir kurtarma kodu kullandın. Kalan kurtarma kodu: ${data.recovery_remaining}. Azaldıysa Ayarlar > Güvenlik'ten yenile.`);
         }
         login2faChallenge = null;
         setCurrentUser(data.user);
@@ -4763,31 +4763,40 @@ function askShareFps() {
 
 async function startScreenShareWithFps(fps, quality) {
     // Susturulmuş kullanıcı ekran paylaşabilir ama ekran sesi hiç yakalanmaz (Daily izni de zaten iletmez).
-    const muteOpts = voiceForceMute ? { displayMediaOptions: { audio: false } } : {};
     if (voiceForceMute) showToast(t('voice-muted-share-note'));
-    const layers = {
-        '60': { low: { maxBitrate: 600000, maxFramerate: 15, scaleResolutionDownBy: 2 }, medium: { maxBitrate: 1200000, maxFramerate: 30, scaleResolutionDownBy: 1 }, high: { maxBitrate: 2500000, maxFramerate: 60, scaleResolutionDownBy: 1 } },
-        '15': { low: { maxBitrate: 400000, maxFramerate: 15, scaleResolutionDownBy: 2 }, medium: { maxBitrate: 800000, maxFramerate: 15, scaleResolutionDownBy: 1 }, high: { maxBitrate: 1500000, maxFramerate: 15, scaleResolutionDownBy: 1 } }
+    // İzleyicilerin ~25 fps'te kalmasının nedenleri (düzeltildi):
+    //  1) Tarayıcıdan 60 fps yakalama hiç istenmiyordu (getDisplayMedia varsayılanı ~30 fps).
+    //  2) Daily'nin varsayılan ekran ayarı ('motion-optimized') 30 fps ve 2 Mbps ile sınırlı.
+    //  3) 60 fps yolunda 3 katmanlı yayın vardı; izleyiciler çoğu zaman 30 fps'lik orta katmanı alıyor, katman
+    //     geçişlerinde görüntü donuyordu. Daily ekran paylaşımı için TEK katman öneriyor (maxQuality: 'low').
+    //  4) Ekran izleri varsayılan 'detail' ipucu taşır: bant yetmeyince tarayıcı çözünürlüğü korur, kareyi düşürür.
+    const want = Number(fps) || (quality === 'high' ? 30 : 15);
+    const premium = Boolean(currentUser?.premium_active);
+    const kbps = want >= 60 ? (premium ? 8000 : 5000) : want >= 30 ? (premium ? 5000 : 3000) : (premium ? 2500 : 1500);
+    const displayMediaOptions = {
+        video: { frameRate: { ideal: want, max: want }, width: { max: 1920 }, height: { max: 1080 } },
+        ...(voiceForceMute ? { audio: false } : {})
     };
-    // Premium: aynı akıcılık seçenekleri, daha yüksek bit hızı tavanıyla (Daily doğrulayıcısı bu katmanları kabul eder).
-    if (currentUser?.premium_active) {
-        const q = { low: { maxBitrate: 600000, maxFramerate: 15, scaleResolutionDownBy: 2 }, medium: { maxBitrate: 1200000, maxFramerate: 30, scaleResolutionDownBy: 1 } };
-        layers['30'] = { ...q, high: { maxBitrate: 5000000, maxFramerate: 30, scaleResolutionDownBy: 1 } };
-        layers['60'] = { ...q, high: { maxBitrate: 6000000, maxFramerate: 60, scaleResolutionDownBy: 1 } };
-        layers['15'] = { low: { maxBitrate: 400000, maxFramerate: 15, scaleResolutionDownBy: 2 }, medium: { maxBitrate: 800000, maxFramerate: 15, scaleResolutionDownBy: 1 }, high: { maxBitrate: 3000000, maxFramerate: 15, scaleResolutionDownBy: 1 } };
-    }
-    if ((fps === '30' && !currentUser?.premium_active) || !layers[fps]) {
-        await callFrame.startScreenShare({ ...muteOpts, screenVideoSendSettings: { maxQuality: quality } });
-        return;
-    }
+    const single = { encodings: { low: { maxBitrate: kbps * 1000, maxFramerate: want } }, maxQuality: 'low' };
     try {
-        await callFrame.startScreenShare({ ...muteOpts, screenVideoSendSettings: { encodings: layers[fps] } });
+        await callFrame.startScreenShare({ displayMediaOptions, screenVideoSendSettings: single });
     } catch (error) {
         // Kullanıcı tarayıcı seçicisini iptal ettiyse hatayı yukarı bırak; ayar reddedildiyse standart kaliteye dön.
         if (error?.name === 'NotAllowedError') throw error;
         console.warn(fps + ' FPS ayarı reddedildi, standart kaliteye dönülüyor:', error);
-        await callFrame.startScreenShare({ ...muteOpts, screenVideoSendSettings: { maxQuality: quality } });
+        await callFrame.startScreenShare({ ...(voiceForceMute ? { displayMediaOptions: { audio: false } } : {}), screenVideoSendSettings: { maxQuality: quality } });
+        return; // hazır kalite ayarına düşüldü: iz ipucunu değiştirme
     }
+    setScreenTrackHint(want, ++screenHintToken);
+}
+
+// 30/60 fps'te akıcılığı koru ('motion' = bant daralınca çözünürlük düşer, kare hızı korunur); 15 fps'te yazı netliği ('detail').
+let screenHintToken = 0;
+function setScreenTrackHint(want, token, tries = 0) {
+    if (token !== screenHintToken) return; // yeni bir paylaşım başladı: eski bekleyen ayarı uygulama
+    const track = callFrame?.participants()?.local?.tracks?.screenVideo?.persistentTrack;
+    if (!track) { if (tries < 10) setTimeout(() => setScreenTrackHint(want, token, tries + 1), 300); return; }
+    try { track.contentHint = want >= 30 ? 'motion' : 'detail'; } catch (_) { /* desteklenmiyor */ }
 }
 
 // "Şu an ne oynuyorum": kullanıcı yazar, isterse paylaşımı kapatır; yalnızca arkadaşlar görür.
@@ -5253,7 +5262,7 @@ function connectToChat() {
 
             markPendingFailed(clientId);
 
-            alert(
+            showNotice(
                 'Uyarı: ' +
                 errorMessage
             );
@@ -5680,7 +5689,7 @@ function connectToChat() {
             const after = !data.blocked ? t('voice-kick-can-rejoin')
                 : data.expires_at ? `${t('voice-kick-blocked-for')} ${new Date(data.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`
                 : t('voice-kick-blocked-until');
-            alert(`👢 ${voiceMuteByLabel(data.by_tier)} ${t('voice-kicked-text')}: ${data.room_name || ''}\n${after}`);
+            showNotice(`👢 ${voiceMuteByLabel(data.by_tier)} ${t('voice-kicked-text')}: ${data.room_name || ''}\n${after}`);
         }
     });
 
@@ -9707,7 +9716,13 @@ async function loadLobbySupporters(lobbyId) {
     } catch (_) { /* şerit ikincil; sessizce geç */ }
 }
 
-function showToast(message) {
+// Önemli uyarılar (eski showNotice() kutuları): metin uzunluğuna göre daha uzun süre kalır, dokununca kapanır, akışı durdurmaz.
+function showNotice(message) {
+    const text = String(message || '');
+    showToast(text, Math.min(12000, 4000 + text.length * 50));
+}
+
+function showToast(message, durationMs = 3200) {
 
     const container = document.getElementById('toast-container');
     if (!container) return;
@@ -9718,10 +9733,15 @@ function showToast(message) {
 
     container.appendChild(toast);
 
-    setTimeout(() => {
+    let gone = false;
+    const dismiss = () => {
+        if (gone) return;
+        gone = true;
         toast.classList.add('toast-leaving');
         setTimeout(() => toast.remove(), 250);
-    }, 3200);
+    };
+    toast.addEventListener('click', dismiss);
+    setTimeout(dismiss, durationMs);
 
 }
 
@@ -10182,7 +10202,7 @@ function startInlineEdit(wrap, msg, opts) {
         });
 
         const data = await res.json();
-        if (!data.success) alert(data.error || 'Düzenlenemedi.');
+        if (!data.success) showNotice(data.error || 'Düzenlenemedi.');
         // Başarılıysa UI güncellemesi socket (hub_message_update/dm_message_update) üzerinden gelir.
 
     });
@@ -11392,7 +11412,7 @@ function applyVoiceForceMute(mute, { announce } = {}) {
     renderVoiceForceMuteBanner();
     if (voiceForceMuteTimer) clearInterval(voiceForceMuteTimer);
     if (mute.expires_at) voiceForceMuteTimer = setInterval(renderVoiceForceMuteBanner, 1000);
-    if (announce) alert(voiceMuteNoticeText(mute));
+    if (announce) showNotice(voiceMuteNoticeText(mute));
 }
 
 function clearVoiceForceMute() {
@@ -12232,7 +12252,7 @@ async function joinVoiceRoom(room) {
         const data = await response.json();
 
         if (!data.success) {
-            alert(data.error || 'Sesli odaya katılınamadı.');
+            showNotice(data.error || 'Sesli odaya katılınamadı.');
             return;
         }
 
@@ -12294,7 +12314,7 @@ async function joinVoiceRoom(room) {
 
     } catch (error) {
         console.error('Sesli odaya katılınamadı:', error);
-        alert(error?.presenceError || voiceJoinErrorMessage(error));
+        showNotice(error?.presenceError || voiceJoinErrorMessage(error));
         leaveCall();
     }
 
@@ -12402,6 +12422,7 @@ document.getElementById('call-hub-room-watch-btn').addEventListener('click', () 
     viewer.className = 'call-screenshare-viewer corner-tr';
     viewer.style.display = 'block';
     startScreenshareFpsMeter(video, viewer);
+    document.body.classList.add('watching-share'); // arka plan animasyonları dursun: kod çözücüye/ekrana yer açılır
 
     watchedScreenshareSessionId = screensharingSessionId;
     attachWatchedScreenAudio();
@@ -12440,6 +12461,7 @@ function closeScreenshareViewer() {
     viewer.style.display = 'none';
     video.srcObject = null;
     watchedScreenshareSessionId = null;
+    document.body.classList.remove('watching-share');
     detachWatchedScreenAudio();
 }
 
@@ -15084,7 +15106,7 @@ async function joinDmCall(userId, username) {
         const data = await response.json();
 
         if (!data.success) {
-            alert(data.error || 'Aramaya katılınamadı.');
+            showNotice(data.error || 'Aramaya katılınamadı.');
             leaveCall();
             return;
         }
@@ -15103,7 +15125,7 @@ async function joinDmCall(userId, username) {
 
     } catch (error) {
         console.error('DM araması başarısız:', error);
-        alert(error?.message === 'join-timeout'
+        showNotice(error?.message === 'join-timeout'
             ? 'Bağlantı kurulamadı (zaman aşımı). Ağ bağlantını kontrol edip tekrar dene.'
             : 'Aramaya katılınamadı.');
         leaveCall();
@@ -15128,7 +15150,6 @@ function endDmCallUi() {
 async function joinCallFrame(roomUrl, token) {
 
     if (typeof DailyIframe === 'undefined') {
-        alert('Sesli sohbet bileşeni yüklenemedi.');
         throw new Error('DailyIframe yok');
     }
 
@@ -15361,7 +15382,7 @@ callScreenshareBtn.addEventListener('click', async () => {
     if (!callFrame || callMode !== 'hub-room') return;
 
     if (!navigator.mediaDevices?.getDisplayMedia) {
-        alert('Bu cihaz/tarayıcı ekran paylaşımını desteklemiyor. Ekran paylaşımı şu an yalnızca masaüstü tarayıcılarda (Chrome, Edge, Firefox) çalışıyor.');
+        showNotice('Bu cihaz/tarayıcı ekran paylaşımını desteklemiyor. Ekran paylaşımı şu an yalnızca masaüstü tarayıcılarda (Chrome, Edge, Firefox) çalışıyor.');
         return;
     }
 
@@ -15389,7 +15410,7 @@ callScreenshareBtn.addEventListener('click', async () => {
         // Kullanıcı izin penceresini iptal ettiğinde (NotAllowedError) sessizce
         // çıkıyoruz — bu bir hata değil, bilinçli bir vazgeçme.
         if (error?.name !== 'NotAllowedError') {
-            alert('Ekran paylaşımı başlatılamadı. Tarayıcı izinlerini kontrol edip tekrar dene.');
+            showNotice('Ekran paylaşımı başlatılamadı. Tarayıcı izinlerini kontrol edip tekrar dene.');
         }
         callScreenshareBtn.classList.remove('active');
     }
@@ -16877,7 +16898,7 @@ function setupVoiceRecorder(button, onRecorded) {
         } catch (error) {
 
             console.error('Mikrofona erişilemedi:', error);
-            alert('Mikrofona erişim izni gerekiyor.');
+            showNotice('Mikrofona erişim izni gerekiyor.');
 
         }
 
