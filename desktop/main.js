@@ -114,7 +114,8 @@ function createWindow() {
 app.whenReady().then(() => {
     // Mikrofon/kamera/bildirim/ekran paylaşımı yalnızca Sauran kaynağına verilir.
     session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => {
-        const allowed = ['media', 'notifications', 'display-capture', 'clipboard-sanitized-write', 'fullscreen'];
+        // speaker-selection: sesli odada ses çıkışı (hoparlör/kulaklık) seçimi; yoksa setSinkId reddedilir ve çıkış değişmez.
+        const allowed = ['media', 'notifications', 'display-capture', 'clipboard-sanitized-write', 'fullscreen', 'speaker-selection'];
         callback(allowed.includes(permission) && isAppOrigin(details.requestingUrl || contents.getURL()));
     });
     // Ekran paylaşımı: kullanıcı önce bir ekran/pencere seçer (seçici penceresi), iptal ederse paylaşım başlamaz.

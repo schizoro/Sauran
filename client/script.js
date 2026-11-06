@@ -15908,7 +15908,7 @@ function audioRouteLabel(type, name) {
 
 function applySinkToAudioEl(el) {
     if (!supportsSinkId || !audioSession.selectedOutputId || typeof el.setSinkId !== 'function') return;
-    el.setSinkId(audioSession.selectedOutputId).catch(() => { /* cihaz yok/izin yok → varsayılan çıkışta kalır */ });
+    el.setSinkId(audioSession.selectedOutputId).catch((error) => console.warn('Yeni ses öğesi seçili çıkışa yönlendirilemedi:', error));
 }
 
 function isMobileNative() {
@@ -16091,10 +16091,22 @@ async function chooseOutputDevice(id) {
         await setNativeRoute(id);
         return;
     }
+    const previous = audioSession.selectedOutputId;
     audioSession.selectedOutputId = id === 'default' ? null : id;
-    document.querySelectorAll('audio[data-call-audio]').forEach((el) => {
-        if (typeof el.setSinkId === 'function') el.setSinkId(audioSession.selectedOutputId || '').catch(() => {});
-    });
+    // Hata artık yutulmuyor: tarayıcı/masaüstü uygulaması çıkış seçimini reddederse kullanıcı bunu görür ve seçim geri alınır
+    // (eskiden menü yeni cihazı seçili gösteriyor ama ses eski çıkıştan gelmeye devam ediyordu).
+    const results = await Promise.allSettled([...document.querySelectorAll('audio[data-call-audio]')]
+        .filter((el) => typeof el.setSinkId === 'function')
+        .map((el) => el.setSinkId(audioSession.selectedOutputId || '')));
+    const failed = results.find((r) => r.status === 'rejected');
+    if (failed) {
+        console.warn('Ses çıkışı değiştirilemedi:', failed.reason);
+        audioSession.selectedOutputId = previous;
+        document.querySelectorAll('audio[data-call-audio]').forEach((el) => {
+            if (typeof el.setSinkId === 'function') el.setSinkId(previous || '').catch(() => {});
+        });
+        showNotice('Ses çıkışı değiştirilemedi' + (failed.reason?.name === 'NotAllowedError' ? ': bu uygulama/tarayıcı ses çıkışı seçimine izin vermiyor. Masaüstü uygulamasını güncelle ya da Chrome/Edge kullan.' : '.'));
+    }
     updateAudioControls();
 }
 

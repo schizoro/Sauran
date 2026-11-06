@@ -1,6 +1,6 @@
 {
   "name": "sauran-desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Sauran Windows masaüstü uygulaması — web uygulamasını sarar ve (kullanıcı izniyle) oynanan oyunu algılar.",
   "main": "main.js",
