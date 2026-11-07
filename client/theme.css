@@ -2024,6 +2024,8 @@ body.hubset-open { overflow: hidden; }
 .typing-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); opacity: 0.35; animation: typing-bounce 1.2s infinite; }
 .typing-dots i:nth-child(2) { animation-delay: 0.15s; }
 .typing-dots i:nth-child(3) { animation-delay: 0.3s; }
+/* Gösterge görünmezken (opacity 0) noktalar boşuna kare üretmesin: lobi/DM açık olduğu sürece 6 nokta sürekli dönüyordu. */
+.typing-indicator:not(.active) .typing-dots i { animation-play-state: paused; }
 @keyframes typing-bounce { 0%, 60%, 100% { opacity: 0.35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { .typing-dots i { animation: none; opacity: 0.8; } }
 
@@ -3115,7 +3117,8 @@ body.drawer-friendlist .friends-directory { display: flex; flex-direction: colum
 .hub-member-card.has-plate::before, .hub-member-card.has-plate .mc-fx { display: none !important; }
 
 /* Ekran paylaşımı izlenirken arka plandaki sürekli animasyonlar duraklatılır (izleyicide kare düşmesi/donma). */
-body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.watching-share .hub-feed *::after, body.watching-share #hub-member-list *, body.watching-share #hub-member-list *::before, body.watching-share #hub-member-list *::after, body.watching-share .pfxc, body.watching-share .pfxc::before, body.watching-share .pfxc::after, body.watching-share .pfxc * { animation-play-state: paused !important; }
+/* Ayrıca pencere arka plandayken (ör. masaüstü uygulaması oyunun yanında açık) aynı süs animasyonları durur. */
+body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.watching-share .hub-feed *::after, body.watching-share #hub-member-list *, body.watching-share #hub-member-list *::before, body.watching-share #hub-member-list *::after, body.watching-share .pfxc, body.watching-share .pfxc::before, body.watching-share .pfxc::after, body.watching-share .pfxc *, body.app-unfocused .hub-feed *, body.app-unfocused .hub-feed *::before, body.app-unfocused .hub-feed *::after, body.app-unfocused #hub-member-list *, body.app-unfocused #hub-member-list *::before, body.app-unfocused #hub-member-list *::after, body.app-unfocused .pfxc, body.app-unfocused .pfxc::before, body.app-unfocused .pfxc::after, body.app-unfocused .pfxc * { animation-play-state: paused !important; }
 
 /* Bildirimler (eski alert kutuları dahil): satır sonları korunur, dokununca kapanır. */
 .toast { pointer-events: auto; cursor: pointer; white-space: pre-line; max-width: min(520px, 92vw); background: rgba(18, 24, 32, 0.96); box-shadow: 0 0 0 1px var(--border-soft-strong), 0 10px 30px rgba(0, 0, 0, 0.55); }
@@ -3130,3 +3133,9 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
 .desktop-update-bar .dub-close { flex: none; width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: var(--text-tertiary); font-size: 18px; line-height: 1; cursor: pointer; }
 .desktop-update-bar .dub-close:hover { background: var(--glass-1); color: var(--text-primary); }
 .desktop-update-bar [hidden] { display: none; }
+
+/* Hareketi azalt tercihi açıksa: tek tek kapatılmamış sürekli (sonsuz) animasyonlar da bir tur oynayıp durur.
+   Yükleniyor göstergesi (giriş düğmesi) bilerek hariç: durursa uygulama donmuş sanılır. */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.btn-spinner), *:not(.btn-spinner)::before, *:not(.btn-spinner)::after { animation-iteration-count: 1 !important; }
+}

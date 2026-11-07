@@ -4880,6 +4880,20 @@ function initDesktopUpdateBar() {
 }
 initDesktopUpdateBar();
 
+// Pencere odağı kaybedince (ör. oyun oynarken yan ekranda açık) süs animasyonları 2 sn sonra durur, odak gelince devam eder.
+// Konuşma göstergeleri ve arama ekranı etkilenmez (yalnızca sohbet akışı, üye listesi ve profil çerçeveleri; bkz. theme.css body.app-unfocused).
+(() => {
+    let blurTimer = null;
+    window.addEventListener('blur', () => {
+        clearTimeout(blurTimer);
+        blurTimer = setTimeout(() => document.body.classList.add('app-unfocused'), 2000);
+    });
+    window.addEventListener('focus', () => {
+        clearTimeout(blurTimer);
+        document.body.classList.remove('app-unfocused');
+    });
+})();
+
 // Sauran Windows uygulaması (window.sauranDesktop): kullanıcı açık rıza verirse çalışan tanınmış oyunu algılar.
 // Oyun adı otomatik yazılır (auto=true → sunucu kalp atışı kesilirse 20 dk sonra gizler), oyun kapanınca temizlenir.
 let autoGameCleanup = null;
