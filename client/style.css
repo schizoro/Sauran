@@ -1688,7 +1688,7 @@ body.call-mini-active { padding-top: 42px; }
 
   /* Ekran paylaşımı mobil tarayıcılarda (özellikle iOS Safari) desteklenmiyor —
      çalışmayan bir butonu göstermek yerine sadece masaüstünde bırakıyoruz. */
-  #call-screenshare-btn { display: none !important; }
+  #call-screenshare-btn { display: none; }
 
   /* AŞAMA D: mobilde "⋯" menüsü ekranın altından taşan bir dropdown yerine
      alttan açılan sabit bir sheet olsun — uzun mesaj listelerinde ekran dışına

@@ -289,7 +289,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .lobby-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lobby-count { font-size: 12px; color: var(--text-tertiary); }
 .lobby-nav .friends-sidebar {
-  position: static; display: flex !important; width: auto; max-width: none; max-height: 40%; flex: 0 1 auto; transform: none !important;
+  position: static; display: flex; width: auto; max-width: none; max-height: 40%; flex: 0 1 auto; transform: none;
   background: none; box-shadow: none; border: 0; border-top: 1px solid var(--border-soft); border-radius: 0;
   -webkit-backdrop-filter: none; backdrop-filter: none; padding: 12px 4px 0; margin-top: 8px; z-index: auto;
 }
@@ -337,12 +337,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .lobby-nav .friends-groups { display: none; }
   body.drawer-groups .lobby-nav .friends-groups { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; margin: 0; padding-top: 0; border-top: 0; max-height: none; }
   body.drawer-groups .lobby-nav .friends-groups-list { overflow-y: auto; }
-  body.drawer-groups .lobby-nav-head, body.drawer-groups #lobby-nav-list, body.drawer-groups .lobby-nav .friends-sidebar { display: none !important; }
+  body.drawer-groups .lobby-nav-head, body.drawer-groups #lobby-nav-list, body.drawer-groups .lobby-nav .friends-sidebar { display: none; }
   .topbar { grid-column: 2; grid-row: 1; border-bottom: 0; padding: 14px 24px 0; min-height: 0; }
   .topbar-logo, .topbar-profile-btn { display: none; }
   .chat-area { grid-column: 2; grid-row: 2; min-height: 0; }
   .hub-back-btn { display: none; }
-  .home-empty { display: none !important; }
+  .home-empty { display: none; }
 }
 @media (min-width: 901px) and (max-height: 720px) { .app-rail { gap: 8px; padding: 10px 0; } }
 
@@ -503,7 +503,7 @@ body .call-header #call-leave-btn:hover { background: rgba(255, 122, 134, 0.24);
 body:has(.adm-header), body:has(.mod-header) { background: var(--bg-app); color: var(--text-secondary); }
 .login-box input[type="date"] { color-scheme: dark; font-weight: 400; color: var(--text-secondary); }
 .login-box label, .login-box .field-label { color: var(--text-tertiary); }
-@media (max-width: 900px) { .hub-back-btn { display: flex; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; } .hub-detail-header { padding-left: 12px; } .home-empty { display: none !important; } }
+@media (max-width: 900px) { .hub-back-btn { display: flex; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; } .hub-detail-header { padding-left: 12px; } .home-empty { display: none; } }
 
 /* ══ Aşama 5: hata düzeltmeleri + prototipe son yaklaştırma ═════════════ */
 
@@ -549,7 +549,7 @@ body:has(.adm-header), body:has(.mod-header) { background: var(--bg-app); color:
 
 /* 9) Mesaj görünümü */
 .hub-msg-text, .hub-msg .content { font-size: 15px; }
-.hub-msg .username { font-size: 14.5px !important; }
+.hub-msg .username { font-size: 14.5px; }
 .hub-msg .header { justify-content: flex-start; gap: 9px; }
 .hub-msg .time, .hub-msg .header .time { margin-left: 0; order: 0; font-size: 12px; }
 .hub-msg .msg-avatar-btn { background: linear-gradient(140deg, #25445a, #182a38); border: 0; border-radius: 50%; }
@@ -979,7 +979,7 @@ html.auth-pending #login-screen { visibility: hidden; }
   .topbar-profile-btn, .topbar-menu-btn { min-height: 38px; }
   body[data-view="hub-detail"] .app-rail, body[data-view="discover"] .app-rail,
   body[data-view="hub-detail"] .lobby-nav-toggle, body[data-view="discover"] .lobby-nav-toggle,
-  body[data-view="hub-detail"] #topbar-menu-btn, body[data-view="discover"] #topbar-menu-btn { display: none !important; }
+  body[data-view="hub-detail"] #topbar-menu-btn, body[data-view="discover"] #topbar-menu-btn { display: none; }
   body[data-view="hub-detail"] #chat-screen[style*="flex"], body[data-view="discover"] #chat-screen[style*="flex"] { padding-left: env(safe-area-inset-left); }
 
   /* Keşfet: başlık üst çubuğa taşındı; başlık bloğu küçük ve yukarıda; Coin üst çubukta küçük */
@@ -1014,7 +1014,7 @@ html.auth-pending #login-screen { visibility: hidden; }
 .topbar-right .discover-wallet[data-lbl]::after { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 0; }
 /* Yukarıdaki genel ".topbar [data-lbl]" kuralı masaüstünde "Lobiler" çentiğini de (display:none olması gerekirken)
    görünür kılıyordu, çünkü öznitelik seçicisi masaüstü-gizleme kuralından daha özgüldü. Masaüstünde kesin kapatıyoruz. */
-@media (min-width: 901px) { .topbar .lobby-nav-toggle[data-lbl] { display: none !important; } }
+@media (min-width: 901px) { .topbar .lobby-nav-toggle[data-lbl] { display: none; } }
 
 /* ── Lobi üst çubuğu: liquid glass hap + sürekli yıldız tozu ─────────── */
 .topbar-lobby-actions { align-items: center; gap: 2px; padding: 1px 6px; border-radius: 999px; background: var(--glass-2); box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong); -webkit-backdrop-filter: blur(var(--blur-1)) saturate(1.3); backdrop-filter: blur(var(--blur-1)) saturate(1.3); }
@@ -1037,7 +1037,7 @@ html.auth-pending #login-screen { visibility: hidden; }
   body[data-view="hub-detail"] .topbar-left #hub-detail-name { font-size: 16px; max-width: calc(50vw - 62px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; }
   body[data-view="hub-detail"] .hub-detail-header { padding-top: 2px; padding-bottom: 4px; padding-right: 28px; justify-content: flex-end; gap: 4px; }
   body[data-view="hub-detail"] .hub-voice-rooms-toggle-btn, body[data-view="hub-detail"] .hub-voice-rooms-side { left: 0; }
-  #discover-open-btn, #friend-add-open-btn { display: none !important; }
+  #discover-open-btn, #friend-add-open-btn { display: none; }
 }
 /* Sesli odalar sekmesi en sola (Lobi ekranında ray yok) */
 
@@ -1085,7 +1085,7 @@ html.auth-pending #login-screen { visibility: hidden; }
   .topbar-lobby-actions .topbar-superlike-btn, .topbar-lobby-actions .hub-icon-btn, .topbar-lobby-actions .hub-members-toggle-btn { min-width: 0; padding: 0 7px; }
 }
 @media (max-width: 900px) {
-  .topbar-lobby-actions .topbar-superlike-btn, .topbar-lobby-actions .hub-icon-btn, .topbar-lobby-actions .hub-members-toggle-btn { width: auto !important; }
+  .topbar-lobby-actions .topbar-superlike-btn, .topbar-lobby-actions .hub-icon-btn, .topbar-lobby-actions .hub-members-toggle-btn { width: auto; }
   body[data-view="hub-detail"] .hub-detail-header .hub-title-pill { flex: 0 0 auto; width: auto; min-width: 0; gap: 0; }
   body[data-view="hub-detail"] .hub-detail-header #hub-detail-icon { display: none; }
 }
@@ -1104,7 +1104,7 @@ html.auth-pending #login-screen { visibility: hidden; }
   body[data-view="hub-detail"] .hub-detail-header { padding-right: 12px; }
   /* Üyeler butonu masaüstündeki gibi ekranın sağ kenarında sabit bir sekme değil, artık Süper Beğeni/Lobi
      Ayarları ile aynı grupta: ikon üstte, "Üyeler" yazısı altta. Eski ok yerine insan ikonu gösterilir. */
-  .topbar-lobby-actions .hub-members-toggle-btn { position: static !important; top: auto; right: auto; transform: none; width: auto; height: auto; border-right: 1px solid rgba(255,255,255,.14); }
+  .topbar-lobby-actions .hub-members-toggle-btn { position: static; top: auto; right: auto; transform: none; width: auto; height: auto; border-right: 1px solid rgba(255,255,255,.14); }
   .topbar-lobby-actions .hub-members-toggle-arrow { display: none; }
   .topbar-lobby-actions .hub-members-toggle-icon { display: block; width: 17px; height: 17px; }
   .hub-members-toggle-icon { display: none; }
@@ -1290,7 +1290,7 @@ html.auth-pending #login-screen { visibility: hidden; }
 
 /* Bildirim zili artık tüm platformlarda üst çubukta tek bir yerde (bkz. #notifications-btn) —
    sol raydaki eski zil ikonu her yerde gizli, çifte giriş noktası olmasın. */
-#rail-notifications { display: none !important; }
+#rail-notifications { display: none; }
 
 /* ── Sauran Plus rozeti: kullanıcı adının yanında, mor/mavi, Supporter'dan ayrı ────────── */
 .plus-badge {
@@ -1770,7 +1770,7 @@ html.auth-pending #login-screen { visibility: hidden; }
 .name-fx-glow { color: #eaf6ff; animation: nfxGlow 2.4s ease-in-out infinite; }
 @keyframes nfxSlide { from { background-position: 0% 0; } to { background-position: -200% 0; } }
 @keyframes nfxGlow { 0%, 100% { text-shadow: 0 0 3px rgba(92, 200, 255, .45); } 50% { text-shadow: 0 0 8px rgba(92, 200, 255, .95), 0 0 14px rgba(185, 139, 255, .6); } }
-@media (prefers-reduced-motion: reduce) { .name-fx { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .name-fx { animation: none; } }
 
 /* ── Sauran Plus "Lobi Arka Planı": Lobi sahibinin yüklediği görsel, okunabilirlik için koyulaştırılarak sohbet alanına yerleşir ── */
 .hub-detail-view.has-hub-bg {
@@ -1908,7 +1908,7 @@ body.hubset-open { overflow: hidden; }
 .hubset-card .profile-field-label { margin-top: 4px; margin-bottom: 0; }
 .hubset-card #hub-discover-settings, .hubset-card .hub-discover-settings { flex-direction: column; gap: 10px; }
 .hubset-identity { flex-direction: row; align-items: center; gap: 20px; }
-.hubset-avatar { width: 88px !important; height: 88px !important; border-radius: 22px !important; flex-shrink: 0; font-size: 34px; }
+.hubset-avatar { width: 88px; height: 88px; border-radius: 22px; flex-shrink: 0; font-size: 34px; }
 .hubset-identity-fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .hubset-identity-fields .hub-name-input { width: 100%; }
 .hubset-inline-btn { padding: 8px 14px; border-radius: 999px; }
@@ -1966,7 +1966,7 @@ body.hubset-open { overflow: hidden; }
   .hubset-save-btn { flex: 1; }
 }
 .hubset-card #hubset-theme-block { display: flex; flex-direction: column; gap: 10px; }
-.hubset-card #hubset-theme-block[style*="none"] { display: none !important; }
+.hubset-card #hubset-theme-block[style*="none"] { display: none; }
 .hubset-card #hubset-theme-hint { margin-bottom: 10px; }
 .hubset-inline-btn { border: 1px solid var(--border-soft-strong) !important; }
 .hubset-savebar .hub-create-error:empty { display: none; }
@@ -2269,15 +2269,15 @@ body.hubset-open #group-pick-modal { z-index: var(--z-hubset-group-pick); }
   body.lobby-drawer-open:not(.drawer-friends):not(.drawer-groups) #rail-lobbies,
   body.drawer-groups #rail-groups, body.drawer-friends #rail-friends { color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-line); }
   /* Lobiler çekmeceyle değil raydan açılır: üst çubuktaki üç çizgi kalktı */
-  .topbar .lobby-nav-toggle { display: none !important; }
+  .topbar .lobby-nav-toggle { display: none; }
   /* Çekmece kipleri: Lobiler | Arkadaşlar | Gruplar (her biri yalnız kendi bölümü) */
   .lobby-nav .friends-groups { display: none; }
   body.drawer-groups .lobby-nav .friends-groups { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; margin: 0; }
   body.drawer-groups .lobby-nav .friends-groups-list { overflow-y: auto; }
-  body.drawer-groups .lobby-nav-head, body.drawer-groups #lobby-nav-list, body.drawer-groups .lobby-nav .friends-sidebar { display: none !important; }
+  body.drawer-groups .lobby-nav-head, body.drawer-groups #lobby-nav-list, body.drawer-groups .lobby-nav .friends-sidebar { display: none; }
   /* Üst çubuk: daha yüksek; "Ana Menü" en solda */
   :root { --topbar-h: 58px; }
-  .topbar { min-height: var(--topbar-h) !important; padding-top: 6px; padding-bottom: 6px; padding-left: 14px; }
+  .topbar { min-height: var(--topbar-h); padding-top: 6px; padding-bottom: 6px; padding-left: 14px; }
   .topbar-left { gap: 0; }
   #topbar-context-title { padding-left: 2px; font-size: 18px; }
   /* Profil yazısı çerçeveden biraz ayrık, okunur */
@@ -2294,26 +2294,26 @@ body.hubset-open #group-pick-modal { z-index: var(--z-hubset-group-pick); }
 html, body { max-width: 100%; overflow-x: hidden; }
 @media (max-width: 950px) and (max-height: 500px) and (orientation: landscape) {
   :root { --topbar-h: 44px; --rail-w: 62px; }
-  .topbar { min-height: var(--topbar-h) !important; padding-top: 2px !important; padding-bottom: 2px !important; padding-left: calc(14px + env(safe-area-inset-left)) !important; padding-right: calc(10px + env(safe-area-inset-right)); }
+  .topbar { min-height: var(--topbar-h); padding-top: 2px; padding-bottom: 2px; padding-left: calc(14px + env(safe-area-inset-left)); padding-right: calc(10px + env(safe-area-inset-right)); }
   #topbar-context-title { font-size: 16px; }
   .app-rail {
-    width: 50px; gap: 4px !important; padding: 8px 0; border-radius: 24px;
-    top: calc(env(safe-area-inset-top) + var(--topbar-h) + 4px) !important; bottom: calc(4px + env(safe-area-inset-bottom));
+    width: 50px; gap: 4px; padding: 8px 0; border-radius: 24px;
+    top: calc(env(safe-area-inset-top) + var(--topbar-h) + 4px); bottom: calc(4px + env(safe-area-inset-bottom));
     overflow-y: auto; overflow-x: hidden; scrollbar-width: none;
   }
   .app-rail::-webkit-scrollbar { display: none; }
-  .app-rail .rail-btn, .app-rail .rail-avatar { width: 38px !important; height: 38px !important; flex: none; }
+  .app-rail .rail-btn, .app-rail .rail-avatar { width: 38px; height: 38px; flex: none; }
   .app-rail [data-lbl]::after { display: none; }
   .app-rail .rail-spacer { flex: 1 0 4px; }
   body:not([data-view="hub-detail"]):not([data-view="discover"]) .chat-area { margin-left: calc(var(--rail-w) + env(safe-area-inset-left)); }
-  .lobby-nav { top: calc(4px + env(safe-area-inset-top)) !important; bottom: calc(4px + env(safe-area-inset-bottom)) !important; width: min(320px, calc(100vw - var(--rail-w) - 20px)) !important; }
+  .lobby-nav { top: calc(4px + env(safe-area-inset-top)); bottom: calc(4px + env(safe-area-inset-bottom)); width: min(320px, calc(100vw - var(--rail-w) - 20px)); }
 }
 @media (max-width: 950px) and (max-height: 500px) and (orientation: landscape) {
   /* Lobi içinde: geri düğmesi yalnızca ok (yazı lobi adının üstüne binmesin); ikinci satır ince */
   body[data-view="hub-detail"] .hub-back-btn [data-i18n="back-to-hubs"] { display: none; }
   body[data-view="hub-detail"] .topbar-left .hub-back-btn { width: 36px; min-width: 36px; height: 36px; padding: 0; justify-content: center; }
   body[data-view="hub-detail"] .topbar-left { gap: 8px; }
-  body[data-view="hub-detail"] .hub-detail-header { padding-top: 0 !important; padding-bottom: 0 !important; min-height: 0; }
+  body[data-view="hub-detail"] .hub-detail-header { padding-top: 0; padding-bottom: 0; min-height: 0; }
   body[data-view="hub-detail"] .hub-detail-header .hub-icon-btn { height: 34px; }
   body[data-view="hub-detail"] .hub-detail-header [data-lbl]::after { display: none; }
 }
@@ -2350,7 +2350,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 /* Ekranda görünmeyen mesajların tüm efektleri (balon, çerçeve, isim efekti) duraklatılır */
 .msg-offscreen, .msg-offscreen *, .msg-offscreen::before, .msg-offscreen::after,
-.msg-offscreen *::before, .msg-offscreen *::after { animation-play-state: paused !important; }
+.msg-offscreen *::before, .msg-offscreen *::after { animation-play-state: paused; }
 /* DM paneli zaten bulanık cam: içindeki her balonun ayrıca arka plan bulanıklaştırması (iPhone'da çok pahalı) kapalı */
 #dm-modal .dm-msg.bubble-glass { -webkit-backdrop-filter: none; backdrop-filter: none; background: linear-gradient(135deg, rgba(255,255,255,.13), rgba(255,255,255,.05)); }
 #dm-close-btn { touch-action: manipulation; }
@@ -2409,11 +2409,11 @@ body.in-group[data-view="hub-detail"] .topbar-lobby-badge { display: none !impor
 /* Telefon: yan paneller açıkken donma — panelin bulanıklığı (backdrop-filter) arkadaki hareketli mesaj efektlerini
    her karede yeniden bulanıklaştırıyordu. Panel opak, efektler panel açıkken duraklatılır. */
 @media (max-width: 900px) {
-  .hub-detail-side, .hub-voice-rooms-side { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: #121821 !important; bottom: 0; z-index: var(--z-side-panel-m); }
+  .hub-detail-side, .hub-voice-rooms-side { -webkit-backdrop-filter: none; backdrop-filter: none; background: #121821; bottom: 0; z-index: var(--z-side-panel-m); }
   body.theme-purple .hub-detail-side, body.theme-purple .hub-voice-rooms-side { background: #17122a !important; }
   .hub-detail-side.open, .hub-voice-rooms-side.open { z-index: var(--z-side-panel-m); } /* .open (z:65) karartma katmanının (69) altında kalıp dokunuşları engelliyordu */
   .hub-side-backdrop.open { cursor: pointer; z-index: var(--z-side-backdrop-m); -webkit-backdrop-filter: none; backdrop-filter: none; }
-  body.hub-side-open .hub-feed *, body.hub-side-open .hub-feed *::before, body.hub-side-open .hub-feed *::after { animation-play-state: paused !important; }
+  body.hub-side-open .hub-feed *, body.hub-side-open .hub-feed *::before, body.hub-side-open .hub-feed *::after { animation-play-state: paused; }
   .hub-side-close-btn { width: 36px; height: 36px; font-size: 16px; }
 }
 @media (max-width: 900px) {
@@ -2422,7 +2422,7 @@ body.in-group[data-view="hub-detail"] .topbar-lobby-badge { display: none !impor
 
 /* Mesaj yazma alanı: odaklanınca çıkan mavi dikdörtgen çerçeve yok (kutunun kendisi zaten yuvarlak) */
 #hub-message-input, #dm-message-input, #hub-message-input:focus, #dm-message-input:focus, #hub-message-input:focus-visible, #dm-message-input:focus-visible {
-  outline: none !important; box-shadow: none !important; border: 0 !important; border-radius: 0; background: transparent; -webkit-appearance: none; appearance: none;
+  outline: none; box-shadow: none; border: 0; border-radius: 0; background: transparent; -webkit-appearance: none; appearance: none;
 }
 
 /* ══ Masaüstü: küçültülmüş arama çubuğu — düzeni aşağı itmeyen, üstte ortalı küçük cam hap ══
@@ -2850,7 +2850,7 @@ body.st-open { overflow: hidden; }
 .mnav, .friends-directory { display: none; }
 @media (max-width: 720px) and (min-height: 501px) {
   :root { --rail-w: 0px; }
-  .app-rail { display: none !important; }
+  .app-rail { display: none; }
   .mnav {
     position: fixed; left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); height: 68px; z-index: var(--z-mobile-nav);
     display: flex; align-items: center; justify-content: space-between; gap: 2px; padding: 7px 8px; border-radius: 999px;
@@ -2866,11 +2866,11 @@ body.st-open { overflow: hidden; }
   .mnav-av { width: 38px; height: 38px; border-radius: 50%; background: var(--bg-surface-3) center / cover no-repeat; display: grid; place-items: center; font-weight: 700; font-size: 15px; color: var(--text-primary); box-shadow: 0 0 0 2px rgba(255,255,255,.25); }
   .mnav-dot { position: absolute; top: 9px; right: calc(50% - 20px); width: 10px; height: 10px; border-radius: 50%; background: #ff3b4e; box-shadow: 0 0 0 2px rgba(18, 26, 42, .9); }
   /* çekmece (Gruplar / Mesajlar / Arkadaşlar) pillin üstünde biter */
-  .lobby-nav { bottom: calc(86px + env(safe-area-inset-bottom)) !important; }
+  .lobby-nav { bottom: calc(86px + env(safe-area-inset-bottom)); }
   body:not([data-view="hub-detail"]):not([data-view="discover"]) .chat-area { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
-  #hub-list-view { padding-bottom: calc(100px + env(safe-area-inset-bottom)) !important; }
+  #hub-list-view { padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
   /* Arkadaşlar çekmecesi: yalnızca arkadaş listesi + arama (mesajlaşma paneli ve lobi listesi gizli) */
-  body.drawer-friendlist .lobby-nav-head, body.drawer-friendlist #lobby-nav-list, body.drawer-friendlist .lobby-nav .friends-sidebar, body.drawer-friendlist .lobby-nav .friends-groups { display: none !important; }
+  body.drawer-friendlist .lobby-nav-head, body.drawer-friendlist #lobby-nav-list, body.drawer-friendlist .lobby-nav .friends-sidebar, body.drawer-friendlist .lobby-nav .friends-groups { display: none; }
   body.drawer-friendlist .friends-directory { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 }
 .friends-directory { padding: 4px 4px 0; }
@@ -2914,10 +2914,10 @@ body.st-open { overflow: hidden; }
 /* ══ Masaüstü / tablet: sol ray da telefondaki yeni gezinmeyle aynı (#mnav dikey cam ray) ═════════════════════
    Gruplar · Keşfet · Ana Menü · Arkadaşlar (liste + arama) · Mesajlar · (altta) Profil. Eski .app-rail gizlenir; ızgaradaki ray sütunu aynen kalır. */
 .mnav-lbl { display: none; }
-body.drawer-friendlist .lobby-nav-head, body.drawer-friendlist #lobby-nav-list, body.drawer-friendlist .lobby-nav .friends-sidebar, body.drawer-friendlist .lobby-nav .friends-groups { display: none !important; }
+body.drawer-friendlist .lobby-nav-head, body.drawer-friendlist #lobby-nav-list, body.drawer-friendlist .lobby-nav .friends-sidebar, body.drawer-friendlist .lobby-nav .friends-groups { display: none; }
 body.drawer-friendlist .friends-directory { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 @media (min-width: 721px) and (min-height: 501px) {
-  .app-rail { display: none !important; }
+  .app-rail { display: none; }
   .mnav {
     position: fixed; z-index: var(--z-mobile-nav); left: 8px; top: 8px; bottom: 8px; width: 60px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 0; border-radius: 30px;
     background: var(--glass-2); -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.35); backdrop-filter: blur(var(--blur-2)) saturate(1.35);
@@ -2938,10 +2938,10 @@ body.drawer-friendlist .friends-directory { display: flex; flex-direction: colum
 @media (max-width: 720px) { .mnav-lbl { display: none; } }
 
 /* ══ Bildirimler: sağdan açılan yan pencere; liste yukarı/aşağı kaydırılır ══════════════════════════════════ */
-#notifications-modal { align-items: stretch !important; justify-content: flex-end !important; padding: 0 !important; }
+#notifications-modal { align-items: stretch; justify-content: flex-end; padding: 0; }
 #notifications-modal .modal-box {
-  width: min(400px, 100vw); max-width: 100vw; height: 100%; max-height: none; margin: 0; border: 0; border-radius: 22px 0 0 22px; background: #0e1319 !important;
-  -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+  width: min(400px, 100vw); max-width: 100vw; height: 100%; max-height: none; margin: 0; border: 0; border-radius: 22px 0 0 22px; background: #0e1319;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
   box-shadow: -18px 0 50px -16px rgba(0, 0, 0, .85), 0 0 0 1px var(--border-soft);
   padding-top: env(safe-area-inset-top, 0px); animation: notifSlideIn .26s cubic-bezier(.22, .8, .3, 1);
 }
@@ -3035,10 +3035,10 @@ body.drawer-friendlist .friends-directory { display: flex; flex-direction: colum
 @supports (-webkit-touch-callout: none) {
   .modal-box, .profile-modal-box, .dm-modal-box, .liquid-glass, .lobby-nav, .mnav, .dm-incoming-call-modal, .app-rail, .friends-sidebar,
   .hub-composer, .topbar, .composer-attach-menu, .msg-actions-menu, .hub-member-menu {
-    -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+    -webkit-backdrop-filter: none; backdrop-filter: none;
   }
-  .dm-modal-box, .profile-modal-box { background: #0f131a !important; }
-  .lobby-nav, .mnav, .app-rail { background-color: #121a26 !important; }
+  .dm-modal-box, .profile-modal-box { background: #0f131a; }
+  .lobby-nav, .mnav, .app-rail { background-color: #121a26; }
   .modal-overlay { background: rgba(0, 0, 0, .66); }
 }
 
@@ -3118,7 +3118,7 @@ body.drawer-friendlist .friends-directory { display: flex; flex-direction: colum
 
 /* Ekran paylaşımı izlenirken arka plandaki sürekli animasyonlar duraklatılır (izleyicide kare düşmesi/donma). */
 /* Ayrıca pencere arka plandayken (ör. masaüstü uygulaması oyunun yanında açık) aynı süs animasyonları durur. */
-body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.watching-share .hub-feed *::after, body.watching-share #hub-member-list *, body.watching-share #hub-member-list *::before, body.watching-share #hub-member-list *::after, body.watching-share .pfxc, body.watching-share .pfxc::before, body.watching-share .pfxc::after, body.watching-share .pfxc *, body.app-unfocused .hub-feed *, body.app-unfocused .hub-feed *::before, body.app-unfocused .hub-feed *::after, body.app-unfocused #hub-member-list *, body.app-unfocused #hub-member-list *::before, body.app-unfocused #hub-member-list *::after, body.app-unfocused .pfxc, body.app-unfocused .pfxc::before, body.app-unfocused .pfxc::after, body.app-unfocused .pfxc * { animation-play-state: paused !important; }
+body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.watching-share .hub-feed *::after, body.watching-share #hub-member-list *, body.watching-share #hub-member-list *::before, body.watching-share #hub-member-list *::after, body.watching-share .pfxc, body.watching-share .pfxc::before, body.watching-share .pfxc::after, body.watching-share .pfxc *, body.app-unfocused .hub-feed *, body.app-unfocused .hub-feed *::before, body.app-unfocused .hub-feed *::after, body.app-unfocused #hub-member-list *, body.app-unfocused #hub-member-list *::before, body.app-unfocused #hub-member-list *::after, body.app-unfocused .pfxc, body.app-unfocused .pfxc::before, body.app-unfocused .pfxc::after, body.app-unfocused .pfxc * { animation-play-state: paused; }
 
 /* Bildirimler (eski alert kutuları dahil): satır sonları korunur, dokununca kapanır. */
 .toast { pointer-events: auto; cursor: pointer; white-space: pre-line; max-width: min(520px, 92vw); background: rgba(18, 24, 32, 0.96); box-shadow: 0 0 0 1px var(--border-soft-strong), 0 10px 30px rgba(0, 0, 0, 0.55); }
@@ -3137,5 +3137,5 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
 /* Hareketi azalt tercihi açıksa: tek tek kapatılmamış sürekli (sonsuz) animasyonlar da bir tur oynayıp durur.
    Yükleniyor göstergesi (giriş düğmesi) bilerek hariç: durursa uygulama donmuş sanılır. */
 @media (prefers-reduced-motion: reduce) {
-  *:not(.btn-spinner), *:not(.btn-spinner)::before, *:not(.btn-spinner)::after { animation-iteration-count: 1 !important; }
+  *:not(.btn-spinner), *:not(.btn-spinner)::before, *:not(.btn-spinner)::after { animation-iteration-count: 1; }
 }
