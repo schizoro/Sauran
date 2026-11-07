@@ -23,7 +23,7 @@ const USER_AGENT = 'Mozilla/5.0 (compatible; SauranBot/1.0; +https://sauran.onli
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 function allowPrivate() {
-  return process.env.LINK_PREVIEW_ALLOW_PRIVATE === '1' && process.env.NODE_ENV !== 'production';
+  return process.env.LINK_PREVIEW_ALLOW_PRIVATE === '1' && process.env.NODE_ENV !== 'production' && process.env.RENDER !== 'true';
 }
 
 function ipv4ToInt(ip) {
@@ -41,18 +41,48 @@ const BLOCKED_V4 = [
   ['203.0.113.0', 24], ['224.0.0.0', 4], ['240.0.0.0', 4]
 ];
 
+// IPv6 adresini 8 adet 16 bitlik sayıya açar (sonda noktalı IPv4 yazımı da desteklenir). Geçersizse null.
+function expandIPv6(ip) {
+  let s = ip.toLowerCase().split('%')[0];
+  const v4 = s.match(/(\d+\.\d+\.\d+\.\d+)$/);
+  if (v4) {
+    if (!net.isIPv4(v4[1])) return null;
+    const n = ipv4ToInt(v4[1]);
+    s = s.slice(0, -v4[1].length) + ((n >>> 16).toString(16)) + ':' + ((n & 0xffff).toString(16));
+  }
+  const halves = s.split('::');
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(':') : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
+  const fill = halves.length === 2 ? 8 - head.length - tail.length : 0;
+  if (fill < 0 || (halves.length === 1 && head.length !== 8)) return null;
+  const parts = [...head, ...Array(fill).fill('0'), ...tail].map((h) => parseInt(h, 16));
+  return parts.length === 8 && parts.every((p) => p >= 0 && p <= 0xffff) ? parts : null;
+}
+
+const v4FromHextets = (a, b) => `${a >>> 8}.${a & 255}.${b >>> 8}.${b & 255}`;
+
 function isBlockedIp(ip) {
   if (net.isIPv4(ip)) return BLOCKED_V4.some(([base, bits]) => inCidr4(ip, base, bits));
   if (net.isIPv6(ip)) {
     const lower = ip.toLowerCase();
-    const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    if (mapped) return isBlockedIp(mapped[1]);
-    if (lower === '::' || lower === '::1') return true;
-    if (/^f[cd]/.test(lower)) return true;          // fc00::/7 benzersiz yerel
-    if (/^fe[89ab]/.test(lower)) return true;       // fe80::/10 bağlantı yerel
-    if (/^ff/.test(lower)) return true;             // çok noktaya yayın
-    if (/^2001:db8:/.test(lower)) return true;      // belgeleme
-    if (/^64:ff9b:/.test(lower)) return true;       // NAT64 (içerdeki v4'e gidebilir)
+    const h = expandIPv6(lower);
+    if (!h) return true;
+    // İçine IPv4 gömülü biçimler, gömülü adrese göre değerlendirilir. URL ayrıştırıcısı "[::ffff:127.0.0.1]" yazımını
+    // "[::ffff:7f00:1]" biçimine çevirir; yalnızca noktalı yazım kontrol edilirse iç ağ korumasının etrafından dolaşılır.
+    const zero = (from, to) => h.slice(from, to).every((x) => x === 0);
+    if (zero(0, 5) && (h[5] === 0xffff || (h[5] === 0 && (h[6] || h[7] > 1)))) return isBlockedIp(v4FromHextets(h[6], h[7])); // ::ffff:a.b.c.d, ::a.b.c.d
+    if (zero(0, 4) && h[4] === 0xffff && h[5] === 0) return isBlockedIp(v4FromHextets(h[6], h[7])); // ::ffff:0:a.b.c.d (SIIT)
+    if (h[0] === 0x2002) return isBlockedIp(v4FromHextets(h[1], h[2])); // 6to4
+    if (h[0] === 0x2001 && h[1] === 0) return true; // Teredo
+    if (zero(0, 7) && h[7] <= 1) return true; // :: ve ::1
+    if ((h[0] & 0xfe00) === 0xfc00) return true;          // fc00::/7 benzersiz yerel
+    if ((h[0] & 0xffc0) === 0xfe80) return true;          // fe80::/10 bağlantı yerel
+    if ((h[0] & 0xffc0) === 0xfec0) return true;          // fec0::/10 eski site yerel
+    if (h[0] === 0x0100 && zero(1, 4)) return true;        // 100::/64 atma
+    if ((h[0] & 0xff00) === 0xff00) return true;          // çok noktaya yayın
+    if (h[0] === 0x2001 && h[1] === 0x0db8) return true;  // belgeleme
+    if (h[0] === 0x0064 && h[1] === 0xff9b) return true;  // NAT64 (içerdeki v4'e gidebilir)
     return false;
   }
   return true;
@@ -75,7 +105,8 @@ function checkUrl(raw) {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
   if (url.username || url.password) return null;
   if (url.port && !['80', '443'].includes(url.port) && !allowPrivate()) return null;
-  const host = url.hostname.replace(/^\[|\]$/g, '');
+  // IP yazılmış adreslerde bağlantı DNS'e (safeLookup) hiç uğramaz: buradaki kontrol tek korumadır.
+  const host = url.hostname.replace(/^\[|\]$/g, '').replace(/\.$/, '');
   if (net.isIP(host) && isBlockedIp(host) && !allowPrivate()) return null;
   if (/^(localhost|.*\.local|.*\.internal|.*\.localhost)$/i.test(host) && !allowPrivate()) return null;
   url.hash = '';
@@ -85,6 +116,10 @@ function checkUrl(raw) {
 // Tek istek; gövdeyi en fazla maxBytes okur. Yönlendirmede { redirect } döner.
 function requestOnce(url, { maxBytes, accept }) {
   return new Promise((resolve, reject) => {
+    // timeout yalnızca boşta kalma süresidir; damla damla veri gönderen sunucu isteği sonsuza dek açık tutmasın diye toplam süre sınırı.
+    const deadline = setTimeout(() => req.destroy(new Error('deadline')), TIMEOUT_MS * 2);
+    const finish = (fn) => (v) => { clearTimeout(deadline); fn(v); };
+    resolve = finish(resolve); reject = finish(reject);
     const lib = url.protocol === 'https:' ? https : http;
     const req = lib.request(url, {
       method: 'GET',
