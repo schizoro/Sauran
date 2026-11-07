@@ -4810,6 +4810,76 @@ function renderActivityControls() {
     toggle.checked = currentUser.show_activity !== false;
 }
 
+// Masaüstü uygulaması güncellemesi: yeni sürüm yayınlandıysa sağ altta "Güncelleme mevcut" çubuğu ve "Güncelle" butonu.
+// Güncelleme yoksa (ya da eski masaüstü sürümü bu arayüzü bilmiyorsa / tarayıcıdaysa) hiçbir şey gösterilmez.
+const DESKTOP_DOWNLOAD_URL = 'https://github.com/schizoro/Sauran/releases/latest';
+
+// 1.0.2 öncesi masaüstü sürümleri kendini güncelleyemez: bir kez elle yeniden kurmaları için "İndir" çubuğu.
+// Bağlantı dış adres olduğundan masaüstü uygulaması onu varsayılan tarayıcıda açar.
+function showLegacyDesktopBar() {
+    const bar = document.createElement('div');
+    bar.className = 'desktop-update-bar';
+    bar.setAttribute('role', 'status');
+    bar.innerHTML = '<div class="dub-text"><strong class="dub-title">Yeni masaüstü sürümü var</strong>'
+        + '<span class="dub-sub">Ses çıkışı düzeltmesi ve otomatik güncelleme için bir kez yeniden kurman gerekiyor.</span></div>'
+        + '<a class="dub-btn" target="_blank" rel="noopener">İndir</a><button type="button" class="dub-close" aria-label="Kapat">×</button>';
+    bar.querySelector('.dub-btn').href = DESKTOP_DOWNLOAD_URL;
+    bar.querySelector('.dub-close').addEventListener('click', () => bar.remove());
+    document.body.appendChild(bar);
+}
+
+function initDesktopUpdateBar() {
+    const desk = window.sauranDesktop;
+    if (!desk?.isDesktop) return;
+    if (typeof desk.onUpdate !== 'function') { showLegacyDesktopBar(); return; }
+    let bar = null;
+    let dismissedVersion = null;
+    let current = null;
+    const render = (status) => {
+        current = status;
+        const state = status?.state;
+        if (!state || state === 'none' || (state === 'available' && status.version === dismissedVersion)) {
+            if (bar) { bar.remove(); bar = null; }
+            return;
+        }
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.className = 'desktop-update-bar';
+            bar.setAttribute('role', 'status');
+            bar.innerHTML = '<div class="dub-text"><strong class="dub-title"></strong><span class="dub-sub"></span></div>'
+                + '<button type="button" class="dub-btn"></button><button type="button" class="dub-close" aria-label="Kapat">×</button>';
+            bar.querySelector('.dub-btn').addEventListener('click', () => desk.downloadUpdate());
+            bar.querySelector('.dub-close').addEventListener('click', () => { dismissedVersion = current?.version; bar.remove(); bar = null; });
+            document.body.appendChild(bar);
+        }
+        const title = bar.querySelector('.dub-title');
+        const sub = bar.querySelector('.dub-sub');
+        const btn = bar.querySelector('.dub-btn');
+        const close = bar.querySelector('.dub-close');
+        const version = status.version ? ' (' + status.version + ')' : '';
+        close.hidden = state !== 'available' && state !== 'error';
+        btn.hidden = state !== 'available' && state !== 'error';
+        if (state === 'available') {
+            title.textContent = 'Güncelleme mevcut' + version;
+            sub.textContent = 'Sauran masaüstü uygulamasının yeni sürümü hazır.';
+            btn.textContent = 'Güncelle';
+        } else if (state === 'downloading') {
+            title.textContent = 'Güncelleme indiriliyor' + version;
+            sub.textContent = '%' + (Number(status.percent) || 0);
+        } else if (state === 'ready') {
+            title.textContent = 'Güncelleme kuruluyor…';
+            sub.textContent = 'Sauran birkaç saniye içinde yeniden açılacak.';
+        } else if (state === 'error') {
+            title.textContent = 'Güncelleme indirilemedi';
+            sub.textContent = 'İnternet bağlantını kontrol edip tekrar dene.';
+            btn.textContent = 'Tekrar dene';
+        }
+    };
+    desk.onUpdate(render);
+    desk.getUpdate?.().then(render).catch(() => {});
+}
+initDesktopUpdateBar();
+
 // Sauran Windows uygulaması (window.sauranDesktop): kullanıcı açık rıza verirse çalışan tanınmış oyunu algılar.
 // Oyun adı otomatik yazılır (auto=true → sunucu kalp atışı kesilirse 20 dk sonra gizler), oyun kapanınca temizlenir.
 let autoGameCleanup = null;

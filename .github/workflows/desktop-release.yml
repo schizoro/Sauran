@@ -1,0 +1,48 @@
+# Sauran Windows masaüstü uygulamasını derleyip GitHub Releases'e yayınlar.
+# Yüklü uygulamalar (electron-updater) bu sürümleri görür ve "Güncelleme mevcut → Güncelle" çubuğunu gösterir.
+#
+# Yeni sürüm çıkarmak:
+#   1) desktop/package.json içindeki "version"ı artır (ör. 1.0.2) ve commit'le.
+#   2) Aynı sürümle etiket it:  git tag v1.0.2 && git push origin v1.0.2
+# Etiket package.json sürümüyle aynı olmalı (v + sürüm); değilse iş durur.
+#
+# Not: Yalnızca masaüstü kabuğu (desktop/ klasörü) değişince gerekir. Web arayüzü (client/, server/) değişiklikleri
+# Render deploy'u ile tüm kullanıcılara zaten ulaşır; masaüstü uygulaması siteyi canlı yükler.
+name: Desktop release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Etiket ve sürüm aynı mı?
+        shell: bash
+        run: |
+          v=$(node -p "require('./package.json').version")
+          if [ "v$v" != "$GITHUB_REF_NAME" ]; then echo "Etiket $GITHUB_REF_NAME, package.json v$v — eşleşmiyor"; exit 1; fi
+
+      - run: npm ci
+
+      - run: npm test
+
+      - name: Derle ve yayınla
+        run: npx electron-builder --win nsis --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -4,9 +4,10 @@ const { app, BrowserWindow, ipcMain, shell, session, desktopCapturer } = require
 const { execFile } = require('child_process');
 const path = require('path');
 const { detectGame, parseTasklist } = require('./games');
+const { autoUpdater } = require('electron-updater');
 
 const APP_URL = process.env.SAURAN_URL || 'https://sauran.online';
-const APP_HOST = new URL(APP_URL).host;
+const APP_ORIGIN = new URL(APP_URL).origin;
 const POLL_MS = 15000;
 
 let win = null;
@@ -14,7 +15,7 @@ let pollTimer = null;
 let lastGame = null;
 
 function isAppOrigin(url) {
-    try { return new URL(url).host === APP_HOST; } catch (_) { return false; }
+    try { return new URL(url).origin === APP_ORIGIN; } catch (_) { return false; }
 }
 
 function scanGame() {
@@ -82,6 +83,43 @@ async function pickShareSource() {
     });
 }
 
+// Otomatik güncelleme (GitHub Releases, electron-updater). Yeni sürüm varsa web arayüzü "Güncelleme mevcut" çubuğunu
+// gösterir; indirme yalnızca kullanıcı "Güncelle"ye basınca başlar, bitince uygulama kapanıp yeni sürümle yeniden açılır.
+// Durum: { state: 'none'|'available'|'downloading'|'ready'|'error', version?, percent?, message? }
+const UPDATE_CHECK_MS = 6 * 60 * 60 * 1000;
+let updateStatus = { state: 'none' };
+let updateDownloading = false;
+
+function setUpdateStatus(next) {
+    updateStatus = next;
+    if (win && !win.isDestroyed()) win.webContents.send('sauran:update', updateStatus);
+}
+
+function initAutoUpdate() {
+    if (!app.isPackaged) return; // geliştirme (npm start): güncelleme kanalı yok
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = false;
+    // İndirme/kurulum sürerken geç gelen kontrol sonuçları durumu geri almasın.
+    const busy = () => updateDownloading || updateStatus.state === 'ready';
+    autoUpdater.on('update-available', (info) => { if (!busy()) setUpdateStatus({ state: 'available', version: info.version }); });
+    autoUpdater.on('update-not-available', () => { if (!busy()) setUpdateStatus({ state: 'none' }); });
+    autoUpdater.on('download-progress', (p) => setUpdateStatus({ state: 'downloading', version: updateStatus.version, percent: Math.round(p.percent || 0) }));
+    autoUpdater.on('update-downloaded', (info) => {
+        setUpdateStatus({ state: 'ready', version: info.version });
+        updateDownloading = false;
+        // Sessiz kur (oneClick NSIS) ve yeni sürümü otomatik aç. Kurulum başlamazsa (ör. antivirüs engeli) 20 sn sonra
+        // çubuk "indirilemedi / Tekrar dene" durumuna döner; takılı kalmaz.
+        setTimeout(() => { try { autoUpdater.quitAndInstall(true, true); } catch (_) { /* aşağıdaki zaman aşımı ele alır */ } }, 800);
+        setTimeout(() => { if (updateStatus.state === 'ready') setUpdateStatus({ state: 'error', version: info.version, message: 'Kurulum başlatılamadı.' }); }, 20000);
+    });
+    // Arka plan kontrol hataları (ağ yok, henüz sürüm yayınlanmamış vb.) kullanıcıya gösterilmez; indirme hatası
+    // downloadUpdate() çağrısının kendisinden yakalanır (aşağıda), böylece kontrol hatası indirme hatası sanılmaz.
+    autoUpdater.on('error', () => {});
+    const check = () => { if (!updateDownloading) autoUpdater.checkForUpdates().catch(() => {}); };
+    check();
+    setInterval(check, UPDATE_CHECK_MS);
+}
+
 function createWindow() {
     win = new BrowserWindow({
         width: 1280,
@@ -128,8 +166,25 @@ app.whenReady().then(() => {
 
     ipcMain.handle('sauran:set-detection', (event, enabled) => { setDetection(Boolean(enabled)); return true; });
     ipcMain.handle('sauran:get-game', () => lastGame);
+    ipcMain.handle('sauran:get-version', () => app.getVersion());
+    ipcMain.handle('sauran:get-update', () => updateStatus);
+    ipcMain.handle('sauran:download-update', async (event) => {
+        if (!isAppOrigin(event.senderFrame?.url || event.sender.getURL())) return false;
+        if (updateDownloading || !['available', 'error'].includes(updateStatus.state)) return false;
+        updateDownloading = true;
+        setUpdateStatus({ state: 'downloading', version: updateStatus.version, percent: 0 });
+        try {
+            await autoUpdater.downloadUpdate();
+        } catch (error) {
+            updateDownloading = false;
+            setUpdateStatus({ state: 'error', version: updateStatus.version, message: String(error && error.message || error).slice(0, 200) });
+            return false;
+        }
+        return true;
+    });
 
     createWindow();
+    initAutoUpdate();
 });
 
 const gotLock = app.requestSingleInstanceLock();

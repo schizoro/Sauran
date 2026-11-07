@@ -11,5 +11,14 @@ contextBridge.exposeInMainWorld('sauranDesktop', {
         const handler = (_event, game) => callback(game);
         ipcRenderer.on('sauran:game', handler);
         return () => ipcRenderer.removeListener('sauran:game', handler);
+    },
+    // Uygulama sürümü ve otomatik güncelleme: durum değişince callback({ state, version, percent, message }) çağrılır.
+    getVersion: () => ipcRenderer.invoke('sauran:get-version'),
+    getUpdate: () => ipcRenderer.invoke('sauran:get-update'),
+    downloadUpdate: () => ipcRenderer.invoke('sauran:download-update'),
+    onUpdate: (callback) => {
+        const handler = (_event, status) => callback(status);
+        ipcRenderer.on('sauran:update', handler);
+        return () => ipcRenderer.removeListener('sauran:update', handler);
     }
 });
