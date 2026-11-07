@@ -1,19 +1,4 @@
 /* ─── v1.17: Tema Değişkenleri ────────────────────────────────────────────── */
-:root {
-  --bg-app: #0a0d11;
-  --bg-surface: #151822;
-  --bg-surface-2: #1a1e2a;
-  --bg-surface-3: #1f2430;
-  --border-soft: rgba(255, 255, 255, 0.09);
-  --border-soft-strong: rgba(255, 255, 255, 0.16);
-  --text-primary: #eef0f3;
-  --text-secondary: #9aa0ac;
-  --text-tertiary: #6b7280;
-  --accent: #5cc8ff;
-  --accent-soft: rgba(92, 200, 255, 0.12);
-  --shadow-surface: 0 2px 10px rgba(0, 0, 0, 0.25);
-  --glass-bg: rgba(255, 255, 255, 0.06);
-}
 
 body.theme-purple {
   --bg-app: #130a22;
@@ -32,7 +17,6 @@ body.theme-purple {
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; -webkit-tap-highlight-color: transparent; }
-html, body { overflow-x: hidden; max-width: 100%; }
 body { background-color: var(--bg-app); color: var(--text-secondary); height: 100vh; height: 100dvh; display: flex; transition: background-color 0.2s, color 0.2s; }
 img, iframe { max-width: 100%; }
 
@@ -122,7 +106,6 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
   border: 1px solid var(--border-soft); box-shadow: var(--shadow-surface); text-align: center; width: 350px; max-width: 92vw;
   animation: login-box-mount 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-.login-box h2 { color: #fff; margin-bottom: 25px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; font-size: 20px; }
 .title-char {
   display: inline-block; opacity: 0; transform: translateY(16px) scale(0.85);
   animation: title-char-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -154,7 +137,6 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 
 @media (prefers-reduced-motion: reduce) {
   .login-box { animation: none; }
-  .login-particles { display: none; }
   #login-btn.is-loading .btn-spinner { animation: none; }
   #login-btn.is-success .btn-success { animation: none; }
 }
@@ -325,8 +307,6 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
     border-right: none; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 12px;
     scrollbar-width: none;
   }
-  .settings-tabs::-webkit-scrollbar { display: none; }
-  .settings-tab-btn { border-radius: 999px; white-space: nowrap; }
 }
 .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.09); color: #5cc8ff; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
 .modal-header button:not([class]) {
@@ -335,7 +315,6 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
   border: 1px solid rgba(255, 255, 255, 0.1); color: #8e9297; font-size: 13px; cursor: pointer; line-height: 1; padding: 0; transition: 0.2s;
 }
 .modal-header button:not([class]):hover { color: #5cc8ff; border-color: rgba(92, 200, 255, 0.4); }
-#users-list { list-style: none; overflow-y: auto; padding: 10px 0; }
 #users-list li { padding: 9px 16px; color: #c5c6c7; font-size: 14px; display: flex; align-items: center; gap: 8px; }
 #users-list li::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #57f287; flex-shrink: 0; }
 #users-list li.me { color: #5cc8ff; font-weight: bold; }
@@ -347,8 +326,6 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 .profile-username { color: #c5c6c7; font-size: 13px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .profile-avatar-wrap { position: relative; display: inline-flex; flex-shrink: 0; }
-.profile-avatar-wrap-sm { width: 30px; height: 30px; }
-.profile-avatar-wrap-sm .profile-avatar { width: 30px; height: 30px; font-size: 13px; }
 .profile-avatar-wrap-sm .profile-avatar-img { width: 30px; height: 30px; max-width: 30px; max-height: 30px; position: absolute; inset: 0; }
 
 /* ─── v1.9: Durum Altıgenleri (Aktif / Takılıyor / Meşgul / Gizli) ───────── */
@@ -364,7 +341,6 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 .status-idle { background: #ffd93d; box-shadow: 0 0 6px rgba(255, 217, 61, 0.8); }
 .status-busy { background: #ff2e46; box-shadow: 0 0 6px rgba(255, 46, 70, 0.8); }
 .status-invisible { background: #6b7280; }
-.status-offline { background: #4b5563; box-shadow: none; }
 
 .profile-about-section { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 14px; text-align: left; }
 .profile-about-text { margin: 0; font-size: 13px; line-height: 1.5; color: #c5c6c7; white-space: pre-wrap; word-break: break-word; }
@@ -470,7 +446,6 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 .liquid-modal-hero p { color: #8e9297; font-size: 12px; line-height: 1.5; max-width: 260px; }
 
 /* Fotoğraf kırpma penceresi */
-.cropper-overlay { z-index: var(--z-cropper); }
 .cropper-box { width: 360px; max-width: 92vw; max-height: 92vh; padding-bottom: 20px; align-items: stretch; }
 .cropper-hero { padding: 26px 24px 12px; }
 .cropper-stage-wrap { display: flex; justify-content: center; padding: 0 20px; }
@@ -484,7 +459,6 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 .cropper-btn { flex: 1; padding: 11px; border-radius: 999px; font-size: 12px; font-weight: bold; cursor: pointer; transition: 0.2s; }
 .cropper-btn-ghost { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); color: #c5c6c7; }
 .cropper-btn-ghost:hover { border-color: rgba(255, 255, 255, 0.3); }
-.cropper-btn-primary { background: #5cc8ff; border: none; color: #0a0d11; }
 .cropper-btn-primary:hover { box-shadow: 0 0 14px rgba(92, 200, 255, 0.4); transform: translateY(-1px); }
 
 /* Arkadaşını Hub'a Davet Et — liquid glass liste */
@@ -535,10 +509,8 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 .avatar-change-overlay.show { opacity: 1; }
 .avatar-change-overlay button { background: none; border: none; color: #5cc8ff; cursor: pointer; font-size: 15px; padding: 4px; }
 .avatar-change-overlay button:hover { color: #fff; }
-#avatar-remove-btn { color: #ff2e46; }
 #avatar-remove-btn:hover { color: #ff6b7d; }
 
-.profile-modal-box-minimal { width: 300px; }
 .username-view { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 12px; }
 .profile-modal-username { color: #fff; font-size: 17px; letter-spacing: 1px; }
 .username-edit-btn { padding: 5px 12px; border-radius: 999px; color: #8e9297; cursor: pointer; font-size: 11px; font-weight: bold; }
@@ -618,9 +590,7 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
   padding: 7px 16px; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; border-radius: 999px; transition: 0.2s;
   backdrop-filter: blur(10px) saturate(160%); -webkit-backdrop-filter: blur(10px) saturate(160%);
 }
-.about-btn-ghost { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.12); color: #8e9297; }
 .about-btn-ghost:hover { border-color: rgba(255, 255, 255, 0.3); color: #c5c6c7; }
-.about-btn-primary { background: rgba(92, 200, 255, 0.08); border: 1px solid rgba(92, 200, 255, 0.35); color: #5cc8ff; }
 .about-btn-primary:hover { background: rgba(92, 200, 255, 0.22); box-shadow: 0 0 10px rgba(92, 200, 255, 0.3); }
 
 /* border yerine inset box-shadow kullanılıyor: clip-path (kesik köşeler) ile
@@ -673,7 +643,6 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
   border-left: 1px solid rgba(255, 255, 255, 0.08); border-radius: 0;
   transform: translateX(0); transition: transform 0.25s ease; z-index: 40;
 }
-.friends-sidebar:not(.open) { transform: translateX(100%); }
 .friends-sidebar-title { color: #fff; font-size: 12px; font-weight: bold; letter-spacing: 1.5px; text-transform: uppercase; }
 .friends-sidebar-list { display: flex; flex-direction: column; gap: 6px; }
 
@@ -710,11 +679,7 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 }
 .friends-sidebar-toggle-btn:hover { color: #5cc8ff; }
 .friends-sidebar-toggle-arrow { display: inline-block; font-size: 13px; transition: transform 0.25s ease; }
-.friends-sidebar-toggle-btn.open .friends-sidebar-toggle-arrow { transform: rotate(180deg); }
 
-@media (max-width: 768px) {
-  .friends-sidebar.open { transform: translateX(0); }
-}
 .hub-create-btn-big { width: 88px; height: 88px; border-radius: 50%; background: transparent; border: 2px solid #5cc8ff; color: #5cc8ff; font-size: 40px; font-weight: 300; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
 .hub-create-btn-big:hover { background: #5cc8ff; color: #0a0d11; box-shadow: 0 0 24px rgba(92, 200, 255, 0.5); transform: scale(1.05); }
 
@@ -735,7 +700,6 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 .hub-card-meta { color: #6b7784; font-size: 11px; letter-spacing: 0.5px; }
 
 /* ─── v1.10: Hub Oluşturma — Basit Form ──────────────────────────────────── */
-.hub-create-image-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .hub-create-image-preview { width: 72px; height: 72px; border-radius: 12px; background-color: #111820; background-size: cover; background-position: center; border: 1px solid rgba(255,255,255,0.09); display: flex; align-items: center; justify-content: center; font-size: 28px; overflow: hidden; object-fit: cover; }
 .hub-create-image-preview img { width: 100%; height: 100%; object-fit: cover; }
 .hub-create-image-btn { padding: 6px 14px; background: transparent; border: 1px solid rgba(255,255,255,0.09); color: #8e9297; font-size: 11px; cursor: pointer; transition: 0.2s; }
@@ -795,12 +759,9 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 .feedback-empty { padding: 30px 16px; color: #4b5563; font-size: 12px; text-align: center; }
 
 /* ─── v1.10: Diğer ────────────────────────────────────────────────────────── */
-.forgot-link { color: #6b7280; font-size: 11px; text-decoration: underline; background: none; border: none; cursor: pointer; }
 .forgot-link:hover { color: #5cc8ff; }
 
 /* ─── v1.6: Hub Oluşturma Sihirbazı ───────────────────────────────────────── */
-.hub-create-box { width: 460px; max-width: 90vw; }
-.hub-create-body { padding: 22px 24px 26px; display: flex; flex-direction: column; gap: 16px; max-height: 70vh; overflow-y: auto; }
 .hub-create-title { color: #8e9297; font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; text-align: center; }
 
 .template-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -918,7 +879,6 @@ button.hub-members-toggle-btn {
 
 /* ─── 13A: Sesli oda presence (üye listesi, mikrofon, konuşan) ─────────────── */
 .hub-voice-room-side { align-self: stretch; display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; flex-shrink: 0; }
-.hub-voice-room-count { margin-top: auto; }
 .hub-voice-room-toggle {
   display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; padding: 3px 10px; border-radius: 999px; cursor: pointer;
   color: #c5c6c7; font-size: 10px; font-weight: bold; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14);
@@ -943,7 +903,6 @@ button.hub-members-toggle-btn {
 }
 .hub-voice-member-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .hub-voice-member-name { flex: 1; min-width: 0; color: #c5c6c7; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.voice-self-tag { color: #5cc8ff; font-style: normal; font-size: 0.9em; opacity: 0.8; }
 
 /* Mikrofon / hoparlör simgeleri: köşesiz, saydam liquid glass. Kapalıyken kırmızı çapraz çizgi,
    konuşurken mikrofon simgesinin çevresinde yeşil ışık. */
@@ -966,9 +925,7 @@ button.hub-members-toggle-btn {
   box-shadow: 0 0 0 2px rgba(87, 242, 135, 0.3), 0 0 14px rgba(87, 242, 135, 0.75);
 }
 .call-hub-room-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
-.call-hub-room-person.is-self .call-hub-room-avatar { border-color: rgba(92, 200, 255, 0.45); }
 .call-hub-room-person .voice-status { margin-top: 2px; }
-#call-mute-btn { padding: 8px 16px; background: transparent; border: 1px solid #57f287; color: #57f287; font-weight: bold; font-size: 12px; cursor: pointer; transition: 0.2s; }
 #call-mute-btn:hover { background: #57f287; color: #0a0d11; }
 #call-mute-btn.muted { border-color: #ff2e46; color: #ff2e46; }
 #call-mute-btn.muted:hover { background: #ff2e46; color: #0a0d11; }
@@ -1165,7 +1122,6 @@ button.hub-members-toggle-btn {
 }
 .hub-member-row:hover { border-color: rgba(92, 200, 255, 0.3); background: rgba(92, 200, 255, 0.06); }
 .hub-member-avatar-wrap { position: relative; flex-shrink: 0; }
-.hub-member-avatar-wrap .msg-avatar-btn { width: 28px; height: 28px; font-size: 11px; }
 .hub-member-dot { position: absolute; bottom: -1px; right: -1px; width: 9px; height: 9px; border-radius: 50%; background: #57f287; border: 2px solid #0e1319; flex-shrink: 0; }
 .hub-member-name { color: #c5c6c7; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .hub-member-name:hover { color: #5cc8ff; }
@@ -1186,13 +1142,8 @@ button.hub-members-toggle-btn {
 
 /* Hub Sohbet / Anket / Paylaşım Kartları */
 .hub-msg { align-self: flex-start; max-width: 78%; width: fit-content; position: relative; padding: 4px 10px; border-radius: 6px; transition: background 0.12s; display: flex; gap: 8px; align-items: flex-start; }
-.hub-msg.msg-mine { align-self: flex-end; flex-direction: row-reverse; }
-.hub-msg.msg-mine .header { flex-direction: row-reverse; }
-.hub-msg.msg-mine .hub-msg-body { text-align: right; }
-.hub-msg.msg-mine .hub-msg-actions { right: auto; left: 6px; }
 .hub-msg:hover { background: rgba(255,255,255,0.025); }
 .hub-msg .header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
-.hub-msg .username { color: #5cc8ff; font-weight: bold; font-size: 13px; }
 .hub-msg .time { color: #6b7784; font-size: 10px; opacity: 0.6; flex-shrink: 0; }
 .hub-msg .edited-tag { color: #4b5563; font-size: 10px; }
 .hub-msg-body { flex: 1; min-width: 0; }
@@ -1223,7 +1174,6 @@ button.hub-members-toggle-btn {
 .hub-msg-actions button:hover { color: #5cc8ff; background: rgba(92, 200, 255, 0.12); }
 
 /* ─── AŞAMA D: Mesaj Aksiyonları Menüsü (⋯) — liquid glass, kompakt ────────── */
-.msg-actions-bar { position: absolute; }
 .msg-actions-menu, .msg-reaction-picker {
   position: absolute; top: calc(100% + 6px); right: 0; z-index: 30;
   animation: dropdown-in 0.15s ease-out;
@@ -1328,7 +1278,6 @@ button.hub-members-toggle-btn {
 .hub-settings-panel .modal-header { border-bottom-color: rgba(255, 255, 255, 0.08); flex-shrink: 0; }
 .hub-settings-panel .hub-settings-body { flex: 1; min-height: 0; }
 #hub-settings-bans-section .hub-settings-action-btn { width: 100%; }
-.settings-blocked-list-tall { max-height: none; }
 #hub-settings-pick-view .settings-blocked-row, #hub-settings-bans-view .settings-blocked-row { align-items: center; }
 #hub-settings-pick-view .settings-blocked-avatar, #hub-settings-bans-view .settings-blocked-avatar { width: 36px; height: 36px; font-size: 14px; }
 #hub-settings-pick-view .settings-blocked-name, #hub-settings-bans-view .settings-blocked-name { font-size: 13px; font-weight: bold; }
@@ -1338,7 +1287,6 @@ button.hub-members-toggle-btn {
 }
 .hub-settings-back-btn:hover { color: #5cc8ff; border-color: rgba(92, 200, 255, 0.4); }
 
-.hub-settings-body { padding: 20px 22px 24px; display: flex; flex-direction: column; gap: 12px; }
 .hub-settings-divider { height: 1px; background: #131a22; margin: 8px 0; }
 .hub-settings-action-btn {
   padding: 10px 14px; text-align: left; font-size: 12px; font-weight: bold; letter-spacing: 0.3px; cursor: pointer;
@@ -1352,9 +1300,7 @@ button.hub-members-toggle-btn {
 .call-overlay { position: fixed; inset: 0; background: #0a0d11; z-index: var(--z-call); display: flex; flex-direction: column; }
 .call-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 25px; background: #111820; border-bottom: 1px solid #131a22; }
 .call-header span { color: #5cc8ff; font-weight: bold; letter-spacing: 0.5px; font-size: 14px; }
-#call-leave-btn { padding: 8px 18px; background: transparent; border: 1px solid #ff2e46; color: #ff2e46; font-weight: bold; font-size: 12px; cursor: pointer; transition: 0.2s; }
 #call-leave-btn:hover { background: #ff2e46; color: #0a0d11; }
-#call-screenshare-btn { padding: 8px 16px; background: transparent; border: 1px solid #5cc8ff; color: #5cc8ff; font-weight: bold; font-size: 12px; cursor: pointer; transition: 0.2s; }
 #call-screenshare-btn:hover { background: #5cc8ff; color: #0a0d11; }
 #call-screenshare-btn.active { background: #5cc8ff; color: #0a0d11; }
 #call-minimize-btn { width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%; background: transparent; border: 1px solid rgba(255,255,255,0.09); color: #8e9297; font-size: 12px; cursor: pointer; transition: 0.2s; }
@@ -1462,13 +1408,9 @@ body.call-mini-active { padding-top: 42px; }
 /* ─── v1.14: Gelen Arama Modalı ───────────────────────────────────────────── */
 .dm-incoming-call-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: var(--z-incoming-call); display: flex; align-items: center; justify-content: center; }
 .dm-incoming-call-box { background: #111820; border: 1px solid rgba(92, 200, 255, 0.35); box-shadow: 0 0 30px rgba(92, 200, 255, 0.15), 0 10px 40px rgba(0,0,0,0.6); padding: 32px 36px; display: flex; flex-direction: column; align-items: center; gap: 14px; min-width: 260px; }
-.dm-incoming-call-username { color: #fff; font-size: 16px; font-weight: bold; }
-.dm-incoming-call-sub { color: #8e9297; font-size: 12px; }
 .dm-incoming-call-actions { display: flex; gap: 10px; margin-top: 8px; }
 .dm-incoming-decline-btn, .dm-incoming-accept-btn { padding: 9px 20px; font-weight: bold; font-size: 12px; cursor: pointer; transition: 0.2s; background: transparent; }
-.dm-incoming-decline-btn { border: 1px solid #ff2e46; color: #ff2e46; }
 .dm-incoming-decline-btn:hover { background: #ff2e46; color: #0a0d11; }
-.dm-incoming-accept-btn { border: 1px solid #5cc8ff; color: #5cc8ff; }
 .dm-incoming-accept-btn:hover { background: #5cc8ff; color: #0a0d11; }
 
 /* ─── v1.14: Bildirim (Toast) ─────────────────────────────────────────────── */
@@ -1525,10 +1467,7 @@ body.call-mini-active { padding-top: 42px; }
 /* ─── v1.7: Çevrimiçi / Arkadaşlar Modalı ────────────────────────────────── */
 .users-modal-box { width: 300px; }
 .users-modal-subtitle { padding: 10px 16px 6px; color: #6b7784; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; }
-.friend-add-section { display: flex; gap: 8px; padding: 12px 16px 0; }
-.friend-add-section input { flex: 1; background: #0a0d11; border: 1px solid rgba(255,255,255,0.09); color: #c5c6c7; padding: 8px 10px; font-size: 12px; outline: none; }
 .friend-add-section input:focus { border-color: #5cc8ff; }
-.friend-add-section button { padding: 8px 12px; background: transparent; border: 1px solid #5cc8ff; color: #5cc8ff; font-size: 11px; font-weight: bold; cursor: pointer; transition: 0.2s; }
 .friend-add-section button:hover { background: #5cc8ff; color: #0a0d11; }
 .friend-add-error { padding: 0 16px; color: #ff2e46; font-size: 11px; min-height: 0; }
 .friend-add-error:not(:empty) { padding-top: 6px; }
@@ -1560,7 +1499,6 @@ body.call-mini-active { padding-top: 42px; }
 /* AŞAMA E: masaüstü/tarayıcı bildirim satırı — mobilde "Mobil bildirimleri"
    metnine geçer, sağında liquid glass açma/kapama anahtarı var. */
 .notif-pref-toggle-row { justify-content: space-between; }
-.notif-pref-toggle-text { flex: 1; }
 .notif-pref-mobile-text { display: none; }
 @media (max-width: 768px) {
   .notif-pref-desktop-text { display: none; }
@@ -1574,7 +1512,6 @@ body.call-mini-active { padding-top: 42px; }
   width: 16px; height: 16px; border-radius: 50%; background: #8e9297; transition: transform 0.2s, background-color 0.2s;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
-.notif-toggle input:checked ~ .notif-toggle-track .notif-toggle-thumb { transform: translateX(16px); background: #5cc8ff; box-shadow: 0 0 8px rgba(92, 200, 255, 0.6); }
 .settings-blocked-empty { color: #4b5563; font-size: 12px; text-align: center; padding: 8px 0; }
 .settings-blocked-row {
   display: flex; align-items: flex-start; gap: 8px; padding: 8px; border-radius: 10px;
@@ -1681,14 +1618,10 @@ body.call-mini-active { padding-top: 42px; }
 
   input, textarea, select { font-size: 16px !important; }
 
-  .modal-box { max-width: 92vw; }
-  .hub-create-box, .poll-create-box, .share-create-box, .users-modal-box, .feedback-modal-box, .hub-invite-friend-box { width: 92vw; max-width: 360px; }
   .dm-side-panel { width: 100vw; max-width: 100vw; }
-  .dm-modal-box { width: 100%; height: 100%; }
 
   /* Ekran paylaşımı mobil tarayıcılarda (özellikle iOS Safari) desteklenmiyor —
      çalışmayan bir butonu göstermek yerine sadece masaüstünde bırakıyoruz. */
-  #call-screenshare-btn { display: none; }
 
   /* AŞAMA D: mobilde "⋯" menüsü ekranın altından taşan bir dropdown yerine
      alttan açılan sabit bir sheet olsun — uzun mesaj listelerinde ekran dışına
@@ -1712,9 +1645,6 @@ body.call-mini-active { padding-top: 42px; }
   .topbar-menu-dropdown { right: 10px; min-width: 200px; }
 
   .hub-list-view { padding: 18px 14px; }
-  .hub-list-header { flex-wrap: wrap; gap: 10px; }
-  .hub-create-btn { padding: 8px 12px; font-size: 12px; }
-  .hub-list-grid { max-width: 100%; }
 
   .hub-detail-header { padding: 10px 12px; gap: 6px; flex-wrap: wrap; }
   .hub-title-pill { flex: 1 1 140px; min-width: 140px; padding: 7px 12px; }
@@ -1725,17 +1655,12 @@ body.call-mini-active { padding-top: 42px; }
 
   .hub-feed { padding: 14px 14px; }
   .hub-composer { padding: 12px 14px; }
-  #hub-chat-form, .composer-form { flex-wrap: nowrap; }
-  #hub-chat-form input, .composer-form input { min-width: 0; }
 
   .side-panel { width: 88vw; max-width: 320px; }
 
-  .profile-modal-box, .profile-modal-box-minimal { width: 88vw; max-width: 320px; }
 
   .call-header { padding: 10px 14px; gap: 8px; flex-wrap: wrap; }
-  #call-mute-btn, #call-screenshare-btn, #call-leave-btn { padding: 7px 12px; font-size: 11px; }
   .voice-icon-btn { width: 30px; height: 30px; }
-  .call-header span { font-size: 12px; }
 
 }
 
@@ -1820,7 +1745,6 @@ body.call-mini-active { padding-top: 42px; }
 .notification-official-tag { font-size: 10px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; color: #ffb066; margin-bottom: 4px; }
 @media (max-width: 480px) {
   .role-notice-actions { flex-direction: column-reverse; align-items: stretch; }
-  .role-notice-actions .dev-notice-btn { width: 100%; }
   .role-notice-later { align-self: center; }
   .role-revoked-row { flex-direction: column; gap: 2px; }
 }
@@ -1857,7 +1781,6 @@ body.call-mini-active { padding-top: 42px; }
 #ios-voice-hint-ok:hover { background: rgba(255, 196, 87, 0.26); }
 
 /* ─── Arkadaşlar düğmesi: okunmamış mesaj rozeti ─────────────────────────── */
-.friends-sidebar-toggle-btn { overflow: visible; }
 .friends-sidebar-toggle-badge {
   position: absolute; top: -8px; left: -10px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px;
   display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; line-height: 1;
