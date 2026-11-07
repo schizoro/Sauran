@@ -137,6 +137,7 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 
 @media (prefers-reduced-motion: reduce) {
   .login-box { animation: none; }
+  .login-particles { display: none; }
   #login-btn.is-loading .btn-spinner { animation: none; }
   #login-btn.is-success .btn-success { animation: none; }
 }
@@ -307,6 +308,7 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
     border-right: none; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 12px;
     scrollbar-width: none;
   }
+  .settings-tabs::-webkit-scrollbar { display: none; }
 }
 .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.09); color: #5cc8ff; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
 .modal-header button:not([class]) {
@@ -679,6 +681,9 @@ body.theme-purple .hub-voice-rooms-side { border-color: var(--border-soft); }
 }
 .friends-sidebar-toggle-btn:hover { color: #5cc8ff; }
 .friends-sidebar-toggle-arrow { display: inline-block; font-size: 13px; transition: transform 0.25s ease; }
+@media (max-width: 768px) {
+  .friends-sidebar.open { transform: translateX(0); }
+}
 
 .hub-create-btn-big { width: 88px; height: 88px; border-radius: 50%; background: transparent; border: 2px solid #5cc8ff; color: #5cc8ff; font-size: 40px; font-weight: 300; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
 .hub-create-btn-big:hover { background: #5cc8ff; color: #0a0d11; box-shadow: 0 0 24px rgba(92, 200, 255, 0.5); transform: scale(1.05); }
@@ -1619,6 +1624,7 @@ body.call-mini-active { padding-top: 42px; }
   input, textarea, select { font-size: 16px !important; }
 
   .dm-side-panel { width: 100vw; max-width: 100vw; }
+  #call-screenshare-btn { display: none !important; }
 
   /* Ekran paylaşımı mobil tarayıcılarda (özellikle iOS Safari) desteklenmiyor —
      çalışmayan bir butonu göstermek yerine sadece masaüstünde bırakıyoruz. */

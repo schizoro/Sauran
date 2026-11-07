@@ -4886,7 +4886,7 @@ initDesktopUpdateBar();
     let blurTimer = null;
     window.addEventListener('blur', () => {
         clearTimeout(blurTimer);
-        blurTimer = setTimeout(() => document.body.classList.add('app-unfocused'), 2000);
+        blurTimer = setTimeout(() => { if (!document.hasFocus()) document.body.classList.add('app-unfocused'); }, 2000); // iframe içine tıklamak (odak hâlâ sayfada) sayılmaz
     });
     window.addEventListener('focus', () => {
         clearTimeout(blurTimer);
