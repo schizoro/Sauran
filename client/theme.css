@@ -4,6 +4,53 @@
 
 /* ── Tasarım belirteçleri ─────────────────────────────────────────────── */
 :root {
+  /* ── Katman sırası (z-index), alttan üste. Yeni katman eklerken buradaki sıraya göre yerleştir. ──
+     Bazıları kendi kapsayıcısının içinde geçerlidir (ör. call-* arama ekranı, mention yazma alanı içinde). */
+  --z-rail: 55;
+  --z-side-backdrop: 55;
+  --z-mention: 60;
+  --z-side-panel: 60;
+  --z-side-toggle: 61;
+  --z-side-panel-open: 65;
+  --z-side-backdrop-m: 69;
+  --z-popover: 70;
+  --z-side-panel-m: 70;
+  --z-topbar: 80;
+  --z-voice-dock: 85;
+  --z-call-device-menu: 90;
+  --z-topbar-menu: 90;
+  --z-notif-prompt: 95;
+  --z-modal: 100;
+  --z-dm-side: 120;
+  --z-modal-raised: 160;
+  --z-group-pick: 170;
+  --z-call: 200;
+  --z-lobby-nav: 200;
+  --z-mobile-nav: 210;
+  --z-modal-m: 230;
+  --z-call-mini: 250;
+  --z-call-ptt: 260;
+  --z-call-viewer: 260;
+  --z-cropper: 300;
+  --z-incoming-call: 300;
+  --z-share-fps-modal: 320;
+  --z-call-viewer-full: 400;
+  --z-dev-notice: 400;
+  --z-emoji-panel: 400;
+  --z-toast: 400;
+  --z-popover-top: 420;
+  --z-store: 440;
+  --z-profile-view: 460;
+  --z-lightbox: 500;
+  --z-center-toast: 600;
+  --z-msg-search: 850;
+  --z-hubset: 900;
+  --z-hubset-modal: 950;
+  --z-hubset-group-pick: 960;
+  --z-call-viewer-pseudo: 1000;
+  --z-hubset-toast: 1000;
+  --z-update-bar: 1001;
+  --z-burst: 10000;
   /* zemin */
   --bg-app: #0a0d11;
   --bg-surface: #0e1319;
@@ -253,7 +300,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   /* Masaüstü de telefonla AYNI gezinme: tek sütunlu etiketli sol ray + rayın yanında açılan Lobiler/Arkadaşlar/Gruplar çekmecesi. */
   #chat-screen[style*="flex"] { display: grid !important; grid-template-columns: calc(var(--rail-w) + 4px) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); height: 100dvh; }
   .app-rail {
-    display: flex; flex-direction: column; align-items: center; gap: 16px; position: relative; z-index: 55; grid-column: 1; grid-row: 1 / 3;
+    display: flex; flex-direction: column; align-items: center; gap: 16px; position: relative; z-index: var(--z-rail); grid-column: 1; grid-row: 1 / 3;
     width: 60px; margin: 8px 0 8px 8px; padding: 14px 0; border-radius: 30px; background: var(--glass-2);
     -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.35); backdrop-filter: blur(var(--blur-2)) saturate(1.35);
     box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong), 0 16px 40px -14px rgba(0, 0, 0, 0.55);
@@ -277,7 +324,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   body.lobby-drawer-open:not(.drawer-friends):not(.drawer-groups) #rail-lobbies,
   body.drawer-groups #rail-groups, body.drawer-friends #rail-friends { color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-line); }
   .lobby-nav {
-    display: flex; flex-direction: column; position: fixed; z-index: 200; left: calc(var(--rail-w) + 4px); top: 8px; bottom: 8px; width: 300px; margin: 0; padding: 18px 12px 12px;
+    display: flex; flex-direction: column; position: fixed; z-index: var(--z-lobby-nav); left: calc(var(--rail-w) + 4px); top: 8px; bottom: 8px; width: 300px; margin: 0; padding: 18px 12px 12px;
     min-height: 0; border-radius: 28px; transform: translateX(calc(-100% - var(--rail-w) - 24px)); transition: transform 0.25s var(--ease);
     background: var(--glass-2); -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.35); backdrop-filter: blur(var(--blur-2)) saturate(1.35);
     box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong), var(--shadow-focus);
@@ -303,7 +350,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .lobby-nav-toggle { display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-secondary); cursor: pointer; }
   .lobby-nav-toggle:hover { background: var(--glass-1); color: var(--text-primary); }
   .lobby-nav {
-    display: flex; flex-direction: column; position: fixed; z-index: 200; top: 0; bottom: 0; left: 0; width: min(320px, 86vw);
+    display: flex; flex-direction: column; position: fixed; z-index: var(--z-lobby-nav); top: 0; bottom: 0; left: 0; width: min(320px, 86vw);
     padding: calc(18px + env(safe-area-inset-top)) 12px 12px; transform: translateX(-104%); transition: transform 0.25s var(--ease);
     background: var(--glass-2); -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.35); backdrop-filter: blur(var(--blur-2)) saturate(1.35);
     box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong), var(--shadow-focus);
@@ -600,7 +647,7 @@ body:has(.adm-header), body:has(.mod-header) { background: var(--bg-app); color:
 
 /* 4) Açılır menüler opak ve üstte: arkadaki metin görünmez */
 .composer-attach-menu, .msg-actions-menu, .topbar-menu-dropdown, .composer-attach-wrap .liquid-glass {
-  background: rgba(16, 22, 29, 0.98); z-index: 70;
+  background: rgba(16, 22, 29, 0.98); z-index: var(--z-popover);
   -webkit-backdrop-filter: none; backdrop-filter: none;
 }
 .composer-attach-wrap { position: relative; z-index: 40; }
@@ -615,8 +662,8 @@ body:has(.adm-header), body:has(.mod-header) { background: var(--bg-app); color:
 /* ══ iOS/mobil gerçek cihaz hataları ════════════════════════════════════ */
 /* Başlıktaki üye düğmesi yalnızca kendi paneli açıkken diğer panellerin üstünde kalır (ses paneline binmesin) */
 .members-in-header { z-index: auto; }
-.members-in-header.open { z-index: 61; }
-.hub-voice-rooms-side.open { z-index: 65; }
+.members-in-header.open { z-index: var(--z-side-toggle); }
+.hub-voice-rooms-side.open { z-index: var(--z-side-panel-open); }
 
 @media (max-width: 900px) {
   /* Klavye açıkken görünüm alanı (visualViewport) kadar yükseklik: composer ve alt sayfalar klavyenin üstünde kalır */
@@ -625,7 +672,7 @@ body:has(.adm-header), body:has(.mod-header) { background: var(--bg-app); color:
   body { position: fixed; top: var(--vvtop, 0px); left: 0; right: 0; width: 100%; height: var(--vvh, 100dvh); max-height: var(--vvh, 100dvh); overflow: hidden; }
   .modal-overlay { top: var(--vvtop, 0px); bottom: auto; height: var(--vvh, 100dvh); }
   .modal-overlay .modal-box, .modal-overlay .profile-modal-box { max-height: calc(var(--vvh, 100dvh) - 16px); overflow-y: auto; }
-  .hub-start-menu { left: 12px; right: auto; z-index: 70; max-width: calc(100vw - 24px); }
+  .hub-start-menu { left: 12px; right: auto; z-index: var(--z-popover); max-width: calc(100vw - 24px); }
 }
 
 /* Ayarlar: şifre alanları ve hesap silme — daha ferah ve büyük */
@@ -713,7 +760,7 @@ body:has(.adm-header), body:has(.mod-header) { background: var(--bg-app); color:
 .call-header .call-audio-arrow svg { width: 18px; height: 18px; margin: 0; }
 .call-header .call-audio-btn { width: 48px; height: 48px; padding: 0; border-radius: 50%; color: var(--accent); align-items: center; justify-content: center; }
 .call-header .call-audio-btn.on-earpiece { background: var(--accent-soft); }
-.call-device-menu { position: fixed; z-index: 90; flex-direction: column; gap: 2px; min-width: 200px; max-width: min(320px, calc(100vw - 16px)); max-height: 60vh; overflow-y: auto; padding: 6px; border-radius: 14px; }
+.call-device-menu { position: fixed; z-index: var(--z-call-device-menu); flex-direction: column; gap: 2px; min-width: 200px; max-width: min(320px, calc(100vw - 16px)); max-height: 60vh; overflow-y: auto; padding: 6px; border-radius: 14px; }
 .call-device-menu-title { padding: 6px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
 .call-device-menu button { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 44px; padding: 8px 10px; border: 0; border-radius: 10px; background: transparent; color: var(--text-primary); font-size: 13.5px; text-align: left; cursor: pointer; }
 .call-device-menu button:hover, .call-device-menu button:focus-visible { background: var(--accent-soft); outline: none; }
@@ -732,7 +779,7 @@ body:has(.adm-header), body:has(.mod-header) { background: var(--bg-app); color:
 .dm-call-log-time { color: var(--text-tertiary); font-size: 11.5px; }
 
 /* Bildirim izni isteği (girişten sonra bir kez, kapatılabilir) */
-.notif-prompt { position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 95; display: flex; align-items: center; gap: 14px; width: min(520px, calc(100vw - 24px)); padding: 12px 14px; border-radius: 16px; color: var(--text-primary); font-size: 13.5px; line-height: 1.4; }
+.notif-prompt { position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: var(--z-notif-prompt); display: flex; align-items: center; gap: 14px; width: min(520px, calc(100vw - 24px)); padding: 12px 14px; border-radius: 16px; color: var(--text-primary); font-size: 13.5px; line-height: 1.4; }
 .notif-prompt-text { flex: 1; }
 .notif-prompt-actions { display: flex; gap: 8px; flex: none; }
 .notif-prompt button { min-height: 40px; padding: 0 14px; border: 0; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; }
@@ -826,7 +873,7 @@ html.auth-pending #login-screen { visibility: hidden; }
   #chat-screen[style*="flex"] { padding-left: calc(var(--rail-w) + env(safe-area-inset-left)); }
   .app-rail {
     display: flex; flex-direction: column; align-items: center; gap: 10px;
-    position: absolute; z-index: 55; left: calc(8px + env(safe-area-inset-left)); top: calc(8px + env(safe-area-inset-top)); bottom: calc(8px + env(safe-area-inset-bottom)); width: 60px;
+    position: absolute; z-index: var(--z-rail); left: calc(8px + env(safe-area-inset-left)); top: calc(8px + env(safe-area-inset-top)); bottom: calc(8px + env(safe-area-inset-bottom)); width: 60px;
     padding: 14px 0; border-radius: 30px; background: var(--glass-2);
     -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.35); backdrop-filter: blur(var(--blur-2)) saturate(1.35);
     box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong), 0 16px 40px -14px rgba(0, 0, 0, 0.55);
@@ -911,7 +958,7 @@ html.auth-pending #login-screen { visibility: hidden; }
 .lobby-supporters .ls-label{font-size:11px;color:#ffd166;margin-right:4px;flex:none}
 .lobby-supporters .ls-avatar{flex:none;width:26px;height:26px;border-radius:50%;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;font-size:12px;background:rgba(255,209,102,.18);border:1px solid rgba(255,209,102,.55)}
 .lobby-supporters .ls-avatar img{width:100%;height:100%;object-fit:cover}
-.super-like-burst{position:fixed;left:50%;top:22%;transform:translateX(-50%);z-index:10000;pointer-events:none;text-align:center;animation:slbLife 3.2s ease forwards}
+.super-like-burst{position:fixed;left:50%;top:22%;transform:translateX(-50%);z-index: var(--z-burst);pointer-events:none;text-align:center;animation:slbLife 3.2s ease forwards}
 .super-like-burst .slb-star{font-size:64px;filter:drop-shadow(0 0 18px rgba(255,209,102,.9));animation:slbPop 1s ease-out}
 .super-like-burst .slb-text{margin-top:6px;padding:8px 16px;border-radius:999px;font-weight:bold;font-size:14px;color:#fff3c4;background:rgba(20,22,28,.6);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,209,102,.5)}
 @keyframes slbPop{0%{transform:scale(.2) rotate(-40deg);opacity:0}60%{transform:scale(1.35) rotate(10deg);opacity:1}100%{transform:scale(1) rotate(0)}}
@@ -1800,13 +1847,13 @@ html.auth-pending #login-screen { visibility: hidden; }
 .share-fps-tag { font-size: 10px; padding: 1px 7px; border-radius: 999px; background: rgba(255, 190, 60, .18); color: #ffd28a; margin-left: 4px; }
 
 /* Sesli oda ekranı (z-index 200) üstünde görünmesi için: FPS seçici, çağrı katmanından yüksek olmalı. */
-#share-fps-modal { z-index: 320; }
+#share-fps-modal { z-index: var(--z-share-fps-modal); }
 
 
 /* ══ Lobi ayarları: tam ekran, bölümlü pencere ════════════════════════════ */
 body.hubset-open { overflow: hidden; }
 .hubset-screen {
-  position: fixed; inset: 0; z-index: 900; display: flex; background: var(--bg-app);
+  position: fixed; inset: 0; z-index: var(--z-hubset); display: flex; background: var(--bg-app);
   animation: hubset-in 0.18s var(--ease);
 }
 @keyframes hubset-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
@@ -1933,7 +1980,7 @@ body.hubset-open { overflow: hidden; }
 .hub-msg.hub-msg-mentions-me { background: rgba(240, 195, 107, 0.06); box-shadow: inset 3px 0 0 #f0c36b; border-radius: 10px; }
 .composer-input-box { position: relative; }
 .mention-suggest {
-  position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); z-index: 60; max-height: 280px; overflow-y: auto;
+  position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); z-index: var(--z-mention); max-height: 280px; overflow-y: auto;
   padding: 6px; border-radius: var(--radius); display: flex; flex-direction: column; gap: 2px;
   background: var(--bg-surface-2); box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong), var(--shadow-focus);
 }
@@ -1982,7 +2029,7 @@ body.hubset-open { overflow: hidden; }
 
 /* ── Mesaj arama paneli ── */
 .msg-search-panel {
-  position: fixed; top: 0; right: 0; bottom: 0; width: 420px; max-width: 100%; z-index: 850; flex-direction: column;
+  position: fixed; top: 0; right: 0; bottom: 0; width: 420px; max-width: 100%; z-index: var(--z-msg-search); flex-direction: column;
   background: var(--bg-surface); border-left: 1px solid var(--border-soft); box-shadow: var(--shadow-focus);
   padding-top: env(safe-area-inset-top);
 }
@@ -2051,7 +2098,7 @@ body.hubset-open { overflow: hidden; }
 .email-current { font-size: 14px; color: var(--text-primary, #e6e6e6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .email-reveal-btn { background: none; border: none; color: var(--accent, #5cc8ff); font-size: 13px; cursor: pointer; padding: 4px 2px; text-decoration: underline; flex-shrink: 0; align-self: center; }
 /* Ayarlar penceresinin (aynı katmanda, DOM'da sonra gelen) ÜSTÜNDE açılmalı */
-#twofa-modal, #email-change-modal { z-index: 160; }
+#twofa-modal, #email-change-modal { z-index: var(--z-modal-raised); }
 .twofa-body .hubset-save-btn { min-height: 44px; flex-shrink: 0; }
 .twofa-body .hub-name-input, .twofa-body .hub-settings-action-btn { flex-shrink: 0; }
 
@@ -2088,8 +2135,8 @@ body.hubset-open { overflow: hidden; }
 .invite-row-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 1px; }
 /* Tam ekran lobi ayarları (z-index 900) açıkken, içinden açılan pencereler (davet, arkadaş daveti, görsel kırpma, profil…)
    ve bildirim baloncukları ayarların ÜSTÜNDE görünmeli. */
-body.hubset-open .modal-overlay, body.hubset-open .cropper-overlay { z-index: 950; }
-body.hubset-open .toast-container { z-index: 1000; }
+body.hubset-open .modal-overlay, body.hubset-open .cropper-overlay { z-index: var(--z-hubset-modal); }
+body.hubset-open .toast-container { z-index: var(--z-hubset-toast); }
 
 /* 2FA kurulumu: sade, iki adımlı */
 .twofa-stephead { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 15px; color: var(--text-primary); margin-top: 4px; }
@@ -2115,7 +2162,7 @@ body.hubset-open .toast-container { z-index: 1000; }
 @keyframes ptt-blink { 50% { opacity: 0.5; } }
 #settings-ptt-key-hint { margin-left: 30px; }
 .call-ptt-btn {
-  position: absolute; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 260;
+  position: absolute; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: var(--z-call-ptt);
   display: flex; align-items: center; gap: 10px; padding: 14px 26px; border-radius: 999px;
   background: rgba(20, 26, 33, 0.92); border: 2px solid rgba(92, 200, 255, 0.45); color: var(--text-primary, #e6e6e6);
   font-size: 15px; font-weight: 650; white-space: nowrap; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
@@ -2177,8 +2224,8 @@ body.hubset-open .toast-container { z-index: 1000; }
 .hub-detail-view.is-group #hub-member-options-wrap { display: none !important; }
 
 /* Grup ayarları içinden açılan kişi seçici onun ÜSTÜNDE */
-#group-pick-modal { z-index: 170; }
-body.hubset-open #group-pick-modal { z-index: 960; }
+#group-pick-modal { z-index: var(--z-group-pick); }
+body.hubset-open #group-pick-modal { z-index: var(--z-hubset-group-pick); }
 #group-settings-members { max-height: 38vh; overflow-y: auto; flex-shrink: 0; }
 #group-settings-members .settings-blocked-name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
 #group-settings-members .voice-mute-row-meta { display: inline; margin: 0; }
@@ -2336,7 +2383,7 @@ body.in-group[data-view="hub-detail"] .topbar-lobby-badge { display: none !impor
 }
 @media (min-width: 1101px) {
   /* Üst çubuk (z 80) şeffaf alanıyla panelin ✕ düğmesini örtmesin */
-  .hub-voice-rooms-side.open { z-index: 85; }
+  .hub-voice-rooms-side.open { z-index: var(--z-voice-dock); }
   .hub-detail-side { top: 72px; }
 }
 
@@ -2360,10 +2407,10 @@ body.in-group[data-view="hub-detail"] .topbar-lobby-badge { display: none !impor
 /* Telefon: yan paneller açıkken donma — panelin bulanıklığı (backdrop-filter) arkadaki hareketli mesaj efektlerini
    her karede yeniden bulanıklaştırıyordu. Panel opak, efektler panel açıkken duraklatılır. */
 @media (max-width: 900px) {
-  .hub-detail-side, .hub-voice-rooms-side { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: #121821 !important; bottom: 0; z-index: 70; }
+  .hub-detail-side, .hub-voice-rooms-side { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: #121821 !important; bottom: 0; z-index: var(--z-side-panel-m); }
   body.theme-purple .hub-detail-side, body.theme-purple .hub-voice-rooms-side { background: #17122a !important; }
-  .hub-detail-side.open, .hub-voice-rooms-side.open { z-index: 70; } /* .open (z:65) karartma katmanının (69) altında kalıp dokunuşları engelliyordu */
-  .hub-side-backdrop.open { cursor: pointer; z-index: 69; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .hub-detail-side.open, .hub-voice-rooms-side.open { z-index: var(--z-side-panel-m); } /* .open (z:65) karartma katmanının (69) altında kalıp dokunuşları engelliyordu */
+  .hub-side-backdrop.open { cursor: pointer; z-index: var(--z-side-backdrop-m); -webkit-backdrop-filter: none; backdrop-filter: none; }
   body.hub-side-open .hub-feed *, body.hub-side-open .hub-feed *::before, body.hub-side-open .hub-feed *::after { animation-play-state: paused !important; }
   .hub-side-close-btn { width: 36px; height: 36px; font-size: 16px; }
 }
@@ -2605,7 +2652,7 @@ body.hubset-open .hub-fx > i { animation-play-state: paused; }
 /* ══ Birleşik emoji paneli (Emoji / GIF'ler / Çıkartmalar) ═══════════════════════════════════════════════ */
 .composer-emoji-btn { flex: none; font-size: 20px; line-height: 1; opacity: .85; }
 .composer-emoji-btn:hover { opacity: 1; }
-.emoji-panel { position: fixed; z-index: 400; width: 380px; max-width: calc(100vw - 16px); height: min(440px, 62vh); flex-direction: column; border-radius: 18px; overflow: hidden; background: var(--glass-2); box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong), 0 18px 50px -12px rgba(0, 0, 0, 0.7); -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.3); backdrop-filter: blur(var(--blur-2)) saturate(1.3); }
+.emoji-panel { position: fixed; z-index: var(--z-emoji-panel); width: 380px; max-width: calc(100vw - 16px); height: min(440px, 62vh); flex-direction: column; border-radius: 18px; overflow: hidden; background: var(--glass-2); box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong), 0 18px 50px -12px rgba(0, 0, 0, 0.7); -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.3); backdrop-filter: blur(var(--blur-2)) saturate(1.3); }
 .emoji-panel.ep-sheet { left: 0 !important; right: 0; bottom: 0 !important; width: 100%; max-width: none; height: 62vh; border-radius: 20px 20px 0 0; }
 .ep-handle { display: none; width: 38px; height: 4px; margin: 8px auto 0; border-radius: 4px; background: var(--border-soft-strong); flex: none; }
 .ep-sheet .ep-handle { display: block; }
@@ -2648,7 +2695,7 @@ body .hub-member-menu, body .sticker-picker, body .emoji-panel, body .hub-emoji-
   background: #0e1319 !important; background-image: none !important; opacity: 1 !important;
   -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
   box-shadow: 0 0 0 1px var(--border-soft-strong), 0 16px 40px -10px rgba(0, 0, 0, 0.75);
-  z-index: 420;
+  z-index: var(--z-popover-top);
 }
 
 /* ══ GIF sekmesi ve sohbette GIF ═════════════════════════════════════════════════════════════════════════ */
@@ -2680,7 +2727,7 @@ body .hub-member-menu, body .sticker-picker, body .emoji-panel, body .hub-emoji-
 /* ══ Canlı önizleme sayfası (Özelleştirme seçenekleri) ══════════════════════════════════════════════ */
 .chat-theme-option.pv-locked { opacity: .62; position: relative; }
 .chat-theme-option.pv-locked::after { content: "🔒"; position: absolute; top: 4px; right: 4px; font-size: 11px; }
-.pv-overlay { z-index: 460; align-items: center; justify-content: center; }
+.pv-overlay { z-index: var(--z-profile-view); align-items: center; justify-content: center; }
 .pv-sheet { width: min(420px, calc(100vw - 24px)); max-height: 92vh; overflow-y: auto; padding: 14px 16px 16px; border-radius: 22px; background: #0e1319 !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
 .pv-handle { display: none; width: 40px; height: 4px; border-radius: 4px; background: var(--border-soft-strong); margin: 0 auto 10px; }
 .pv-stage { border-radius: 16px; background: #05080b; padding: 14px; margin-bottom: 14px; box-shadow: inset 0 0 0 1px var(--border-soft); overflow: hidden; }
@@ -2714,7 +2761,7 @@ body .hub-member-menu, body .sticker-picker, body .emoji-panel, body .hub-emoji-
 }
 
 /* ══ Mağaza ana sayfası ═════════════════════════════════════════════════════════════════════════════ */
-.store-screen { position: fixed; inset: 0; z-index: 440; display: none; flex-direction: column; background: #080b0f; }
+.store-screen { position: fixed; inset: 0; z-index: var(--z-store); display: none; flex-direction: column; background: #080b0f; }
 body.st-open { overflow: hidden; }
 .st-shell { display: flex; flex-direction: column; width: min(1100px, 100%); height: 100%; margin: 0 auto; }
 .st-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px 6px; padding-top: calc(14px + env(safe-area-inset-top, 0px)); }
@@ -2803,7 +2850,7 @@ body.st-open { overflow: hidden; }
   :root { --rail-w: 0px; }
   .app-rail { display: none !important; }
   .mnav {
-    position: fixed; left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); height: 68px; z-index: 210;
+    position: fixed; left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); height: 68px; z-index: var(--z-mobile-nav);
     display: flex; align-items: center; justify-content: space-between; gap: 2px; padding: 7px 8px; border-radius: 999px;
     background: linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.05)), rgba(18, 26, 42, .78);
     -webkit-backdrop-filter: blur(22px) saturate(1.5); backdrop-filter: blur(22px) saturate(1.5);
@@ -2870,7 +2917,7 @@ body.drawer-friendlist .friends-directory { display: flex; flex-direction: colum
 @media (min-width: 721px) and (min-height: 501px) {
   .app-rail { display: none !important; }
   .mnav {
-    position: fixed; z-index: 210; left: 8px; top: 8px; bottom: 8px; width: 60px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 0; border-radius: 30px;
+    position: fixed; z-index: var(--z-mobile-nav); left: 8px; top: 8px; bottom: 8px; width: 60px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 0; border-radius: 30px;
     background: var(--glass-2); -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.35); backdrop-filter: blur(var(--blur-2)) saturate(1.35);
     box-shadow: var(--hi), 0 0 0 1px var(--border-soft-strong), 0 16px 40px -14px rgba(0, 0, 0, 0.55);
   }
@@ -2971,7 +3018,7 @@ body.drawer-friendlist .friends-directory { display: flex; flex-direction: colum
 /* ekran dışındaki süslü öğeler durur (perf-chat.js .anim-off ekler) */
 .anim-off, .anim-off *, .anim-off::before, .anim-off::after, .anim-off *::before, .anim-off *::after { animation-play-state: paused !important; }
 /* Üzerinde kalıcı pencere açıkken (DM paneli üstü dahil) tüm pencereler DM panelinin üstünde açılır */
-.modal-overlay:not(.pv-overlay) { z-index: 230; }
+.modal-overlay:not(.pv-overlay) { z-index: var(--z-modal-m); }
 
 /* Performans: Supporter Rose çerçevesi listelerde SABİT sürümü kullanır (animasyonlu SVG her karede yeniden çizilir; telefonda sohbeti dondurabilir) */
 #hub-feed .sr-ring-img, #dm-feed .sr-ring-img, #dm-modal .sr-ring-img, #hub-member-list .sr-ring-img, #friends-sidebar-list .sr-ring-img, #friends-favorites .sr-ring-img, #fd-list .sr-ring-img,
@@ -3075,7 +3122,7 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
 .toast-container { left: 12px; right: 12px; transform: none; }
 
 /* Masaüstü uygulaması güncelleme çubuğu (yalnızca Sauran Windows uygulamasında, yeni sürüm varken görünür). */
-.desktop-update-bar { position: fixed; right: 16px; bottom: 16px; z-index: 1001; display: flex; align-items: center; gap: 12px; max-width: min(440px, calc(100vw - 32px)); padding: 12px 12px 12px 16px; border-radius: 14px; background: rgba(18, 24, 32, 0.97); color: var(--text-primary); box-shadow: 0 0 0 1px var(--accent-line), 0 12px 32px rgba(0, 0, 0, 0.55); font-size: 13px; }
+.desktop-update-bar { position: fixed; right: 16px; bottom: 16px; z-index: var(--z-update-bar); display: flex; align-items: center; gap: 12px; max-width: min(440px, calc(100vw - 32px)); padding: 12px 12px 12px 16px; border-radius: 14px; background: rgba(18, 24, 32, 0.97); color: var(--text-primary); box-shadow: 0 0 0 1px var(--accent-line), 0 12px 32px rgba(0, 0, 0, 0.55); font-size: 13px; }
 .desktop-update-bar .dub-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .desktop-update-bar .dub-sub { color: var(--text-secondary); font-size: 12px; }
 .desktop-update-bar .dub-btn { flex: none; display: inline-block; text-decoration: none; font-size: 13px; padding: 8px 14px; border: 0; border-radius: 10px; background: var(--accent); color: #06121b; font-weight: 600; cursor: pointer; }
