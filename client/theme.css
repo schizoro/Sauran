@@ -979,7 +979,7 @@ html.auth-pending #login-screen { visibility: hidden; }
   .topbar-profile-btn, .topbar-menu-btn { min-height: 38px; }
   body[data-view="hub-detail"] .app-rail, body[data-view="discover"] .app-rail,
   body[data-view="hub-detail"] .lobby-nav-toggle, body[data-view="discover"] .lobby-nav-toggle,
-  body[data-view="hub-detail"] #topbar-menu-btn, body[data-view="discover"] #topbar-menu-btn { display: none; }
+  body[data-view="hub-detail"] #topbar-menu-btn, body[data-view="discover"] #topbar-menu-btn { display: none !important; }
   body[data-view="hub-detail"] #chat-screen[style*="flex"], body[data-view="discover"] #chat-screen[style*="flex"] { padding-left: env(safe-area-inset-left); }
 
   /* Keşfet: başlık üst çubuğa taşındı; başlık bloğu küçük ve yukarıda; Coin üst çubukta küçük */
@@ -2422,7 +2422,7 @@ body.in-group[data-view="hub-detail"] .topbar-lobby-badge { display: none !impor
 
 /* Mesaj yazma alanı: odaklanınca çıkan mavi dikdörtgen çerçeve yok (kutunun kendisi zaten yuvarlak) */
 #hub-message-input, #dm-message-input, #hub-message-input:focus, #dm-message-input:focus, #hub-message-input:focus-visible, #dm-message-input:focus-visible {
-  outline: none; box-shadow: none; border: 0; border-radius: 0; background: transparent; -webkit-appearance: none; appearance: none;
+  outline: none !important; box-shadow: none !important; border: 0 !important; border-radius: 0; background: transparent; -webkit-appearance: none; appearance: none;
 }
 
 /* ══ Masaüstü: küçültülmüş arama çubuğu — düzeni aşağı itmeyen, üstte ortalı küçük cam hap ══
@@ -3118,7 +3118,7 @@ body.drawer-friendlist .friends-directory { display: flex; flex-direction: colum
 
 /* Ekran paylaşımı izlenirken arka plandaki sürekli animasyonlar duraklatılır (izleyicide kare düşmesi/donma). */
 /* Ayrıca pencere arka plandayken (ör. masaüstü uygulaması oyunun yanında açık) aynı süs animasyonları durur. */
-body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.watching-share .hub-feed *::after, body.watching-share #hub-member-list *, body.watching-share #hub-member-list *::before, body.watching-share #hub-member-list *::after, body.watching-share .pfxc, body.watching-share .pfxc::before, body.watching-share .pfxc::after, body.watching-share .pfxc *, body.app-unfocused .hub-feed *, body.app-unfocused .hub-feed *::before, body.app-unfocused .hub-feed *::after, body.app-unfocused #hub-member-list *, body.app-unfocused #hub-member-list *::before, body.app-unfocused #hub-member-list *::after, body.app-unfocused .pfxc, body.app-unfocused .pfxc::before, body.app-unfocused .pfxc::after, body.app-unfocused .pfxc * { animation-play-state: paused; }
+body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.watching-share .hub-feed *::after, body.watching-share #hub-member-list *, body.watching-share #hub-member-list *::before, body.watching-share #hub-member-list *::after, body.watching-share .pfxc, body.watching-share .pfxc::before, body.watching-share .pfxc::after, body.watching-share .pfxc *, body.app-unfocused .hub-feed *, body.app-unfocused .hub-feed *::before, body.app-unfocused .hub-feed *::after, body.app-unfocused #hub-member-list *, body.app-unfocused #hub-member-list *::before, body.app-unfocused #hub-member-list *::after, body.app-unfocused .pfxc, body.app-unfocused .pfxc::before, body.app-unfocused .pfxc::after, body.app-unfocused .pfxc * { animation-play-state: paused !important; }
 
 /* Bildirimler (eski alert kutuları dahil): satır sonları korunur, dokununca kapanır. */
 .toast { pointer-events: auto; cursor: pointer; white-space: pre-line; max-width: min(520px, 92vw); background: rgba(18, 24, 32, 0.96); box-shadow: 0 0 0 1px var(--border-soft-strong), 0 10px 30px rgba(0, 0, 0, 0.55); }
