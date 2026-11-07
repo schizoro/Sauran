@@ -360,20 +360,26 @@ app.use(cors(corsOptionsDelegate));
 // Tam kaynak kısıtlaması önce Report-Only olarak gelir: ihlaller yalnızca tarayıcı konsoluna düşer, hiçbir şey engellenmez.
 // Konsolda ihlal görülmediği doğrulandıktan sonra Report-Only satırı zorunlu CSP'ye taşınabilir.
 const CSP_ENFORCED = "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'";
+// Daily alan adları Daily'nin CSP rehberine göre (docs.daily.co → Content security policy): her daily.co adresinin yedek
+// (failover) alan adları dailywebrtc.com / dailywebrtc.net de listelenmeli. Arama motoru (call object) istemcide avoidEval ile
+// <script> olarak yüklenir ('unsafe-eval' gerekmez); gürültü engelleme (Krisp) blob: adresinden worker açar ve WebAssembly
+// derler ('wasm-unsafe-eval' yalnızca WebAssembly'ye izin verir, JavaScript eval'ine değil).
+const DAILY_HOSTS = 'https://*.daily.co https://*.dailywebrtc.com https://*.dailywebrtc.net';
 const CSP_REPORT_ONLY = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' https://*.daily.co",
+  `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' ${DAILY_HOSTS} blob:`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://*.giphy.com",
   "media-src 'self' data: blob:",
   "font-src 'self' data:",
-  "connect-src 'self' https://*.daily.co wss://*.daily.co wss: https://*.wss.daily.co",
+  `connect-src 'self' ${DAILY_HOSTS} wss:`,
   "worker-src 'self' blob:",
-  "frame-src 'self' https://*.daily.co",
+  `frame-src 'self' ${DAILY_HOSTS}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "object-src 'none'",
-  "form-action 'self'"
+  "form-action 'self'",
+  'report-uri /api/csp-report'
 ].join('; ');
 
 app.use((req, res, next) => {
@@ -2300,6 +2306,62 @@ function requirePlatformRole(req, res, minRole) {
   return user;
 }
 
+// =====================================================
+// CSP İHLAL RAPORLARI (Report-Only kuralını zorunluya almadan önce gerçek kullanıcılarda ne engelleneceğini görmek için)
+// =====================================================
+// Tarayıcı ihlali kendiliğinden bildirir (oturum gerekmez). Kişisel veri tutulmaz: yalnızca yönerge, engellenen adresin
+// kökü (yol/sorgu atılır), sayfa yolu ve kaynak dosya kökü. Bellekte en fazla 200 farklı ihlal; sunucu yeniden başlayınca sıfırlanır.
+const CSP_REPORT_MAX = 200;
+const cspReports = new Map(); // anahtar -> { directive, blocked, page, source, count, first_at, last_at }
+// report-uri her ihlal için ayrı istek atar ve aynı IP'yi birçok kullanıcı paylaşabilir (mobil operatör): sınır geniş tutulur.
+const cspReportLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, keyFn: byIp, message: 'Çok fazla rapor.' });
+const CSP_DIRECTIVES = new Set(['default-src', 'script-src', 'script-src-elem', 'script-src-attr', 'style-src', 'style-src-elem', 'style-src-attr', 'img-src', 'media-src',
+  'font-src', 'connect-src', 'worker-src', 'frame-src', 'child-src', 'manifest-src', 'object-src', 'base-uri', 'form-action', 'frame-ancestors', 'prefetch-src', 'trusted-types', 'require-trusted-types-for']);
+const cspOrigin = (v) => {
+  const raw = String(v || '').slice(0, 500);
+  if (!raw || /^(inline|eval|wasm-eval|data|blob|self|trusted-types-sink)$/i.test(raw)) return raw.toLowerCase();
+  try { const u = new URL(raw); return /^https?:|^wss?:/.test(u.protocol) ? u.origin : u.protocol; } catch (_) { return raw.split(/[?#]/)[0].slice(0, 100); }
+};
+const cspPath = (v) => { try { return new URL(String(v || '')).pathname.slice(0, 100); } catch (_) { return ''; } };
+// Tarayıcılar report-uri için application/csp-report, Reporting API için application/reports+json gönderir.
+// Hatalı/büyük gövde, Express'in (yığın izi içerebilen) varsayılan hata sayfası yerine boş yanıtla geri çevrilir.
+const cspReportBody = express.json({ type: ['application/csp-report', 'application/reports+json'], limit: '16kb' });
+app.post('/api/csp-report', cspReportLimiter, cspReportBody, (req, res) => {
+  const list = Array.isArray(req.body) ? req.body.map((r) => r && r.body) : [req.body && req.body['csp-report']];
+  let added = 0;
+  for (const r of list.slice(0, 10)) {
+    if (!r || typeof r !== 'object') continue;
+    const directive = String(r['effective-directive'] || r.effectiveDirective || r['violated-directive'] || '').split(' ')[0].slice(0, 40);
+    if (!CSP_DIRECTIVES.has(directive)) continue;
+    const entry = {
+      directive,
+      blocked: cspOrigin(r['blocked-uri'] ?? r.blockedURL),
+      page: cspPath(r['document-uri'] ?? r.documentURL),
+      source: cspOrigin(r['source-file'] ?? r.sourceFile)
+    };
+    const key = `${entry.directive}|${entry.blocked}|${entry.page}|${entry.source}`;
+    const now = new Date().toISOString();
+    const prev = cspReports.get(key);
+    if (prev) { prev.count += 1; prev.last_at = now; continue; }
+    if (++added > 2) continue; // bir istek en fazla 2 yeni satır açar: sahte raporlarla liste hızla doldurulamaz
+    if (cspReports.size >= CSP_REPORT_MAX) {
+      // Dolu: en az görülen (eşitse en eski) satır çıkar; gerçek ve sık ihlaller kalır.
+      let worst = null;
+      for (const [k, v] of cspReports) if (!worst || v.count < worst[1].count || (v.count === worst[1].count && v.last_at < worst[1].last_at)) worst = [k, v];
+      cspReports.delete(worst[0]);
+    }
+    cspReports.set(key, { ...entry, count: 1, first_at: now, last_at: now });
+  }
+  return res.status(204).end();
+}, (err, req, res, next) => res.status(err && err.status === 413 ? 413 : 400).end());
+
+app.get('/api/admin/csp-reports', (req, res) => {
+  const user = requirePlatformRole(req, res, 'admin');
+  if (!user) return;
+  const reports = [...cspReports.values()].sort((a, b) => b.count - a.count);
+  return res.json({ success: true, total: reports.reduce((n, r) => n + r.count, 0), reports });
+});
+
 app.get('/api/hubs', (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
@@ -3570,8 +3632,8 @@ app.post('/api/hubs/:id/voice-rooms/:roomId/join', async (req, res) => {
     return res.json({ success: true, room_url: roomUrl, token, room_id: roomId, room_name: room.name, voice_mute: mute });
 
   } catch (error) {
-    console.error('Sesli oda başlatma hatası:', error);
-    res.status(500).json({ success: false, error: 'Sesli odaya katılınamadı (sunucu: ' + String(error && error.message || error).slice(0, 160) + ').' });
+    console.error('Sesli oda başlatma hatası:', error); // ayrıntı yalnızca sunucu günlüğünde: iç hata metni (Daily yanıtı vb.) kullanıcıya gösterilmez
+    res.status(500).json({ success: false, error: 'Sesli odaya katılınamadı. Biraz sonra tekrar dene.' });
   }
 });
 

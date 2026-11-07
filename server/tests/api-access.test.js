@@ -194,3 +194,39 @@ test('Süper Beğeni: Coin yetmezse düşmez; yeterse 10 Coin düşer', async ()
   assert.equal(again.status, 400, 'bakiye 5 iken ikinci Süper Beğeni geçmemeli');
   assert.equal((await as.carol.get('/api/wallet')).body.balance, 5);
 });
+
+// ---------------------------------------------------------------- CSP ihlal raporları
+test('CSP raporu: oturumsuz kabul edilir, kişisel ayrıntı (yol/sorgu) atılır, yalnızca yönetici görür', async () => {
+  const send = (body, type = 'application/csp-report') => fetch(srv.base + '/api/csp-report', { method: 'POST', headers: { 'Content-Type': type }, body: JSON.stringify(body) });
+  const r = await send({ 'csp-report': { 'effective-directive': 'img-src', 'blocked-uri': 'https://kotu.example/izle?kullanici=gizli@posta.com', 'document-uri': 'https://sauran.online/app?token=GIZLI', 'source-file': 'https://sauran.online/script.js?v=1' } });
+  assert.equal(r.status, 204);
+  await send([{ type: 'csp-violation', body: { effectiveDirective: 'img-src', blockedURL: 'https://kotu.example/baska', documentURL: 'https://sauran.online/app', sourceFile: 'https://sauran.online/script.js' } }], 'application/reports+json');
+  for (const [body, status] of [['{bozuk', 400], ['{"a":"' + 'x'.repeat(20000) + '"}', 413]]) {
+    const bad = await fetch(srv.base + '/api/csp-report', { method: 'POST', headers: { 'Content-Type': 'application/csp-report' }, body });
+    const text = await bad.text();
+    assert.equal(bad.status, status);
+    assert.ok(!/<html|Error|at \w/i.test(text), 'hata sayfası/yığın izi sızmamalı: ' + text.slice(0, 80));
+  }
+  // Uydurma yönerge kaydedilmez; bir istek en fazla 2 yeni satır açar
+  await send([1, 2, 3, 4, 5].map((i) => ({ body: { effectiveDirective: 'img-src', blockedURL: `https://sahte${i}.example/`, documentURL: 'https://sauran.online/app' } })), 'application/reports+json');
+  await send({ 'csp-report': { 'effective-directive': 'uydurma-src', 'blocked-uri': 'https://uydurma.example/' } });
+  assert.equal((await as.bob.get('/api/admin/csp-reports')).status, 403);
+  const list = await as.alice.get('/api/admin/csp-reports');
+  assert.equal(list.status, 200);
+  const hit = list.body.reports.find((x) => x.blocked === 'https://kotu.example');
+  assert.ok(hit, list.text);
+  assert.equal(hit.count, 2, 'aynı ihlal tek satırda sayılır');
+  assert.equal(hit.page, '/app');
+  assert.ok(!/gizli|GIZLI|token|kullanici/.test(list.text), 'sorgu/yol ayrıntısı saklanmamalı');
+  assert.ok(!list.text.includes('uydurma'));
+  assert.equal(list.body.reports.filter((x) => /sahte/.test(x.blocked)).length, 2);
+});
+
+test('CSP üst bilgisi: Daily yedek alan adları ve rapor adresi var, unsafe-eval yok', async () => {
+  const res = await fetch(srv.base + '/app');
+  const csp = res.headers.get('content-security-policy-report-only');
+  for (const part of ['https://*.dailywebrtc.com', 'https://*.dailywebrtc.net', 'report-uri /api/csp-report', "worker-src 'self' blob:"]) assert.ok(csp.includes(part), part);
+  assert.ok(!/'unsafe-eval'/.test(csp), 'JavaScript eval izni olmamalı');
+  assert.ok(csp.includes("'wasm-unsafe-eval'"), 'gürültü engelleme (WebAssembly) için');
+  assert.match(res.headers.get('content-security-policy'), /frame-ancestors 'none'/);
+});

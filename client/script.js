@@ -12404,7 +12404,7 @@ async function joinVoiceRoom(room) {
 
 }
 
-// Katılım hatasının GERÇEK nedenini kullanıcıya (ve bana) gösterir: eskiden her hata "Sesli odaya katılınamadı." olarak görünüyordu.
+// Katılım hatasını kullanıcının anlayacağı nedene çevirir (izin, zaman aşımı, ağ...). Tanınmayan hatada ham metin gösterilmez; konsolda kalır.
 function voiceJoinErrorMessage(error) {
     const raw = String((error && (error.errorMsg || error.message)) || error || '');
     const name = String((error && error.name) || '');
@@ -12413,8 +12413,8 @@ function voiceJoinErrorMessage(error) {
     if (name === 'NotFoundError' || /no (audio|microphone)|device not found/i.test(raw)) return 'Mikrofon bulunamadı. Bir mikrofonun bağlı olduğundan emin ol.';
     if (name === 'NotReadableError' || /in use|could not start/i.test(raw)) return 'Mikrofon başka bir uygulama tarafından kullanılıyor. Diğer uygulamaları kapatıp tekrar dene.';
     if (/DailyIframe yok/i.test(raw)) return 'Sesli sohbet bileşeni yüklenemedi. Sayfayı yenileyip tekrar dene.';
-    if (/network|fetch|failed to fetch|load failed/i.test(raw)) return 'Sunucuya ulaşılamadı. İnternet bağlantını kontrol edip tekrar dene.';
-    return 'Sesli odaya katılınamadı' + (raw ? ` (${raw.slice(0, 120)})` : '.');
+    if (/network|fetch|failed to fetch|load failed|call object bundle/i.test(raw)) return 'Sunucuya ulaşılamadı. İnternet bağlantını kontrol edip tekrar dene.';
+    return 'Sesli odaya katılınamadı. Sayfayı yenileyip tekrar dene.'; // ham hata metni yalnızca konsola yazılır (çağıran yer)
 }
 
 
@@ -15253,7 +15253,9 @@ async function joinCallFrame(roomUrl, token) {
     // "Bağlandı" yazmasına rağmen sesin hiç gelmemesine yol açıyordu. Headless
     // modda ses elemanları sayfamızın kendi DOM'unda (aynı origin) olduğu için
     // bunu kendimiz tespit edip düzeltebiliyoruz (bkz. aşağıdaki audio-unlock).
-    callFrame = DailyIframe.createCallObject();
+    // avoidEval: Daily'nin arama motoru eval (Function) yerine <script> olarak yüklenir; böylece içerik güvenlik kuralı
+    // (CSP) 'unsafe-eval' izni vermeden zorunlu yapılabilir. Daily'nin önerdiği ve ileride varsayılan yapacağı ayar.
+    callFrame = DailyIframe.createCallObject({ dailyConfig: { avoidEval: true } });
 
     // ÖNEMLİ: Tüm olay dinleyicileri join()'den ÖNCE bağlanmalı. join()'in
     // döndürdüğü promise çözülmesiyle 'joined-meeting' olayının ateşlenmesi
