@@ -10857,6 +10857,14 @@ dmForm.addEventListener(
 new MutationObserver(() => {
     document.body.classList.toggle('dm-open', dmModal.style.display !== 'none' && dmModal.style.display !== '');
 }).observe(dmModal, { attributes: true, attributeFilter: ['style'] });
+// Arama ekranı açık mı: body.call-open. Telefonda alt menü (mnav) arama ekranının altındaki sessize al / alta al / ayrıl
+// düğmelerini örtüyordu; ekran açıkken alt menü gizlenir. Ekran 7 farklı yerden açılıp kapandığı için görünürlüğü izlenir.
+{
+    const overlay = document.getElementById('call-overlay');
+    if (overlay) new MutationObserver(() => {
+        document.body.classList.toggle('call-open', overlay.style.display !== 'none' && overlay.style.display !== '');
+    }).observe(overlay, { attributes: true, attributeFilter: ['style'] });
+}
 
 function closeDmPanel() {
     dmModal.style.display = 'none';

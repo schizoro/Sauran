@@ -3157,5 +3157,5 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
 /* Telefonda DM paneli tam ekran açılır; alt menü (mnav, katman 210) panelin (120) üstünde kalıp yazma kutusunu örtüyordu.
    Panelin katmanı yükseltilmez (arama ekranı, 200, panelin üstünde kalmalı); DM açıkken alt menü gizlenir. */
 @media (max-width: 720px) and (min-height: 501px) {
-  body.dm-open .mnav { display: none; }
+  body.dm-open .mnav, body.call-open .mnav { display: none; }
 }
