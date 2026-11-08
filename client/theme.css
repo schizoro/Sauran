@@ -3159,3 +3159,9 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
 @media (max-width: 720px) and (min-height: 501px) {
   body.dm-open .mnav, body.call-open .mnav { display: none; }
 }
+
+/* Çok satırlı yazma kutusu (textarea): tek satır gibi başlar, yazdıkça büyür (script.js autosizeComposer); düğmeler altta hizalı */
+.composer-input-box textarea.composer-textarea { flex: 1; min-width: 0; resize: none; overflow-y: hidden; max-height: 200px; min-height: 39px; height: auto;
+  margin: 0; padding: 9px 6px; border: 0; outline: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 14.5px; line-height: 1.45; }
+.composer-input-box:has(textarea.composer-textarea) { align-items: flex-end; }
+.dm-msg-content { white-space: pre-wrap; word-break: break-word; }

@@ -10328,6 +10328,7 @@ function restoreDraft(kind) {
     const input = kind === 'dm' ? dmMessageInput : hubMessageInput;
     const key = draftKey(kind);
     if (input) input.value = (key && composerDrafts.get(key)) || '';
+    if (typeof autosizeComposer === 'function') autosizeComposer(input);
 }
 
 function cancelMessageReply(context) {
@@ -11294,6 +11295,38 @@ const hubMessageInput = document.getElementById('hub-message-input');
 // Taslak yazdıkça saklanır: sohbetten hangi yoldan çıkılırsa çıkılsın (Ana Menü, panel dışına tıklama, silinen hesap…) kaybolmaz.
 hubMessageInput.addEventListener('input', () => stashDraft('hub'));
 dmMessageInput.addEventListener('input', () => stashDraft('dm'));
+
+// Çok satırlı yazma kutusu: masaüstünde Enter gönderir, Shift+Enter alt satıra geçer; telefonda (dokunmatik) Enter alt satıra
+// geçer, gönderme ➤ düğmesiyle (kullanıcı tercihi, 2026-11-08). Kutu yazdıkça büyür (en fazla ~8 satır).
+// Bahsetme (@) önerisi açıkken Enter öneriyi seçer (o işleyici olayı önce yakalar); Türkçe/IME harf birleştirme sırasında gönderilmez.
+const COMPOSER_MAX_HEIGHT = 200;
+function autosizeComposer(input) {
+    if (!input || input.tagName !== 'TEXTAREA') return;
+    // Kutu görünmüyorken (ör. lobi açılırken) ölçüm 0 verir: yükseklik sabitlenmez, görünür olunca ilk girişte ölçülür.
+    if (!input.offsetParent) { input.style.height = ''; return; }
+    input.style.height = 'auto';
+    const h = Math.min(input.scrollHeight, COMPOSER_MAX_HEIGHT);
+    input.style.height = `${h}px`;
+    input.style.overflowY = input.scrollHeight > COMPOSER_MAX_HEIGHT ? 'auto' : 'hidden';
+}
+const touchComposer = window.matchMedia('(hover: none) and (pointer: coarse)');
+[hubMessageInput, dmMessageInput].forEach((input) => {
+    if (!input || input.tagName !== 'TEXTAREA') return;
+    const syncEnterKey = () => input.setAttribute('enterkeyhint', touchComposer.matches ? 'enter' : 'send');
+    syncEnterKey();
+    touchComposer.addEventListener?.('change', syncEnterKey);
+    input.addEventListener('input', () => autosizeComposer(input));
+    input.addEventListener('keydown', (event) => {
+        if (touchComposer.matches) return; // telefonda Enter yeni satır
+        if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229 || event.defaultPrevented) return;
+        // @ önerisi açıksa Enter öneriyi seçer (bu işleyici öneri işleyicisinden önce kayıtlı olduğu için ayrıca bakılır)
+        if (input === hubMessageInput && typeof mentionSuggest !== 'undefined' && !mentionSuggest.hidden && mentionItems.length) return;
+        event.preventDefault();
+        input.form?.requestSubmit();
+    });
+    // Gönderince (kutu kod tarafından boşaltılır) ve taslak geri yüklenince boyut güncellenir.
+    input.form?.addEventListener('submit', () => setTimeout(() => autosizeComposer(input), 0));
+});
 const hubVoiceBtn = document.getElementById('hub-voice-btn');
 wireAttachMenu('hub', async (file) => {
 
