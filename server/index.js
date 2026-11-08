@@ -5095,6 +5095,9 @@ io.use((socket, next) => {
 // SOCKET.IO BAĞLANTI
 // =====================================================
 
+// İstemcinin geçici mesaj kimliği (yalnızca güvenli karakterler); yanıtlarda geri yansıtılır.
+const safeClientId = (v) => (typeof v === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(v) ? v : null);
+
 io.on('connection', (socket) => {
   const userId = socket.userId;
   const username = socket.username;
@@ -5126,21 +5129,21 @@ io.on('connection', (socket) => {
   }
 
   socket.on('dm_message', (data) => {
+    const clientId = safeClientId(data?.client_id); // her hata yanıtı hangi geçici mesaja ait olduğunu taşır
     try {
       if (!socket.userId || !socket.username) {
-        socket.emit('message_error', 'Oturum doğrulanamadı.');
+        socket.emit('message_error', 'Oturum doğrulanamadı.', clientId);
         return;
       }
 
       if (isSocketMessageRateLimited(socket)) {
-        socket.emit('message_error', 'Çok hızlı mesaj gönderiyorsun, biraz yavaşla.');
+        socket.emit('message_error', 'Çok hızlı mesaj gönderiyorsun, biraz yavaşla.', clientId);
         return;
       }
 
       const toUserId = Number(data?.to_user_id);
       const replyToMessageId = data?.reply_to_message_id ? Number(data.reply_to_message_id) : null;
       const result = saveDmMessage(socket.userId, socket.username, toUserId, data?.content, replyToMessageId);
-      const clientId = typeof data?.client_id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(data.client_id) ? data.client_id : null;
 
       if (!result.success) {
         socket.emit('message_error', result.error, clientId);
@@ -5152,7 +5155,7 @@ io.on('connection', (socket) => {
 
     } catch (error) {
       console.error('DM kaydedilirken hata:', error);
-      socket.emit('message_error', 'Mesaj gönderilemedi.');
+      socket.emit('message_error', 'Mesaj gönderilemedi.', clientId);
     }
   });
 
@@ -5294,11 +5297,15 @@ io.on('connection', (socket) => {
     const toUserId = Number(data?.to_user_id);
     if (!toUserId || !socket.userId) return;
     if (!areFriends(socket.userId, toUserId) && !activeDmCalls.has(dmPairKey(socket.userId, toUserId))) return; // yalnızca arkadaş (ya da süren aramanın karşı tarafı)
-    io.to(`user:${toUserId}`).emit('dm_call_declined', { from_user_id: socket.userId });
+    // busy: istemci zaten görüşmede olduğu için kendiliğinden reddetti. Yalnızca bu hesabın gerçekten süren bir DM
+    // görüşmesi varsa kabul edilir; yoksa (ör. bir sekme lobi ses odasında, telefon boşta) yok sayılır ve diğer cihazlar çalmaya devam eder.
+    const busy = data?.busy === true;
+    if (busy && ![...activeDmCalls.values()].some((c) => c.callerId === socket.userId || c.calleeId === socket.userId)) return;
+    io.to(`user:${toUserId}`).emit('dm_call_declined', { from_user_id: socket.userId, busy });
     const pendingDecline = pendingDmCalls.get(toUserId);
     if (pendingDecline && pendingDecline.toId === socket.userId) {
       clearPendingDmCall(toUserId);
-      logDmCall(toUserId, pendingDecline.callerName, socket.userId, 'declined');
+      logDmCall(toUserId, pendingDecline.callerName, socket.userId, busy ? 'missed' : 'declined');
     }
     // Aynı hesabın diğer cihazlarında çalan gelen arama kapansın.
     socket.to(`user:${socket.userId}`).emit('dm_call_handled', { from_user_id: toUserId });
@@ -5346,14 +5353,15 @@ io.on('connection', (socket) => {
   });
 
   socket.on('hub_chat_message', (data) => {
+    const clientId = safeClientId(data?.client_id); // her hata yanıtı hangi geçici mesaja ait olduğunu taşır
     try {
       if (!socket.userId || !socket.username) {
-        socket.emit('message_error', 'Oturum doğrulanamadı.');
+        socket.emit('message_error', 'Oturum doğrulanamadı.', clientId);
         return;
       }
 
       if (isSocketMessageRateLimited(socket)) {
-        socket.emit('message_error', 'Çok hızlı mesaj gönderiyorsun, biraz yavaşla.');
+        socket.emit('message_error', 'Çok hızlı mesaj gönderiyorsun, biraz yavaşla.', clientId);
         return;
       }
 
@@ -5363,31 +5371,30 @@ io.on('connection', (socket) => {
       if (!content || !hubId) return;
 
       if (content.length > 2000) {
-        socket.emit('message_error', 'Mesajınız çok uzun (Maksimum 2000 karakter).', data?.client_id || null);
+        socket.emit('message_error', 'Mesajınız çok uzun (Maksimum 2000 karakter).', clientId);
         return;
       }
 
       if (!isHubMember(hubId, socket.userId)) {
-        socket.emit('message_error', 'Bu Lobi\'a üye değilsin.');
+        socket.emit('message_error', 'Bu Lobi\'a üye değilsin.', clientId);
         return;
       }
 
       const slowWait = slowModeWait(hubId, socket.userId);
       if (slowWait) {
-        socket.emit('slow_mode_wait', { hub_id: hubId, retry_after: slowWait, client_id: typeof data?.client_id === 'string' ? data.client_id.slice(0, 40) : null });
+        socket.emit('slow_mode_wait', { hub_id: hubId, retry_after: slowWait, client_id: clientId });
         return;
       }
 
       const filtered = applyHubWordFilter(hubId, socket.userId, content);
       if (filtered.blocked) {
-        socket.emit('message_blocked', { hub_id: hubId, reason: 'word_filter', client_id: typeof data?.client_id === 'string' ? data.client_id.slice(0, 40) : null });
+        socket.emit('message_blocked', { hub_id: hubId, reason: 'word_filter', client_id: clientId });
         return;
       }
 
       const replyToMessageId = data?.reply_to_message_id ? Number(data.reply_to_message_id) : null;
       const message = saveHubMessage(hubId, socket.userId, socket.username, filtered.text, replyToMessageId);
       // İstemcinin "gönderiliyor" diye hemen gösterdiği geçici mesajı gerçek mesajla eşleştirmesi için yalnızca geri yansıtılır.
-      const clientId = typeof data?.client_id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(data.client_id) ? data.client_id : null;
 
       markSlowModePost(hubId, socket.userId);
       // Yeniden bağlanan soket lobi kanalına henüz katılmamış olabilir: üyeliği doğrulandı, kanala al ki onay ve sonraki mesajlar ulaşsın.
@@ -5399,7 +5406,7 @@ io.on('connection', (socket) => {
 
     } catch (error) {
       console.error('Lobi mesajı kaydedilirken hata:', error);
-      socket.emit('message_error', 'Mesaj gönderilemedi.');
+      socket.emit('message_error', 'Mesaj gönderilemedi.', clientId);
     }
   });
 

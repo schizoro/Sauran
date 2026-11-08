@@ -158,6 +158,7 @@
         }
         content.insertBefore(bar, content.firstChild);
         apply();
+        document.addEventListener('sauran:hub-list-rendered', apply);
     })();
 
     // Lobi bilgi penceresi (üst çubuktaki lobi fotoğrafına tıklayınca)

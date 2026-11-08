@@ -32,6 +32,7 @@
         const open = body.classList.contains('lobby-drawer-open') && body.classList.contains(mode);
         closeAll();
         if (!open) body.classList.add('lobby-drawer-open', mode);
+        if (!open && mode === 'drawer-friendlist') refreshPending();
         sync();
     }
 
@@ -41,6 +42,7 @@
     dir.className = 'friends-directory';
     dir.innerHTML = `<div class="fd-head"><span>Arkadaşlar</span><button type="button" class="rail-btn rail-btn-sm" id="fd-add" aria-label="Arkadaş ekle" title="Arkadaş ekle"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg></button></div>
         <div class="fd-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input id="fd-input" type="search" placeholder="Arkadaşlarda kullanıcı adı ara" autocomplete="off" aria-label="Arkadaş ara"></div>
+        <button type="button" class="fd-pending" id="fd-pending" hidden></button>
         <div class="fd-list" id="fd-list"></div>`;
     const lobbyNav = $('lobby-nav');
     if (lobbyNav) lobbyNav.appendChild(dir);
@@ -58,6 +60,23 @@
             return `<button type="button" class="fd-row" data-fid="${f.id}"><span class="fd-av" style="--user-color:${escA(color)}">${av}<i class="fd-st${f.online ? ' on' : ''}"></i></span><span class="fd-name">${esc(f.username)}</span><span class="fd-sub">${f.online ? 'çevrimiçi' : ''}</span></button>`;
         }).join('');
     }
+    // Bekleyen arkadaşlık istekleri: bildirimi kaçıran ya da kapatan kişi istekleri buradan da bulabilsin.
+    async function refreshPending() {
+        const btn = $('fd-pending');
+        if (!btn) return;
+        try {
+            const r = await fetch('/api/friends/requests', { credentials: 'include' });
+            const d = await r.json();
+            const n = d && d.success && Array.isArray(d.requests) ? d.requests.length : 0;
+            btn.hidden = n === 0;
+            btn.innerHTML = `<span>Bekleyen arkadaşlık istekleri</span><b>${n}</b>`;
+        } catch (_) { btn.hidden = true; }
+    }
+    $('fd-pending')?.addEventListener('click', () => {
+        closeAll(); sync();
+        if (typeof openOnlinePanel === 'function' && typeof usersModal !== 'undefined') { usersModal.style.display = 'flex'; openOnlinePanel(); }
+    });
+    document.addEventListener('friends-updated', refreshPending);
     $('fd-input')?.addEventListener('input', renderDir);
     $('fd-add')?.addEventListener('click', () => { closeAll(); sync(); $('friend-add-open-btn')?.click(); });
     $('fd-list')?.addEventListener('click', (e) => {

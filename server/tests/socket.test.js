@@ -99,3 +99,32 @@ test('Lobi kelime filtresi: engelleme modunda mesaj yayınlanmaz', async () => {
   await blocked;
   assert.ok(await sock.alice.expectNone('hub_message', (m) => String(m.content).includes('FILTRE_1')));
 });
+
+test('DM: 2000 karakter gider; 2001 sessizce kesilmez, reddedilir ve hata hangi mesaja ait olduğunu söyler', async () => {
+  const ok = 'UZUN_OK_' + 'a'.repeat(1992);
+  const got = sock.bob.waitFor('dm_message', (m) => m.content === ok.slice(0, 2000));
+  sock.alice.emit('dm_message', { to_user_id: S.bob.id, content: ok.slice(0, 2000), client_id: 'u1' });
+  assert.equal((await got).content.length, 2000);
+  const err = sock.alice.waitFor('message_error', (e) => Array.isArray(e) && e[1] === 'u2');
+  sock.alice.emit('dm_message', { to_user_id: S.bob.id, content: 'b'.repeat(2001), client_id: 'u2' });
+  assert.match(String((await err)[0]), /uzun/);
+  assert.ok(await sock.bob.expectNone('dm_message', (m) => String(m.content).startsWith('bbbb')));
+});
+
+test('Mesaj hataları gönderilen geçici mesajın kimliğini taşır (yanlış balon işaretlenmesin)', async () => {
+  const err = sock.carol.waitFor('message_error', (e) => Array.isArray(e) && e[1] === 'c-kimlik-1');
+  sock.carol.emit('hub_chat_message', { hub_id: S.hubId, content: 'izinsiz', client_id: 'c-kimlik-1' });
+  assert.match(String((await err)[0]), /üye değil/);
+  const err2 = sock.carol.waitFor('message_error', (e) => Array.isArray(e) && e[1] === 'c-kimlik-2');
+  sock.carol.emit('dm_message', { to_user_id: S.alice.id, content: 'arkadaş değiliz', client_id: 'c-kimlik-2' });
+  await err2;
+});
+
+test('Arama: görüşmede olmayan birinin "meşgul" yanıtı yok sayılır; normal ret iletilir', async () => {
+  // alice'in süren bir DM görüşmesi yok: busy ret sahte/yanlış kabul edilir, bob'a hiçbir şey gitmez (diğer cihazlar çalmaya devam eder).
+  sock.alice.emit('dm_call_decline', { to_user_id: S.bob.id, busy: true });
+  assert.ok(await sock.bob.expectNone('dm_call_declined', (d) => d.from_user_id === S.alice.id && d.busy === true));
+  const got = sock.bob.waitFor('dm_call_declined', (d) => d.from_user_id === S.alice.id);
+  sock.alice.emit('dm_call_decline', { to_user_id: S.bob.id });
+  assert.equal((await got).busy, false);
+});

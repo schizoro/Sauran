@@ -4550,14 +4550,19 @@ function purgeDeletedMessageResidue() {
   }
 }
 
+// Lobi ve DM metin mesajları için tek sınır (index.js lobi soketi de bunu kullanır).
+const MAX_MESSAGE_LENGTH = 2000;
+const MESSAGE_TOO_LONG_ERROR = `Mesajın çok uzun (en fazla ${MAX_MESSAGE_LENGTH} karakter).`;
+
 function editMessage(messageId, userId, newContent) {
   const msg = db.prepare(`SELECT user_id, hub_id, to_user_id, kind FROM messages WHERE id = ?`).get(messageId);
   if (!msg) return { success: false, error: 'Mesaj bulunamadı.' };
   if (msg.user_id !== userId) return { success: false, error: 'Yalnızca kendi mesajını düzenleyebilirsin.' };
   if (!['text', 'dm'].includes(msg.kind)) return { success: false, error: 'Bu mesaj türü düzenlenemez.' };
 
-  newContent = String(newContent || '').trim().slice(0, 2000);
+  newContent = String(newContent || '').trim();
   if (!newContent) return { success: false, error: 'Boş mesaj gönderilemez.' };
+  if (newContent.length > MAX_MESSAGE_LENGTH) return { success: false, error: MESSAGE_TOO_LONG_ERROR };
 
   if (msg.hub_id) {
     const filtered = applyHubWordFilter(msg.hub_id, userId, newContent);
@@ -6633,8 +6638,10 @@ function saveDmMessage(fromId, fromUsername, toId, content, replyToMessageId = n
   // Askıdaki hesaba YENİ mesaj gönderilemez (mevcut DM geçmişi olduğu gibi durur).
   if (isAccountSuspended(toId)) return { success: false, error: DM_UNAVAILABLE_ERROR };
 
-  content = String(content || '').trim().slice(0, 500);
+  content = String(content || '').trim();
   if (!content) return { success: false, error: 'Boş mesaj gönderilemez.' };
+  // Sınır lobi ile aynı; aşan mesaj sessizce kesilmez, reddedilir (istemci metni kutuda tutar).
+  if (content.length > MAX_MESSAGE_LENGTH) return { success: false, error: MESSAGE_TOO_LONG_ERROR };
 
   // Yanıtlanan mesaj bu iki kullanıcı arasındaki DM'e ait değilse (başka bir
   // konuşmadan sızdırılmış bir ID olabilir) sessizce yok sayılır.

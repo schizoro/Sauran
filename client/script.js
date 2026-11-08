@@ -201,7 +201,8 @@ function playVoicePresenceSound(joined) {
 // Gelen arama için tekrar eden zil sesi (kabul/red/iptal edilene kadar).
 let ringtoneIntervalId = null;
 function startRingtone() {
-    if (!notifSoundEnabled || ringtoneIntervalId) return;
+    // Mesaj bildirim sesini kapatan biri aramaları da kaçırmasın: zil bu ayardan bağımsız çalar (reddetmek tek dokunuş).
+    if (ringtoneIntervalId) return;
     const ring = () => {
         const ctx = getAppAudioCtx();
         if (!ctx) return;
@@ -3209,8 +3210,9 @@ async function openGeneralScreenForNotificationType(type) {
         await reloadNotifications();
         notificationsModal.style.display = 'flex';
     } else if (type === 'dm_message' || type === 'incoming_call') {
-        friendsSidebar2.classList.add('open');
-        friendsSidebarToggleBtn2.classList.add('open');
+        // Mesajlar (DM listesi) çekmecesi: kenar paneli shell.js tarafından bu çekmeceye taşındı; eski ".open" sınıfı artık görünür bir şey açmıyordu.
+        document.body.classList.remove('drawer-groups', 'drawer-friendlist');
+        document.body.classList.add('lobby-drawer-open', 'drawer-friends');
         loadFriendsSidebar();
     }
     // hub_message ve bilinmeyen türler: uygulama zaten lobi listesiyle açılır.
@@ -4261,6 +4263,12 @@ const I18N = {
     'call-incoming-sub': { tr: 'seni arıyor...', en: 'is calling you...' },
     'call-leave': { tr: 'Ayrıl', en: 'Leave' },
     'call-connected': { tr: 'Bağlandı', en: 'Connected' },
+    'conn-lost': { tr: 'Bağlantı koptu. Yeniden bağlanılıyor…', en: 'Connection lost. Reconnecting…' },
+    'conn-offline': { tr: 'İnternet bağlantın yok. Bağlantı gelince otomatik devam eder.', en: 'You are offline. Sauran will reconnect automatically.' },
+    'conn-back': { tr: 'Yeniden bağlandı', en: 'Reconnected' },
+    'call-declined': { tr: 'Arama reddedildi.', en: 'Call declined.' },
+    'call-busy': { tr: '{user} şu an başka bir görüşmede.', en: '{user} is on another call right now.' },
+    'msg-too-long': { tr: 'Mesajın çok uzun: {n} / {max} karakter. Kısaltıp tekrar gönder.', en: 'Your message is too long: {n} / {max} characters. Shorten it and send again.' },
     'call-connecting': { tr: 'Bağlanıyor...', en: 'Connecting...' },
     'notif-friend-request': { tr: '1 arkadaşlık isteği', en: '1 friend request' },
     'notif-hub-invite': { tr: '1 lobi daveti', en: '1 lobby invite' },
@@ -4810,6 +4818,9 @@ function renderActivityControls() {
     toggle.checked = currentUser.show_activity !== false;
 }
 
+// Lobi ve DM metin mesajı sınırı (sunucu db.js MAX_MESSAGE_LENGTH ile aynı).
+const MAX_MESSAGE_LENGTH = 2000;
+
 // Masaüstü uygulaması güncellemesi: yeni sürüm yayınlandıysa sağ altta "Güncelleme mevcut" çubuğu ve "Güncelle" butonu.
 // Güncelleme yoksa (ya da eski masaüstü sürümü bu arayüzü bilmiyorsa / tarayıcıdaysa) hiçbir şey gösterilmez.
 const DESKTOP_DOWNLOAD_URL = 'https://github.com/schizoro/Sauran/releases/latest';
@@ -5288,6 +5299,16 @@ function connectToChat() {
     });
 
 
+    // Bağlantı koparsa kullanıcıya söylenir (mesajlar ve çevrimiçi durumu sessizce donmasın). Kısa kopmalarda şerit
+    // titremesin diye 1,5 sn beklenir; geri gelince kısa bir "Yeniden bağlandı" gösterilip kapanır.
+    socket.on('disconnect', (reason) => {
+        // 'io client disconnect': bilerek kapatıldı (çıkış). 'io server disconnect': sunucu oturumu kapattı (süresi doldu, askı,
+        // hesap silme); Socket.IO bu durumda yeniden bağlanmaz, "yeniden bağlanılıyor" yazısı yanıltıcı olur.
+        if (reason === 'io client disconnect' || reason === 'io server disconnect') { setConnectionBanner('reset'); return; }
+        setConnectionBanner('lost');
+    });
+    socket.on('connect', () => setConnectionBanner('ok'));
+
     // -------------------------------------------------
     // Socket bağlantı hatası
     // -------------------------------------------------
@@ -5650,7 +5671,7 @@ function connectToChat() {
     });
     socket.on('dm_call_declined', (data) => {
         if (data.from_user_id === outgoingCallToId) {
-            showToast('Arama reddedildi.');
+            showToast(data.busy ? t('call-busy').replace('{user}', outgoingCallToUsername || '') : t('call-declined'));
             endDmCallUi();
         }
     });
@@ -5867,7 +5888,8 @@ function connectToChat() {
         if (firstConnect) { firstConnect = false; return; }
         if (currentHub && document.body.dataset.view === 'hub-detail') {
             socket.emit('join_hub', currentHub.id);
-            if (!pendingSends.size) loadHubMessages(currentHub.id);
+            // Hâlâ yolda olan (süresi dolmamış) mesaj varken akış yeniden çizilmez; onun balonu kaybolmasın.
+            if (![...pendingSends.values()].some((e) => !e.failed)) loadHubMessages(currentHub.id);
         }
     });
 
@@ -6530,6 +6552,12 @@ async function logout() {
     }
 
     if (callFrame) leaveCall();
+
+    // Aynı sekmede başka hesapla girilirse önceki hesabın taslakları ve "bağlantı koptu" şeridi görünmesin.
+    composerDrafts.clear();
+    if (hubMessageInput) hubMessageInput.value = '';
+    if (dmMessageInput) dmMessageInput.value = '';
+    setConnectionBanner('reset');
 
     currentHub = null;
 
@@ -9156,6 +9184,8 @@ function renderDmTitle(userId, username) {
 
 async function openDm(userId, username) {
 
+    userId = Number(userId); // bildirim/veri özniteliğinden metin olarak gelebilir; aynı sohbet "değişti" sanılmasın
+
     // Bildirim bağlantısında ad taşınmaz: yoksa oturumlu API'den alınır.
     if (!username) {
         try {
@@ -9168,8 +9198,11 @@ async function openDm(userId, username) {
     setDmReadOnlyMode(false);
     clearTyping('dm');
     if (msgSearchPanel?.dataset.kind === 'dm') closeMessageSearch();
+    const dmChanged = activeDmUserId !== userId;
+    if (dmChanged) { stashDraft('dm'); cancelMessageReply('dm'); }
     activeDmUserId = userId;
     activeDmUsername = username;
+    if (dmChanged) restoreDraft('dm');
     renderDmTitle(userId, username);
     dmFeed.innerHTML = '';
 
@@ -9261,6 +9294,8 @@ function appendDmCallLog(msg, opts) {
 
 function appendDmMessage(msg, opts) {
 
+    if (msg && msg.id && dmFeed.querySelector(`[data-message-id="${Number(msg.id)}"]`)) return;
+
     if (msg.kind === 'dm_call') { appendDmCallLog(msg, opts); return; }
 
     const row = document.createElement('div');
@@ -9340,18 +9375,23 @@ function optimisticMessage(content, kind, extra) {
 function trackPendingSend(clientId, el, kind) {
     el.classList.add('msg-pending');
     el.dataset.clientId = clientId;
-    const timer = setTimeout(() => markPendingFailed(clientId), 15000);
+    // Süre dolunca "gönderilemedi" görünür ama kayıt bir süre tutulur: bağlantı geri gelip mesaj geç ulaşırsa
+    // sunucunun yanıtı bu balonla eşleşir (ikinci bir kopya eklenmez, "gönderilemedi" kalkar).
+    const timer = setTimeout(() => markPendingFailed(clientId, { final: false }), 15000);
     pendingSends.set(clientId, { el, kind, timer });
 }
 
-function markPendingFailed(clientId) {
-    const entry = clientId ? pendingSends.get(clientId) : [...pendingSends.values()][0];
+// Yalnızca kimliği verilen mesaj işaretlenir; kimliksiz bir hata başka bir mesajı yanlışlıkla "gönderilemedi" yapmaz.
+function markPendingFailed(clientId, { final = true } = {}) {
+    const entry = clientId && pendingSends.get(clientId);
     if (!entry) return;
     clearTimeout(entry.timer);
     entry.el.classList.remove('msg-pending');
     entry.el.classList.add('msg-failed');
     entry.el.title = t('msg-send-failed');
-    pendingSends.delete(entry.el.dataset.clientId);
+    if (final) { pendingSends.delete(clientId); return; }
+    entry.failed = true;
+    entry.timer = setTimeout(() => pendingSends.delete(clientId), 5 * 60 * 1000);
 }
 
 // Sunucudan dönen mesaj bekleyen geçici mesajla eşleşirse onun yerine geçer (true döner) ve yeni satır eklenmez.
@@ -9360,7 +9400,9 @@ function resolvePendingSend(msg) {
     if (!entry) return false;
     clearTimeout(entry.timer);
     pendingSends.delete(msg.client_id);
-    entry.el.classList.remove('msg-pending');
+    if (!entry.el.isConnected) return false; // akış bu arada yeniden çizildiyse mesaj normal yoldan eklenir
+    entry.el.classList.remove('msg-pending', 'msg-failed');
+    entry.el.removeAttribute('title');
     if (entry.kind === 'hub') {
         entry.el.dataset.messageId = msg.id;
         renderHubMessageIntoWrap(entry.el, msg);
@@ -10233,6 +10275,57 @@ function startMessageReply(msg, opts) {
 
 }
 
+// ─── Bağlantı durumu şeridi ───
+let connBannerTimer = null;
+let connBannerShown = false;
+function setConnectionBanner(state) {
+    let bar = document.getElementById('conn-banner');
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'conn-banner';
+        bar.className = 'conn-banner';
+        bar.setAttribute('role', 'status');
+        bar.setAttribute('aria-live', 'polite');
+        bar.hidden = true;
+        document.body.appendChild(bar);
+    }
+    clearTimeout(connBannerTimer);
+    if (state === 'reset') { connBannerShown = false; bar.hidden = true; return; }
+    if (state === 'lost') {
+        connBannerTimer = setTimeout(() => {
+            bar.textContent = navigator.onLine === false ? t('conn-offline') : t('conn-lost');
+            bar.className = 'conn-banner';
+            bar.hidden = false;
+            connBannerShown = true;
+        }, 1500);
+        return;
+    }
+    if (!connBannerShown) { bar.hidden = true; return; }
+    connBannerShown = false;
+    bar.textContent = t('conn-back');
+    bar.className = 'conn-banner ok';
+    connBannerTimer = setTimeout(() => { bar.hidden = true; }, 2500);
+}
+window.addEventListener('offline', () => { if (socket && currentUser) setConnectionBanner('lost'); });
+
+// Sohbet başına taslak: başka bir sohbete geçince yarım mesaj kaybolmaz ve yeni açılan sohbetin kutusunda kalıp yanlış kişiye gitmez.
+const composerDrafts = new Map(); // 'dm:<kullanıcı>' | 'hub:<lobi>' -> metin
+function draftKey(kind) {
+    if (kind === 'dm') return activeDmUserId ? `dm:${activeDmUserId}` : null;
+    return currentHub ? `hub:${currentHub.id}` : null;
+}
+function stashDraft(kind) {
+    const key = draftKey(kind);
+    const input = kind === 'dm' ? dmMessageInput : hubMessageInput;
+    if (!key || !input) return;
+    if (input.value.trim()) composerDrafts.set(key, input.value); else composerDrafts.delete(key);
+}
+function restoreDraft(kind) {
+    const input = kind === 'dm' ? dmMessageInput : hubMessageInput;
+    const key = draftKey(kind);
+    if (input) input.value = (key && composerDrafts.get(key)) || '';
+}
+
 function cancelMessageReply(context) {
     if (context === 'hub') {
         hubReplyTarget = null;
@@ -10744,6 +10837,7 @@ dmForm.addEventListener(
 
         const content = dmMessageInput.value.trim();
         if (!content || !activeDmUserId || !socket) return;
+        if (content.length > MAX_MESSAGE_LENGTH) { showNotice(t('msg-too-long').replace('{n}', content.length).replace('{max}', MAX_MESSAGE_LENGTH)); return; }
         if (feedPaging.dm.hasNewer) returnToLatest('dm');
 
         const clientId = newClientId();
@@ -10752,14 +10846,22 @@ dmForm.addEventListener(
         socket.emit('dm_message', { to_user_id: activeDmUserId, content, reply_to_message_id: dmReplyTarget, client_id: clientId });
 
         dmMessageInput.value = '';
+        composerDrafts.delete(`dm:${activeDmUserId}`);
         cancelMessageReply('dm');
 
     }
 );
 
 
+// DM paneli açık mı: body.dm-open (telefonda alt menü gizlenir). Panel 8 farklı yerden açılıp kapandığı için görünürlüğü izlenir.
+new MutationObserver(() => {
+    document.body.classList.toggle('dm-open', dmModal.style.display !== 'none' && dmModal.style.display !== '');
+}).observe(dmModal, { attributes: true, attributeFilter: ['style'] });
+
 function closeDmPanel() {
     dmModal.style.display = 'none';
+    stashDraft('dm');
+    cancelMessageReply('dm');
     activeDmUserId = null;
 }
 
@@ -11177,6 +11279,9 @@ const hubStartBtn = document.getElementById('hub-start-btn');
 const hubStartMenu = document.getElementById('hub-start-menu');
 const hubChatForm = document.getElementById('hub-chat-form');
 const hubMessageInput = document.getElementById('hub-message-input');
+// Taslak yazdıkça saklanır: sohbetten hangi yoldan çıkılırsa çıkılsın (Ana Menü, panel dışına tıklama, silinen hesap…) kaybolmaz.
+hubMessageInput.addEventListener('input', () => stashDraft('hub'));
+dmMessageInput.addEventListener('input', () => stashDraft('dm'));
 const hubVoiceBtn = document.getElementById('hub-voice-btn');
 wireAttachMenu('hub', async (file) => {
 
@@ -13987,6 +14092,8 @@ async function loadHubList() {
         renderHubUnreadBadges();
         hubListGridOwned.parentElement.style.display = hubListGridOwned.children.length ? 'block' : 'none';
         hubListGridJoined.parentElement.style.display = hubListGridJoined.children.length ? 'block' : 'none';
+        // Ana menü sekmeleri (shell.js) seçili olmayan bölümü yeniden gizlesin: yukarıdaki satırlar sekme seçimini ezer.
+        document.dispatchEvent(new CustomEvent('sauran:hub-list-rendered'));
 
     } catch (error) {
 
@@ -14748,7 +14855,10 @@ async function openHub(hubId) {
 
         if (!data.success) return;
 
+        const hubChanged = !currentHub || currentHub.id !== data.hub.id;
+        if (hubChanged) { stashDraft('hub'); cancelMessageReply('hub'); }
         currentHub = data.hub;
+        if (hubChanged) restoreDraft('hub');
         resetSlowModeForHub();
 
         switchToView('hub-detail');
@@ -15096,7 +15206,14 @@ function setCallRingBackground(url) {
 
 function showIncomingCall(fromId, fromUsername) {
 
-    if (callFrame || callMode) return; // zaten görüşmedeyse gelen aramayı gösterme
+    // Zaten görüşmedeyse gelen arama gösterilmez; arayan 45 sn boşuna çalmasın diye "meşgul" yanıtı gider.
+    if (callFrame || callMode) {
+        // "Meşgul" yalnızca bire bir DM görüşmesindeyken gönderilir (lobi ses odası meşgul sayılmaz; arayan çalmaya devam eder ve
+        // diğer cihazların açabilir). Görüştüğün ya da aynı anda aradığın kişinin daveti de meşgul sayılmaz. Sunucu ayrıca doğrular.
+        const inDmCall = callMode === 'dm' || callMode === 'dm-ringing';
+        if (inDmCall && socket && fromId && fromId !== outgoingCallToId) socket.emit('dm_call_decline', { to_user_id: fromId, busy: true });
+        return;
+    }
 
     incomingCallFromId = fromId;
     incomingCallFromUsername = fromUsername;
@@ -16821,19 +16938,19 @@ hubChatForm.addEventListener(
 
         const content = hubMessageInput.value.trim();
         if (!content || !currentHub || !socket) return;
+        if (content.length > MAX_MESSAGE_LENGTH) { showNotice(t('msg-too-long').replace('{n}', content.length).replace('{max}', MAX_MESSAGE_LENGTH)); return; }
         if (slowModeGuard()) return;
         if (feedPaging.hub.hasNewer) returnToLatest('hub');
 
         const clientId = newClientId();
-        if (content.length <= 500) {
-            appendHubMessage(optimisticMessage(content, 'text', { reply_to_message_id: hubReplyTarget }), { forceScroll: true, clientId });
-        }
+        appendHubMessage(optimisticMessage(content, 'text', { reply_to_message_id: hubReplyTarget }), { forceScroll: true, clientId });
         typingSendStop('hub');
         socket.emit('hub_chat_message', { hub_id: currentHub.id, content, reply_to_message_id: hubReplyTarget, client_id: clientId });
-        if (content.length <= 500) startSlowModeCooldown(currentHub.slow_mode_seconds);
+        startSlowModeCooldown(currentHub.slow_mode_seconds);
         if (pendingSends.get(clientId)) pendingSends.get(clientId).content = content;
 
         hubMessageInput.value = '';
+        composerDrafts.delete(`hub:${currentHub.id}`);
         cancelMessageReply('hub');
 
     }
@@ -17059,6 +17176,9 @@ async function loadHubMessages(hubId) {
 
 
 function appendHubMessage(msg, opts) {
+
+    // Aynı mesaj (ör. yeniden bağlanınca hem yeniden yüklenen akışta hem geç gelen yanıtta) iki kez eklenmez.
+    if (msg && msg.id && hubFeed.querySelector(`.hub-msg[data-message-id="${Number(msg.id)}"]`)) return;
 
     const empty = hubFeed.querySelector('.hub-feed-empty');
     if (empty) empty.remove();

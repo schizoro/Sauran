@@ -230,3 +230,11 @@ test('CSP üst bilgisi: Daily yedek alan adları ve rapor adresi var, unsafe-eva
   assert.ok(csp.includes("'wasm-unsafe-eval'"), 'gürültü engelleme (WebAssembly) için');
   assert.match(res.headers.get('content-security-policy'), /frame-ancestors 'none'/);
 });
+
+test('Mesaj düzenleme: 2000 karakteri aşan düzenleme kesilmez, reddedilir', async () => {
+  const r = await as.alice.patch(`/api/messages/${S.hubMsg}`, { content: 'x'.repeat(2001) });
+  assert.equal(r.status, 400);
+  assert.match(r.body.error, /uzun/);
+  const page = await as.alice.get(`/api/hubs/${S.hubId}/messages`);
+  assert.ok(!page.text.includes('x'.repeat(100)));
+});
