@@ -4266,6 +4266,7 @@ const I18N = {
     'conn-lost': { tr: 'Bağlantı koptu. Yeniden bağlanılıyor…', en: 'Connection lost. Reconnecting…' },
     'conn-offline': { tr: 'İnternet bağlantın yok. Bağlantı gelince otomatik devam eder.', en: 'You are offline. Sauran will reconnect automatically.' },
     'conn-back': { tr: 'Yeniden bağlandı', en: 'Reconnected' },
+    'lc-room-join-hint': { tr: 'Katılmak için tıkla', en: 'Click to join' },
     'call-declined': { tr: 'Arama reddedildi.', en: 'Call declined.' },
     'call-busy': { tr: '{user} şu an başka bir görüşmede.', en: '{user} is on another call right now.' },
     'msg-too-long': { tr: 'Mesajın çok uzun: {n} / {max} karakter. Kısaltıp tekrar gönder.', en: 'Your message is too long: {n} / {max} characters. Shorten it and send again.' },
@@ -12271,7 +12272,7 @@ function renderVoiceRoomsList() {
         const isActive = room.id === currentVoiceRoomId;
         const count = room.participants?.length || 0;
         return `
-            <div class="hub-voice-room-row ${isActive ? 'active' : ''}" data-room-id="${room.id}">
+            <div class="hub-voice-room-row ${isActive ? 'active' : ''}" data-room-id="${room.id}"${!isActive && document.body.classList.contains('lc') ? ` title="${escapeAttr(t('lc-room-join-hint'))}"` : ''}>
                 <span class="hub-voice-room-icon">${isActive ? '🔊' : '🔈'}</span>
                 <div class="hub-voice-room-info">
                     <div class="hub-voice-room-name">${escapeHtml(room.name)}</div>
@@ -12314,6 +12315,9 @@ function renderVoiceRoomsList() {
 
             // Zaten bu odadaysa hiçbir şey yapma — mevcut bağlantı bozulmasın.
             if (currentVoiceRoomId === roomId) return;
+
+            // "Sıkı Düzen" yerleşimi (layout-c.js): odadakiler zaten listede görünür; tek tıkla katılınır (önizleme penceresi yok).
+            if (document.body.classList.contains('lc')) { joinVoiceRoom(room); return; }
 
             openVoiceRoomPreview(room);
         });
