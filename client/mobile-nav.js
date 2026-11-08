@@ -97,7 +97,11 @@
         else if (k === 'discover') { closeAll(); $('rail-discover')?.click(); }
         else if (k === 'home') { closeAll(); $('rail-home')?.click(); }
         else if (k === 'dms') { $('rail-friends')?.click(); }
-        else if (k === 'friends') { toggleMode('drawer-friendlist'); if (body.classList.contains('drawer-friendlist')) { renderDir(); } return; }
+        else if (k === 'friends') {
+            // "Sıkı Düzen" (layout-c.js): Arkadaşlar tam sayfa açılır (çekmece yerine)
+            if (body.classList.contains('lc')) { closeAll(); document.dispatchEvent(new Event('sauran:open-friends')); setTimeout(sync, 0); return; }
+            toggleMode('drawer-friendlist'); if (body.classList.contains('drawer-friendlist')) { renderDir(); } return;
+        }
         else if (k === 'profile') { closeAll(); $('rail-profile')?.click(); }
         setTimeout(sync, 0);
     });
@@ -108,9 +112,9 @@
         const on = {
             groups: drawer && body.classList.contains('drawer-groups'),
             dms: drawer && body.classList.contains('drawer-friends'),
-            friends: drawer && body.classList.contains('drawer-friendlist'),
+            friends: (drawer && body.classList.contains('drawer-friendlist')) || (!drawer && body.classList.contains('lc-friends-page')),
             discover: view === 'discover' && !drawer,
-            home: !drawer && view !== 'discover' && (view === 'hubs' || view === ''),
+            home: !drawer && view !== 'discover' && (view === 'hubs' || view === '') && !body.classList.contains('lc-friends-page'),
             profile: false
         };
         nav.querySelectorAll('.mnav-btn').forEach((b) => b.classList.toggle('on', Boolean(on[b.dataset.m])));
