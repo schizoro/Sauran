@@ -9759,7 +9759,10 @@ function placeMobileTopbarItems(view) {
     const sl = document.getElementById('lobby-superlike-btn');
     const membersBtn = document.getElementById('hub-members-toggle-btn');
     const ctxTitle = document.getElementById('topbar-context-title');
-    if (mobile && view === 'hub-detail') {
+    // "Sıkı Düzen" yerleşiminde (layout-c.js, body.lc) lobi başlığı tek satırdır ve üst çubuk lobi ekranında gizlidir:
+    // ayarlar / Süper Beğeni / üyeler düğmeleri lobi başlığında kalır.
+    const lcLayout = document.body.classList.contains('lc');
+    if (mobile && view === 'hub-detail' && !lcLayout) {
         moveNode(back, left, left.firstChild); moveNode(nameEl, left, ctxTitle);
         if (actions) { moveNode(sl, actions); moveNode(gear, actions); moveNode(membersBtn, actions); actions.style.display = 'flex'; }
     } else {

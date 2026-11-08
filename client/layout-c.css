@@ -1,0 +1,270 @@
+/* Sauran — "Sıkı Düzen" yerleşimi (tasarım yönü C). layout-c.js body'ye .lc, masaüstünde .lc-desk ekler.
+   Kenardan kenara düz paneller, ince çizgiler: ray (64) · kanal/ses sütunu (240) · sohbet · üyeler (232).
+   Bu dosya theme.css'ten SONRA yüklenir; eski yerleşimin konumlandırma kurallarını yalnızca .lc-desk altında ezer. */
+
+:root {
+  --lc-rail: 64px;
+  --lc-col: 240px;
+  --lc-mem: 232px;
+  --lc-bg-rail: #07090c;
+  --lc-bg-col: #0e1217;
+  --lc-bg-main: #0b0e12;
+  --lc-line: rgba(255, 255, 255, 0.07);
+  --lc-hover: rgba(255, 255, 255, 0.045);
+  --lc-active: rgba(255, 255, 255, 0.08);
+  --z-lc-rail: 60;
+}
+
+.lc-rail, .lc-col { display: none; }
+
+/* ═══════════════ MASAÜSTÜ ═══════════════ */
+body.lc.lc-desk.lc-auth .lc-rail {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  position: fixed; left: 0; top: 0; bottom: 0; width: var(--lc-rail); z-index: var(--z-lc-rail);
+  padding: calc(12px + env(safe-area-inset-top)) 0 calc(12px + env(safe-area-inset-bottom)) env(safe-area-inset-left);
+  background: var(--lc-bg-rail); border-right: 1px solid var(--lc-line); overflow-y: auto; scrollbar-width: none;
+}
+body.lc.lc-desk.lc-auth .lc-rail::-webkit-scrollbar { display: none; }
+.lc-lobbies { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.lc-ico {
+  position: relative; flex: none; width: 42px; height: 42px; border: 0; padding: 0; border-radius: 12px; cursor: pointer;
+  display: grid; place-items: center; background: var(--bg-surface-3); color: var(--text-secondary);
+  transition: border-radius .15s var(--ease), background .15s var(--ease), color .15s var(--ease);
+}
+.lc-ico svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.lc-ico:hover { border-radius: 14px; background: var(--accent-soft); color: var(--accent); }
+.lc-mark { width: 100%; height: 100%; border-radius: inherit; overflow: hidden; display: grid; place-items: center; font-weight: 800; font-size: 15px; color: #fff;
+  background: linear-gradient(135deg, #2b3a4f, #1b2533); }
+.lc-mark img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lc-home { border-radius: 50%; background: var(--bg-surface-3); }
+.lc-home-av { width: 100%; height: 100%; border-radius: 50%; overflow: hidden; display: grid; place-items: center; font-weight: 800; color: var(--text-primary); }
+.lc-home-av img { width: 100%; height: 100%; object-fit: cover; }
+.lc-sep { width: 26px; height: 2px; border-radius: 2px; background: var(--lc-line); flex: none; }
+.lc-spacer { flex: 1; }
+.lc-add { color: var(--success); }
+.lc-add:hover { background: rgba(95, 214, 164, 0.14); color: var(--success); }
+/* Etkin göstergesi: soldaki beyaz şerit (okunmamışta kısa, etkin olanda uzun) */
+.lc-pill { position: absolute; left: -11px; top: 50%; width: 4px; height: 0; border-radius: 0 3px 3px 0; background: var(--text-primary); transform: translateY(-50%); transition: height .15s var(--ease); }
+.lc-ico:hover .lc-pill { height: 18px; }
+.lc-ico.on .lc-pill { height: 30px; background: var(--accent); }
+.lc-ico.on { border-radius: 14px; }
+.lc-ico.on .lc-mark { box-shadow: inset 0 0 0 2px var(--accent); }
+.lc-lobby .lc-unread { position: absolute; right: -5px; bottom: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; font-size: 10.5px; font-weight: 800;
+  background: #ff4d5e; color: #fff; align-items: center; justify-content: center; box-shadow: 0 0 0 3px var(--lc-bg-rail); }
+.lc-lobby .lc-unread.is-muted { background: var(--bg-surface-3); color: var(--text-secondary); }
+.lc-dot { position: absolute; right: -2px; top: -2px; width: 11px; height: 11px; border-radius: 50%; background: #ff4d5e; box-shadow: 0 0 0 3px var(--lc-bg-rail); }
+.lc-dot[hidden] { display: none; }
+
+/* Kanal / ses sütunu */
+body.lc.lc-desk.lc-auth .lc-col {
+  display: flex; flex-direction: column; position: fixed; top: 0; bottom: 0; left: var(--lc-rail); width: var(--lc-col); z-index: var(--z-lc-rail);
+  background: var(--lc-bg-col); border-right: 1px solid var(--lc-line); padding-top: env(safe-area-inset-top);
+}
+.lc-col-head { height: 48px; flex: none; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 8px 0 14px; border-bottom: 1px solid var(--lc-line); }
+.lc-col-title { font-weight: 800; font-size: 14.5px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lc-col-body { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 0 10px; }
+.lc-col-body [hidden] { display: none !important; }
+.lc-lbl { display: flex; align-items: center; justify-content: space-between; padding: 14px 10px 4px 14px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); }
+.lc-ch { display: flex; align-items: center; gap: 8px; width: calc(100% - 12px); margin: 1px 6px; padding: 6px 8px; border: 0; border-radius: 7px; background: none; color: var(--text-secondary); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.lc-ch:hover { background: var(--lc-hover); color: var(--text-primary); }
+.lc-ch.on { background: var(--lc-active); color: var(--text-primary); font-weight: 600; }
+.lc-hash { color: var(--text-tertiary); font-weight: 500; width: 14px; text-align: center; }
+.lc-icon-btn { flex: none; width: 32px; height: 32px; border: 0; border-radius: 8px; background: none; color: var(--text-secondary); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.lc-icon-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.lc-icon-btn:hover:not(:disabled) { background: var(--lc-hover); color: var(--text-primary); }
+.lc-icon-btn:disabled { opacity: .35; cursor: default; }
+.lc-icon-btn.off { color: var(--danger); background: rgba(255, 122, 134, 0.12); }
+.lc-icon-btn.lc-danger { color: var(--danger); }
+.lc-icon-btn.lc-danger:hover { background: rgba(255, 122, 134, 0.14); color: var(--danger); }
+.lc-lbl-btn { width: 24px; height: 24px; }
+.lc-lbl-btn svg { width: 15px; height: 15px; }
+.lc-lbl-btn[hidden] { display: none; }
+
+/* Sütuna taşınan ses odaları listesi: kart yerine düz satır */
+.lc-rooms-slot .hub-voice-rooms-list { display: flex; flex-direction: column; gap: 1px; padding: 0 6px; }
+.lc-rooms-slot .hub-voice-room-row { margin: 0 !important; border-radius: 7px !important; background: none !important; border: 0 !important; box-shadow: none !important; padding: 6px 8px !important; }
+.lc-rooms-slot .hub-voice-room-row:hover { background: var(--lc-hover) !important; }
+
+/* Sütuna taşınan DM listesi */
+.lc-dm-slot .friends-sidebar { position: static !important; display: flex !important; flex-direction: column; width: auto !important; height: auto !important; max-height: none !important;
+  transform: none !important; margin: 0 !important; padding: 4px 6px !important; border: 0 !important; border-radius: 0 !important; background: none !important;
+  box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; opacity: 1 !important; visibility: visible !important; }
+.lc-dm-slot .friends-sidebar-title { padding: 10px 8px 4px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); }
+
+/* Ses paneli + kullanıcı paneli (sütunun altı) */
+.lc-voice { flex: none; border-top: 1px solid var(--lc-line); background: #0a0d11; padding: 8px 8px 8px 12px; }
+.lc-voice[hidden] { display: none; }
+.lc-voice-row { display: flex; align-items: center; gap: 4px; }
+.lc-voice-info { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.lc-voice-info b { color: var(--success); font-size: 13px; }
+.lc-voice-info span { color: var(--text-tertiary); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lc-user { flex: none; display: flex; align-items: center; gap: 2px; padding: 8px 6px calc(8px + env(safe-area-inset-bottom)) 8px; background: #0a0d11; border-top: 1px solid var(--lc-line); }
+.lc-user-id { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 4px; border: 0; border-radius: 8px; background: none; color: inherit; cursor: pointer; text-align: left; font: inherit; }
+.lc-user-id:hover { background: var(--lc-hover); }
+.lc-user-av { width: 32px; height: 32px; border-radius: 50%; flex: none; overflow: hidden; display: grid; place-items: center; font-weight: 800; font-size: 13px; background: var(--bg-surface-3); color: var(--text-primary); }
+.lc-user-av img { width: 100%; height: 100%; object-fit: cover; }
+.lc-user-txt { min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.lc-user-txt b { font-size: 13.5px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lc-user-txt span { font-size: 11.5px; color: var(--text-tertiary); }
+
+/* ── Eski gezinme parçaları masaüstünde gizlenir ── */
+body.lc.lc-desk .mnav, body.lc.lc-desk .app-rail, body.lc.lc-desk #lobby-nav, body.lc.lc-desk .lobby-nav-toggle,
+body.lc.lc-desk #friends-sidebar-toggle-btn, body.lc.lc-desk .hub-voice-rooms-toggle-btn, body.lc.lc-desk #hub-voice-rooms-side,
+body.lc.lc-desk #hub-voice-rooms-backdrop, body.lc.lc-desk #hub-side-backdrop, body.lc.lc-desk #hub-back-btn,
+body.lc.lc-desk .hub-title-pill, body.lc.lc-desk #hub-in-room-pill { display: none !important; }
+
+/* ── Ana alan: ray + sütun kadar sağa kayar ── */
+body.lc.lc-desk #chat-screen[style*="flex"] {
+  display: grid !important; grid-template-columns: minmax(0, 1fr) !important; grid-template-rows: auto minmax(0, 1fr) !important;
+  padding-left: calc(var(--lc-rail) + var(--lc-col)) !important; height: 100dvh; background: var(--lc-bg-main);
+}
+body.lc.lc-desk #chat-screen > .topbar, body.lc.lc-desk #chat-screen > .chat-area { grid-column: 1 !important; margin-left: 0 !important; }
+body.lc.lc-desk .chat-area { grid-row: 2; min-height: 0; padding-bottom: 0 !important; }
+/* Üst çubuk: düz ve ince; lobi içinde lobi başlığı onun yerini alır */
+body.lc.lc-desk .topbar { position: relative !important; left: auto !important; right: auto !important; top: auto !important; margin: 0 !important; height: 48px; padding: 0 16px !important;
+  border-radius: 0 !important; background: none !important; box-shadow: none !important; border-bottom: 1px solid var(--lc-line); -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+body.lc.lc-desk[data-view="hub-detail"] .topbar { display: none !important; }
+body.lc.lc-desk #topbar-context-title { display: inline !important; font-weight: 800; font-size: 15px; }
+
+/* ── Lobi ekranı: düz başlık + sohbet + sağda üyeler ── */
+body.lc.lc-desk .hub-detail-view { height: 100%; }
+body.lc.lc-desk .hub-detail-main { height: 100%; margin: 0 !important; border-radius: 0 !important; background: none !important; box-shadow: none !important; border: 0 !important; }
+body.lc.lc-desk.lc-in-hub:not(.lc-members-hidden) .hub-detail-main { margin-right: var(--lc-mem) !important; }
+body.lc.lc-desk .hub-detail-header {
+  position: relative !important; top: auto !important; height: 48px; min-height: 48px; margin: 0 !important; padding: 0 12px 0 16px !important; gap: 4px !important;
+  border-radius: 0 !important; border: 0 !important; border-bottom: 1px solid var(--lc-line) !important; background: none !important; box-shadow: none !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; display: flex !important; align-items: center;
+}
+.lc-head-ch { display: none; }
+body.lc.lc-desk .lc-head-ch { display: flex; align-items: center; gap: 6px; margin-right: auto; font-size: 15px; }
+body.lc.lc-desk .lc-head-ch .lc-hash { font-size: 20px; }
+body.lc.lc-desk .hub-detail-header .hub-icon-btn { width: 34px; height: 34px; min-width: 34px; padding: 0 !important; border-radius: 8px !important; background: none !important; box-shadow: none !important; display: grid; place-items: center; font-size: 15px; }
+body.lc.lc-desk .hub-detail-header .hub-icon-btn::after { display: none !important; }
+body.lc.lc-desk .hub-detail-header .hub-icon-btn:hover { background: var(--lc-hover) !important; }
+.lc-members-btn { display: none; }
+body.lc.lc-desk.lc-in-hub .lc-members-btn { display: grid; color: var(--text-secondary); }
+body.lc.lc-desk.lc-in-hub:not(.lc-members-hidden) .lc-members-btn { color: var(--text-primary); background: var(--lc-active) !important; }
+.lc-members-btn svg { width: 19px; height: 19px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Üye listesi sağda sabit sütun */
+body.lc.lc-desk.lc-in-hub .hub-detail-side {
+  display: flex !important; flex-direction: column; position: fixed !important; right: 0 !important; left: auto !important; top: 0 !important; bottom: 0 !important;
+  width: var(--lc-mem) !important; max-width: none !important; height: auto !important; transform: none !important; margin: 0 !important; z-index: var(--z-lc-rail) !important;
+  padding: calc(8px + env(safe-area-inset-top)) 8px 8px !important; border-radius: 0 !important; border: 0 !important; border-left: 1px solid var(--lc-line) !important;
+  background: var(--lc-bg-col) !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; opacity: 1 !important; visibility: visible !important; overflow-y: auto;
+}
+body.lc.lc-desk.lc-in-hub.lc-members-hidden .hub-detail-side { display: none !important; }
+body.lc.lc-desk .hub-detail-side .hub-side-section { background: none !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; }
+body.lc.lc-desk .hub-detail-side .hub-side-title { padding: 10px 8px 6px; font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--text-tertiary); }
+
+/* Akış ve yazma kutusu: düz zemin */
+body.lc.lc-desk .hub-feed { padding-left: 4px !important; padding-right: 8px !important; }
+body.lc.lc-desk .hub-msg { border-radius: 6px; padding: 4px 16px 4px 12px !important; }
+body.lc.lc-desk .hub-msg:hover { background: rgba(255, 255, 255, 0.025); }
+
+/* DM: sağdan açılan panel yerine ana alanı doldurur (ray + sütun görünür kalır) */
+body.lc.lc-desk #dm-modal.dm-side-panel { left: calc(var(--lc-rail) + var(--lc-col)) !important; right: 0 !important; width: auto !important; max-width: none !important; z-index: var(--z-lc-rail) !important; }
+body.lc.lc-desk #dm-modal .dm-modal-box { width: 100% !important; max-width: none !important; border-radius: 0 !important; border: 0 !important; background: var(--lc-bg-main) !important; box-shadow: none !important; }
+
+/* ☰ menüsü body'de, sabit konumlu: üst çubuktan açılınca sağ üstte, raydaki "Diğer"den açılınca rayın yanında */
+body.lc > #topbar-menu-dropdown { position: fixed !important; top: calc(56px + env(safe-area-inset-top)) !important; right: calc(10px + env(safe-area-inset-right)) !important; left: auto !important; bottom: auto !important; z-index: var(--z-popover-top) !important; max-height: calc(100dvh - 72px); overflow-y: auto; }
+body.lc.lc-menu-from-rail > #topbar-menu-dropdown { left: calc(var(--lc-rail) + 8px) !important; right: auto !important; top: auto !important; bottom: calc(12px + env(safe-area-inset-bottom)) !important; }
+
+.lc-rail [hidden], .lc-col [hidden] { display: none !important; }
+
+/* Üyeler: eski kenar sekmesi ve kapatma düğmesi yerine başlıktaki üye düğmesi kullanılır; kartlar düz satır */
+body.lc.lc-desk .hub-members-toggle-btn, body.lc.lc-desk .hub-side-close-btn { display: none !important; }
+body.lc.lc-desk .hub-member-list { display: flex; flex-direction: column; gap: 1px; }
+body.lc.lc-desk .hub-member-card { margin: 0 !important; padding: 5px 8px !important; min-height: 0 !important; border: 0 !important; border-radius: 7px !important;
+  background: none !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+body.lc.lc-desk .hub-member-card::before, body.lc.lc-desk .hub-member-card::after { display: none !important; }
+body.lc.lc-desk .hub-member-card:hover { background: var(--lc-hover) !important; }
+body.lc.lc-desk .hub-member-card .msg-avatar-btn { width: 32px !important; height: 32px !important; font-size: 13px !important; }
+
+/* ═══════════════ TELEFON / DAR EKRAN ═══════════════ */
+.lc-burger { display: none; }
+.lc-backdrop { display: none; }
+body.lc:not(.lc-desk) .hub-voice-rooms-toggle-btn, body.lc:not(.lc-desk) #hub-voice-rooms-side, body.lc:not(.lc-desk) #hub-voice-rooms-backdrop { display: none !important; }
+body.lc:not(.lc-desk)[data-view="hub-detail"] .lc-burger { display: grid; place-items: center; order: -1; flex: none; width: 40px; height: 40px; padding: 0 !important; border-radius: 10px !important; color: var(--text-primary); }
+body.lc:not(.lc-desk) .lc-burger svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; }
+body.lc:not(.lc-desk).lc-in-hub .lc-members-btn { display: grid; place-items: center; width: 40px; height: 40px; padding: 0 !important; color: var(--text-primary); }
+body.lc:not(.lc-desk) .hub-members-toggle-btn { display: none !important; }
+
+/* ☰ çekmecesi: lobi rayı + kanal/ses sütunu soldan açılır */
+body.lc.lc-drawer .lc-backdrop { display: block; position: fixed; inset: 0; z-index: calc(var(--z-modal-m) - 2); background: rgba(0, 0, 0, 0.55); }
+body.lc.lc-drawer .lc-rail { display: flex; flex-direction: column; align-items: center; gap: 8px; position: fixed; left: 0; top: 0; bottom: 0; width: var(--lc-rail); z-index: calc(var(--z-modal-m) - 1);
+  padding: calc(12px + env(safe-area-inset-top)) 0 calc(12px + env(safe-area-inset-bottom)) env(safe-area-inset-left); background: var(--lc-bg-rail); border-right: 1px solid var(--lc-line); overflow-y: auto; }
+body.lc.lc-drawer .lc-col { display: flex; flex-direction: column; position: fixed; top: 0; bottom: 0; left: calc(var(--lc-rail) + env(safe-area-inset-left)); width: min(var(--lc-col), calc(100vw - var(--lc-rail) - 48px));
+  z-index: calc(var(--z-modal-m) - 1); background: var(--lc-bg-col); padding-top: env(safe-area-inset-top); box-shadow: 18px 0 40px -18px rgba(0, 0, 0, 0.8); }
+body.lc.lc-drawer .lc-rail .lc-spacer { flex: 1; }
+
+/* Alt sekme çubuğu: yüzen hap yerine kenardan kenara düz çubuk, etiketli */
+@media (max-width: 720px) and (min-height: 501px) {
+  body.lc .mnav {
+    left: 0; right: 0; bottom: 0; height: calc(58px + env(safe-area-inset-bottom)); padding: 0 max(4px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(4px, env(safe-area-inset-left));
+    border-radius: 0; gap: 0; background: var(--lc-bg-rail); border-top: 1px solid var(--lc-line); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  body.lc .mnav-btn { height: 56px; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--text-tertiary); }
+  body.lc .mnav-btn svg { width: 22px; height: 22px; }
+  body.lc .mnav-btn.on { background: none; box-shadow: none; color: var(--accent); }
+  body.lc .mnav-lbl { display: block; font-size: 10.5px; line-height: 1; font-weight: 600; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.lc .mnav-avatar { flex: 1 1 0; }
+  body.lc .mnav-av { width: 24px; height: 24px; font-size: 11px; box-shadow: 0 0 0 1.5px var(--text-tertiary); }
+  body.lc .mnav-btn.on .mnav-av { box-shadow: 0 0 0 2px var(--accent); }
+  body.lc .mnav-dot { top: 6px; right: calc(50% - 16px); }
+  body.lc .mnav-btn[data-m="home"] { order: 1; }
+  body.lc .mnav-btn[data-m="dms"] { order: 2; }
+  body.lc .mnav-btn[data-m="friends"] { order: 3; }
+  body.lc .mnav-btn[data-m="discover"] { order: 4; }
+  body.lc .mnav-btn[data-m="groups"] { order: 5; }
+  body.lc .mnav-btn[data-m="profile"] { order: 6; }
+  body.lc .lobby-nav { bottom: calc(60px + env(safe-area-inset-bottom)); }
+  body.lc:not([data-view="hub-detail"]):not([data-view="discover"]) .chat-area { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  body.lc #hub-list-view { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
+  /* Lobi başlığı: düz */
+  body.lc .hub-detail-header { border-radius: 0 !important; margin: 0 !important; background: var(--lc-bg-col) !important; box-shadow: none !important; border-bottom: 1px solid var(--lc-line) !important;
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+}
+
+/* Lobi başlığı: "# sohbet" + (telefonda) lobi adı; tek satır */
+.lc-head-txt { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+.lc-head-hub { display: none; font-size: 11.5px; color: var(--text-tertiary); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.lc .lc-head-ch { cursor: pointer; }
+body.lc:not(.lc-desk)[data-view="hub-detail"] .topbar { display: none !important; }
+body.lc:not(.lc-desk) .lc-head-ch { display: flex; align-items: center; gap: 6px; margin-right: auto; min-width: 0; font-size: 15px; }
+body.lc:not(.lc-desk) .lc-head-hub { display: block; }
+body.lc:not(.lc-desk) .lc-head-ch .lc-hash { font-size: 19px; }
+body.lc:not(.lc-desk) #hub-back-btn, body.lc:not(.lc-desk) .hub-title-pill, body.lc:not(.lc-desk) #hub-in-room-pill { display: none !important; }
+body.lc:not(.lc-desk) .hub-detail-header { display: flex !important; flex-wrap: nowrap !important; align-items: center; gap: 2px !important; min-height: 54px; padding: env(safe-area-inset-top) 6px 0 4px !important; position: relative !important; top: auto !important; }
+body.lc:not(.lc-desk) .hub-detail-header .hub-icon-btn { width: 40px; height: 40px; min-width: 40px; padding: 0 !important; border-radius: 10px !important; background: none !important; box-shadow: none !important; display: grid; place-items: center; font-size: 17px; }
+body.lc .hub-detail-header .hub-icon-btn::after { display: none !important; }
+body.lc .hub-detail-header .topbar-superlike-btn { position: static !important; }
+
+/* ── Arama ekranı: "Sohbete dön" ve düğme adları ── */
+.lc-call-back { position: absolute; z-index: 3; top: calc(12px + env(safe-area-inset-top)); left: calc(12px + env(safe-area-inset-left)); display: inline-flex; align-items: center; gap: 4px;
+  height: 40px; padding: 0 14px 0 8px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.08); color: var(--text-primary); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.lc-call-back:hover { background: rgba(255, 255, 255, 0.14); }
+.lc-call-back svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+@media (min-height: 501px) {
+body.lc .call-overlay > .call-header { padding-bottom: 26px !important; overflow: visible; }
+body.lc .call-header button[data-lc-lbl] { position: relative; overflow: visible; }
+body.lc .call-header button[data-lc-lbl]::after { content: attr(data-lc-lbl); position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+  font-size: 10.5px; font-weight: 600; line-height: 1; white-space: nowrap; color: var(--text-secondary); pointer-events: none; }
+body.lc .call-header #call-leave-btn[data-lc-lbl]::after { color: var(--danger); }
+}
+/* Masaüstünde arama ekranı ray + sütunun sağında açılır (ses paneli sütunda görünür kalır) */
+body.lc.lc-desk #call-overlay { left: calc(var(--lc-rail) + var(--lc-col)) !important; width: auto !important; right: 0 !important; }
+/* "Sohbete dön" düğmesine yer: oda adı ve alt satırlar biraz aşağıda */
+body.lc #call-hub-name { top: calc(64px + env(safe-area-inset-top)) !important; }
+body.lc .call-header-sub { top: calc(96px + env(safe-area-inset-top)) !important; }
+body.lc .call-header span#call-header-duration { top: calc(120px + env(safe-area-inset-top)) !important; }
+body.lc.lc-desk #call-hub-name, body.lc.lc-desk .call-header-sub, body.lc.lc-desk .call-header span#call-header-duration { left: calc(var(--lc-rail) + var(--lc-col)) !important; }
+/* Masaüstünde küçültülmüş arama çubuğu yerine sütundaki ses paneli kullanılır (aynı düğmeler: göster / ayrıl). */
+body.lc.lc-desk #call-mini-bar { display: none !important; }
+
+/* Ana sayfa sütunu: bekleyen istekler + gruplar + DM listesi */
+.lc-pending-slot .fd-pending { margin: 6px 8px 4px; }
+.lc-groups-slot .friends-groups { display: block !important; margin: 0 !important; padding: 4px 6px 0 !important; background: none !important; border: 0 !important; box-shadow: none !important; }
+.lc-groups-slot .friends-groups-head { padding: 10px 4px 4px 8px; }
+/* Grup sohbeti: başlıkta grup adı (# işareti yok) */
+body.lc.lc-in-group .lc-head-ch .lc-hash { display: none; }

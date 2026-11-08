@@ -104,7 +104,7 @@
         try {
             const r = await fetch('/api/hubs', { credentials: 'include' });
             const d = await r.json();
-            if (d && d.success) { lastHubs = d.hubs || []; renderNav(); }
+            if (d && d.success) { lastHubs = d.hubs || []; renderNav(); window.__sauranHubs = lastHubs; document.dispatchEvent(new Event('sauran:hubs')); }
         } catch (_) { /* sessiz: ana liste zaten hatayı gösterir */ }
     }
 
