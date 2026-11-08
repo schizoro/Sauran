@@ -84,6 +84,7 @@
             <div class="adm-nav">
                 <button type="button" id="tab-users" class="active">Kullanıcılar</button>
                 <button type="button" id="tab-audit" style="display:none;">Audit Log</button>
+                <button type="button" id="tab-csp">Güvenlik Kuralı</button>
                 <a href="/" id="t-back">← Uygulama</a>
                 <a href="moderation.html" id="t-moderation">Moderasyon Paneli</a>
             </div>
@@ -138,6 +139,18 @@
             </div>
           </div>
 
+          <div id="adm-csp-view" style="display:none;">
+            <div class="adm-glass">
+                <div class="adm-toolbar" style="justify-content:space-between;align-items:center;">
+                    <span id="csp-summary" style="font-weight:600;"></span>
+                    <button id="csp-refresh" type="button" class="adm-apply-btn"></button>
+                </div>
+                <div id="csp-table-wrap"></div>
+                <div id="csp-empty" class="adm-state" style="display:none;"></div>
+                <p id="csp-note" class="adm-muted" style="font-size:11px;margin:12px 0 0;"></p>
+            </div>
+          </div>
+
         </div>
     </div>
 
@@ -180,6 +193,11 @@
                 auAllActions: 'Tüm işlemler', auActorPh: 'Yapan ID', auTargetPh: 'Hedef ID', auFrom: 'Başlangıç', auTo: 'Bitiş',
                 auEmpty: 'Kayıt bulunamadı.', auEntries: 'kayıt', auDeleted: 'silinmiş hesap',
                 auNote: 'Yönetim geçmişi yalnızca ekleme yapılarak tutulur; bu panelden değiştirilemez veya silinemez. Yalnızca yönetimsel değişiklikler kaydedilir, sayfa görüntülemeleri kaydedilmez.',
+                tabCsp: 'Güvenlik Kuralı', cspRefresh: 'Yenile', cspDirective: 'Kural', cspBlocked: 'Engellenecek kaynak', cspPage: 'Sayfa',
+                cspSource: 'Kaynak dosya', cspCount: 'Sayı', cspLast: 'Son görülme',
+                cspEmpty: 'Hiç ihlal yok. Kural zorunlu olsaydı bu süre içinde hiçbir şey engellenmeyecekti.',
+                cspSummaryN: (n, k) => `${n} ihlal · ${k} farklı satır`,
+                cspNote: 'İçerik güvenlik kuralı (CSP) şu an yalnızca raporlama modunda: hiçbir şey engellenmiyor. Bu liste, kural zorunlu olsaydı tarayıcıların neyi engelleyeceğini gösterir. Kişisel bilgi tutulmaz (adreslerin yalnızca site kısmı ve sayfa yolu). Liste sunucu yeniden başlayınca (deploy) sıfırlanır.',
                 act_platform_role_changed: 'Rol değişikliği', act_platform_role_accepted: 'Görev kabulü', act_platform_role_declined: 'Görev reddi', act_account_suspended: 'Hesap askıya alındı', act_account_unsuspended: 'Askı kaldırıldı'
             },
             en: {
@@ -212,6 +230,11 @@
                 auAllActions: 'All actions', auActorPh: 'Actor ID', auTargetPh: 'Target ID', auFrom: 'From', auTo: 'To',
                 auEmpty: 'No entries found.', auEntries: 'entries', auDeleted: 'deleted account',
                 auNote: 'The admin history is append-only; it cannot be changed or deleted from this panel. Only administrative changes are recorded, not page views.',
+                tabCsp: 'Security Policy', cspRefresh: 'Refresh', cspDirective: 'Directive', cspBlocked: 'Would block', cspPage: 'Page',
+                cspSource: 'Source file', cspCount: 'Count', cspLast: 'Last seen',
+                cspEmpty: 'No violations. Had the policy been enforced, nothing would have been blocked in this period.',
+                cspSummaryN: (n, k) => `${n} violations · ${k} distinct rows`,
+                cspNote: 'The content security policy (CSP) is in report-only mode: nothing is blocked. This list shows what browsers would block if it were enforced. No personal data is kept (only the site part of addresses and the page path). The list resets when the server restarts (deploy).',
                 act_platform_role_changed: 'Role changed', act_platform_role_accepted: 'Duty accepted', act_platform_role_declined: 'Duty declined', act_account_suspended: 'Account suspended', act_account_unsuspended: 'Suspension lifted'
             }
         };
@@ -367,6 +390,10 @@
             $('adm-denied').textContent = t('denied');
             $('tab-users').textContent = t('tabUsers');
             $('tab-audit').textContent = t('tabAudit');
+            $('tab-csp').textContent = t('tabCsp');
+            $('csp-refresh').textContent = t('cspRefresh');
+            $('csp-empty').textContent = t('cspEmpty');
+            $('csp-note').textContent = t('cspNote');
             $('au-actor').placeholder = t('auActorPh');
             $('au-target').placeholder = t('auTargetPh');
             $('au-from').title = t('auFrom');
@@ -520,12 +547,39 @@
             $('au-next').disabled = audit.page >= pages;
         }
 
+        async function loadCsp() {
+            const data = await api('/api/admin/csp-reports');
+            const rows = data.reports || [];
+            $('csp-summary').textContent = t('cspSummaryN')(data.total || 0, rows.length);
+            $('csp-empty').style.display = rows.length ? 'none' : 'block';
+            const cell = (v) => v ? esc(v) : '<span class="adm-muted">—</span>';
+            const when = (v) => { const d = new Date(v); return isNaN(d) ? '—' : esc(d.toLocaleString(lang === 'en' ? 'en-GB' : 'tr-TR', { dateStyle: 'medium', timeStyle: 'short' })); };
+            $('csp-table-wrap').innerHTML = rows.length ? `
+                <table class="adm-table"><thead><tr>
+                    <th>${t('cspDirective')}</th><th>${t('cspBlocked')}</th><th>${t('cspPage')}</th>
+                    <th>${t('cspSource')}</th><th>${t('cspCount')}</th><th>${t('cspLast')}</th>
+                </tr></thead><tbody style="cursor:default;">
+                ${rows.map((r) => `
+                    <tr style="cursor:default;">
+                        <td data-label="${t('cspDirective')}">${cell(r.directive)}</td>
+                        <td data-label="${t('cspBlocked')}" style="word-break:break-all;">${cell(r.blocked)}</td>
+                        <td data-label="${t('cspPage')}">${cell(r.page)}</td>
+                        <td data-label="${t('cspSource')}" style="word-break:break-all;">${cell(r.source)}</td>
+                        <td data-label="${t('cspCount')}">${Number(r.count) || 0}</td>
+                        <td data-label="${t('cspLast')}">${when(r.last_at)}</td>
+                    </tr>`).join('')}
+                </tbody></table>` : '';
+        }
+
         function showView(name) {
             $('adm-users-view').style.display = name === 'users' ? 'block' : 'none';
             $('adm-audit-view').style.display = name === 'audit' ? 'block' : 'none';
+            $('adm-csp-view').style.display = name === 'csp' ? 'block' : 'none';
             $('tab-users').classList.toggle('active', name === 'users');
             $('tab-audit').classList.toggle('active', name === 'audit');
+            $('tab-csp').classList.toggle('active', name === 'csp');
             if (name === 'audit') loadAudit().then(() => { audit.loaded = true; }).catch(showError);
+            if (name === 'csp') loadCsp().catch(showError);
         }
 
         let isFounder = false;
@@ -542,6 +596,8 @@
         function wire() {
             $('tab-users').addEventListener('click', () => showView('users'));
             $('tab-audit').addEventListener('click', () => showView('audit'));
+            $('tab-csp').addEventListener('click', () => showView('csp'));
+            $('csp-refresh').addEventListener('click', () => loadCsp().catch(showError));
             ['au-action', 'au-actor', 'au-target', 'au-from', 'au-to'].forEach((id) => {
                 $(id).addEventListener(id === 'au-actor' || id === 'au-target' ? 'input' : 'change', () => { audit.page = 1; loadAudit().catch(showError); });
             });
