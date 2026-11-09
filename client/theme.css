@@ -3211,3 +3211,14 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
 .session-empty { padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.03); font-size: 13px; color: var(--text-tertiary, var(--text-secondary)); }
 #settings-logout-all-btn[hidden] { display: none !important; }
 #settings-logout-all-btn { justify-content: center; background: rgba(255, 90, 110, 0.1) !important; color: #ff8d9b !important; border-color: rgba(255, 90, 110, 0.3) !important; font-weight: 800; }
+
+/* Abonelikler: üstte plan sekmesi, altta yalnızca seçilen plan */
+.subs-cards { grid-template-columns: 1fr !important; }
+.subs-modal-box { width: min(560px, 94vw) !important; }
+.subs-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 14px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.08); }
+.subs-tab { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; border: 1px solid transparent; border-radius: 11px; background: none; color: var(--text-secondary); font: inherit; font-size: 14px; font-weight: 800; cursor: pointer; }
+.subs-tab:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.05); }
+.subs-tab-plus[aria-selected="true"] { background: rgba(179, 102, 245, 0.2); border-color: rgba(179, 102, 245, 0.5); color: #e7ccff; }
+.subs-tab-premium[aria-selected="true"] { background: rgba(255, 200, 87, 0.16); border-color: rgba(255, 200, 87, 0.5); color: #ffe6a8; }
+.subs-tab-on { font-style: normal; font-size: 10.5px; padding: 2px 7px; border-radius: 999px; background: rgba(61, 220, 151, 0.18); color: #9fe9c9; }
+.subs-cards[data-plan="plus"] .subs-card-premium, .subs-cards[data-plan="premium"] .subs-card-plus { display: none !important; }

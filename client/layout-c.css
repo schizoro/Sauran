@@ -784,3 +784,36 @@ body.lc #settings-modal .settings-atmo-vol output { min-width: 36px; text-align:
 body.lc #settings-modal .ptt-key-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; margin: 6px 0; border-radius: 14px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); }
 body.lc #settings-modal .ptt-kbd { padding: 4px 10px; border-radius: 8px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.18); font-weight: 800; }
 body.lc #settings-modal .settings-voice-hint { font-size: 12.5px; color: var(--text-tertiary, var(--text-secondary)); margin: 4px 2px 8px; }
+
+/* ═══════════════ ABONELİKLER PENCERESİ (yeni görünüm) ═══════════════ */
+body.lc .lc-modal.subs-modal-box { width: min(560px, 94vw) !important; max-height: 90vh; display: flex; flex-direction: column; }
+body.lc .lc-modal.subs-modal-box .market-modal-body { overflow-y: auto; }
+body.lc .subs-cards { gap: 14px !important; margin-top: 2px !important; align-items: start; }
+body.lc .subs-card { padding: 18px !important; border-radius: 18px !important; gap: 10px !important; box-shadow: none !important; overflow: visible !important; }
+body.lc .subs-card-plus { background: linear-gradient(180deg, rgba(179, 102, 245, 0.12), rgba(255, 255, 255, 0.02) 55%) !important; border-color: rgba(179, 102, 245, 0.4) !important; }
+body.lc .subs-card-premium { background: linear-gradient(180deg, rgba(255, 200, 87, 0.12), rgba(255, 255, 255, 0.02) 55%) !important; border-color: rgba(255, 200, 87, 0.45) !important; }
+body.lc .subs-card-active { outline: 2px solid rgba(61, 220, 151, 0.55); outline-offset: 2px; }
+body.lc .subs-card-head { flex-wrap: wrap; gap: 8px !important; }
+body.lc .subs-card-name { font-size: 18px !important; font-weight: 800 !important; color: var(--text-primary) !important; }
+body.lc .subs-card-ribbon { position: absolute !important; top: -11px !important; right: 16px !important; transform: none !important; padding: 3px 10px !important; border-radius: 999px; font-size: 10.5px !important; letter-spacing: .06em; }
+body.lc .subs-card-tag { font-size: 13px !important; color: var(--text-secondary) !important; padding-bottom: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
+body.lc .subs-list { gap: 9px !important; margin: 2px 0 8px !important; }
+body.lc .subs-list li { font-size: 13.5px !important; line-height: 1.4 !important; color: var(--text-primary) !important; gap: 10px !important; }
+body.lc .subs-list li b { font-weight: 700; }
+body.lc .subs-list small { color: var(--text-tertiary, var(--text-secondary)) !important; font-size: 12px; }
+/* Emoji yerine renkli tik */
+body.lc .subs-ic { width: 20px !important; height: 20px; margin-top: 0; border-radius: 7px; font-size: 0 !important; position: relative; flex: none; background: rgba(179, 102, 245, 0.16); }
+body.lc .subs-ic::before { content: ""; position: absolute; inset: 4px; background: #d3a6ff; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat; }
+body.lc .subs-card-premium .subs-ic { background: rgba(255, 200, 87, 0.16); }
+body.lc .subs-card-premium .subs-ic::before { background: #ffd58a; }
+body.lc .subs-plus-all, body.lc .subs-extra-head { padding: 9px 10px !important; border-radius: 12px !important; background: rgba(255, 200, 87, 0.1) !important; color: #ffe6a8 !important; }
+body.lc .subs-extra-head { background: none !important; padding: 8px 0 0 !important; font-size: 12.5px !important; color: #ffd58a !important; text-transform: none; }
+body.lc .subs-extra-head .subs-ic { display: none; }
+body.lc .subs-buy-btn, body.lc .subs-status { width: 100%; min-height: 44px; border-radius: 12px !important; font: inherit !important; font-size: 14px !important; font-weight: 800 !important; }
+body.lc .subs-buy-btn { border: 1px dashed rgba(255, 255, 255, 0.16) !important; background: rgba(255, 255, 255, 0.03) !important; color: var(--text-tertiary, var(--text-secondary)) !important; cursor: default; }
+body.lc .subs-status { display: grid; place-items: center; padding: 10px !important; }
+body.lc .subs-note { margin: 14px 0 0 !important; padding: 12px 14px; border-radius: 14px; background: rgba(92, 200, 255, 0.07); border: 1px solid rgba(92, 200, 255, 0.2); color: #b9e6ff !important; font-size: 12.5px !important; text-align: left !important; line-height: 1.5; }
+@media (max-width: 900px) {
+  body.lc .lc-modal.subs-modal-box { width: 100% !important; max-height: 92vh; }
+  body.lc .subs-card { padding: 16px !important; }
+}

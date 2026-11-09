@@ -8835,23 +8835,28 @@ async function loadSubscriptions() {
         const d = await r.json();
         if (d.success) { plus = d.plus; premium = d.premium; }
     } catch (_) {}
+    // Üstte plan seçici; varsayılan sekme: aktif plan, yoksa Premium.
+    const pick = plus.active && !premium.active ? 'plus' : 'premium';
+    box.dataset.plan = pick;
     box.innerHTML = `
-        <div class="subs-card subs-card-plus${plus.active ? ' subs-card-active' : ''}">
+        <div class="subs-tabs" role="tablist">
+            <button type="button" role="tab" class="subs-tab subs-tab-premium" data-subs-tab="premium" aria-selected="${pick === 'premium'}">♛ Premium${premium.active ? ' <i class="subs-tab-on">Aktif</i>' : ''}</button>
+            <button type="button" role="tab" class="subs-tab subs-tab-plus" data-subs-tab="plus" aria-selected="${pick === 'plus'}">✦ Plus${plus.active ? ' <i class="subs-tab-on">Aktif</i>' : ''}</button>
+        </div>
+        <div class="subs-card subs-card-plus${plus.active ? ' subs-card-active' : ''}" role="tabpanel">
             <div class="subs-card-head"><span class="plus-badge" style="margin-left:0;">✦ PLUS</span><span class="subs-card-name">Sauran Plus</span></div>
             <p class="subs-card-tag">Kendini ifade et, daha rahat paylaş.</p>
             <ul class="subs-list">${SUBS_PLUS_ITEMS}</ul>
             ${subsStatusHtml(plus, premium.active)}
         </div>
-        <div class="subs-card subs-card-premium${premium.active ? ' subs-card-active' : ''}">
-            <div class="subs-card-ribbon">EN KAPSAMLI</div>
-            <div class="subs-card-head"><span class="subs-premium-badge">♛ PREMIUM</span><span class="subs-card-name">Sauran Premium</span></div>
+        <div class="subs-card subs-card-premium${premium.active ? ' subs-card-active' : ''}" role="tabpanel">
+            <div class="subs-card-head"><span class="subs-premium-badge">♛ PREMIUM</span><span class="subs-card-name">Sauran Premium</span><span class="subs-card-ribbon">EN KAPSAMLI</span></div>
             <p class="subs-card-tag">Plus'taki her şey <b>+</b> daha fazlası.</p>
             <ul class="subs-list">
-                <li class="subs-plus-all"><span class="subs-ic">✓</span><span><b>Sauran Plus'taki her şey:</b></span></li>
-                ${SUBS_PLUS_ITEMS
-                    .replace(/Her ay <b>100 Sauran Coin<\/b>/, 'Her ay <b>250 Sauran Coin</b> <small>(Plus: 100)</small>')
-                    .replace(/<b>50 MB<\/b> dosya\/video yükleme <small>\(ücretsiz: 25 MB\)<\/small>/, '<b>100 MB</b> dosya/video yükleme <small>(Plus: 50 MB)</small>')}
+                <li class="subs-plus-all"><span class="subs-ic">✓</span><span><b>Sauran Plus'taki her şey dahil</b> <small>(Plus sekmesindeki tüm özellikler)</small></span></li>
                 <li class="subs-extra-head"><span class="subs-ic">＋</span><span><b>Ek olarak Premium'da:</b></span></li>
+                <li><span class="subs-ic">🪙</span><span>Her ay <b>250 Sauran Coin</b> <small>(Plus: 100)</small></span></li>
+                <li><span class="subs-ic">📎</span><span><b>100 MB</b> dosya/video yükleme <small>(Plus: 50 MB)</small></span></li>
                 <li><span class="subs-ic">💎</span><span>Her ay <b>3 Lobi Takviyesi</b> <small>(lobi seviyesi yükselir; Seviye 3'te lobi Atmosphere + sesi)</small></span></li>
                 <li><span class="subs-ic">🌌</span><span><b>Premium Atmosphere</b> paketleri <small>(Cyber Gaming, Cosmic…)</small></span></li>
                 <li><span class="subs-ic">🎞️</span><span><b>Animasyonlu (GIF)</b> profil fotoğrafı</span></li>
@@ -8869,6 +8874,13 @@ document.getElementById('subs-open-btn')?.addEventListener('click', () => {
     closeTopbarDropdown();
     document.getElementById('subs-modal').style.display = 'flex';
     loadSubscriptions();
+});
+document.getElementById('subs-cards')?.addEventListener('click', (e) => {
+    const tab = e.target.closest('[data-subs-tab]');
+    if (!tab) return;
+    const box = e.currentTarget;
+    box.dataset.plan = tab.dataset.subsTab;
+    box.querySelectorAll('[data-subs-tab]').forEach((b) => b.setAttribute('aria-selected', String(b === tab)));
 });
 document.getElementById('subs-close-btn')?.addEventListener('click', () => { document.getElementById('subs-modal').style.display = 'none'; });
 document.getElementById('subs-modal')?.addEventListener('click', (e) => { if (e.target.id === 'subs-modal') e.currentTarget.style.display = 'none'; });

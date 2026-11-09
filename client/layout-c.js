@@ -184,14 +184,16 @@
         ...MI,
         home: '<path d="M4 11l8-7 8 7v9H4zM10 20v-6h4v6"/><path d="M19 3v4M17 5h4"/>',
         userplus: '<circle cx="10" cy="8" r="4"/><path d="M2 20c1.5-4 4.5-5.5 8-5.5S16.5 16 18 20M19 8v6M16 11h6"/>',
-        people: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c1-3.5 3.5-5 6.5-5s5.5 1.5 6.5 5M16 4.5a3.5 3.5 0 0 1 0 7M18 15c2 .6 3.2 2.2 3.8 5"/>'
+        people: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c1-3.5 3.5-5 6.5-5s5.5 1.5 6.5 5M16 4.5a3.5 3.5 0 0 1 0 7M18 15c2 .6 3.2 2.2 3.8 5"/>',
+        gem: '<path d="M7 4h10l4 5-9 11L3 9z"/><path d="M3 9h18M9.5 4L8 9l4 11 4-11-1.5-5"/>'
     };
     const MODALS = [
         ['hub-join-modal', 'key', 'cyan', tr('lc-modal-join-sub', 'Arkadaşının paylaştığı davet kodunu yapıştır.')],
         ['feedback-modal', 'bulb', 'amber', tr('lc-modal-feedback-sub', 'Önerin panoda görünür; diğer kullanıcılar oylayabilir.')],
         ['hub-create-modal', 'home', 'violet', ''],
         ['group-pick-modal', 'people', 'violet', tr('lc-modal-group-sub', 'Arkadaşlarını seç, birlikte sohbet edin.')],
-        ['inventory-modal', 'box', 'orange', '']
+        ['inventory-modal', 'box', 'orange', ''],
+        ['subs-modal', 'gem', 'violet', '']
     ];
     // Başlıktaki baştaki emoji/simge karakterlerini atar (çeviri uygulanınca geri gelirse yine atılır).
     const stripLead = (el) => {
