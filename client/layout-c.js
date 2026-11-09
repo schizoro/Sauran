@@ -235,6 +235,46 @@
     const faIcon = document.querySelector('#friend-add-modal .friend-add-hero-icon');
     if (faIcon) { faIcon.className = 'lc-mi-ico lc-mh-ico tone-cyan friend-add-hero-icon'; faIcon.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${MODAL_ICONS.userplus}</svg>`; }
     ['friend-add-modal', 'other-profile-modal', 'profile-modal'].forEach((id) => $(id)?.querySelector('.modal-box')?.classList.add('lc-modal', 'lc-modal-' + id));
+    // ── Küçük açılır menüler (ek ekle, Bir şey başlat): Diğer menüsüyle aynı satır görünümü ──
+    const POP_ICONS = {
+        camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+        image: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M20 16l-5-5-8 8.5"/>',
+        clip: '<path d="M20 11.5l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.8 17a1.7 1.7 0 0 1-2.4-2.4l7.4-7.4"/>',
+        poll: '<path d="M5 20V10M12 20V4M19 20v-7"/>',
+        pin: '<path d="M9 4h6l-1 6 3 3v1H7v-1l3-3zM12 14v6"/>'
+    };
+    function dressPopItem(el, icon, tone, sub) {
+        if (!el || el.dataset.lcDressed) return;
+        el.dataset.lcDressed = '1';
+        const label = el.querySelector('span') || document.createElement('span');
+        [...el.childNodes].forEach((n) => { if (n.nodeType === 3) n.remove(); });
+        const ico = document.createElement('span');
+        ico.className = `lc-mi-ico tone-${tone}`;
+        ico.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${POP_ICONS[icon]}</svg>`;
+        const txt = document.createElement('span');
+        txt.className = 'lc-mi-txt';
+        const b = document.createElement('b');
+        b.appendChild(label);
+        const small = document.createElement('small');
+        small.textContent = sub;
+        txt.append(b, small);
+        el.prepend(ico, txt);
+    }
+    ['hub-attach-menu', 'dm-attach-menu'].forEach((id) => {
+        const menu = $(id);
+        if (!menu) return;
+        menu.classList.add('lc-pop');
+        dressPopItem(menu.querySelector('[data-attach="camera"]'), 'camera', 'cyan', tr('lc-attach-camera-sub', 'Fotoğraf ya da video çek'));
+        dressPopItem(menu.querySelector('[data-attach="gallery"]'), 'image', 'violet', tr('lc-attach-gallery-sub', 'Cihazındaki fotoğraf ve videolar'));
+        dressPopItem(menu.querySelector('[data-attach="file"]'), 'clip', 'orange', tr('lc-attach-file-sub', 'Belge, ses ya da başka bir dosya'));
+    });
+    const startMenu = $('hub-start-menu');
+    if (startMenu) {
+        startMenu.classList.add('lc-pop');
+        dressPopItem(startMenu.querySelector('[data-action="poll"]'), 'poll', 'amber', tr('lc-start-poll-sub', 'Seçenekler sun, lobi oylasın'));
+        dressPopItem(startMenu.querySelector('[data-action="share"]'), 'pin', 'cyan', tr('lc-start-share-sub', 'Bağlantı ya da duyuru paylaş'));
+    }
+
     // Lobi bilgisi penceresi shell.js tarafından açılışta üretilir: göründüğünde sınıf eklenir.
     new MutationObserver(() => { const b = document.querySelector('#hub-info-modal .modal-box'); if (b && !b.classList.contains('lc-modal')) b.classList.add('lc-modal', 'lc-modal-hub-info'); })
         .observe(document.body, { childList: true });
