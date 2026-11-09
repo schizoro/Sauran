@@ -693,3 +693,94 @@ body.lc .discover-empty { padding: 28px 16px !important; border-radius: 16px; ba
   body.lc .discover-grid { grid-template-columns: 1fr !important; }
 }
 @media (prefers-reduced-motion: reduce) { body.lc .discover-card { transition: none; } body.lc .discover-card:hover { transform: none; } }
+
+/* ═══════════════ AYARLAR EKRANI (yeni görünüm) ═══════════════ */
+/* Hata düzeltmesi: "Masaüstü / tarayıcı bildirimleri" düğmesi satırı dolduracak şekilde geriliyordu */
+#settings-modal .notif-pref-toggle-row .notif-toggle { flex: 0 0 40px !important; width: 40px !important; height: 24px !important; margin-left: auto; }
+#settings-modal .notif-pref-toggle-row .notif-toggle-track { width: 100% !important; }
+#settings-modal .notif-pref-toggle-row .notif-toggle input { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; margin: 0 !important; opacity: 0 !important; z-index: 2; cursor: pointer; }
+#settings-modal .notif-pref-toggle-row .notif-pref-toggle-text { flex: 1; min-width: 0; }
+
+body.lc #settings-modal .modal-header > span { font-size: 26px; font-weight: 800; }
+body.lc #settings-modal .settings-tabs { display: flex; flex-direction: column; gap: 4px; }
+body.lc #settings-modal .settings-tab-btn {
+  display: flex !important; align-items: center; gap: 11px; width: 100%; padding: 7px 10px !important; border: 1px solid transparent !important; border-radius: 13px !important;
+  background: none !important; color: var(--text-secondary) !important; font: inherit !important; font-size: 14px !important; font-weight: 700 !important; text-align: left; cursor: pointer;
+}
+body.lc #settings-modal .settings-tab-btn:hover { background: rgba(255, 255, 255, 0.05) !important; color: var(--text-primary) !important; }
+body.lc #settings-modal .settings-tab-btn.active { background: linear-gradient(135deg, rgba(179, 102, 245, 0.2), rgba(92, 200, 255, 0.1)) !important; border-color: rgba(179, 102, 245, 0.45) !important; color: var(--text-primary) !important; }
+body.lc #settings-modal .st-ico { width: 32px !important; height: 32px !important; border-radius: 10px !important; }
+body.lc #settings-modal .st-ico svg { width: 17px !important; height: 17px !important; }
+/* Bölüm başlıkları: büyük harf yerine okunaklı başlık */
+body.lc #settings-modal .profile-field-label, body.lc #settings-modal .notif-pref-group-title {
+  display: block; text-transform: none !important; letter-spacing: 0 !important; font-size: 14px !important; font-weight: 800 !important; color: var(--text-primary) !important; margin: 24px 0 10px !important;
+}
+body.lc #settings-modal .settings-panel > .profile-field-label:first-child, body.lc #settings-modal .notif-pref-group:first-child .notif-pref-group-title { margin-top: 4px !important; }
+/* Seçenek satırları: kart görünümü */
+body.lc #settings-modal .privacy-options { display: flex; flex-direction: column; gap: 8px !important; }
+body.lc #settings-modal .privacy-option {
+  padding: 12px 14px !important; border-radius: 13px !important; border: 1px solid rgba(255, 255, 255, 0.08) !important; background: rgba(255, 255, 255, 0.03) !important; cursor: pointer;
+}
+body.lc #settings-modal .privacy-option:hover { background: rgba(255, 255, 255, 0.06) !important; }
+body.lc #settings-modal .privacy-option.selected { border-color: rgba(92, 200, 255, 0.5) !important; background: rgba(92, 200, 255, 0.08) !important; }
+body.lc #settings-modal .privacy-option-title { font-size: 14px !important; font-weight: 700 !important; }
+body.lc #settings-modal .privacy-option-desc { font-size: 12.5px !important; color: var(--text-tertiary, var(--text-secondary)) !important; }
+body.lc #settings-modal .notif-pref-group { display: flex; flex-direction: column; gap: 6px; }
+body.lc #settings-modal .notif-pref-row { padding: 11px 14px !important; border-radius: 13px !important; border: 1px solid rgba(255, 255, 255, 0.07) !important; background: rgba(255, 255, 255, 0.03) !important; font-size: 14px; }
+body.lc #settings-modal .notif-pref-row:hover { background: rgba(255, 255, 255, 0.055) !important; }
+body.lc #settings-modal .hub-settings-action-btn { min-height: 44px; padding: 10px 14px !important; border-radius: 13px !important; border: 1px solid rgba(255, 255, 255, 0.08) !important; background: rgba(255, 255, 255, 0.04) !important; color: var(--text-primary) !important; font: inherit !important; font-size: 14px !important; font-weight: 700 !important; }
+body.lc #settings-modal .hub-settings-action-btn:hover { background: rgba(255, 255, 255, 0.08) !important; }
+body.lc #settings-modal .hub-settings-danger, body.lc #settings-modal #settings-delete-account-btn { background: rgba(255, 90, 110, 0.1) !important; border-color: rgba(255, 90, 110, 0.3) !important; color: #ff8d9b !important; }
+body.lc #settings-modal .hub-settings-divider { height: 1px; margin: 18px 0 0; background: rgba(255, 255, 255, 0.06); border: 0; }
+@media (max-width: 900px) {
+  body.lc #settings-modal .settings-tabs { flex-direction: row; overflow-x: auto; gap: 6px; scrollbar-width: none; }
+  body.lc #settings-modal .settings-tab-btn { width: auto; flex: none; padding: 6px 12px 6px 6px !important; border-radius: 999px !important; }
+  body.lc #settings-modal .st-ico { width: 26px !important; height: 26px !important; border-radius: 999px !important; }
+  body.lc #settings-modal .st-ico svg { width: 14px !important; height: 14px !important; }
+  body.lc #settings-modal .modal-header > span { font-size: 20px; }
+}
+
+/* ═══════════════ AYARLAR: SEKME İÇERİKLERİ ═══════════════ */
+.lc-mi-ico.tone-red { --tone: #ff8d9b; --tone-bg: rgba(255, 90, 110, 0.14); }
+body.lc #settings-modal .set-row {
+  display: flex !important; align-items: center; gap: 12px; width: 100%; min-height: 58px; box-sizing: border-box; text-align: left; text-decoration: none !important;
+  padding: 10px 12px !important; margin: 0 0 8px !important; border-radius: 14px !important; border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.03) !important; color: var(--text-primary) !important; font: inherit !important; cursor: pointer;
+}
+body.lc #settings-modal .set-row[style*="display: none"], body.lc #settings-modal .set-row[style*="display:none"] { display: none !important; }
+body.lc #settings-modal .set-row:hover { background: rgba(255, 255, 255, 0.065) !important; border-color: rgba(255, 255, 255, 0.14) !important; }
+body.lc #settings-modal .set-row .lc-mi-txt b { font-size: 14px; }
+body.lc #settings-modal .set-row-go { flex: none; width: 18px; height: 18px; stroke: var(--text-tertiary, var(--text-secondary)); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+body.lc #settings-modal .set-row.hub-settings-danger, body.lc #settings-modal #settings-delete-account-btn, body.lc #settings-modal #twofa-disable-btn {
+  background: rgba(255, 90, 110, 0.06) !important; border-color: rgba(255, 90, 110, 0.28) !important;
+}
+body.lc #settings-modal .set-row.hub-settings-danger .lc-mi-txt b, body.lc #settings-modal #settings-delete-account-btn .lc-mi-txt b { color: #ff8d9b; }
+body.lc #settings-modal #settings-logout-all-btn { justify-content: center; background: rgba(255, 90, 110, 0.1) !important; color: #ff8d9b !important; border-color: rgba(255, 90, 110, 0.3) !important; font-weight: 800 !important; }
+/* Giriş alanları ve ana düğme */
+body.lc #settings-modal .settings-panel input[type="password"], body.lc #settings-modal .settings-panel input[type="text"], body.lc #settings-modal .settings-panel input[type="email"] {
+  width: 100% !important; box-sizing: border-box !important; padding: 11px 13px !important; margin: 0 0 8px !important; border-radius: 12px !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important; background: rgba(0, 0, 0, 0.28) !important; color: var(--text-primary) !important; font: inherit !important; font-size: 14px !important;
+}
+body.lc #settings-modal .settings-panel input:focus { border-color: var(--accent) !important; box-shadow: 0 0 0 3px rgba(92, 200, 255, 0.16) !important; outline: none; }
+body.lc #settings-modal #settings-password-btn {
+  width: auto !important; min-height: 42px; padding: 10px 20px !important; margin: 4px 0 0 auto !important; display: block; border: 0 !important; border-radius: 12px !important;
+  background: linear-gradient(135deg, #2f7bff, #5cc8ff) !important; color: #04121e !important; font: inherit !important; font-size: 14px !important; font-weight: 800 !important; box-shadow: none !important;
+}
+/* E-posta, iki adımlı doğrulama durumu, engellenenler */
+body.lc #settings-modal .email-current-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; margin-bottom: 8px; border-radius: 14px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); }
+body.lc #settings-modal .email-current { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; }
+body.lc #settings-modal .email-reveal-btn { flex: none; padding: 6px 12px; border-radius: 999px; border: 1px solid rgba(92, 200, 255, 0.4); background: rgba(92, 200, 255, 0.1); color: #8fdcff; font: inherit; font-size: 12.5px; font-weight: 800; cursor: pointer; text-decoration: none; }
+body.lc #settings-modal .twofa-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px; margin-bottom: 8px; border-radius: 14px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); font-size: 13px; color: var(--text-secondary); }
+body.lc #settings-modal .twofa-badge { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; }
+body.lc #settings-modal .twofa-badge.on { background: rgba(61, 220, 151, 0.16); color: #9fe9c9; }
+body.lc #settings-modal .twofa-badge.off { background: rgba(255, 200, 87, 0.14); color: #ffd58a; }
+body.lc #settings-modal #settings-blocked-list:empty::after, body.lc #settings-modal .settings-blocked-list .settings-blocked-empty {
+  display: block; padding: 18px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.03); border: 1px dashed rgba(255, 255, 255, 0.12); text-align: center; font-size: 13px; color: var(--text-tertiary, var(--text-secondary));
+}
+/* Ses: kaydırıcı ve kısayol satırı */
+body.lc #settings-modal .settings-atmo-vol { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); font-size: 14px; font-weight: 700; color: var(--text-primary); }
+body.lc #settings-modal .settings-atmo-vol input[type="range"] { flex: 1; accent-color: #b366f5; height: 4px; }
+body.lc #settings-modal .settings-atmo-vol output { min-width: 36px; text-align: right; font-weight: 800; color: #d3a6ff; }
+body.lc #settings-modal .ptt-key-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; margin: 6px 0; border-radius: 14px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); }
+body.lc #settings-modal .ptt-kbd { padding: 4px 10px; border-radius: 8px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.18); font-weight: 800; }
+body.lc #settings-modal .settings-voice-hint { font-size: 12.5px; color: var(--text-tertiary, var(--text-secondary)); margin: 4px 2px 8px; }

@@ -275,6 +275,90 @@
         dressPopItem(startMenu.querySelector('[data-action="share"]'), 'pin', 'cyan', tr('lc-start-share-sub', 'Bağlantı ya da duyuru paylaş'));
     }
 
+    // Ayarlar: başlık ve sekmeler simgeli (Diğer menüsüyle aynı renkli kutular). Sekme düğmeleri ve işleyicileri aynı kalır.
+    const SET_ICONS = {
+        general: ['gear', 'gray'], notifications: ['bell', 'amber'], voice: ['mic', 'cyan'], security: ['shield', 'blue'],
+        privacy: ['eye', 'violet'], legal: ['doc', 'gray'], account: ['user', 'pink']
+    };
+    const SET_PATHS = {
+        ...MI,
+        bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0"/>',
+        mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+        eye: '<path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+        doc: '<path d="M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6"/>',
+        user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 4.5-6.5 8-6.5s6.5 2 8 6.5"/>'
+    };
+    document.querySelectorAll('#settings-modal .settings-tab-btn').forEach((btn) => {
+        const [icon, tone] = SET_ICONS[btn.dataset.settingsTab] || ['gear', 'gray'];
+        if (btn.querySelector('.lc-mi-ico')) return;
+        const ico = document.createElement('span');
+        ico.className = `lc-mi-ico st-ico tone-${tone}`;
+        ico.setAttribute('aria-hidden', 'true');
+        ico.innerHTML = `<svg viewBox="0 0 24 24">${SET_PATHS[icon]}</svg>`;
+        const label = document.createElement('span');
+        label.className = 'st-label';
+        // Çeviri sistemi düğmenin metnini yeniden yazarsa simge kaybolmasın: metin ayrı bir alt öğeye taşınır.
+        label.dataset.i18n = btn.dataset.i18n || '';
+        label.textContent = btn.textContent.trim();
+        btn.removeAttribute('data-i18n');
+        btn.textContent = '';
+        btn.append(ico, label);
+    });
+    const setTitle = document.querySelector('#settings-modal .modal-header > span');
+    if (setTitle) stripLead(setTitle);
+
+    // Ayarlar içindeki eylem ve bağlantı satırları: simge kutusu + başlık + kısa açıklama (+ dış bağlantıda ok).
+    Object.assign(SET_PATHS, {
+        mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5l8.5 6.5 8.5-6.5"/>',
+        logout: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 16l-4-4 4-4M6 12h10"/>',
+        trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+        chat: '<path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H10l-5 4v-4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/>',
+        child: '<circle cx="12" cy="6" r="2.5"/><path d="M12 9v6M8 12h8M10 21l2-6 2 6"/>'
+    });
+    const SET_ROWS = [
+        ['email-change-btn', 'mail', 'cyan', tr('set-email-sub', 'Doğrulama kodu yeni adresine gönderilir')],
+        ['twofa-enable-btn', 'shield', 'blue', tr('set-2fa-on-sub', 'Girişte telefonundaki uygulamadan kod istenir')],
+        ['twofa-codes-btn', 'key', 'amber', tr('set-2fa-codes-sub', 'Yeni kodlar üretilir, eskileri geçersiz olur')],
+        ['twofa-disable-btn', 'shield', 'red', tr('set-2fa-off-sub', 'Hesabın yalnızca şifreyle korunur')],
+        ['settings-export-data-btn', 'box', 'orange', tr('set-export-sub', 'Hesabındaki verilerin bir kopyası (JSON)')],
+        ['settings-logout-btn', 'logout', 'gray', tr('set-logout-sub', 'Bu cihazdaki oturumu kapat')],
+        ['settings-delete-account-btn', 'trash', 'red', tr('set-delete-sub', 'Hesabın ve verilerin kalıcı olarak silinir')]
+    ];
+    const LEGAL_ROWS = {
+        'gizlilik-politikasi.html': ['doc', 'gray', tr('set-legal-privacy-sub', 'Hangi verileri neden ve ne kadar süre tuttuğumuz')],
+        'kullanim-sartlari.html': ['doc', 'gray', tr('set-legal-terms-sub', 'Sauran\'ı kullanma koşulları')],
+        'topluluk-kurallari.html': ['doc', 'gray', tr('set-legal-community-sub', 'Herkesin uyduğu topluluk kuralları')],
+        'cocuk-guvenligi.html': ['child', 'blue', tr('set-legal-child-sub', 'Çocukları korumak için aldığımız önlemler')],
+        'destek.html': ['chat', 'violet', tr('set-legal-support-sub', 'Bize ulaş; öneri, görüş ve şikayet')]
+    };
+    const ARROW = '<svg class="set-row-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 16L16 8M10 8h6v6"/></svg>';
+    function dressSetRow(el, icon, tone, sub, external) {
+        if (!el || el.dataset.lcDressed) return;
+        el.dataset.lcDressed = '1';
+        el.classList.add('set-row');
+        let label = el.querySelector('span');
+        if (!label) { label = document.createElement('span'); label.textContent = (el.textContent || '').replace(/^[^\p{L}\p{N}]+/u, '').trim(); }
+        [...el.childNodes].forEach((n) => { if (n !== label) n.remove(); });
+        const ico = document.createElement('span');
+        ico.className = `lc-mi-ico tone-${tone}`;
+        ico.setAttribute('aria-hidden', 'true');
+        ico.innerHTML = `<svg viewBox="0 0 24 24">${SET_PATHS[icon]}</svg>`;
+        const txt = document.createElement('span');
+        txt.className = 'lc-mi-txt';
+        const b = document.createElement('b');
+        b.appendChild(label);
+        const small = document.createElement('small');
+        small.textContent = sub;
+        txt.append(b, small);
+        el.append(ico, txt);
+        if (external) el.insertAdjacentHTML('beforeend', ARROW);
+    }
+    SET_ROWS.forEach(([id, icon, tone, sub]) => dressSetRow($(id), icon, tone, sub, false));
+    document.querySelectorAll('#settings-modal [data-settings-panel="legal"] a.hub-settings-action-btn').forEach((a) => {
+        const m = LEGAL_ROWS[a.getAttribute('href')];
+        if (m) dressSetRow(a, m[0], m[1], m[2], true);
+    });
+
     // Özel mesaj başlığı: arama ve sesli arama düğmeleri emoji yerine sade simge (kimlikleri ve işleyicileri aynı).
     const dmSearch = $('dm-search-btn');
     if (dmSearch) dmSearch.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>';
