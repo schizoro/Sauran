@@ -1,6 +1,8 @@
-// Sauran — "Sıkı Düzen" Arkadaşlar sayfası (Paket 6). Masaüstünde Ana sayfanın ortası; telefonda "Arkadaşlar" sekmesi.
-// Sekmeler: Çevrimiçi · Tümü · Bekleyen · Engellenen. Veri mevcut uçlardan: arkadaşlar script.js'in önbelleğinden
-// (window.__friendsCache, 'friends-updated' olayı), istekler /api/friends/requests, engellenenler /api/users/blocked.
+// Sauran — Arkadaşlar sayfası (kimlik seçimi 4C: akıllı gruplar). Masaüstünde Ana sayfanın ortası; telefonda "Arkadaşlar" sekmesi.
+// Sekme yok; tek sayfada gruplar: Şimdi aktif · En çok konuştukların · İstekler · Diğer arkadaşlar · Engellenenler.
+// Her grubun başlığındaki ▲/▼ düğmesi listeyi tamamen kapatır / açar; durum tarayıcıda hatırlanır.
+// Veri mevcut uçlardan: arkadaşlar script.js'in önbelleğinden (window.__friendsCache, 'friends-updated' olayı),
+// istekler /api/friends/requests, engellenenler /api/users/blocked, en çok konuşulanlar /api/friends/top.
 // Eylemler mevcut işlevlere devredilir: openDm, DM arama düğmesi, openOtherProfile, loadFriendsSidebar.
 // layout-c.js'ten SONRA yüklenir; body.lc yoksa (eski yerleşim) hiçbir şey yapmaz.
 (function () {
@@ -19,7 +21,8 @@
         ok: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
         no: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
         add: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="8" r="4"/><path d="M2 20c1.5-4 4.5-5.5 8-5.5S16.5 16 18 20M19 8v6M16 11h6"/></svg>',
-        search: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>'
+        search: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>',
+        fold: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>'
     };
 
     const page = document.createElement('section');
@@ -29,28 +32,30 @@
     page.setAttribute('aria-labelledby', 'lcf-title');
     page.innerHTML = `
         <header class="lcf-head">
-            <h2 class="lcf-title" id="lcf-title">${ICON.people}<span>${esc(tr('menu-friends', 'Arkadaşlar'))}</span></h2>
-            <div class="lcf-tabs" role="tablist">
-                <button type="button" role="tab" data-tab="online">${esc(tr('lcf-online', 'Çevrimiçi'))}</button>
-                <button type="button" role="tab" data-tab="all">${esc(tr('lcf-all', 'Tümü'))}</button>
-                <button type="button" role="tab" data-tab="pending">${esc(tr('lcf-pending', 'Bekleyen'))}<b class="lcf-badge" id="lcf-pending-n" hidden></b></button>
-                <button type="button" role="tab" data-tab="blocked">${esc(tr('lcf-blocked', 'Engellenen'))}</button>
-            </div>
-            <button type="button" class="lcf-add" id="lcf-add">${ICON.add}<span>${esc(tr('menu-add-friend', 'Arkadaş ekle'))}</span></button>
+            <h2 class="lcf-title" id="lcf-title">${ICON.people}<span>${esc(tr('lcf-your-friends', 'Arkadaşların'))}</span><b class="lcf-badge" id="lcf-pending-n" hidden></b></h2>
+            <button type="button" class="lcf-add" id="lcf-add" data-lcf-add>${ICON.add}<span>${esc(tr('menu-add-friend', 'Arkadaş ekle'))}</span></button>
         </header>
         <div class="lcf-body">
-            <label class="lcf-search">${ICON.search}<input id="lcf-q" type="search" autocomplete="off" placeholder="${esc(tr('lcf-search', 'Arkadaşlarında ara'))}"></label>
-            <div class="lcf-count" id="lcf-count"></div>
-            <div class="lcf-list" id="lcf-list" role="list"></div>
+            <div class="lcf-tools">
+                <label class="lcf-search">${ICON.search}<input id="lcf-q" type="search" autocomplete="off" placeholder="${esc(tr('lcf-search', 'Arkadaşlarında ara'))}"></label>
+                <button type="button" class="lcf-add lcf-add-m" data-lcf-add aria-label="${esc(tr('menu-add-friend', 'Arkadaş ekle'))}">${ICON.add}</button>
+            </div>
+            <div class="lcf-groups" id="lcf-groups"></div>
         </div>`;
     const chatArea = document.querySelector('#chat-screen .chat-area');
     if (!chatArea) return;
     chatArea.insertBefore(page, chatArea.firstChild);
 
-    let tab = '';
     let requests = [];
     let blocked = [];
+    let topIds = [];
     let loaded = false;
+
+    // Kapalı grupların hatırlanması (yalnızca bu tarayıcıda). Engellenenler varsayılan olarak kapalı.
+    const FOLD_KEY = 'sauran.lcf.fold';
+    let folded = { blocked: true };
+    try { folded = { ...folded, ...(JSON.parse(localStorage.getItem(FOLD_KEY) || '{}') || {}) }; } catch (_) { /* varsayılan */ }
+    const saveFold = () => { try { localStorage.setItem(FOLD_KEY, JSON.stringify(folded)); } catch (_) { /* yoksay */ } };
 
     const friends = () => (Array.isArray(window.__friendsCache) ? window.__friendsCache : []);
     const avatar = (u) => {
@@ -66,25 +71,44 @@
 
     async function loadExtras() {
         try {
-            const [r, b] = await Promise.all([
+            const [r, b, tp] = await Promise.all([
                 fetch('/api/friends/requests', { credentials: 'include' }).then((x) => x.json()),
-                fetch('/api/users/blocked', { credentials: 'include' }).then((x) => x.json())
+                fetch('/api/users/blocked', { credentials: 'include' }).then((x) => x.json()),
+                fetch('/api/friends/top?limit=5', { credentials: 'include' }).then((x) => x.json()).catch(() => null)
             ]);
             requests = r && r.success && Array.isArray(r.requests) ? r.requests : [];
             blocked = b && b.success && Array.isArray(b.blocked) ? b.blocked : [];
+            topIds = tp && tp.success && Array.isArray(tp.friends) ? tp.friends.map((f) => Number(f.id)) : [];
         } catch (_) { /* liste boş görünür */ }
         loaded = true;
         render();
     }
 
-    function setTab(next) {
-        tab = next;
-        page.querySelectorAll('.lcf-tabs [data-tab]').forEach((b) => {
-            const on = b.dataset.tab === tab;
-            b.classList.toggle('on', on);
-            b.setAttribute('aria-selected', on ? 'true' : 'false');
-        });
-        render();
+    function friendRow(u, kind) {
+        if (kind === 'pending') {
+            const id = Number(u.user_id);
+            return `<div class="lcf-row" role="listitem" data-uid="${id}" data-kind="pending">
+                <span class="lcf-av">${avatar({ id, username: u.username, avatar_data: u.avatar_data })}</span>
+                <span class="lcf-txt"><b>${esc(u.username)}</b><span>${esc(tr('lcf-wants', 'Arkadaşlık isteği gönderdi'))}</span></span>
+                <span class="lcf-acts">
+                    <button type="button" class="lcf-act lcf-text ok" data-act="accept">${esc(tr('accept', 'Kabul et'))}</button>
+                    <button type="button" class="lcf-act lcf-text no" data-act="reject">${esc(tr('reject', 'Reddet'))}</button>
+                </span></div>`;
+        }
+        if (kind === 'blocked') {
+            return `<div class="lcf-row" role="listitem" data-uid="${Number(u.id)}" data-kind="blocked">
+                <span class="lcf-av">${avatar(u)}</span>
+                <span class="lcf-txt"><b>${esc(u.username)}</b><span>${esc(tr('lcf-is-blocked', 'Engellendi'))}</span></span>
+                <span class="lcf-acts"><button type="button" class="lcf-act lcf-text" data-act="unblock">${esc(tr('lcf-unblock', 'Engeli kaldır'))}</button></span></div>`;
+        }
+        return `<div class="lcf-row${u.online ? ' is-on' : ''}" role="listitem" data-uid="${Number(u.id)}" data-name="${esc(u.username)}" data-kind="friend">
+            <span class="lcf-av">${avatar(u)}<i class="lcf-st" aria-hidden="true"></i></span>
+            <span class="lcf-txt"><b>${esc(u.username)}</b><span>${esc(activityText(u))}</span></span>
+            <span class="lcf-acts">
+                <button type="button" class="lcf-act" data-act="dm" title="${esc(tr('lcf-message', 'Mesaj gönder'))}" aria-label="${esc(tr('lcf-message', 'Mesaj gönder'))}">${ICON.chat}</button>
+                <button type="button" class="lcf-act" data-act="call" title="${esc(tr('lcf-call', 'Sesli ara'))}" aria-label="${esc(tr('lcf-call', 'Sesli ara'))}">${ICON.call}</button>
+                <button type="button" class="lcf-act" data-act="profile" title="${esc(tr('lcf-profile', 'Profili gör'))}" aria-label="${esc(tr('lcf-profile', 'Profili gör'))}">${ICON.more}</button>
+            </span></div>`;
     }
 
     function render() {
@@ -93,74 +117,60 @@
         const badge = $('lcf-pending-n');
         badge.hidden = n === 0;
         badge.textContent = String(n);
-        // Varsayılan sekme istekler yüklendikten sonra seçilir: bekleyen istek varsa "Bekleyen", yoksa çevrimiçi varsa "Çevrimiçi".
-        if (!tab) {
-            if (!loaded) { $('lcf-count').textContent = ''; $('lcf-list').innerHTML = `<div class="lcf-empty">${esc(tr('loading', 'Yükleniyor…'))}</div>`; return; }
-            setTab(n ? 'pending' : (friends().some((f) => f.online) ? 'online' : 'all'));
-            return;
-        }
+        const box = $('lcf-groups');
+        const all = friends();
+        if (!loaded && !all.length) { box.innerHTML = `<div class="lcf-empty">${esc(tr('loading', 'Yükleniyor…'))}</div>`; return; }
+
         const q = ($('lcf-q').value || '').trim().toLocaleLowerCase('tr');
         const match = (u) => !q || String(u.username || '').toLocaleLowerCase('tr').includes(q);
-        let rows = [];
-        let label = '';
-        let empty = '';
-        if (tab === 'online' || tab === 'all') {
-            rows = friends().filter((f) => (tab === 'all' || f.online) && match(f));
-            rows.sort((a, b) => Number(Boolean(b.online)) - Number(Boolean(a.online)) || String(a.username).localeCompare(String(b.username), 'tr'));
-            label = (tab === 'online' ? tr('lcf-online', 'Çevrimiçi') : tr('lcf-all-friends', 'Tüm arkadaşlar')) + ' — ' + rows.length;
-            empty = q ? tr('lcf-no-match', 'Bu adla eşleşen arkadaş yok.')
-                : tab === 'online' ? tr('lcf-empty-online', 'Şu an çevrimiçi arkadaşın yok.')
-                : tr('lcf-empty-all', 'Henüz arkadaşın yok. Sağ üstteki "Arkadaş ekle" ile kullanıcı adından ekleyebilirsin.');
-        } else if (tab === 'pending') {
-            rows = requests.filter((r) => match({ username: r.username }));
-            label = tr('lcf-incoming', 'Gelen istekler') + ' — ' + rows.length;
-            empty = loaded ? tr('lcf-empty-pending', 'Bekleyen arkadaşlık isteğin yok.') : tr('loading', 'Yükleniyor…');
-        } else {
-            rows = blocked.filter(match);
-            label = tr('lcf-blocked', 'Engellenen') + ' — ' + rows.length;
-            empty = loaded ? tr('lcf-empty-blocked', 'Kimseyi engellemedin.') : tr('loading', 'Yükleniyor…');
-        }
-        $('lcf-count').textContent = rows.length ? label : '';
-        const list = $('lcf-list');
-        if (!rows.length) { list.innerHTML = `<div class="lcf-empty">${esc(empty)}</div>`; return; }
-        list.innerHTML = rows.map((u) => {
-            if (tab === 'pending') {
-                const id = Number(u.user_id);
-                return `<div class="lcf-row" role="listitem" data-uid="${id}">
-                    <span class="lcf-av">${avatar({ id, username: u.username, avatar_data: u.avatar_data })}</span>
-                    <span class="lcf-txt"><b>${esc(u.username)}</b><span>${esc(tr('lcf-wants', 'Arkadaşlık isteği gönderdi'))}</span></span>
-                    <span class="lcf-acts">
-                        <button type="button" class="lcf-act ok" data-act="accept" title="${esc(tr('accept', 'Kabul et'))}" aria-label="${esc(tr('accept', 'Kabul et'))}">${ICON.ok}</button>
-                        <button type="button" class="lcf-act no" data-act="reject" title="${esc(tr('reject', 'Reddet'))}" aria-label="${esc(tr('reject', 'Reddet'))}">${ICON.no}</button>
-                    </span></div>`;
-            }
-            if (tab === 'blocked') {
-                return `<div class="lcf-row" role="listitem" data-uid="${Number(u.id)}">
-                    <span class="lcf-av">${avatar(u)}</span>
-                    <span class="lcf-txt"><b>${esc(u.username)}</b><span>${esc(tr('lcf-is-blocked', 'Engellendi'))}</span></span>
-                    <span class="lcf-acts"><button type="button" class="lcf-act lcf-text" data-act="unblock">${esc(tr('lcf-unblock', 'Engeli kaldır'))}</button></span></div>`;
-            }
-            return `<div class="lcf-row${u.online ? ' is-on' : ''}" role="listitem" data-uid="${Number(u.id)}" data-name="${esc(u.username)}">
-                <span class="lcf-av">${avatar(u)}<i class="lcf-st" aria-hidden="true"></i></span>
-                <span class="lcf-txt"><b>${esc(u.username)}</b><span>${esc(activityText(u))}</span></span>
-                <span class="lcf-acts">
-                    <button type="button" class="lcf-act" data-act="dm" title="${esc(tr('lcf-message', 'Mesaj gönder'))}" aria-label="${esc(tr('lcf-message', 'Mesaj gönder'))}">${ICON.chat}</button>
-                    <button type="button" class="lcf-act" data-act="call" title="${esc(tr('lcf-call', 'Sesli ara'))}" aria-label="${esc(tr('lcf-call', 'Sesli ara'))}">${ICON.call}</button>
-                    <button type="button" class="lcf-act" data-act="profile" title="${esc(tr('lcf-profile', 'Profili gör'))}" aria-label="${esc(tr('lcf-profile', 'Profili gör'))}">${ICON.more}</button>
-                </span></div>`;
+        const byName = (a, b) => String(a.username).localeCompare(String(b.username), 'tr');
+        const active = all.filter((f) => f.online).sort(byName);
+        const activeIds = new Set(active.map((f) => Number(f.id)));
+        const top = topIds.map((id) => all.find((f) => Number(f.id) === id)).filter((f) => f && !activeIds.has(Number(f.id)));
+        const topSet = new Set(top.map((f) => Number(f.id)));
+        const others = all.filter((f) => !activeIds.has(Number(f.id)) && !topSet.has(Number(f.id))).sort(byName);
+
+        const groups = [
+            { key: 'active', title: tr('lcf-g-active', 'Şimdi aktif'), rows: active, kind: 'friend', tone: 'on' },
+            { key: 'top', title: tr('lcf-g-top', 'En çok konuştukların'), rows: top, kind: 'friend' },
+            { key: 'pending', title: tr('lcf-g-pending', 'İstekler'), rows: requests.map((r) => ({ ...r, username: r.username })), kind: 'pending', tone: 'warn' },
+            { key: 'others', title: tr('lcf-g-others', 'Diğer arkadaşların'), rows: others, kind: 'friend' },
+            { key: 'blocked', title: tr('lcf-g-blocked', 'Engellediklerin'), rows: blocked, kind: 'blocked', tone: 'muted' }
+        ];
+        const html = groups.map((g) => {
+            const rows = g.rows.filter(match);
+            if (!rows.length) return '';
+            const open = q ? true : !folded[g.key]; // ararken tüm eşleşmeler görünür
+            return `<section class="lcf-group${g.tone ? ' tone-' + g.tone : ''}" data-group="${g.key}">
+                <button type="button" class="lcf-group-head" data-fold="${g.key}" aria-expanded="${open}" aria-controls="lcf-g-${g.key}">
+                    <span class="lcf-group-title">${esc(g.title)}</span><span class="lcf-group-n">${rows.length}</span>
+                    <span class="lcf-fold" aria-hidden="true">${ICON.fold}</span>
+                    <span class="lcf-visually-hidden">${esc(open ? tr('lcf-collapse', 'Listeyi kapat') : tr('lcf-expand', 'Listeyi aç'))}</span>
+                </button>
+                <div class="lcf-list" id="lcf-g-${g.key}" role="list"${open ? '' : ' hidden'}>${rows.map((u) => friendRow(u, g.kind)).join('')}</div>
+            </section>`;
         }).join('');
+        box.innerHTML = html || `<div class="lcf-empty">${esc(q ? tr('lcf-no-match', 'Bu adla eşleşen kimse yok.')
+            : tr('lcf-empty-all', 'Henüz arkadaşın yok. Sağ üstteki "Arkadaş ekle" ile kullanıcı adından ekleyebilirsin.'))}</div>`;
     }
 
     page.addEventListener('click', async (e) => {
-        const tabBtn = e.target.closest('.lcf-tabs [data-tab]');
-        if (tabBtn) { setTab(tabBtn.dataset.tab); return; }
-        if (e.target.closest('#lcf-add')) { ($('friend-add-open-btn') || $('rail-friend'))?.click(); return; }
+        const foldBtn = e.target.closest('[data-fold]');
+        if (foldBtn) {
+            const key = foldBtn.dataset.fold;
+            folded[key] = foldBtn.getAttribute('aria-expanded') === 'true';
+            saveFold();
+            render();
+            page.querySelector(`[data-fold="${key}"]`)?.focus();
+            return;
+        }
+        if (e.target.closest('[data-lcf-add]')) { ($('friend-add-open-btn') || $('rail-friend'))?.click(); return; }
         const act = e.target.closest('[data-act]');
         const row = e.target.closest('.lcf-row');
         if (!row) return;
         const id = Number(row.dataset.uid);
         const name = row.dataset.name || row.querySelector('.lcf-txt b')?.textContent || '';
-        if (!act) { if (tab === 'online' || tab === 'all') openDm?.(id, name); return; }
+        if (!act) { if (row.dataset.kind === 'friend' && typeof openDm === 'function') openDm(id, name); return; }
         e.stopPropagation();
         const kind = act.dataset.act;
         if (kind === 'dm') { if (typeof openDm === 'function') openDm(id, name); }

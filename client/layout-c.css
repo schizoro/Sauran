@@ -407,3 +407,35 @@ body.lc.lc-show-friends.lc-desk .topbar { display: none !important; }
 .lc-room-card:hover .hub-voice-room-delete, .lc-room-card:focus-within .hub-voice-room-delete { opacity: .75; }
 @media (hover: none) { .lc-room-card .hub-voice-room-delete { opacity: .6; } }
 .lc-room-card .hub-voice-room-members-list { padding: 0 8px 8px 10px !important; }
+
+/* ═══════════════ ARKADAŞLAR: AKILLI GRUPLAR (kimlik seçimi 4C) ═══════════════
+   Sekme yok; gruplar kart içinde, başlığın sağındaki ▲/▼ düğmesi listeyi kapatır/açar (layout-c-friends.js). */
+.lcf-tabs { display: none; }
+.lcf-title { border-right: 0; padding-right: 0; }
+.lcf-groups { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+.lcf-group { position: relative; border-radius: 14px; background: var(--bg-surface-2, #141922); border: 1px solid var(--lc-line); padding: 2px 12px 6px; }
+.lcf-group.tone-on { background: linear-gradient(135deg, rgba(61, 220, 151, 0.08), rgba(92, 200, 255, 0.03)); border-color: rgba(61, 220, 151, 0.28); }
+.lcf-group.tone-warn { background: rgba(255, 200, 87, 0.05); border-color: rgba(255, 200, 87, 0.35); }
+.lcf-group-head { width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 0; border: 0; background: none; color: var(--text-secondary); font: inherit; cursor: pointer; text-align: left; }
+.lcf-group-title { font-size: 13px; font-weight: 800; color: var(--text-primary); }
+.tone-on .lcf-group-title { color: #9fe9c9; }
+.tone-warn .lcf-group-title { color: #ffd58a; }
+.tone-muted .lcf-group-title { color: var(--text-secondary); }
+.lcf-group-n { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: rgba(255, 255, 255, 0.08); color: var(--text-primary); font-size: 11.5px; font-weight: 800; display: inline-grid; place-items: center; }
+.lcf-fold { margin-left: auto; width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.06); color: var(--text-secondary); transition: transform .15s var(--ease), background .15s var(--ease); }
+.lcf-fold svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.lcf-group-head[aria-expanded="false"] .lcf-fold { transform: rotate(180deg); }
+.lcf-group-head:hover .lcf-fold { background: rgba(255, 255, 255, 0.12); color: var(--text-primary); }
+.lcf-group-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+.lcf-group .lcf-list[hidden] { display: none; }
+.lcf-group .lcf-row { margin: 0 -6px; padding: 8px 6px; }
+.lcf-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.lcf-act.lcf-text.ok { background: linear-gradient(135deg, #2f7bff, #5cc8ff); color: #04121e; }
+.lcf-act.lcf-text.no:hover { color: var(--danger); }
+@media (prefers-reduced-motion: reduce) { .lcf-fold { transition: none; } }
+.lcf-tools { display: flex; align-items: center; gap: 8px; }
+.lcf-tools .lcf-search { flex: 1; min-width: 0; }
+.lcf-add-m { display: none; }
+/* Telefonda sayfanın adı üst çubukta yazar: başlık şeridi kalkar, "Arkadaş ekle" arama kutusunun yanına geçer. */
+body.lc:not(.lc-desk) .lcf-head { display: none; }
+body.lc:not(.lc-desk) .lcf-add-m { display: inline-flex; margin-left: 0; width: 38px; height: 38px; padding: 0; justify-content: center; border-radius: 10px; }
