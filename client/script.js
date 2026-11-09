@@ -3754,7 +3754,14 @@ document.getElementById('settings-export-data-btn').addEventListener('click', as
 
 document.getElementById('settings-delete-account-btn').addEventListener('click', async () => {
 
-    const typed = prompt(t('delete-account-prompt').replace('{username}', currentUser.username));
+    const typed = await askText({
+        title: t('delete-account-title'),
+        message: t('delete-account-prompt').replace('{username}', currentUser.username),
+        placeholder: currentUser.username,
+        okLabel: t('delete-account-continue'),
+        danger: true,
+        maxLength: 64
+    });
     if (typed !== currentUser.username) {
         if (typed !== null) showToast(t('delete-account-mismatch'));
         return;
@@ -4293,6 +4300,12 @@ const I18N = {
     'voice-speaker-title': { tr: 'Hoparlör (dinleme)', en: 'Speaker (listening)' },
     'voice-room-delete-confirm': { tr: 'Bu sesli odayı silmek istediğine emin misin?', en: 'Are you sure you want to delete this voice room?' },
     'voice-room-name-prompt': { tr: 'Oda adı:', en: 'Room name:' },
+    'voice-room-add-title': { tr: 'Yeni ses odası', en: 'New voice room' },
+    'voice-room-name-ph': { tr: 'Oda adı (ör. Oyun Odası)', en: 'Room name (e.g. Game Room)' },
+    'ask-create': { tr: 'Oluştur', en: 'Create' },
+    'ask-ok': { tr: 'Tamam', en: 'OK' },
+    'delete-account-title': { tr: 'Hesabı kalıcı olarak sil', en: 'Permanently delete account' },
+    'delete-account-continue': { tr: 'Devam et', en: 'Continue' },
     'voice-room-join': { tr: 'Katıl', en: 'Join' },
     'voice-room-nobody-here': { tr: 'Bu odada henüz kimse yok.', en: 'Nobody is here yet.' },
     'voice-room-you': { tr: '(Sen)', en: '(You)' },
@@ -12490,9 +12503,57 @@ function renderVoiceRoomsList() {
 
 }
 
+// Uygulama içi yazı giriş penceresi: tarayıcının prompt() kutusu yerine kullanılır. Electron (masaüstü uygulaması) prompt()'u
+// hiç desteklemez (hata fırlatır), telefonda da sistem kutusu uygulamanın görünümünden kopuk durur. Vazgeç / Esc / dışarı tıklama → null.
+function askText({ title = '', message = '', placeholder = '', value = '', okLabel = '', danger = false, maxLength = 100 } = {}) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay ask-text-overlay';
+        overlay.innerHTML = `
+            <div class="modal-box ask-text-box" role="dialog" aria-modal="true" aria-labelledby="ask-text-title">
+                <h3 id="ask-text-title" class="ask-text-title"></h3>
+                <p class="ask-text-msg"></p>
+                <input type="text" class="ask-text-input" autocomplete="off" spellcheck="false">
+                <div class="ask-text-actions">
+                    <button type="button" class="ask-text-cancel"></button>
+                    <button type="button" class="ask-text-ok"></button>
+                </div>
+            </div>`;
+        overlay.querySelector('.ask-text-title').textContent = title;
+        const msg = overlay.querySelector('.ask-text-msg');
+        msg.textContent = message;
+        if (!message) msg.remove();
+        const input = overlay.querySelector('.ask-text-input');
+        input.placeholder = placeholder;
+        input.value = value;
+        input.maxLength = maxLength;
+        const ok = overlay.querySelector('.ask-text-ok');
+        ok.textContent = okLabel || t('ask-ok');
+        if (danger) ok.classList.add('danger');
+        overlay.querySelector('.ask-text-cancel').textContent = t('cancel');
+        const previousFocus = document.activeElement;
+        const done = (result) => {
+            document.removeEventListener('keydown', onKey, true);
+            overlay.remove();
+            if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+            resolve(result);
+        };
+        const onKey = (event) => {
+            if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); done(null); }
+            else if (event.key === 'Enter' && event.target === input) { event.preventDefault(); done(input.value); }
+        };
+        document.addEventListener('keydown', onKey, true);
+        ok.addEventListener('click', () => done(input.value));
+        overlay.querySelector('.ask-text-cancel').addEventListener('click', () => done(null));
+        overlay.addEventListener('click', (event) => { if (event.target === overlay) done(null); });
+        document.body.appendChild(overlay);
+        input.focus();
+    });
+}
+
 hubVoiceRoomAddBtn.addEventListener('click', async () => {
 
-    const name = prompt(t('voice-room-name-prompt'));
+    const name = await askText({ title: t('voice-room-add-title'), placeholder: t('voice-room-name-ph'), okLabel: t('ask-create'), maxLength: 50 });
     if (!name || !name.trim()) return;
 
     try {

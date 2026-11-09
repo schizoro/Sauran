@@ -2995,6 +2995,19 @@ body.drawer-friendlist .friends-directory { display: flex; flex-direction: colum
 #notifications-modal .nc-new .nc-time { right: 30px; }
 #notifications-modal .notification-text { font-size: 13.5px; line-height: 1.5; color: var(--text-primary); margin-bottom: 10px; }
 #notifications-modal .notification-text strong { color: #fff; }
+/* Uygulama içi yazı giriş penceresi (script.js askText) */
+.ask-text-overlay { display: flex; z-index: calc(var(--z-modal, 1000) + 50); }
+.ask-text-box { width: min(420px, calc(100vw - 32px)); padding: 22px 20px 18px; border-radius: 18px; display: flex; flex-direction: column; gap: 12px; }
+.ask-text-title { margin: 0; font-size: 17px; color: var(--text-primary); }
+.ask-text-msg { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); }
+.ask-text-input { width: 100%; box-sizing: border-box; padding: 11px 13px; border-radius: 12px; border: 1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.25); color: var(--text-primary); font: inherit; font-size: 15px; outline: none; }
+.ask-text-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(92,200,255,.18); }
+.ask-text-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.ask-text-actions button { padding: 9px 16px; border-radius: 10px; border: 0; font: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+.ask-text-cancel { background: rgba(255,255,255,.07); color: var(--text-secondary); }
+.ask-text-ok { background: linear-gradient(135deg, #2f7bff, #5cc8ff); color: #04121e; }
+.ask-text-ok.danger { background: rgba(255,90,110,.9); color: #fff; }
+@media (max-width: 720px) { .ask-text-overlay { align-items: center; } }
 #notifications-modal .notification-official-tag.team-tag { background: rgba(179,102,245,.16); color: #d3a6ff; }
 #notifications-modal .team-message-body { margin-top: 4px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondary, #c5c6c7); font-weight: 400; }
 #notifications-modal a.team-message-url { display: inline-block; margin-top: 8px; font-size: 12.5px; font-weight: 700; color: #d3a6ff; text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
