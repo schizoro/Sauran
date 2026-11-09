@@ -250,7 +250,7 @@
             closePanel();
             const perms = stkTarget ? (state.stk && state.stk.permissions) : (state.data && state.data.permissions);
             if (!(perms && perms.personal)) { showToast(stkTarget ? 'Kendi çıkartmanı oluşturmak Sauran Plus abonelerine açıktır.' : 'Kendi emojini oluşturmak Sauran Plus abonelerine açıktır.'); }
-            if (typeof openCustomizeCenter === 'function') { openCustomizeCenter('look'); setTimeout(() => { el(stkTarget ? 'cz-sticker-card' : 'cz-emoji-card')?.scrollIntoView({ block: 'start' }); }, 1000); }
+            if (typeof openCustomizeCenter === 'function') { openCustomizeCenter('emoji'); setTimeout(() => { el(stkTarget ? 'cz-sticker-card' : 'cz-emoji-card')?.scrollIntoView({ block: 'start' }); }, 1000); }
             return;
         }
         const stk = e.target.closest('[data-sticker]');

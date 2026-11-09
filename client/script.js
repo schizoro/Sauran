@@ -8196,7 +8196,7 @@ function showCzSection(section) {
         b.classList.toggle('active', act);
         b.setAttribute('aria-current', act ? 'page' : 'false');
     });
-    const names = { look: 'Görünüm', atmosphere: 'Atmosphere', premium: 'Premium' };
+    const names = { look: 'Profil', name: 'İsim', chat: 'Sohbet', card: 'Üye kartı', emoji: 'Emoji ve çıkartma', atmosphere: 'Atmosphere', premium: 'Premium' };
     document.getElementById('cz-eyebrow').textContent = 'Profil › Özelleştir › ' + (names[section] || '');
     document.getElementById('cz-content').scrollTop = 0;
     if (section === 'atmosphere') loadAtmosphereGrid();
