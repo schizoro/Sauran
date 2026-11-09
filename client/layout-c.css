@@ -457,3 +457,74 @@ body.lc:not(.lc-desk) .lcf-add-m { display: inline-flex; margin-left: 0; width: 
 .hub-member-row.st-offline .hub-member-sub { color: var(--text-tertiary) !important; }
 .hub-member-group.g-offline .hub-member-row { opacity: .55; }
 .hub-member-group.g-offline .hub-member-row:hover, .hub-member-group.g-offline .hub-member-row:focus-within { opacity: .95; }
+
+/* ═══════════════ MASAÜSTÜ ALT DOK (kimlik seçimi 3F) ═══════════════
+   Telefondaki alt çubuğa benzer; sohbet alanının altında ortada yüzer. Sol alttaki kullanıcı paneli masaüstünde kalkar. */
+.lc-dock { display: none; }
+body.lc.lc-desk.lc-auth .lc-dock {
+  display: flex; align-items: center; gap: 6px; position: fixed; z-index: calc(var(--z-lc-rail) + 2);
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  left: calc(var(--lc-rail) + var(--lc-col) + (100vw - var(--lc-rail) - var(--lc-col)) / 2); transform: translateX(-50%);
+  max-width: calc(100vw - var(--lc-rail) - var(--lc-col) - 24px);
+  padding: 5px 8px; border-radius: 22px; background: rgba(17, 21, 29, 0.94);
+  -webkit-backdrop-filter: blur(18px) saturate(140%); backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.09);
+}
+.lc-dock-group { display: flex; align-items: center; gap: 2px; }
+.lc-dock-group:empty, .lc-dock-voice:has(> #lc-voice[hidden]) { display: none; }
+.lc-dock-group + .lc-dock-group { padding-left: 8px; border-left: 1px solid rgba(255, 255, 255, 0.1); }
+.lc-dock .lc-ico { width: 60px; min-height: 52px; padding: 5px 2px 4px; }
+.lc-dock .lc-ico > svg { background: none; padding: 6px; }
+.lc-dock .lc-ico.on > svg { background: rgba(179, 102, 245, 0.22); }
+.lc-dock .lc-dot { right: 14px; top: 3px; box-shadow: 0 0 0 3px rgba(17, 21, 29, 0.94); }
+/* Sen (avatar) ve Ayarlar: simge + altında kısa ad */
+#lc-dock #lc-user-id, #lc-dock #lc-gear { flex: none; width: 56px; height: auto; min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 5px 2px 4px; border-radius: 14px; }
+#lc-dock #lc-user-id .lc-user-txt { display: none; }
+#lc-dock #lc-user-id .lc-user-av { width: 28px; height: 28px; box-shadow: 0 0 0 2px var(--success); }
+#lc-dock #lc-gear svg { width: 22px !important; height: 22px !important; padding: 3px; box-sizing: content-box; }
+#lc-dock [data-dock-label]::after { content: attr(data-dock-label); font-size: 10px; font-weight: 600; line-height: 1.2; color: var(--text-tertiary, var(--text-secondary)); }
+#lc-dock [data-dock-label]:hover::after { color: var(--text-primary); }
+/* Ses odasındayken: oda adı + mikrofon / kulaklık / büyüt / ayrıl */
+#lc-dock .lc-voice { border: 0; padding: 4px 4px 4px 12px; border-radius: 16px; background: rgba(61, 220, 151, 0.1); box-shadow: inset 0 0 0 1px rgba(61, 220, 151, 0.35); }
+#lc-dock .lc-voice-row { gap: 2px; }
+#lc-dock .lc-voice-info { order: 1; max-width: 150px; margin-right: 6px; }
+#lc-dock #lc-mic { order: 2; } #lc-dock #lc-deaf { order: 3; } #lc-dock #lc-voice-open { order: 4; } #lc-dock #lc-voice-leave { order: 5; }
+/* Dok içeriği örtmesin: sohbet, DM ve ses ekranı dokun üstünde biter */
+body.lc.lc-desk.lc-auth .chat-area { padding-bottom: 74px !important; }
+body.lc.lc-desk.lc-auth #dm-modal.dm-side-panel { bottom: 74px !important; height: auto !important; }
+body.lc.lc-desk.lc-auth #call-overlay { bottom: 74px !important; height: auto !important; }
+body.lc.lc-desk #lc-user { display: none; }
+body.lc.lc-desk.lc-menu-from-rail > #topbar-menu-dropdown { left: var(--lc-menu-x, calc(var(--lc-rail) + var(--lc-col) + 16px)) !important; bottom: calc(84px + env(safe-area-inset-bottom)) !important; }
+.lc-flash { animation: lc-flash 1s var(--ease); }
+@keyframes lc-flash { 0% { box-shadow: 0 0 0 2px rgba(92, 200, 255, 0.7); border-radius: 12px; } 100% { box-shadow: 0 0 0 2px rgba(92, 200, 255, 0); border-radius: 12px; } }
+@media (prefers-reduced-motion: reduce) { .lc-flash { animation: none; } }
+
+/* ═══════════════ "DİĞER" MENÜSÜ (yeni görünüm) ═══════════════
+   layout-c.js içeriği gruplar: simge kutusu + ad + kısa açıklama. Gizli düğmelerin satır içi display:none'u korunur (!important yok). */
+body.lc #topbar-menu-dropdown.lc-menu {
+  width: 300px; max-width: calc(100vw - 24px); min-width: 0; padding: 6px 6px 8px; gap: 0; border-radius: 18px;
+  background: rgba(16, 20, 28, 0.98) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.09), 0 22px 54px -12px rgba(0, 0, 0, 0.8) !important;
+}
+.lc-menu .lc-mi-group { display: flex; flex-direction: column; }
+.lc-menu .lc-mi-group[hidden] { display: none; }
+.lc-menu .lc-mi-head { padding: 10px 10px 4px; font-size: 11.5px; font-weight: 800; color: var(--text-tertiary, var(--text-secondary)); }
+.lc-menu .lc-mi-group:first-child .lc-mi-head { padding-top: 6px; }
+.lc-menu .topbar-menu-item { display: flex; align-items: center; gap: 11px; width: 100%; padding: 7px 8px; border-radius: 12px; border: 0; background: none; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
+.lc-menu .topbar-menu-item:hover, .lc-menu .topbar-menu-item:focus-visible { background: rgba(255, 255, 255, 0.06); color: var(--text-primary); outline: none; }
+.lc-menu .topbar-menu-item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.lc-mi-ico { flex: none; width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; background: var(--tone-bg, rgba(255, 255, 255, 0.08)); color: var(--tone, var(--text-primary)); }
+.lc-mi-ico svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.lc-mi-ico.tone-cyan { --tone: #6fd0ff; --tone-bg: rgba(92, 200, 255, 0.14); }
+.lc-mi-ico.tone-amber { --tone: #ffd27a; --tone-bg: rgba(255, 200, 87, 0.14); }
+.lc-mi-ico.tone-violet { --tone: #d3a6ff; --tone-bg: rgba(179, 102, 245, 0.16); }
+.lc-mi-ico.tone-orange { --tone: #ffb36b; --tone-bg: rgba(255, 159, 67, 0.14); }
+.lc-mi-ico.tone-blue { --tone: #8fb6ff; --tone-bg: rgba(90, 140, 255, 0.15); }
+.lc-mi-ico.tone-pink { --tone: #ff9cc4; --tone-bg: rgba(255, 110, 170, 0.14); }
+.lc-mi-ico.tone-gray { --tone: var(--text-secondary); --tone-bg: rgba(255, 255, 255, 0.08); }
+.lc-mi-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.lc-mi-txt b { font-size: 13.5px; font-weight: 700; color: var(--text-primary); }
+.lc-mi-txt b span { font: inherit; }
+.lc-mi-txt small { font-size: 11.5px; color: var(--text-tertiary, var(--text-secondary)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lc-menu .lc-mi-foot { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.lc-menu .topbar-badge { margin-left: auto; }

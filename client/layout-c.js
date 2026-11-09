@@ -118,12 +118,81 @@
     $('lc-bell').addEventListener('click', () => { const b = $('notifications-btn'); if (b) b.click(); else $('rail-notifications')?.click(); });
     const menuDropdown = $('topbar-menu-dropdown');
     if (menuDropdown) document.body.appendChild(menuDropdown); // konumu layout-c.css belirler (position: fixed)
+    // "Diğer" menüsü yeni görünümde: gruplar, renkli simge kutuları ve kısa açıklamalar. Düğmeler (ve işleyicileri) aynen kalır,
+    // yalnızca içerikleri ve sıraları değişir; yönetim grubu yalnızca yetkili hesapta görünür.
+    const MI = {
+        key: '<path d="M14.5 9.5a4 4 0 1 0-4.6 4L4 19.5V22h3v-2h2v-2h2l1.4-1.4A4 4 0 0 0 14.5 9.5z"/><circle cx="15.5" cy="8.5" r="1"/>',
+        bulb: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/>',
+        shield: '<path d="M12 3l7 3v6c0 4.5-3 7.8-7 9-4-1.2-7-4.5-7-9V6z"/>',
+        gift: '<path d="M4 11h16v9H4zM3 7h18v4H3zM12 7v13M12 7c-1.5-3-5-3.5-5-1.2C7 7 9.5 7 12 7zm0 0c1.5-3 5-3.5 5-1.2C17 7 14.5 7 12 7z"/>',
+        bag: '<path d="M5 8h14l-1 12H6zM9 8V6a3 3 0 0 1 6 0v2"/>',
+        box: '<path d="M4 7.5l8-4 8 4v9l-8 4-8-4zM4 7.5l8 4 8-4M12 11.5v9"/>',
+        gem: '<path d="M6 4h12l3 5-9 11L3 9zM3 9h18M9 4l3 16 3-16"/>',
+        spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.7 1.8 1.8.7-1.8.7L19 21l-.7-1.8-1.8-.7 1.8-.7z"/>',
+        gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>'
+    };
+    const MENU_GROUPS = [
+        { title: tr('lc-menu-community', 'Topluluk'), items: [
+            ['hub-join-open-btn', 'key', 'cyan', tr('lc-menu-join-sub', 'Bir lobinin davet kodunu gir')],
+            ['feedback-open-btn', 'bulb', 'amber', tr('lc-menu-feedback-sub', 'Fikrini Sauran ekibine ilet')]] },
+        { title: tr('lc-menu-store', 'Mağaza ve görünüm'), items: [
+            ['market-open-btn', 'bag', 'violet', tr('lc-menu-market-sub', 'Çerçeve, efekt ve daha fazlası')],
+            ['inventory-open-btn', 'box', 'orange', tr('lc-menu-inventory-sub', 'Sahip olduğun ürünler')],
+            ['subs-open-btn', 'gem', 'cyan', tr('lc-menu-subs-sub', 'Plus ve Premium')],
+            ['plusfx-open-btn', 'spark', 'violet', tr('lc-menu-custom-sub', 'Profil ve sohbet görünümün')]] },
+        { title: tr('lc-menu-admin', 'Yönetim'), admin: true, items: [
+            ['admin-panel-link', 'shield', 'blue', tr('lc-menu-admin-sub', 'Platform yönetim paneli')],
+            ['gift-tool-link', 'gift', 'pink', tr('lc-menu-gift-sub', 'Kullanıcılara hediye gönder')]] }
+    ];
+    if (menuDropdown) {
+        menuDropdown.classList.add('lc-menu');
+        const dress = (id, icon, tone, sub) => {
+            const el = $(id);
+            if (!el) return null;
+            const label = el.querySelector('span') || document.createElement('span');
+            [...el.childNodes].forEach((n) => { if (n.nodeType === 3) n.remove(); }); // emoji metni
+            const ico = document.createElement('span');
+            ico.className = `lc-mi-ico tone-${tone}`;
+            ico.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${MI[icon]}</svg>`;
+            const txt = document.createElement('span');
+            txt.className = 'lc-mi-txt';
+            const b = document.createElement('b');
+            b.appendChild(label);
+            const small = document.createElement('small');
+            small.textContent = sub;
+            txt.append(b, small);
+            el.prepend(ico, txt);
+            return el;
+        };
+        MENU_GROUPS.forEach((g) => {
+            const box = document.createElement('div');
+            box.className = 'lc-mi-group' + (g.admin ? ' lc-mi-admin' : '');
+            const head = document.createElement('div');
+            head.className = 'lc-mi-head';
+            head.textContent = g.title;
+            box.appendChild(head);
+            g.items.forEach(([id, icon, tone, sub]) => { const el = dress(id, icon, tone, sub); if (el) box.appendChild(el); });
+            menuDropdown.appendChild(box);
+        });
+        const settings = dress('settings-btn', 'gear', 'gray', tr('lc-menu-settings-sub', 'Hesap, bildirim, ses ve gizlilik'));
+        if (settings) { const foot = document.createElement('div'); foot.className = 'lc-mi-foot'; foot.appendChild(settings); menuDropdown.appendChild(foot); }
+    }
+    // Yönetim grubu yalnızca bağlantılarından biri görünürse gösterilir (görünürlüğü script.js hesaba göre ayarlar).
+    const syncAdminGroup = () => {
+        const grp = menuDropdown && menuDropdown.querySelector('.lc-mi-admin');
+        if (!grp) return;
+        grp.hidden = ![...grp.querySelectorAll('.topbar-menu-item')].some((a) => a.style.display !== 'none');
+    };
     $('lc-more').addEventListener('click', (e) => {
         e.stopPropagation();
+        syncAdminGroup();
         body.classList.add('lc-menu-from-rail');
+        // Masaüstünde düğme alttaki dokta: menü düğmenin hemen üstünde, ortalanmış açılır (ekran kenarına taşmadan).
+        const r = e.currentTarget.getBoundingClientRect();
+        body.style.setProperty('--lc-menu-x', `${Math.round(Math.min(Math.max(8, r.left + r.width / 2 - 120), window.innerWidth - 248))}px`);
         $('topbar-menu-btn')?.click();
     });
-    $('topbar-menu-btn')?.addEventListener('click', (e) => { if (e.isTrusted) body.classList.remove('lc-menu-from-rail'); }, true);
+    $('topbar-menu-btn')?.addEventListener('click', (e) => { syncAdminGroup(); if (e.isTrusted) body.classList.remove('lc-menu-from-rail'); }, true);
 
     // Ses odası önizleme penceresi #chat-screen (z 1) içindeydi: ray ve sütunun (z 60) altında kalmasın.
     const roomPreview = $('voice-room-preview-modal');
@@ -145,7 +214,7 @@
             <div class="lc-home-sec" id="lc-home-sec"><div id="lc-pending-slot" class="lc-pending-slot"></div><div id="lc-groups-slot" class="lc-groups-slot"></div><div id="lc-dm-slot" class="lc-dm-slot"></div></div>
         </div>
         <div class="lc-voice" id="lc-voice" hidden>
-            <div class="lc-voice-row">
+            <div class="lc-voice-row" id="lc-voice-row">
                 <div class="lc-voice-info"><b id="lc-voice-state">${tr('lc-voice-connected', 'Sesli bağlı')}</b><span id="lc-voice-room"></span></div>
                 <button type="button" class="lc-icon-btn" id="lc-voice-open">${ICON.expand}</button>
                 <button type="button" class="lc-icon-btn lc-danger" id="lc-voice-leave">${ICON.leave}</button>
@@ -158,6 +227,22 @@
             <button type="button" class="lc-icon-btn" id="lc-gear">${ICON.gear}</button>
         </div>`;
     document.body.appendChild(col);
+
+    // ── Masaüstü alt dok (kimlik seçimi 3F): telefondaki alt çubuğa benzer, sohbet alanının altında ortada yüzer ──
+    // Keşfet / Bildirim / Diğer (raydan), ses paneli (sütundan), Sen ve Ayarlar (kullanıcı panelinden) masaüstünde buraya TAŞINIR
+    // (bkz. MOVES); telefonda yerlerine döner. Mesajlar ve Arkadaşlar düğmeleri yalnızca dokta vardır.
+    const dock = document.createElement('nav');
+    dock.id = 'lc-dock';
+    dock.className = 'lc-dock';
+    dock.setAttribute('aria-label', tr('lc-dock', 'Hızlı gezinme'));
+    dock.innerHTML = `
+        <div class="lc-dock-group" id="lc-dock-nav">
+            <button type="button" class="lc-ico lc-tool" id="lc-dock-dms">${ICON.chat}<span class="lc-name" aria-hidden="true">${tr('lc-dock-dms', 'Mesajlar')}</span></button>
+            <button type="button" class="lc-ico lc-tool" id="lc-dock-friends">${ICON.members}<span class="lc-name" aria-hidden="true">${tr('menu-friends', 'Arkadaşlar')}</span></button>
+        </div>
+        <div class="lc-dock-group lc-dock-voice" id="lc-dock-voice"></div>
+        <div class="lc-dock-group" id="lc-dock-me"></div>`;
+    document.body.appendChild(dock);
     label('lc-col-menu', tr('lc-lobby-info', 'Lobi bilgisi'));
     label('lc-add-friend', tr('menu-add-friend', 'Arkadaş ekle'));
     $('lc-add-friend').addEventListener('click', () => ($('friend-add-open-btn') || $('rail-friend'))?.click());
@@ -170,6 +255,20 @@
     // Lobi adının yanındaki ⌄: lobi bilgi penceresi (takviye, üyeler, ayrılma…); yoksa lobi ayarları.
     $('lc-col-menu').addEventListener('click', () => { const b = $('topbar-lobby-badge'); if (b) b.click(); else $('hub-settings-open-btn')?.click(); });
     label('lc-ch-add', tr('channel-add', 'Metin kanalı aç'));
+    label('lc-dock-dms', tr('lc-dock-dms-full', 'Mesajlar: özel sohbetler ve gruplar'));
+    label('lc-dock-friends', tr('menu-friends', 'Arkadaşlar'));
+    $('lc-user-id').dataset.dockLabel = tr('lc-dock-me', 'Sen');
+    $('lc-gear').dataset.dockLabel = tr('menu-settings', 'Ayarlar');
+    // Mesajlar: Ana sayfaya geçer ve özel sohbet listesini gösterir; Arkadaşlar: Ana sayfadaki arkadaş sayfası.
+    const flash = (el) => { if (!el) return; el.classList.remove('lc-flash'); void el.offsetWidth; el.classList.add('lc-flash'); setTimeout(() => el.classList.remove('lc-flash'), 1000); };
+    $('lc-dock-dms').addEventListener('click', () => {
+        $('lc-home').click();
+        requestAnimationFrame(() => { const slot = $('lc-dm-slot'); slot?.scrollIntoView({ block: 'start', behavior: 'smooth' }); flash(slot); });
+    });
+    $('lc-dock-friends').addEventListener('click', () => {
+        $('lc-home').click();
+        requestAnimationFrame(() => { const page = $('lc-friends'); page?.querySelector('.lcf-body')?.scrollTo({ top: 0, behavior: 'smooth' }); flash(page?.querySelector('.lcf-groups')); });
+    });
     $('lc-ch-add').addEventListener('click', () => { if (typeof createChannelPrompt === 'function') createChannelPrompt(); });
 
     // ── Metin kanalları listesi (script.js 'sauran:channels' duyurusunda yeniden çizilir) ──
@@ -240,6 +339,14 @@
 
     // Masaüstünde mevcut öğeler sütuna taşınır; dar ekranda eski yerlerine döner (işleyiciler öğeyle birlikte gelir).
     const MOVES = [ // [öğe, yuva, telefonda da taşınır]
+        ['lc-discover', 'lc-dock-nav', false],
+        ['lc-bell', 'lc-dock-nav', false],
+        ['lc-more', 'lc-dock-nav', false],
+        ['lc-voice', 'lc-dock-voice', false],
+        ['lc-mic', 'lc-voice-row', false],
+        ['lc-deaf', 'lc-voice-row', false],
+        ['lc-user-id', 'lc-dock-me', false],
+        ['lc-gear', 'lc-dock-me', false],
         ['hub-voice-rooms-list', 'lc-rooms-slot', true],
         ['fd-pending', 'lc-pending-slot', false],
         ['friends-groups', 'lc-groups-slot', false],
