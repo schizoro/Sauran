@@ -177,6 +177,68 @@
         const settings = dress('settings-btn', 'gear', 'gray', tr('lc-menu-settings-sub', 'Hesap, bildirim, ses ve gizlilik'));
         if (settings) { const foot = document.createElement('div'); foot.className = 'lc-mi-foot'; foot.appendChild(settings); menuDropdown.appendChild(foot); }
     }
+    // ── Küçük pencereler: ortak yeni görünüm ──────────────────────────────────────────────
+    // Başlıktaki emoji yerine renkli simge kutusu + başlık + bir satırlık açıklama; kutu, giriş alanları ve düğmeler
+    // layout-c.css'teki .lc-modal kurallarıyla tek tip görünür. İçerik, kimlikler ve işleyiciler değişmez.
+    const MODAL_ICONS = {
+        ...MI,
+        home: '<path d="M4 11l8-7 8 7v9H4zM10 20v-6h4v6"/><path d="M19 3v4M17 5h4"/>',
+        userplus: '<circle cx="10" cy="8" r="4"/><path d="M2 20c1.5-4 4.5-5.5 8-5.5S16.5 16 18 20M19 8v6M16 11h6"/>',
+        people: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c1-3.5 3.5-5 6.5-5s5.5 1.5 6.5 5M16 4.5a3.5 3.5 0 0 1 0 7M18 15c2 .6 3.2 2.2 3.8 5"/>'
+    };
+    const MODALS = [
+        ['hub-join-modal', 'key', 'cyan', tr('lc-modal-join-sub', 'Arkadaşının paylaştığı davet kodunu yapıştır.')],
+        ['feedback-modal', 'bulb', 'amber', tr('lc-modal-feedback-sub', 'Önerin panoda görünür; diğer kullanıcılar oylayabilir.')],
+        ['hub-create-modal', 'home', 'violet', ''],
+        ['group-pick-modal', 'people', 'violet', tr('lc-modal-group-sub', 'Arkadaşlarını seç, birlikte sohbet edin.')],
+        ['inventory-modal', 'box', 'orange', '']
+    ];
+    // Başlıktaki baştaki emoji/simge karakterlerini atar (çeviri uygulanınca geri gelirse yine atılır).
+    const stripLead = (el) => {
+        if (!el) return;
+        const clean = () => {
+            const txt = el.textContent || '';
+            const next = txt.replace(/^[^\p{L}\p{N}]+/u, '');
+            if (next !== txt) el.textContent = next;
+        };
+        clean();
+        new MutationObserver(clean).observe(el, { childList: true, characterData: true, subtree: true });
+    };
+    function dressModal(id, icon, tone, sub) {
+        const ov = $(id);
+        const box = ov && ov.querySelector('.modal-box');
+        const head = box && box.querySelector('.modal-header');
+        if (!head || head.dataset.lcDressed) return;
+        head.dataset.lcDressed = '1';
+        box.classList.add('lc-modal');
+        const title = head.querySelector('span');
+        stripLead(title);
+        const ico = document.createElement('span');
+        ico.className = `lc-mi-ico lc-mh-ico tone-${tone}`;
+        ico.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${MODAL_ICONS[icon]}</svg>`;
+        const txt = document.createElement('span');
+        txt.className = 'lc-mh-txt';
+        if (title) { title.classList.add('lc-mh-title'); txt.appendChild(title); }
+        // Açıklama: verilmediyse pencerenin kendi açıklama paragrafı başlığa taşınır (hub-create-desc, mk-sub).
+        const own = box.querySelector('.hub-create-desc, .mk-sub');
+        if (sub || own) {
+            const small = document.createElement('small');
+            if (sub) small.textContent = sub; else { small.appendChild(own); own.classList.add('lc-mh-own'); }
+            txt.appendChild(small);
+        }
+        head.prepend(ico, txt);
+        const close = head.querySelector('button');
+        if (close) { close.classList.add('lc-mh-close'); close.setAttribute('aria-label', tr('close', 'Kapat')); }
+    }
+    MODALS.forEach(([id, icon, tone, sub]) => dressModal(id, icon, tone, sub));
+    // Arkadaş ekle penceresinin kendi büyük başlığı var: yalnızca simgesi yenilenir.
+    const faIcon = document.querySelector('#friend-add-modal .friend-add-hero-icon');
+    if (faIcon) { faIcon.className = 'lc-mi-ico lc-mh-ico tone-cyan friend-add-hero-icon'; faIcon.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${MODAL_ICONS.userplus}</svg>`; }
+    ['friend-add-modal', 'other-profile-modal', 'profile-modal'].forEach((id) => $(id)?.querySelector('.modal-box')?.classList.add('lc-modal', 'lc-modal-' + id));
+    // Lobi bilgisi penceresi shell.js tarafından açılışta üretilir: göründüğünde sınıf eklenir.
+    new MutationObserver(() => { const b = document.querySelector('#hub-info-modal .modal-box'); if (b && !b.classList.contains('lc-modal')) b.classList.add('lc-modal', 'lc-modal-hub-info'); })
+        .observe(document.body, { childList: true });
+
     // Yönetim grubu yalnızca bağlantılarından biri görünürse gösterilir (görünürlüğü script.js hesaba göre ayarlar).
     const syncAdminGroup = () => {
         const grp = menuDropdown && menuDropdown.querySelector('.lc-mi-admin');
