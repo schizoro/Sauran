@@ -4084,7 +4084,8 @@ function disconnectRevokedSockets(userId = null) {
       if (!s) continue;
       const h = s.data && s.data.tokenHash;
       const row = h ? db.prepare(`SELECT expires_at FROM sessions WHERE token_hash = ?`).get(h) : null;
-      if (!row || new Date(row.expires_at).getTime() <= now) s.disconnect(true);
+      // Önce cihaza "oturumun kapatıldı" denir (uygulama hemen çıkış ekranına geçer), sonra bağlantı kesilir.
+      if (!row || new Date(row.expires_at).getTime() <= now) { s.emit('session_revoked'); s.disconnect(true); }
     }
   }
 }
