@@ -62,6 +62,17 @@
     label('lc-discover', tr('menu-discover', 'Keşfet'));
     label('lc-bell', tr('menu-notifications', 'Bildirimler'));
     label('lc-more', tr('lc-more', 'Diğer: mağaza, kod ile katıl, ayarlar…'));
+    // Kart şeridinde her düğmenin altında kısa adı yazar (ekran okuyucu tam adı aria-label'dan okur).
+    [['lc-home', 'lc-short-home', 'Ana sayfa'], ['lc-add', 'lc-short-add', 'Oluştur'], ['lc-discover', 'menu-discover', 'Keşfet'],
+        ['lc-bell', 'lc-short-bell', 'Bildirim'], ['lc-more', 'lc-short-more', 'Diğer']].forEach(([id, key, fb]) => {
+        const el = $(id);
+        if (!el) return;
+        const s = document.createElement('span');
+        s.className = 'lc-name';
+        s.setAttribute('aria-hidden', 'true');
+        s.textContent = tr(key, fb);
+        el.appendChild(s);
+    });
 
     function renderLobbies() {
         const box = $('lc-lobbies');
@@ -80,11 +91,15 @@
             if (h.image_data) { const img = document.createElement('img'); img.src = h.image_data; img.alt = ''; img.decoding = 'async'; mark.appendChild(img); }
             else mark.textContent = String(h.name || '?').trim().charAt(0).toUpperCase() || '?';
             const pill = document.createElement('span'); pill.className = 'lc-pill';
+            const name = document.createElement('span');
+            name.className = 'lc-name';
+            name.textContent = h.name || '';
+            name.setAttribute('aria-hidden', 'true');
             const unread = document.createElement('span');
             unread.className = 'hub-card-unread lc-unread';
             unread.dataset.hubUnread = h.id; // içeriği script.js renderHubUnreadBadges doldurur
             unread.style.display = 'none';
-            b.append(mark, pill, unread);
+            b.append(mark, name, pill, unread);
             b.addEventListener('click', () => { closeDmIfDesk(); if (typeof openHub === 'function') openHub(h.id); });
             box.appendChild(b);
         });

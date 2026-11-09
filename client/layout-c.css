@@ -3,7 +3,7 @@
    Bu dosya theme.css'ten SONRA yüklenir; eski yerleşimin konumlandırma kurallarını yalnızca .lc-desk altında ezer. */
 
 :root {
-  --lc-rail: 64px;
+  --lc-rail: 76px;
   --lc-col: 240px;
   --lc-mem: 232px;
   --lc-bg-rail: #07090c;
@@ -25,34 +25,35 @@ body.lc.lc-desk.lc-auth .lc-rail {
   background: var(--lc-bg-rail); border-right: 1px solid var(--lc-line); overflow-y: auto; scrollbar-width: none;
 }
 body.lc.lc-desk.lc-auth .lc-rail::-webkit-scrollbar { display: none; }
-.lc-lobbies { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+/* Lobi kartları (kimlik seçimi 1B): her öğe ikon + altında kısa ad; seçili kart mor-camgöbeği ışıltıyla parlar. */
+.lc-lobbies { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .lc-ico {
-  position: relative; flex: none; width: 42px; height: 42px; border: 0; padding: 0; border-radius: 12px; cursor: pointer;
-  display: grid; place-items: center; background: var(--bg-surface-3); color: var(--text-secondary);
-  transition: border-radius .15s var(--ease), background .15s var(--ease), color .15s var(--ease);
+  position: relative; flex: none; width: 64px; min-height: 58px; border: 0; padding: 6px 2px 5px; border-radius: 14px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: transparent; color: var(--text-secondary);
+  transition: background .15s var(--ease), box-shadow .15s var(--ease), color .15s var(--ease);
 }
-.lc-ico svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.lc-ico:hover { border-radius: 14px; background: var(--accent-soft); color: var(--accent); }
-.lc-mark { width: 100%; height: 100%; border-radius: inherit; overflow: hidden; display: grid; place-items: center; font-weight: 800; font-size: 15px; color: #fff;
+.lc-ico > svg { width: 20px; height: 20px; padding: 8px; box-sizing: content-box; border-radius: 11px; background: var(--bg-surface-3); stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.lc-ico:hover { background: var(--lc-hover); color: var(--text-primary); }
+.lc-ico:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.lc-ico.on { background: linear-gradient(160deg, rgba(179, 102, 245, 0.26), rgba(92, 200, 255, 0.14)); box-shadow: inset 0 0 0 1px rgba(179, 102, 245, 0.55), 0 0 18px rgba(179, 102, 245, 0.18); color: var(--text-primary); }
+.lc-ico.on > svg { background: rgba(179, 102, 245, 0.22); color: #e2c9ff; }
+.lc-name { max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; font-weight: 600; line-height: 1.2; color: var(--text-tertiary, var(--text-secondary)); }
+.lc-ico:hover .lc-name, .lc-ico.on .lc-name { color: var(--text-primary); }
+.lc-mark { width: 36px; height: 36px; flex: none; border-radius: 11px; overflow: hidden; display: grid; place-items: center; font-weight: 800; font-size: 15px; color: #fff;
   background: linear-gradient(135deg, #2b3a4f, #1b2533); }
 .lc-mark img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.lc-home { border-radius: 50%; background: var(--bg-surface-3); }
-.lc-home-av { width: 100%; height: 100%; border-radius: 50%; overflow: hidden; display: grid; place-items: center; font-weight: 800; color: var(--text-primary); }
+.lc-home-av { width: 36px; height: 36px; flex: none; border-radius: 50%; overflow: hidden; display: grid; place-items: center; font-weight: 800; color: var(--text-primary); background: var(--bg-surface-3); }
 .lc-home-av img { width: 100%; height: 100%; object-fit: cover; }
 .lc-sep { width: 26px; height: 2px; border-radius: 2px; background: var(--lc-line); flex: none; }
 .lc-spacer { flex: 1; }
 .lc-add { color: var(--success); }
 .lc-add:hover { background: rgba(95, 214, 164, 0.14); color: var(--success); }
-/* Etkin göstergesi: soldaki beyaz şerit (okunmamışta kısa, etkin olanda uzun) */
-.lc-pill { position: absolute; left: -11px; top: 50%; width: 4px; height: 0; border-radius: 0 3px 3px 0; background: var(--text-primary); transform: translateY(-50%); transition: height .15s var(--ease); }
-.lc-ico:hover .lc-pill { height: 18px; }
-.lc-ico.on .lc-pill { height: 30px; background: var(--accent); }
-.lc-ico.on { border-radius: 14px; }
-.lc-ico.on .lc-mark { box-shadow: inset 0 0 0 2px var(--accent); }
-.lc-lobby .lc-unread { position: absolute; right: -5px; bottom: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; font-size: 10.5px; font-weight: 800;
+/* Discord tarzı soldaki beyaz şerit kullanılmaz; seçili olan kartın kendisi parlar. */
+.lc-pill { display: none; }
+.lc-lobby .lc-unread { position: absolute; right: 4px; top: 2px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; font-size: 10.5px; font-weight: 800;
   background: #ff4d5e; color: #fff; align-items: center; justify-content: center; box-shadow: 0 0 0 3px var(--lc-bg-rail); }
 .lc-lobby .lc-unread.is-muted { background: var(--bg-surface-3); color: var(--text-secondary); }
-.lc-dot { position: absolute; right: -2px; top: -2px; width: 11px; height: 11px; border-radius: 50%; background: #ff4d5e; box-shadow: 0 0 0 3px var(--lc-bg-rail); }
+.lc-dot { position: absolute; right: 12px; top: 4px; width: 11px; height: 11px; border-radius: 50%; background: #ff4d5e; box-shadow: 0 0 0 3px var(--lc-bg-rail); }
 .lc-dot[hidden] { display: none; }
 
 /* Kanal / ses sütunu */
