@@ -11,12 +11,12 @@
 
     const CATS = [['all', 'Tümü'], ['frame', 'Çerçeveler'], ['profile', 'Profil'], ['chat', 'Sohbet'], ['card', 'Üye kartları'], ['atmo', 'Paketler'], ['sticker', 'Çıkartmalar']];
     const PICKS = [
-        { id: 'profile-theme-picker', cat: 'profile', kind: 'ptheme', attr: 'ptheme', def: 'default', feature: 'profile_theme', field: 'profile_theme', group: 'Profil teması' },
-        { id: 'profile-effect-picker', cat: 'profile', kind: 'effect', attr: 'effect', def: 'none', feature: 'profile_effect', field: 'profile_effect', group: 'Profil efekti' },
-        { id: 'name-plate-picker', cat: 'profile', kind: 'plate', attr: 'plate', def: 'none', feature: 'name_plate', field: 'name_plate', group: 'İsim plakası' },
-        { id: 'name-effect-picker', cat: 'profile', kind: 'nfx', attr: 'nfx', def: 'none', feature: 'name_effect', field: 'name_effect', group: 'İsim efekti' },
-        { id: 'chat-theme-picker', cat: 'chat', kind: 'theme', attr: 'theme', def: 'classic', feature: 'chat_theme', field: 'chat_theme', group: 'Sohbet teması' },
-        { id: 'bubble-style-picker', cat: 'chat', kind: 'bubble', attr: 'bubble', def: 'default', feature: 'bubble_style', field: 'bubble_style', group: 'Mesaj balonu' }
+        { id: 'profile-theme-picker', cat: 'profile', kind: 'ptheme', attr: 'ptheme', def: 'default', feature: 'profile_theme', field: 'profile_theme', group: 'Profil teması', shelf: 'Profil temaları' },
+        { id: 'profile-effect-picker', cat: 'profile', kind: 'effect', attr: 'effect', def: 'none', feature: 'profile_effect', field: 'profile_effect', group: 'Profil efekti', shelf: 'Profil efektleri' },
+        { id: 'name-plate-picker', cat: 'profile', kind: 'plate', attr: 'plate', def: 'none', feature: 'name_plate', field: 'name_plate', group: 'İsim plakası', shelf: 'İsim plakaları' },
+        { id: 'name-effect-picker', cat: 'profile', kind: 'nfx', attr: 'nfx', def: 'none', feature: 'name_effect', field: 'name_effect', group: 'İsim efekti', shelf: 'İsim efektleri' },
+        { id: 'chat-theme-picker', cat: 'chat', kind: 'theme', attr: 'theme', def: 'classic', feature: 'chat_theme', field: 'chat_theme', group: 'Sohbet teması', shelf: 'Sohbet temaları' },
+        { id: 'bubble-style-picker', cat: 'chat', kind: 'bubble', attr: 'bubble', def: 'default', feature: 'bubble_style', field: 'bubble_style', group: 'Mesaj balonu', shelf: 'Mesaj balonları' }
     ];
 const optLabel = (btn) => { const c = btn.cloneNode(true); c.querySelectorAll('.nfx-preview, .chat-theme-swatch, .bubble-swatch').forEach((n) => n.remove()); return (c.textContent || '').trim(); };
     const state = { cat: 'all', items: [], wallet: null };
@@ -44,7 +44,7 @@ const optLabel = (btn) => { const c = btn.cloneNode(true); c.querySelectorAll('.
                 const frames = [{ key: 'classic', label: 'Klasik', rarity: 'free', price: 0, purchasable: false, owned: true, equipped: d.equipped === 'classic' }, ...d.items.filter((i) => !(typeof PLUS_ONLY_ITEM_KEYS !== 'undefined' && PLUS_ONLY_ITEM_KEYS.has(i.key)))];
                 frames.forEach((f) => {
                     if (f.key === 'classic') return;
-                    items.push({ cat: 'frame', id: 'frame:' + f.key, title: f.label, tier: f.price === 0 ? 'free' : 'coin', price: f.price, owned: Boolean(f.owned), active: Boolean(f.equipped), data: f, locked: !f.owned,
+                    items.push({ cat: 'frame', shelf: 'Avatar çerçeveleri', id: 'frame:' + f.key, title: f.label, tier: f.price === 0 ? 'free' : 'coin', price: f.price, owned: Boolean(f.owned), active: Boolean(f.equipped), data: f, locked: !f.owned,
                         thumb: `<div class="st-frame profile-avatar-wrap frame-${escA(f.key)}">${typeof mkPreviewHtml === 'function' ? mkPreviewHtml(f) : esc(f.label.charAt(0))}</div>` });
                 });
             }
@@ -63,7 +63,7 @@ const optLabel = (btn) => { const c = btn.cloneNode(true); c.querySelectorAll('.
                 else if (cfg.kind === 'nfx') thumb = `<div class="st-nm">${typeof usernameCardHtml === 'function' ? usernameCardHtml(u.username || 'Ad', true, key) : esc(u.username || 'Ad')}</div>`;
                 else if (cfg.kind === 'theme') thumb = `<div class="st-chat"><div class="hub-msg-bubble">Selam! 👋</div><div class="hub-msg-bubble chat-theme-${escA(key)}">Akşam oyun var mı?</div></div>`;
                 else thumb = `<div class="st-chat"><div class="hub-msg-bubble">Selam! 👋</div><div class="hub-msg-bubble bubble-${escA(key)}">Akşam oyun var mı?</div></div>`;
-                items.push({ cat: cfg.cat, id: cfg.id + ':' + key, title: label, sub: cfg.group, tier: 'plus', owned: allowed, active: (u[cfg.field] || cfg.def) === key, locked: !allowed, thumb, open: () => btn.click() });
+                items.push({ cat: cfg.cat, shelf: cfg.shelf, id: cfg.id + ':' + key, title: label, sub: cfg.group, tier: 'plus', owned: allowed, active: (u[cfg.field] || cfg.def) === key, locked: !allowed, thumb, open: () => btn.click() });
             });
         });
         // Üye kartları (Premium)
@@ -73,14 +73,14 @@ const optLabel = (btn) => { const c = btn.cloneNode(true); c.querySelectorAll('.
             CARD_STYLES.forEach((c) => {
                 const btn = document.querySelector(`#cz-cardstyle-card [data-card-style="${c.key}"]`);
                 const prev = btn && btn.querySelector('.cz-card-prev');
-                items.push({ cat: 'card', id: 'card:' + c.key, title: c.label, sub: 'Lobi üye kartı', tier: 'premium', owned: ok, active: ok && (u.card_style || 'classic') === c.key, locked: !ok, thumb: `<div class="st-cardthumb">${prev ? prev.outerHTML : ''}</div>`, open: () => btn && btn.click() });
+                items.push({ cat: 'card', shelf: 'Lobi üye kartları', id: 'card:' + c.key, title: c.label, sub: 'Lobi üye kartı', tier: 'premium', owned: ok, active: ok && (u.card_style || 'classic') === c.key, locked: !ok, thumb: `<div class="st-cardthumb">${prev ? prev.outerHTML : ''}</div>`, open: () => btn && btn.click() });
             });
         }
         // Atmosphere
         try {
             const cat = typeof ensureAtmoCatalog === 'function' ? await ensureAtmoCatalog(true) : null;
             if (cat && cat.items) cat.items.forEach((a) => {
-                items.push({ cat: 'atmo', id: 'atmo:' + a.key, title: a.label, sub: 'Paket · profil + sohbet + lobi + ses', tier: a.tier === 'free' ? 'free' : a.tier, price: a.price_coins, owned: Boolean(a.available), active: Boolean(a.active), locked: !a.available, data: a,
+                items.push({ cat: 'atmo', shelf: 'Atmosphere paketleri', id: 'atmo:' + a.key, title: a.label, sub: 'Paket · profil + sohbet + lobi + ses', tier: a.tier === 'free' ? 'free' : a.tier, price: a.price_coins, owned: Boolean(a.available), active: Boolean(a.active), locked: !a.available, data: a,
                     thumb: `<div class="st-atmo st-bundle" style="background:${a.art}"><span class="st-bundle-emoji" aria-hidden="true">${a.emoji}</span><div class="hub-msg-bubble${a.bundle && a.bundle.chat_theme && a.bundle.chat_theme !== 'classic' ? ' chat-theme-' + a.bundle.chat_theme : ''}${a.bundle && a.bundle.bubble_style && a.bundle.bubble_style !== 'default' ? ' bubble-' + a.bundle.bubble_style : ''}">Merhaba! 👋</div></div>` });
             });
         } catch (_) { /* katalog yok */ }
@@ -89,7 +89,7 @@ const optLabel = (btn) => { const c = btn.cloneNode(true); c.querySelectorAll('.
             const lists = [['plus', PLUS_STICKERS, 'sticker_pack', 'plus'], ['premium', PREMIUM_STICKERS, 'premium_sticker_pack', 'premium']];
             lists.forEach(([tier, list, feature]) => list.forEach((s) => {
                 const ok = has(feature);
-                items.push({ cat: 'sticker', id: 'stk:' + s.id, title: (s.id.replace(/^(plus|prem)-/, '').replace(/-/g, ' ')), sub: tier === 'premium' ? 'Premium çıkartma' : 'Plus çıkartma', tier, owned: ok, active: false, locked: !ok, data: s,
+                items.push({ cat: 'sticker', shelf: tier === 'premium' ? 'Premium çıkartmalar' : 'Plus çıkartmalar', id: 'stk:' + s.id, title: (s.id.replace(/^(plus|prem)-/, '').replace(/-/g, ' ')), sub: tier === 'premium' ? 'Premium çıkartma' : 'Plus çıkartma', tier, owned: ok, active: false, locked: !ok, data: s,
                     thumb: `<div class="st-stk">${typeof stickerInnerHtml === 'function' ? stickerInnerHtml(s.id) : esc(s.emoji)}</div>` });
             }));
         }
@@ -99,17 +99,30 @@ const optLabel = (btn) => { const c = btn.cloneNode(true); c.querySelectorAll('.
     // ── Çizim ──
     function cardHtml(it, i) {
         const badge = tierBadge(it.tier, it.price);
-        const stateLine = it.active ? '<span class="st-state on">✓ Kullanımda</span>' : it.owned ? '<span class="st-state">Sende</span>' : it.tier === 'coin' ? '<span class="st-state soon">Yakında</span>' : '<span class="st-state lock">🔒 Kilitli</span>';
+        const stateLine = it.active ? '<span class="st-state on">✓ Kullanımda</span>' : it.owned ? '<span class="st-state">Sende</span>' : it.tier === 'coin' ? '<span class="st-state soon">Yakında</span>' : '<span class="st-state lock">Kilitli</span>';
         return `<button type="button" class="st-card${it.locked ? ' st-locked' : ''}${it.active ? ' st-active' : ''}" data-st-i="${i}">
             <div class="st-thumb">${it.thumb}</div>
-            <div class="st-meta"><div class="st-title">${esc(it.title)}</div>${it.sub ? `<div class="st-sub">${esc(it.sub)}</div>` : ''}<div class="st-row">${badge}${stateLine}</div></div>
+            <div class="st-meta"><div class="st-title">${esc(it.title)}</div>${it.sub && it.cat === 'atmo' ? `<div class="st-sub">${esc(it.sub)}</div>` : ''}<div class="st-row">${badge}${stateLine}</div></div>
         </button>`;
     }
     function renderGrid() {
         const grid = $('st-grid');
         if (!grid) return;
         const list = state.items.map((it, i) => [it, i]).filter(([it]) => state.cat === 'all' || it.cat === state.cat);
-        grid.innerHTML = list.map(([it, i]) => cardHtml(it, i)).join('') || '<p class="st-empty">Bu kategoride ürün yok.</p>';
+        // Raflar: her özellik kendi başlığı altında. "Tümü"nde yatay kayan raf + "Tümünü gör"; kategoride başlıklı ızgara.
+        const shelves = [];
+        list.forEach(([it, i]) => {
+            const name = it.shelf || 'Diğer';
+            let sh = shelves.find((x) => x.name === name);
+            if (!sh) { sh = { name, cat: it.cat, rows: [] }; shelves.push(sh); }
+            sh.rows.push([it, i]);
+        });
+        const all = state.cat === 'all';
+        grid.className = all ? 'st-grid st-shelves is-rows' : 'st-grid st-shelves';
+        grid.innerHTML = shelves.map((sh) => `<section class="st-shelf" data-shelf="${escA(sh.name)}">
+                <div class="st-shelf-head"><h3>${esc(sh.name)} <span>${sh.rows.length}</span></h3>${all ? `<button type="button" class="st-shelf-more" data-st-cat="${escA(sh.cat)}" data-st-shelf="${escA(sh.name)}">Tümünü gör</button>` : ''}</div>
+                <div class="st-shelf-row">${sh.rows.map(([it, i]) => cardHtml(it, i)).join('')}</div>
+            </section>`).join('') || '<p class="st-empty">Bu kategoride ürün yok.</p>';
         grid.querySelectorAll('.st-av[data-fx]').forEach((el) => { if (typeof applyProfileEffect === 'function') applyProfileEffect(el, el.dataset.fx); });
         $('st-chips').querySelectorAll('[data-st-cat]').forEach((b) => b.classList.toggle('on', b.dataset.stCat === state.cat));
     }
@@ -118,8 +131,8 @@ const optLabel = (btn) => { const c = btn.cloneNode(true); c.querySelectorAll('.
         const u = me();
         const premOn = has('premium_card'), plusOn = has('chat_theme');
         const cards = [];
-        if (!premOn) cards.push(`<button type="button" class="st-promo-card st-promo-prem" data-st-subs="1"><b>♛ Sauran Premium</b><span>Animasyonlu kartlar, hareketli avatar, lobi takviyesi ve daha fazlası</span><i>Aboneliği gör →</i></button>`);
-        if (!plusOn) cards.push(`<button type="button" class="st-promo-card st-promo-plus" data-st-subs="1"><b>✦ Sauran Plus</b><span>Profil temaları, efektler, sohbet stilleri, kendi emojilerin</span><i>Aboneliği gör →</i></button>`);
+        if (!premOn) cards.push(`<button type="button" class="st-promo-card st-promo-prem" data-st-subs="1"><b><em class="subs-premium-badge">♛ PREMIUM</em> Sauran Premium</b><span>Animasyonlu kartlar, hareketli avatar, lobi takviyesi ve daha fazlası</span><i>Aboneliği gör</i></button>`);
+        if (!plusOn) cards.push(`<button type="button" class="st-promo-card st-promo-plus" data-st-subs="1"><b><em class="plus-badge plus-badge-sm">✦ PLUS</em> Sauran Plus</b><span>Profil temaları, efektler, sohbet stilleri, kendi emojilerin</span><i>Aboneliği gör</i></button>`);
         void u;
         box.innerHTML = cards.join('');
         box.style.display = cards.length ? '' : 'none';
@@ -133,7 +146,7 @@ const optLabel = (btn) => { const c = btn.cloneNode(true); c.querySelectorAll('.
             scr.className = 'store-screen';
             scr.setAttribute('role', 'dialog'); scr.setAttribute('aria-modal', 'true'); scr.setAttribute('aria-label', 'Sauran Mağaza');
             scr.innerHTML = `<div class="st-shell">
-                <header class="st-head"><button type="button" class="st-close" id="st-close" aria-label="Kapat">←</button><h2>🛍️ Mağaza</h2><span class="st-wallet" id="st-wallet">🪙 …</span></header>
+                <header class="st-head"><button type="button" class="st-close" id="st-close" aria-label="Kapat"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><span class="st-hico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6zM9 8V6a3 3 0 0 1 6 0v2"/></svg></span><div class="st-htxt"><h2>Mağaza</h2><small>Profilini, sohbetini ve lobini kişiselleştir</small></div><span class="st-wallet" id="st-wallet" title="Sauran Coin"><i class="st-coin-dot" aria-hidden="true"></i>…</span></header>
                 <div class="st-chips" id="st-chips" role="tablist">${CATS.map(([k, l]) => `<button type="button" role="tab" data-st-cat="${k}">${l}</button>`).join('')}</div>
                 <div class="st-body"><div id="st-promo" class="st-promo"></div><div class="st-note">Bir ürüne dokun: kendi hesabınla nasıl görüneceğini gör.</div><div id="st-grid" class="st-grid"></div></div>
             </div>`;
@@ -143,7 +156,7 @@ const optLabel = (btn) => { const c = btn.cloneNode(true); c.querySelectorAll('.
         scr.style.display = 'flex';
         document.body.classList.add('st-open');
         $('st-grid').innerHTML = '<p class="st-empty">Yükleniyor…</p>';
-        try { const w = await fetch('/api/wallet', { credentials: 'include' }); if (w.status === 200) { state.wallet = (await w.json()).balance; $('st-wallet').textContent = `🪙 ${state.wallet}`; } } catch (_) { /* cüzdan yok */ }
+        try { const w = await fetch('/api/wallet', { credentials: 'include' }); if (w.status === 200) { state.wallet = (await w.json()).balance; $('st-wallet').innerHTML = `<i class="st-coin-dot" aria-hidden="true"></i>${esc(state.wallet)} Coin`; } } catch (_) { /* cüzdan yok */ }
         await refresh();
     }
     async function refresh() {
@@ -243,7 +256,14 @@ const optLabel = (btn) => { const c = btn.cloneNode(true); c.querySelectorAll('.
     function onClick(e) {
         if (e.target.closest('#st-close')) { close(); return; }
         const cat = e.target.closest('[data-st-cat]');
-        if (cat) { state.cat = cat.dataset.stCat; renderGrid(); return; }
+        if (cat) {
+            state.cat = cat.dataset.stCat;
+            renderGrid();
+            const body = document.querySelector('#store-screen .st-body');
+            const target = cat.dataset.stShelf && [...document.querySelectorAll('#st-grid .st-shelf')].find((s) => s.dataset.shelf === cat.dataset.stShelf);
+            if (target && body) body.scrollTop = target.offsetTop - body.offsetTop - 8; else if (body) body.scrollTop = 0;
+            return;
+        }
         if (e.target.closest('[data-st-subs]')) { close(); document.getElementById('subs-open-btn')?.click(); return; }
         const card = e.target.closest('[data-st-i]');
         if (card) openItem(state.items[Number(card.dataset.stI)]);
