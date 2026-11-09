@@ -26,6 +26,7 @@
         more: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>',
         members: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c1-3.5 3.5-5 6.5-5s5.5 1.5 6.5 5M16 4.5a3.5 3.5 0 0 1 0 7M18 15c2 .6 3.2 2.2 3.8 5"/></svg>',
         chevron: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
+        chat: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H10l-5 4v-4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/></svg>',
         expand: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>'
     };
     // script.js'teki global let değişkenleri: doğrudan ad ile okunur (eval yok; CSP 'unsafe-eval' gerektirmez).
@@ -134,9 +135,8 @@
         <div class="lc-col-head" id="lc-col-head"><span class="lc-col-title" id="lc-col-title"></span><button type="button" class="lc-icon-btn" id="lc-add-friend">${ICON.plus}</button><button type="button" class="lc-icon-btn" id="lc-col-menu">${ICON.chevron}</button></div>
         <div class="lc-col-body">
             <div class="lc-hub-sec" id="lc-hub-sec">
-                <div class="lc-lbl"><span>${tr('lc-text-channels', 'Metin kanalları')}</span></div>
-                <button type="button" class="lc-ch on" id="lc-ch-chat"><span class="lc-hash">#</span>${tr('lc-chat', 'sohbet')}</button>
-                <div class="lc-lbl"><span>${tr('voice-rooms-title', 'Ses odaları')}</span><button type="button" class="lc-icon-btn lc-lbl-btn" id="lc-room-add">${ICON.plus}</button></div>
+                <button type="button" class="lc-ch lc-chat-card on" id="lc-ch-chat"><span class="lc-chat-ico">${ICON.chat}</span>${tr('lc-chat-card', 'Sohbet')}</button>
+                <div class="lc-lbl lc-rooms-lbl"><span>${tr('lc-voice-rooms-label', 'Ses odaları')}</span><button type="button" class="lc-icon-btn lc-lbl-btn" id="lc-room-add">${ICON.plus}</button></div>
                 <div id="lc-rooms-slot" class="lc-rooms-slot"></div>
             </div>
             <div class="lc-home-sec" id="lc-home-sec"><div id="lc-pending-slot" class="lc-pending-slot"></div><div id="lc-groups-slot" class="lc-groups-slot"></div><div id="lc-dm-slot" class="lc-dm-slot"></div></div>

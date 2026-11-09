@@ -356,3 +356,36 @@ body.lc.lc-show-friends.lc-desk .topbar { display: none !important; }
 .lc-rooms-slot .hub-voice-room-member:hover .voice-mod-mute-btn, .lc-rooms-slot .hub-voice-room-member:focus-within .voice-mod-mute-btn { display: grid !important; place-items: center; }
 @media (hover: none) { .lc-rooms-slot .voice-mod-mute-btn { display: grid !important; place-items: center; } }
 .lc-rooms-slot .voice-self-tag { font-size: 11px; color: var(--text-tertiary); }
+
+/* ═══════════════ ODA KARTLARI (kimlik seçimi 2B) ═══════════════
+   Sohbet tek bir kart; ses odaları canlı kartlar: durum satırı, Katıl düğmesi, dolu oda yeşil ışıkla öne çıkar.
+   Kart sarmalayıcısını (.lc-room-card) script.js renderVoiceRoomsList yalnızca body.lc iken üretir. */
+.lc-chat-card { width: calc(100% - 16px) !important; margin: 10px 8px 0 !important; padding: 10px 12px !important; border-radius: 12px !important; gap: 10px !important;
+  background: var(--bg-surface-2, #151a23) !important; color: var(--text-primary) !important; font-weight: 700 !important; border: 1px solid var(--lc-line) !important; }
+.lc-chat-card.on { background: rgba(92, 200, 255, 0.08) !important; border-color: rgba(92, 200, 255, 0.32) !important; }
+.lc-chat-card:hover { background: rgba(92, 200, 255, 0.11) !important; }
+.lc-chat-ico { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: rgba(92, 200, 255, 0.14); color: var(--accent); flex: none; }
+.lc-chat-ico svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linejoin: round; }
+.lc-rooms-lbl { text-transform: none !important; letter-spacing: 0 !important; font-size: 12.5px !important; color: var(--text-secondary) !important; padding: 16px 10px 6px 14px !important; }
+.lc-rooms-slot .hub-voice-rooms-list { gap: 6px !important; padding: 0 8px !important; }
+.lc-room-card { border-radius: 12px; background: var(--bg-surface-2, #151a23); border: 1px solid var(--lc-line); overflow: hidden; transition: border-color .15s var(--ease), box-shadow .15s var(--ease); }
+.lc-room-card:hover { border-color: rgba(255, 255, 255, 0.14); }
+.lc-room-card.is-live { background: linear-gradient(135deg, rgba(61, 220, 151, 0.12), rgba(92, 200, 255, 0.05)); border-color: rgba(61, 220, 151, 0.38); }
+.lc-room-card.is-here { border-color: rgba(61, 220, 151, 0.65); box-shadow: 0 0 18px rgba(61, 220, 151, 0.16); }
+.lc-room-card .hub-voice-room-row, .lc-room-card .hub-voice-room-row.active, .lc-room-card .hub-voice-room-row:hover { padding: 9px 10px !important; background: none !important; min-height: 0; }
+.lc-room-card .hub-voice-room-icon, .lc-room-card .hub-voice-room-count { display: none !important; }
+.lc-room-card .hub-voice-room-info { min-width: 0; flex: 1; }
+.lc-room-card .hub-voice-room-name { color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lc-room-status { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 11.5px; color: var(--text-tertiary); }
+.lc-room-card.is-live .lc-room-status, .lc-room-card.is-here .lc-room-status { color: #9fe9c9; }
+.lc-live { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px var(--success); flex: none; }
+.lc-room-card .hub-voice-room-side { display: flex !important; align-items: center; gap: 6px; flex: none; }
+.lc-room-join { border: 0; border-radius: 9px; padding: 5px 11px; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; background: rgba(255, 255, 255, 0.08); color: var(--text-primary); }
+.lc-room-join:hover { background: rgba(255, 255, 255, 0.14); }
+.lc-room-card.is-live .lc-room-join { background: linear-gradient(135deg, #2f7bff, #5cc8ff); color: #04121e; }
+.lc-room-join:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Sil (yalnızca lobi sahibi görür): yanlışlıkla basılmasın diye üzerine gelince ya da odaklanınca görünür. */
+.lc-room-card .hub-voice-room-delete { opacity: 0; transition: opacity .15s var(--ease); }
+.lc-room-card:hover .hub-voice-room-delete, .lc-room-card:focus-within .hub-voice-room-delete { opacity: .75; }
+@media (hover: none) { .lc-room-card .hub-voice-room-delete { opacity: .6; } }
+.lc-room-card .hub-voice-room-members-list { padding: 0 8px 8px 10px !important; }

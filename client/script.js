@@ -4276,6 +4276,12 @@ const I18N = {
     'conn-offline': { tr: 'İnternet bağlantın yok. Bağlantı gelince otomatik devam eder.', en: 'You are offline. Sauran will reconnect automatically.' },
     'conn-back': { tr: 'Yeniden bağlandı', en: 'Reconnected' },
     'lc-room-join-hint': { tr: 'Katılmak için tıkla', en: 'Click to join' },
+    'lc-room-join': { tr: 'Katıl', en: 'Join' },
+    'lc-room-here': { tr: 'Buradasın', en: "You're here" },
+    'lc-room-talking': { tr: 'kişi konuşuyor', en: 'talking' },
+    'lc-room-empty': { tr: 'Boş', en: 'Empty' },
+    'lc-chat-card': { tr: 'Sohbet', en: 'Chat' },
+    'lc-voice-rooms-label': { tr: 'Ses odaları', en: 'Voice rooms' },
     'call-declined': { tr: 'Arama reddedildi.', en: 'Call declined.' },
     'call-busy': { tr: '{user} şu an başka bir görüşmede.', en: '{user} is on another call right now.' },
     'msg-too-long': { tr: 'Mesajın çok uzun: {n} / {max} karakter. Kısaltıp tekrar gönder.', en: 'Your message is too long: {n} / {max} characters. Shorten it and send again.' },
@@ -12409,14 +12415,18 @@ function renderVoiceRoomsList() {
         return;
     }
 
+    // "Sıkı Düzen" yerleşiminde her oda bir kart: durum satırı (kaç kişi konuşuyor / boş / buradasın) ve Katıl düğmesi (kimlik seçimi 2B).
+    const lcCards = document.body.classList.contains('lc');
     hubVoiceRoomsList.innerHTML = voiceRoomsCache.map((room) => {
         const isActive = room.id === currentVoiceRoomId;
         const count = room.participants?.length || 0;
-        return `
-            <div class="hub-voice-room-row ${isActive ? 'active' : ''}" data-room-id="${room.id}"${!isActive && document.body.classList.contains('lc') ? ` title="${escapeAttr(t('lc-room-join-hint'))}"` : ''}>
+        const status = isActive ? t('lc-room-here') : (count ? `${count} ${t('lc-room-talking')}` : t('lc-room-empty'));
+        const inner = `
+            <div class="hub-voice-room-row ${isActive ? 'active' : ''}" data-room-id="${room.id}"${!isActive && lcCards ? ` title="${escapeAttr(t('lc-room-join-hint'))}"` : ''}>
                 <span class="hub-voice-room-icon">${isActive ? '🔊' : '🔈'}</span>
                 <div class="hub-voice-room-info">
                     <div class="hub-voice-room-name">${escapeHtml(room.name)}</div>
+                    ${lcCards ? `<div class="lc-room-status">${count || isActive ? '<i class="lc-live" aria-hidden="true"></i>' : ''}${escapeHtml(status)}</div>` : ''}
                     <button class="hub-voice-room-toggle${voiceRoomsExpanded.has(room.id) ? ' open' : ''}" data-toggle-members="${room.id}" type="button" aria-expanded="${voiceRoomsExpanded.has(room.id)}">
                         <span>${t('voice-room-members-btn')}</span>
                         <span class="hub-voice-room-chevron">▸</span>
@@ -12425,11 +12435,13 @@ function renderVoiceRoomsList() {
                 <div class="hub-voice-room-side">
                     ${currentHub?.is_owner ? `<button class="hub-voice-room-delete" data-delete-room="${room.id}" type="button" title="${t('delete')}">🗑</button>` : ''}
                     <div class="hub-voice-room-count">${count} ${t('member-count')}</div>
+                    ${lcCards && !isActive ? `<button class="lc-room-join" type="button">${escapeHtml(t('lc-room-join'))}</button>` : ''}
                 </div>
             </div>
             ${voiceRoomMembersHtml(room)}
             ${isActive ? `<button class="hub-voice-room-leave-btn" data-leave-room="${room.id}" type="button">🚪 ${t('call-leave')}</button>` : ''}
         `;
+        return lcCards ? `<div class="lc-room-card${isActive ? ' is-here' : ''}${count ? ' is-live' : ''}">${inner}</div>` : inner;
     }).join('');
 
     hubVoiceRoomsList.querySelectorAll('[data-toggle-members]').forEach((btn) => {
