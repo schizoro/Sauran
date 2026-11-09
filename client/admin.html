@@ -274,6 +274,7 @@ Sauran Geliştirici Ekibi</textarea>
                 auNote: 'Yönetim geçmişi yalnızca ekleme yapılarak tutulur; bu panelden değiştirilemez veya silinemez. Yalnızca yönetimsel değişiklikler kaydedilir, sayfa görüntülemeleri kaydedilmez.',
                 tabCsp: 'Güvenlik Kuralı', cspRefresh: 'Yenile', cspDirective: 'Kural', cspBlocked: 'Engellenecek kaynak', cspPage: 'Sayfa',
                 cspSource: 'Kaynak dosya', cspCount: 'Sayı', cspLast: 'Son görülme',
+                cspRefreshing: 'Yenileniyor…', cspLastRefresh: 'son yenileme', cspSince: (d, h) => `Kayıt başlangıcı: ${d} (${h} önce, sunucu açılışı)`,
                 cspEmpty: 'Hiç ihlal yok. Kural zorunlu olsaydı bu süre içinde hiçbir şey engellenmeyecekti.',
                 cspSummaryN: (n, k) => `${n} ihlal · ${k} farklı satır`,
                 cspNote: 'İçerik güvenlik kuralı (CSP) şu an yalnızca raporlama modunda: hiçbir şey engellenmiyor. Bu liste, kural zorunlu olsaydı tarayıcıların neyi engelleyeceğini gösterir. Kişisel bilgi tutulmaz (adreslerin yalnızca site kısmı ve sayfa yolu). Liste sunucu yeniden başlayınca (deploy) sıfırlanır.',
@@ -311,6 +312,7 @@ Sauran Geliştirici Ekibi</textarea>
                 auNote: 'The admin history is append-only; it cannot be changed or deleted from this panel. Only administrative changes are recorded, not page views.',
                 tabCsp: 'Security Policy', cspRefresh: 'Refresh', cspDirective: 'Directive', cspBlocked: 'Would block', cspPage: 'Page',
                 cspSource: 'Source file', cspCount: 'Count', cspLast: 'Last seen',
+                cspRefreshing: 'Refreshing…', cspLastRefresh: 'last refresh', cspSince: (d, h) => `Collecting since: ${d} (${h} ago, server start)`,
                 cspEmpty: 'No violations. Had the policy been enforced, nothing would have been blocked in this period.',
                 cspSummaryN: (n, k) => `${n} violations · ${k} distinct rows`,
                 cspNote: 'The content security policy (CSP) is in report-only mode: nothing is blocked. This list shows what browsers would block if it were enforced. No personal data is kept (only the site part of addresses and the page path). The list resets when the server restarts (deploy).',
@@ -627,9 +629,22 @@ Sauran Geliştirici Ekibi</textarea>
         }
 
         async function loadCsp() {
-            const data = await api('/api/admin/csp-reports');
+            // Yenile geri bildirimi: istek sürerken düğme "Yenileniyor…" ve kapalı; bitince son yenileme saati yazılır.
+            const btn = $('csp-refresh');
+            btn.disabled = true;
+            btn.textContent = t('cspRefreshing');
+            let data;
+            try { data = await api('/api/admin/csp-reports'); }
+            finally { btn.disabled = false; btn.textContent = t('cspRefresh'); }
             const rows = data.reports || [];
-            $('csp-summary').textContent = t('cspSummaryN')(data.total || 0, rows.length);
+            const loc = lang === 'en' ? 'en-GB' : 'tr-TR';
+            const since = new Date(data.since);
+            const hours = isNaN(since) ? null : Math.max(0, (Date.now() - since) / 36e5);
+            const sinceTxt = isNaN(since) ? '' : t('cspSince')(since.toLocaleString(loc, { dateStyle: 'medium', timeStyle: 'short' }), hours < 1 ? Math.round(hours * 60) + (lang === 'en' ? ' min' : ' dk') : Math.round(hours) + (lang === 'en' ? ' h' : ' sa'));
+            $('csp-summary').innerHTML = `${esc(t('cspSummaryN')(data.total || 0, rows.length))}<br><small class="adm-muted" style="font-weight:400;">${esc(sinceTxt)} · ${esc(t('cspLastRefresh'))} ${esc(new Date().toLocaleTimeString(loc))}</small>`;
+            const sum = $('csp-summary');
+            sum.style.transition = 'none'; sum.style.opacity = '0.3';
+            requestAnimationFrame(() => { sum.style.transition = 'opacity .35s'; sum.style.opacity = '1'; });
             $('csp-empty').style.display = rows.length ? 'none' : 'block';
             const cell = (v) => v ? esc(v) : '<span class="adm-muted">—</span>';
             const when = (v) => { const d = new Date(v); return isNaN(d) ? '—' : esc(d.toLocaleString(lang === 'en' ? 'en-GB' : 'tr-TR', { dateStyle: 'medium', timeStyle: 'short' })); };

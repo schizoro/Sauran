@@ -2435,6 +2435,7 @@ function requirePlatformRole(req, res, minRole) {
 // Tarayıcı ihlali kendiliğinden bildirir (oturum gerekmez). Kişisel veri tutulmaz: yalnızca yönerge, engellenen adresin
 // kökü (yol/sorgu atılır), sayfa yolu ve kaynak dosya kökü. Bellekte en fazla 200 farklı ihlal; sunucu yeniden başlayınca sıfırlanır.
 const CSP_REPORT_MAX = 200;
+const cspReportsSince = new Date().toISOString(); // liste bu andan beri toplanıyor (sunucu açılışı)
 const cspReports = new Map(); // anahtar -> { directive, blocked, page, source, count, first_at, last_at }
 // report-uri her ihlal için ayrı istek atar ve aynı IP'yi birçok kullanıcı paylaşabilir (mobil operatör): sınır geniş tutulur.
 const cspReportLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, keyFn: byIp, message: 'Çok fazla rapor.' });
@@ -2482,7 +2483,7 @@ app.get('/api/admin/csp-reports', (req, res) => {
   const user = requirePlatformRole(req, res, 'admin');
   if (!user) return;
   const reports = [...cspReports.values()].sort((a, b) => b.count - a.count);
-  return res.json({ success: true, total: reports.reduce((n, r) => n + r.count, 0), reports });
+  return res.json({ success: true, total: reports.reduce((n, r) => n + r.count, 0), reports, since: cspReportsSince });
 });
 
 app.get('/api/hubs', (req, res) => {
