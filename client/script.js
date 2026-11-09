@@ -13368,6 +13368,10 @@ function modlogDetails(entry) {
     const en = modlogIsEn();
     const parts = [];
     if (d.room_name) parts.push(`${en ? 'Room' : 'Oda'}: ${escapeHtml(d.room_name)}`);
+    // Metin kanalı işlemleri: hangi kanal (adı değiştiyse eski → yeni), silinince giden mesaj sayısı
+    if (entry.action === 'channel_rename' && d.old_name) parts.push(`#${escapeHtml(d.old_name)} → #${escapeHtml(d.channel_name || '')}`);
+    else if (/^channel_/.test(entry.action) && d.channel_name) parts.push(`#${escapeHtml(d.channel_name)}`);
+    if (entry.action === 'channel_delete' && Number(d.messages) > 0) parts.push(en ? `${Number(d.messages)} messages deleted` : `${Number(d.messages)} mesaj silindi`);
     if (d.duration) parts.push(escapeHtml(modlogDuration(d.duration)));
     if (entry.action === 'slow_mode') parts.push(Number(d.seconds) ? escapeHtml(formatSlowDuration(d.seconds)) : (en ? 'off' : 'kapatıldı'));
     if (entry.action === 'word_filter') {
