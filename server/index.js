@@ -69,6 +69,7 @@ const {
   getVoiceRoomDailyName,
   setVoiceRoomDailyName,
   getVoiceRoom,
+  getVoiceRoomWithHub,
   setHubDailyRoomName,
   createHubInvite,
   joinHubByCode,
@@ -4868,12 +4869,26 @@ app.get('/api/hubs/:id/bans', (req, res) => {
 // ARKADAŞLIK
 // =====================================================
 
+// Arkadaş seste mi? Yalnızca görüntüleyen de o lobinin üyesiyse ve arkadaş görünür çevrimiçiyse (görünmez değilse) bildirilir;
+// böylece üye olmadığın bir lobide kimin konuştuğu sızmaz.
+function friendVoiceFor(viewerId, friendId, online) {
+  if (!online) return null;
+  const found = findUserVoiceRoom(friendId);
+  if (!found) return null;
+  const room = getVoiceRoomWithHub(found.roomId);
+  if (!room || !isHubMember(room.hub_id, viewerId)) return null;
+  return { hub_id: room.hub_id, hub_name: room.hub_name, hub_type: room.hub_type, room_id: room.id, room_name: room.name };
+}
+
 app.get('/api/friends', (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
 
   try {
-    const friends = listFriends(user.id).map(f => ({ ...f, online: isVisiblyOnline(f.id, f.status) }));
+    const friends = listFriends(user.id).map(f => {
+      const online = isVisiblyOnline(f.id, f.status);
+      return { ...f, online, voice: friendVoiceFor(user.id, f.id, online) };
+    });
     return res.json({ success: true, friends });
   } catch (error) {
     console.error('Arkadaş listesi hatası:', error);

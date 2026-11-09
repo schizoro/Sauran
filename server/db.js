@@ -5433,6 +5433,11 @@ function setVoiceRoomDailyName(roomId, dailyRoomName) {
   db.prepare(`UPDATE hub_voice_rooms SET daily_room_name = ? WHERE id = ?`).run(dailyRoomName, roomId);
 }
 
+// Arkadaş listesindeki "Seste" satırı için: oda adı + lobi adı ve türü
+function getVoiceRoomWithHub(roomId) {
+  return db.prepare(`SELECT r.id, r.name, r.hub_id, h.name AS hub_name, h.type AS hub_type FROM hub_voice_rooms r INNER JOIN hubs h ON h.id = r.hub_id WHERE r.id = ?`).get(roomId);
+}
+
 function getVoiceRoom(roomId) {
   return db.prepare(`SELECT id, hub_id, name, created_by FROM hub_voice_rooms WHERE id = ?`).get(roomId);
 }
@@ -9138,6 +9143,7 @@ module.exports = {
   getVoiceRoomDailyName,
   setVoiceRoomDailyName,
   getVoiceRoom,
+  getVoiceRoomWithHub,
   setHubDailyRoomName,
   createHubInvite,
   joinHubByCode,

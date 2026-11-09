@@ -864,3 +864,9 @@ body.lc .subs-note { margin: 14px 0 0 !important; padding: 12px 14px; border-rad
   body.lc #hub-list-header { display: flex; gap: 8px !important; }
   body.lc #hub-list-header > button { flex: 1 1 auto; padding: 8px 10px !important; font-size: 12.5px !important; white-space: nowrap; }
 }
+
+/* Arkadaşlar: seste olan arkadaş */
+.lcf-row.is-voice .lcf-txt > span { color: #9fe9c9 !important; }
+.lcf-act.lcf-join { background: rgba(61, 220, 151, 0.16) !important; color: #9fe9c9 !important; border: 1px solid rgba(61, 220, 151, 0.4) !important; font-weight: 800 !important; }
+.lcf-act.lcf-join:hover { background: rgba(61, 220, 151, 0.26) !important; }
+@media (max-width: 720px) { .lcf-row.is-voice .lcf-act[data-act="call"] { display: none !important; } }

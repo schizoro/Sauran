@@ -63,6 +63,7 @@
         return `<span class="lcf-av-fallback">${esc(String(u.username || '?').charAt(0).toUpperCase())}</span>`;
     };
     const activityText = (f) => {
+        if (f.voice) return `${tr('lcf-in-voice', 'Seste')} · ${f.voice.hub_name} › ${f.voice.room_name}`;
         const a = f.activity;
         if (a && typeof a === 'object' && a.text) return a.text;
         if (typeof a === 'string' && a) return a;
@@ -101,10 +102,12 @@
                 <span class="lcf-txt"><b>${esc(u.username)}</b><span>${esc(tr('lcf-is-blocked', 'Engellendi'))}</span></span>
                 <span class="lcf-acts"><button type="button" class="lcf-act lcf-text" data-act="unblock">${esc(tr('lcf-unblock', 'Engeli kaldır'))}</button></span></div>`;
         }
-        return `<div class="lcf-row${u.online ? ' is-on' : ''}" role="listitem" data-uid="${Number(u.id)}" data-name="${esc(u.username)}" data-kind="friend">
+        const v = u.voice;
+        const join = v ? `<button type="button" class="lcf-act lcf-text lcf-join" data-act="join" data-hub="${Number(v.hub_id)}" data-room="${Number(v.room_id)}" data-room-name="${esc(v.room_name)}" title="${esc(tr('lcf-join-title', 'Odaya katıl'))}">${esc(tr('lcf-join', 'Katıl'))}</button>` : '';
+        return `<div class="lcf-row${u.online ? ' is-on' : ''}${v ? ' is-voice' : ''}" role="listitem" data-uid="${Number(u.id)}" data-name="${esc(u.username)}" data-kind="friend">
             <span class="lcf-av">${avatar(u)}<i class="lcf-st" aria-hidden="true"></i></span>
             <span class="lcf-txt"><b>${esc(u.username)}</b><span>${esc(activityText(u))}</span></span>
-            <span class="lcf-acts">
+            <span class="lcf-acts">${join}
                 <button type="button" class="lcf-act" data-act="dm" title="${esc(tr('lcf-message', 'Mesaj gönder'))}" aria-label="${esc(tr('lcf-message', 'Mesaj gönder'))}">${ICON.chat}</button>
                 <button type="button" class="lcf-act" data-act="call" title="${esc(tr('lcf-call', 'Sesli ara'))}" aria-label="${esc(tr('lcf-call', 'Sesli ara'))}">${ICON.call}</button>
                 <button type="button" class="lcf-act" data-act="profile" title="${esc(tr('lcf-profile', 'Profili gör'))}" aria-label="${esc(tr('lcf-profile', 'Profili gör'))}">${ICON.more}</button>
@@ -174,6 +177,16 @@
         e.stopPropagation();
         const kind = act.dataset.act;
         if (kind === 'dm') { if (typeof openDm === 'function') openDm(id, name); }
+        else if (kind === 'join') {
+            // Arkadaşın odasına: önce lobi açılır, sonra odaya katılınır (zaten o odadaysan yalnızca lobi açılır).
+            const hubId = Number(act.dataset.hub), roomId = Number(act.dataset.room);
+            act.disabled = true;
+            try {
+                if (typeof openHub === 'function') await openHub(hubId);
+                const here = typeof currentVoiceRoomId !== 'undefined' && Number(currentVoiceRoomId) === roomId;
+                if (!here && typeof joinVoiceRoom === 'function') await joinVoiceRoom({ id: roomId, name: act.dataset.roomName || '' });
+            } finally { act.disabled = false; }
+        }
         else if (kind === 'call') {
             if (typeof openDm === 'function') await openDm(id, name);
             $('dm-call-btn')?.click();
@@ -205,6 +218,15 @@
         }
     });
     $('lcf-q').addEventListener('input', render);
+    // Seste olma bilgisi: bir sesli odada biri girip çıkınca (ve sayfa açıkken 30 sn'de bir) arkadaş listesi tazelenir.
+    let voiceTimer = null;
+    const refreshVoice = () => {
+        if (page.hidden || typeof loadFriendsSidebar !== 'function') return;
+        clearTimeout(voiceTimer);
+        voiceTimer = setTimeout(() => loadFriendsSidebar(), 600);
+    };
+    document.addEventListener('sauran:voice-changed', refreshVoice);
+    setInterval(refreshVoice, 30000);
     document.addEventListener('friends-updated', render);
 
     // Görünürlük: masaüstünde Ana sayfa; telefonda "Arkadaşlar" sekmesi (body.lc-friends-page)

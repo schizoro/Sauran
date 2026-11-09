@@ -5945,6 +5945,7 @@ function connectToChat() {
     });
 
     socket.on('voice_room_participants_updated', (data) => {
+        document.dispatchEvent(new CustomEvent('sauran:voice-changed', { detail: { hub_id: data && data.hub_id } }));
 
         const room = voiceRoomsCache.find(r => r.id === data.room_id);
         if (room) room.participants = data.participants;
