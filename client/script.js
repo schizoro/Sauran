@@ -4277,6 +4277,10 @@ const I18N = {
     'conn-back': { tr: 'Yeniden bağlandı', en: 'Reconnected' },
     'lc-room-join-hint': { tr: 'Katılmak için tıkla', en: 'Click to join' },
     'lc-room-join': { tr: 'Katıl', en: 'Join' },
+    'members-in-voice': { tr: 'Seste', en: 'In voice' },
+    'members-here': { tr: 'Burada', en: 'Here' },
+    'members-away': { tr: 'Uzakta', en: 'Away' },
+    'members-offline': { tr: 'Çevrimdışı', en: 'Offline' },
     'channel-text-label': { tr: 'Metin kanalları', en: 'Text channels' },
     'channel-add': { tr: 'Metin kanalı aç', en: 'Create text channel' },
     'channel-new-title': { tr: 'Yeni metin kanalı', en: 'New text channel' },
@@ -12473,6 +12477,10 @@ function renderVoiceRoomsList() {
         return;
     }
 
+    if (document.body.classList.contains('lc') && currentHub && Array.isArray(currentHub.members)) {
+        try { renderHubMembers(); } catch (_) { /* üye listesi henüz hazır değil */ }
+    }
+
     // "Sıkı Düzen" yerleşiminde her oda bir kart: durum satırı (kaç kişi konuşuyor / boş / buradasın) ve Katıl düğmesi (kimlik seçimi 2B).
     const lcCards = document.body.classList.contains('lc');
     hubVoiceRoomsList.innerHTML = voiceRoomsCache.map((room) => {
@@ -16915,7 +16923,17 @@ function renderHubMembers() {
         .map((x) => x.m);
     const isStaffTier = (m) => m.permission_tier === 'owner' || m.permission_tier === 'moderator';
 
-    hubMemberList.innerHTML = orderedMembers.map((m, idx) => {
+    // Sıkı Düzen yerleşiminde üyeler ne yaptıklarına göre gruplanır (kimlik seçimi 5C): Seste · Burada · Uzakta.
+    const grouped = document.body.classList.contains('lc');
+    const voiceRoomOf = new Map();
+    (voiceRoomsCache || []).forEach((r) => (r.participants || []).forEach((p) => voiceRoomOf.set(p.user_id, r.name)));
+
+    // Durum: Seste (bir ses odasında) · Burada (çevrimiçi) · Uzakta (çevrimiçi ama "Takılıyor") · Çevrimdışı
+    const presenceOf = (m) => (voiceRoomOf.has(m.user_id) ? 'voice' : !m.online ? 'offline' : (m.status === 'idle' ? 'away' : 'here'));
+    const presenceText = (m, state) => state === 'voice' ? `🔊 ${t('members-in-voice')} · ${voiceRoomOf.get(m.user_id) || ''}`
+        : state === 'away' ? t('members-away') : state === 'offline' ? t('members-offline') : t('members-here');
+
+    const memberRowHtml = (m, idx, list, group) => {
 
         const avatar = avatarButtonHtml(m.user_id, m.avatar_data, m.username, m.avatar_frame, m.profile_color);
         knownVoicePlus.set(m.user_id, Boolean(m.plus_active));
@@ -16926,14 +16944,17 @@ function renderHubMembers() {
         // Kurucu herkese (kendisi hariç) işlem yapabilir; moderatör yalnızca üyelere — diğer moderatör ve kurucuya değil.
         const showMenu = canModerate && !isSelf && m.permission_tier !== 'owner' && (myTier === 'owner' || m.permission_tier === 'member');
 
-        const divider = (idx > 0 && !isStaffTier(m) && isStaffTier(orderedMembers[idx - 1])) ? '<div class="hub-member-divider" role="separator"></div>' : '';
+        const divider = (idx > 0 && !isStaffTier(m) && isStaffTier(list[idx - 1])) ? '<div class="hub-member-divider" role="separator"></div>' : '';
 
         const cardColor = m.profile_color || getUserColor(m.username);
-        const subText = m.permission_tier === 'owner' ? 'Kurucu' : m.permission_tier === 'moderator' ? 'Moderatör' : (m.online ? t('hub-info-online') : '');
+        const roleText = m.permission_tier === 'owner' ? 'Kurucu' : m.permission_tier === 'moderator' ? 'Moderatör' : '';
+        const state = grouped ? presenceOf(m) : null;
+        const subText = grouped ? `${roleText ? roleText + ' · ' : ''}${presenceText(m, state)}`
+            : (roleText || (m.online ? t('hub-info-online') : ''));
         const premFx = m.premium_card ? '<span class="mc-fx" aria-hidden="true"><i class="mc-shine"></i><i class="mc-spark mc-spark-a"></i><i class="mc-spark mc-spark-b"></i><i class="mc-spark mc-spark-c"></i></span>' : '';
         return `
             ${divider}
-            <div class="hub-member-row hub-member-card${m.name_plate && m.name_plate !== 'none' ? ' has-plate plate-' + escapeAttr(m.name_plate) : ''}${m.premium_card ? ' member-prem cs-' + (m.card_style || 'classic') + (CARD_EMOJI_STYLES.has(m.card_style) ? ' cs-emoji' : '') : ''}" style="--mc:${escapeAttr(cardColor)}" data-user-id="${m.user_id}" data-tier="${m.permission_tier}">
+            <div class="hub-member-row hub-member-card${state ? ' st-' + state : ''}${m.name_plate && m.name_plate !== 'none' ? ' has-plate plate-' + escapeAttr(m.name_plate) : ''}${m.premium_card ? ' member-prem cs-' + (m.card_style || 'classic') + (CARD_EMOJI_STYLES.has(m.card_style) ? ' cs-emoji' : '') : ''}" style="--mc:${escapeAttr(cardColor)}" data-user-id="${m.user_id}" data-tier="${m.permission_tier}">
                 ${premFx}
                 <span class="hub-member-avatar-wrap">
                     ${avatar}
@@ -16955,7 +16976,25 @@ function renderHubMembers() {
             </div>
         `;
 
-    }).join('');
+    };
+
+    if (grouped) {
+        // Kurucu her zaman en üstte, hemen altında moderatörler (durumları ne olursa olsun); diğer üyeler durumlarına göre gruplanır.
+        const staff = orderedMembers.filter(isStaffTier);
+        const groups = { voice: [], here: [], away: [], offline: [] };
+        orderedMembers.filter((m) => !isStaffTier(m)).forEach((m) => groups[presenceOf(m)].push(m));
+        const labels = { voice: t('members-in-voice'), here: t('members-here'), away: t('members-away'), offline: t('members-offline') };
+        hubMemberList.innerHTML = (staff.length ? `
+            <div class="hub-member-group g-staff">
+                ${staff.map((m, i) => memberRowHtml(m, i, staff, 'staff')).join('')}
+            </div>` : '') + ['voice', 'here', 'away', 'offline'].filter((k) => groups[k].length).map((k) => `
+            <div class="hub-member-group g-${k}">
+                <div class="hub-member-group-head"><span>${escapeHtml(labels[k])}</span><b>${groups[k].length}</b></div>
+                ${groups[k].map((m, i) => memberRowHtml(m, i, groups[k], k)).join('')}
+            </div>`).join('');
+    } else {
+        hubMemberList.innerHTML = orderedMembers.map((m, idx) => memberRowHtml(m, idx, orderedMembers, null)).join('');
+    }
 
     hubMemberList.querySelectorAll('.hub-member-row').forEach((row) => {
 

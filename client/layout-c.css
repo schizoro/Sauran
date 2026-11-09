@@ -439,3 +439,21 @@ body.lc.lc-show-friends.lc-desk .topbar { display: none !important; }
 /* Telefonda sayfanın adı üst çubukta yazar: başlık şeridi kalkar, "Arkadaş ekle" arama kutusunun yanına geçer. */
 body.lc:not(.lc-desk) .lcf-head { display: none; }
 body.lc:not(.lc-desk) .lcf-add-m { display: inline-flex; margin-left: 0; width: 38px; height: 38px; padding: 0; justify-content: center; border-radius: 10px; }
+
+/* ═══════════════ ÜYE LİSTESİ: SESTE · BURADA · UZAKTA (kimlik seçimi 5C) ═══════════════
+   script.js renderHubMembers yalnızca body.lc iken grupları üretir; satırlar (premium kart, yönetim menüsü) aynen kalır. */
+.hub-member-group { display: flex; flex-direction: column; gap: 1px; margin-bottom: 12px; }
+.hub-member-group-head { display: flex; align-items: center; gap: 6px; padding: 8px 8px 4px; font-size: 12.5px; font-weight: 800; color: var(--text-secondary); }
+.hub-member-group-head b { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: rgba(255, 255, 255, 0.08); color: var(--text-primary); font-size: 11px; display: inline-grid; place-items: center; }
+.hub-member-group.g-voice { padding: 2px 4px 6px; border-radius: 12px; background: linear-gradient(135deg, rgba(61, 220, 151, 0.1), rgba(92, 200, 255, 0.04)); box-shadow: inset 0 0 0 1px rgba(61, 220, 151, 0.3); }
+.hub-member-group.g-voice .hub-member-group-head { color: #9fe9c9; }
+.hub-member-group.g-here .hub-member-group-head { color: var(--text-primary); }
+.hub-member-group.g-away .hub-member-group-head { color: #ffd58a; }
+.hub-member-group.g-staff { padding-bottom: 8px; border-bottom: 1px solid var(--lc-line); }
+/* Satırdaki durum yazısının rengi: Seste yeşil · Burada açık · Uzakta sarı · Çevrimdışı soluk */
+.hub-member-row.st-voice .hub-member-sub { color: #9fe9c9 !important; }
+.hub-member-row.st-here .hub-member-sub { color: var(--text-secondary) !important; }
+.hub-member-row.st-away .hub-member-sub { color: #ffd58a !important; }
+.hub-member-row.st-offline .hub-member-sub { color: var(--text-tertiary) !important; }
+.hub-member-group.g-offline .hub-member-row { opacity: .55; }
+.hub-member-group.g-offline .hub-member-row:hover, .hub-member-group.g-offline .hub-member-row:focus-within { opacity: .95; }
