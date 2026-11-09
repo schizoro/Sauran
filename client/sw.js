@@ -35,7 +35,7 @@ self.addEventListener('fetch', (event) => {
 
 // Web Push yükü (sunucudan) yalnızca genel bir başlık, sabit bir metin ve genel `type` taşır: kullanıcıya/sohbete özgü hiçbir bilgi yoktur.
 // Yükteki url/name gibi alanlar bilerek KULLANILMAZ.
-const GENERIC_TYPES = ['dm_message', 'hub_message', 'incoming_call', 'friend_request', 'friend_request_accepted', 'hub_invite', 'platform_role_notice', 'platform_role_revoked', 'generic'];
+const GENERIC_TYPES = ['dm_message', 'hub_message', 'incoming_call', 'friend_request', 'friend_request_accepted', 'hub_invite', 'platform_role_notice', 'platform_role_revoked', 'team_message', 'generic'];
 
 // Bildirim metni yükten DEĞİL, türe göre bu sabit tablodan gelir (sunucu sanitizasyonuna ek ikinci güvence; sunucu FCM ile aynı metinleri gönderir).
 const GENERIC_BODY = {
@@ -47,6 +47,7 @@ const GENERIC_BODY = {
     hub_invite: 'Yeni bir lobi davetin var',
     platform_role_notice: 'Sauran Yönetim: Yeni bir görev bildirimin var.',
     platform_role_revoked: 'Sauran Yönetim: Yönetim görevin hakkında bir bilgilendirme var.',
+    team_message: "Sauran Geliştirici Ekibi'nden yeni bir mesajın var.",
     generic: 'Yeni bir bildirimin var'
 };
 

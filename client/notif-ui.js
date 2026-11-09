@@ -8,7 +8,7 @@
     const ICONS = {
         hub_invite: ['✉️', 'blue'], friend_request: ['👤', 'violet'], friend_request_accepted: ['🤝', 'green'],
         voice_muted: ['🔇', 'red'], voice_unmuted: ['🔈', 'green'], voice_kicked: ['👢', 'red'], voice_unblocked: ['🚪', 'green'],
-        hub_mention: ['@', 'blue'], gift: ['🎁', 'gold'], platform_role_notice: ['🛡️', 'gold'], platform_role_revoked: ['⚖️', 'gray']
+        hub_mention: ['@', 'blue'], gift: ['🎁', 'gold'], platform_role_notice: ['🛡️', 'gold'], platform_role_revoked: ['⚖️', 'gray'], team_message: ['💜', 'violet']
     };
     let mode = 'all'; // all | unread | read
 

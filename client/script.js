@@ -3206,7 +3206,7 @@ function openFromNotificationUrl(url) {
 async function openGeneralScreenForNotificationType(type) {
     if (!currentUser) return;
 
-    if (['friend_request', 'friend_request_accepted', 'hub_invite', 'platform_role_notice', 'platform_role_revoked'].includes(type)) {
+    if (['friend_request', 'friend_request_accepted', 'hub_invite', 'platform_role_notice', 'platform_role_revoked', 'team_message'].includes(type)) {
         await reloadNotifications();
         notificationsModal.style.display = 'flex';
     } else if (type === 'dm_message' || type === 'incoming_call') {
@@ -5647,6 +5647,14 @@ function connectToChat() {
             };
             const label = labelByType[payload?.type] || t('notif-hub-invite');
             const channels = payload?.channels || {};
+            // Geliştirici Ekibi duyurusu açılır kutu göstermez; doğrudan Bildirimler paneline düşer (açıksa liste yenilenir).
+            if (payload?.type === 'team_message' && notificationsModal.style.display === 'flex') reloadNotifications();
+            // ...ve uygulama açık/odakta olsa bile cihazın bildirim paneline sistem bildirimi olarak düşer (izin verilmişse).
+            // Etiket Web Push ile aynı ('team_message'): aynı cihaza push da gelirse ikisi tek bildirimde birleşir.
+            if (payload?.type === 'team_message' && (getBrowserNotifState() === 'granted' || getNativeNotify())) {
+                showSystemNotification('Sauran Geliştirici Ekibi', String(payload?.data?.title || ''), { tag: 'team_message' })
+                    .catch((error) => console.error('Sistem bildirimi gösterilemedi:', error));
+            }
 
             if (channels.inapp !== false) showCenterToast(label);
             if (channels.desktop !== false) maybeShowBrowserNotification(payload?.type, label);
@@ -7590,6 +7598,29 @@ function renderNotifications(notifications) {
 
         }
 
+        if (n.type === 'team_message') {
+
+            // "Sauran Geliştirici Ekibi" toplu bildirimi. Bağlantı yalnızca bu sitenin kendi sayfasına gidebilir (/ ile başlar, // değil).
+            const d = n.data || {};
+            const link = typeof d.link === 'string' && /^\/(?!\/)[^\s\\]*$/.test(d.link) ? d.link : '';
+            return `
+                <div class="notification-card team-message-card${seenClass(n)}" data-notif-id="${n.id}" data-notif-type="team_message">
+                    <div class="notification-official-tag team-tag">Sauran Geliştirici Ekibi</div>
+                    <div class="notification-text">
+                        <strong>${escapeHtml(d.title || '')}</strong>
+                        <div class="team-message-body">${escapeHtml(d.body || '')}</div>
+                        ${link ? `<a class="team-message-url" href="${escapeHtml(link)}" target="_blank" rel="noopener" data-team-link>🔗 ${escapeHtml(location.host + link)}</a>` : ''}
+                    </div>
+                    <div class="notification-actions">
+                        ${link ? `<a class="notification-accept team-message-link" href="${escapeHtml(link)}" target="_blank" rel="noopener" data-team-link>${escapeHtml(d.button_label || 'Aç')}</a>` : ''}
+                        ${n.status === 'pending' && !link ? `<button class="notification-accept" data-dismiss type="button">${escapeHtml(t('ok-got-it'))}</button>` : ''}
+                        <button class="notification-delete" data-delete type="button">${escapeHtml(nui.del)}</button>
+                    </div>
+                </div>
+            `;
+
+        }
+
         if (n.type === 'platform_role_revoked') {
 
             const ui = ROLE_NOTICE_UI[roleNoticeLang()];
@@ -7643,6 +7674,26 @@ function renderNotifications(notifications) {
             const card = btn.closest('.notification-card');
             await fetch(`/api/notifications/${card.dataset.notifId}`, { method: 'DELETE', credentials: 'include' });
             reloadNotifications();
+        });
+    });
+
+    // Geliştirici Ekibi bağlantısı: basınca bildirim okundu sayılır (kart listede kalır) ve 24 saatlik kişisel anahtar alınır;
+    // böylece sayfa uygulama dışındaki tarayıcıda açılsa da giriş gerektirmez. Anahtar alınamazsa sayfa anahtarsız açılır (oturumla çalışır).
+    notificationsList.querySelectorAll('[data-team-link]').forEach((link) => {
+        link.addEventListener('click', async (event) => {
+            event.preventDefault();
+            const card = link.closest('.notification-card');
+            fetch(`/api/notifications/${card.dataset.notifId}/read`, { method: 'POST', credentials: 'include' })
+                .then(() => { card.classList.add('notification-seen'); refreshNotificationsBadge(); })
+                .catch(() => {});
+            let url = link.getAttribute('href').split('#')[0];
+            try {
+                const r = await fetch('/api/site-feedback/link', { method: 'POST', credentials: 'include' }).then((x) => x.json());
+                if (r && r.success && /^[A-Za-z0-9_-]{20,64}$/.test(r.token || '')) url += '#t=' + r.token;
+            } catch (_) { /* anahtarsız devam */ }
+            const win = window.open(url, '_blank');
+            if (win) win.opener = null;
+            else location.assign(url);
         });
     });
 
@@ -9409,7 +9460,11 @@ function showFailedSendBar(el) {
     bar.innerHTML = `<span>${escapeHtml(t('msg-send-failed'))}</span>`
         + (el._sendInfo ? `<button type="button" data-msg-retry>${escapeHtml(t('msg-retry'))}</button>` : '')
         + `<button type="button" data-msg-discard>${escapeHtml(t('msg-discard'))}</button>`;
+    // Akış en alttaysa yeni satır da görünür kalsın (yoksa hata satırı ekranın altında kalıp fark edilmiyordu).
+    const feed = el.closest('#hub-feed, #dm-feed');
+    const nearBottom = feed && feed.scrollHeight - feed.scrollTop - feed.clientHeight < 160;
     el.appendChild(bar);
+    if (nearBottom) feed.scrollTop = feed.scrollHeight;
 }
 
 document.addEventListener('click', (event) => {

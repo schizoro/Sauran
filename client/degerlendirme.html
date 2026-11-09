@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Değerlendir ve Öneri Bırak — Sauran</title>
+    <meta name="description" content="Sauran'ın tasarımını puanla; öneri, görüş ve şikayetlerini doğrudan Sauran Geliştirici Ekibi'ne ilet.">
+    <meta name="robots" content="noindex, follow">
+    <meta name="referrer" content="no-referrer">
+    <meta name="theme-color" content="#0d0f14">
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <style>
+        :root { --bg:#0d0f14; --text:#eef0f3; --muted:#9aa0ac; --accent:#b366f5; --accent-2:#5cc8ff; --line:rgba(255,255,255,.12); --ok:#3ddc97; --danger:#ff6b7d; --star:#ffc857; }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,-apple-system,Roboto,sans-serif; line-height:1.55; min-height:100vh; overflow-x:hidden; }
+        a { color:inherit; }
+        .orb { position:fixed; border-radius:50%; filter:blur(90px); opacity:.45; pointer-events:none; z-index:0; }
+        .orb.o1 { width:460px; height:460px; background:#6a2fc0; top:-160px; left:-140px; }
+        .orb.o2 { width:480px; height:480px; background:#1fb7ad; bottom:-200px; right:-160px; opacity:.3; }
+        .wrap { position:relative; z-index:1; max-width:760px; margin:0 auto; padding:0 16px 64px; }
+        .glass { background:rgba(255,255,255,.06); border:1px solid var(--line); border-radius:22px;
+                 -webkit-backdrop-filter:blur(22px) saturate(140%); backdrop-filter:blur(22px) saturate(140%);
+                 box-shadow:0 8px 32px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.12); }
+        nav { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:18px 0; }
+        .brand { display:flex; align-items:center; gap:10px; font-weight:700; font-size:1.15rem; text-decoration:none; }
+        .brand img { width:32px; height:32px; border-radius:10px; }
+        .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:11px 20px; border-radius:14px; font-weight:600; font-size:.95rem;
+               border:1px solid var(--line); background:rgba(255,255,255,.06); color:var(--text); cursor:pointer; text-decoration:none; font-family:inherit; }
+        .btn:hover { background:rgba(255,255,255,.1); }
+        .btn.primary { background:linear-gradient(135deg,#8b4ae0,#b366f5); border-color:transparent; color:#fff; box-shadow:0 6px 22px rgba(179,102,245,.35); }
+        .btn.primary:hover { filter:brightness(1.08); }
+        .btn:disabled { opacity:.5; cursor:not-allowed; filter:none; }
+        .btn.small { padding:8px 14px; font-size:.85rem; border-radius:12px; }
+
+        .hero { padding:22px 0 8px; }
+        .tag { display:inline-block; font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; padding:4px 10px; border-radius:999px;
+               background:rgba(179,102,245,.16); color:#d3a6ff; margin-bottom:12px; }
+        h1 { font-size:clamp(1.6rem,5vw,2.2rem); line-height:1.2; margin-bottom:10px; }
+        .lead { color:var(--muted); font-size:1rem; max-width:620px; }
+
+        .who { margin:20px 0 18px; padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; font-size:.92rem; }
+        .who .dot { width:9px; height:9px; border-radius:50%; background:var(--ok); box-shadow:0 0 10px var(--ok); flex-shrink:0; }
+        .who.warn { border-color:rgba(255,200,87,.35); }
+        .who.warn .dot { background:var(--star); box-shadow:0 0 10px var(--star); }
+        .who .grow { flex:1; min-width:200px; }
+
+        .card { padding:22px 20px; margin-top:16px; }
+        .card h2 { font-size:1.15rem; display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+        .card .sub { color:var(--muted); font-size:.9rem; margin-bottom:16px; }
+
+        .rate-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-top:1px solid rgba(255,255,255,.07); flex-wrap:wrap; }
+        .rate-row:first-of-type { border-top:0; }
+        .rate-label { font-weight:600; font-size:.95rem; }
+        .rate-label small { display:block; font-weight:400; color:var(--muted); font-size:.8rem; }
+        .req { color:#d3a6ff; }
+        .stars { display:flex; gap:4px; }
+        .star { width:40px; height:40px; border-radius:10px; border:1px solid transparent; background:rgba(255,255,255,.05); color:rgba(255,255,255,.25);
+                font-size:22px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform .1s, background .15s, color .15s; }
+        .star:hover { transform:scale(1.06); }
+        .star.on { color:var(--star); background:rgba(255,200,87,.12); }
+        .star:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+        label.field { display:block; font-weight:600; font-size:.92rem; margin:16px 0 6px; }
+        textarea { width:100%; min-height:110px; resize:vertical; padding:12px 14px; border-radius:14px; border:1px solid var(--line); background:rgba(0,0,0,.25);
+                   color:var(--text); font:inherit; font-size:.95rem; outline:none; }
+        textarea:focus { border-color:rgba(179,102,245,.6); box-shadow:0 0 0 3px rgba(179,102,245,.15); }
+        .count { text-align:right; font-size:.78rem; color:var(--muted); margin-top:4px; }
+
+        .kinds { display:flex; gap:8px; flex-wrap:wrap; }
+        .kind { padding:9px 14px; border-radius:999px; border:1px solid var(--line); background:rgba(255,255,255,.05); color:var(--text); cursor:pointer; font:inherit; font-size:.9rem; font-weight:600; }
+        .kind[aria-checked="true"] { background:rgba(179,102,245,.2); border-color:rgba(179,102,245,.6); color:#e7ccff; }
+        .kind:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+        .actions { display:flex; align-items:center; gap:12px; margin-top:16px; flex-wrap:wrap; }
+        .msg { font-size:.9rem; }
+        .msg.ok { color:var(--ok); }
+        .msg.err { color:var(--danger); }
+        .note { color:var(--muted); font-size:.82rem; margin-top:14px; }
+        .locked { opacity:.55; pointer-events:none; }
+
+        footer { margin-top:36px; text-align:center; color:var(--muted); font-size:.82rem; }
+        footer .fl { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin-bottom:8px; }
+        footer a { text-decoration:none; }
+        footer a:hover { color:var(--text); }
+
+        @media (max-width:520px) {
+            .rate-row { flex-direction:column; align-items:flex-start; }
+            .star { width:46px; height:46px; }
+            .card { padding:18px 16px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="orb o1"></div><div class="orb o2"></div>
+    <div class="wrap">
+        <nav>
+            <a class="brand" href="/"><img src="icons/icon.svg" alt="">Sauran</a>
+            <a class="btn small" href="/app">Uygulamaya dön</a>
+        </nav>
+
+        <section class="hero">
+            <span class="tag">Sauran Geliştirici Ekibi</span>
+            <h1>Sauran'ı birlikte şekillendirelim</h1>
+            <p class="lead">Uygulamanın tasarımını nasıl buldun? Puanların ve yazdıkların doğrudan geliştirici ekibine ulaşır. Neyi önce değiştireceğimize bunlara bakarak karar veriyoruz.</p>
+        </section>
+
+        <div id="who" class="glass who" aria-live="polite">
+            <span class="dot"></span><span class="grow">Kontrol ediliyor…</span>
+        </div>
+
+        <section class="glass card" id="puanla">
+            <h2>⭐ Tasarımı puanla</h2>
+            <p class="sub">1 yıldız çok kötü, 5 yıldız çok iyi. Yalnızca genel görünüm zorunlu. Daha sonra gelip puanını değiştirebilirsin.</p>
+            <div id="rate-rows"></div>
+            <label class="field" for="rv-comment">En çok neyi beğendin, neyi değiştirelim? <span style="font-weight:400;color:var(--muted)">(isteğe bağlı)</span></label>
+            <textarea id="rv-comment" maxlength="1000" placeholder="Örn. Sesli odaya girmek çok kolay oldu ama ayarları bulmakta zorlandım."></textarea>
+            <div class="count"><span id="rv-count">0</span> / 1000</div>
+            <div class="actions">
+                <button class="btn primary" id="rv-send" type="button">Değerlendirmeyi gönder</button>
+                <span class="msg" id="rv-msg" role="status"></span>
+            </div>
+        </section>
+
+        <section class="glass card" id="yaz">
+            <h2>💬 Öneri, görüş ve şikayet</h2>
+            <p class="sub">Aklındaki her şeyi yaz: yeni bir özellik, beğenmediğin bir şey, yaşadığın bir sorun. Yazdıkların herkese açık değildir, yalnızca ekip görür.</p>
+            <div class="kinds" role="radiogroup" aria-label="Konu">
+                <button class="kind" type="button" role="radio" aria-checked="true" data-kind="oneri">💡 Öneri</button>
+                <button class="kind" type="button" role="radio" aria-checked="false" data-kind="gorus">💬 Görüş</button>
+                <button class="kind" type="button" role="radio" aria-checked="false" data-kind="sikayet">⚠️ Şikayet</button>
+                <button class="kind" type="button" role="radio" aria-checked="false" data-kind="destek">🛟 Destek talebi</button>
+            </div>
+            <label class="field" for="ms-body">Mesajın</label>
+            <textarea id="ms-body" maxlength="2000" placeholder="Buraya yaz…"></textarea>
+            <div class="count"><span id="ms-count">0</span> / 2000</div>
+            <div class="actions">
+                <button class="btn primary" id="ms-send" type="button">Gönder</button>
+                <span class="msg" id="ms-msg" role="status"></span>
+            </div>
+            <p class="note">Bir kullanıcıyı ya da mesajı bildirmek için uygulamadaki 🚩 Bildir düğmesini kullan. Hesabınla ilgili acil bir sorun için <a href="mailto:destek@sauran.online">destek@sauran.online</a> adresine de yazabilirsin.</p>
+        </section>
+
+        <footer>
+            <div class="fl">
+                <a href="/kullanim-sartlari.html">Kullanım Şartları</a>
+                <a href="/gizlilik-politikasi.html">Gizlilik Politikası</a>
+                <a href="/topluluk-kurallari.html">Topluluk Kuralları</a>
+                <a href="/destek.html">Destek</a>
+            </div>
+            © Sauran · sauran.online
+        </footer>
+    </div>
+    <script src="degerlendirme.js"></script>
+</body>
+</html>

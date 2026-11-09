@@ -2995,6 +2995,11 @@ body.drawer-friendlist .friends-directory { display: flex; flex-direction: colum
 #notifications-modal .nc-new .nc-time { right: 30px; }
 #notifications-modal .notification-text { font-size: 13.5px; line-height: 1.5; color: var(--text-primary); margin-bottom: 10px; }
 #notifications-modal .notification-text strong { color: #fff; }
+#notifications-modal .notification-official-tag.team-tag { background: rgba(179,102,245,.16); color: #d3a6ff; }
+#notifications-modal .team-message-body { margin-top: 4px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondary, #c5c6c7); font-weight: 400; }
+#notifications-modal a.team-message-url { display: inline-block; margin-top: 8px; font-size: 12.5px; font-weight: 700; color: #d3a6ff; text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+#notifications-modal .team-message-card .notification-actions button.notification-delete { flex: 0 0 auto; padding: 9px 18px; }
+#notifications-modal a.team-message-link { flex: 1 0 auto; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; padding: 9px 18px; font-size: 12.5px; font-weight: 800; border-radius: 999px; text-decoration: none; background: linear-gradient(135deg, #8b4ae0, #b366f5) !important; color: #fff !important; }
 #notifications-modal .notification-official-tag { display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: .06em; padding: 3px 8px; border-radius: 999px; background: rgba(255,176,102,.14); color: #ffb066; margin-bottom: 6px; text-transform: uppercase; }
 #notifications-modal .notification-preview { margin-top: 6px; padding: 8px 10px; border-radius: 12px; background: rgba(255,255,255,.05); font-style: normal; opacity: .9; }
 #notifications-modal .notification-actions { display: flex; gap: 8px; flex-wrap: wrap; }

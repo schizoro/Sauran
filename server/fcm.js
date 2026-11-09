@@ -56,7 +56,8 @@ const GENERIC_BODY = {
   friend_request_accepted: 'Bir arkadaşlık isteğin kabul edildi',
   hub_invite: 'Yeni bir lobi davetin var',
   platform_role_notice: 'Sauran Yönetim: Yeni bir görev bildirimin var.',
-  platform_role_revoked: 'Sauran Yönetim: Yönetim görevin hakkında bir bilgilendirme var.'
+  platform_role_revoked: 'Sauran Yönetim: Yönetim görevin hakkında bir bilgilendirme var.',
+  team_message: 'Sauran Geliştirici Ekibi\'nden yeni bir mesajın var.'
 };
 const GENERIC_FALLBACK = 'Yeni bir bildirimin var';
 

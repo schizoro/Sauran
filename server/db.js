@@ -5765,6 +5765,7 @@ function deleteAccount(userId) {
   const run = db.transaction(() => {
     unlinkReportDataForDeletedUser(userId);
     anonymizeAuditLogForDeletedUser(userId);
+    db.prepare(`UPDATE team_broadcasts SET sent_by = NULL WHERE sent_by = ?`).run(userId);
 
     // Gruplar silinmez: hesap gruptan çıkar, sahiplik en eski üyeye geçer (son kişiyse grup silinir).
     const groupPurges = [];
@@ -6565,6 +6566,8 @@ function getAccountExport(userId) {
     poll_votes: pollVotes,
     feedback,
     feedback_votes: feedbackVotes,
+    site_reviews: db.prepare(`SELECT campaign, score_look, score_ease, score_speed, score_voice, comment, created_at, updated_at FROM site_reviews WHERE user_id = ? ORDER BY created_at`).all(userId),
+    site_messages: db.prepare(`SELECT kind, body, created_at FROM site_messages WHERE user_id = ? ORDER BY id`).all(userId),
     notification_preferences: notificationPreferences,
     notification_devices: notificationDevices,
     sessions,
@@ -7124,6 +7127,219 @@ function voteFeedback(userId, feedbackId) {
   `).get(feedbackId);
 
   return { success: true, voted: !existing, vote_count };
+}
+
+// =====================================================
+// RESMİ SİTE: TASARIM DEĞERLENDİRMESİ + ÖNERİ / GÖRÜŞ / ŞİKAYET
+// =====================================================
+// sauran.online/degerlendirme.html sayfasından gelir. Uygulama içindeki herkese açık öneri panosundan (feedback) AYRIDIR:
+// buradaki kayıtlar yalnızca yönetim paneline (admin ve üstü) açıktır.
+// Kimlik: oturum çerezi YA DA kişiye özel kısa ömürlü anahtar (uygulama dışı tarayıcıda oturum olmasa da çalışsın diye).
+// Anahtar bildirimde SAKLANMAZ: kullanıcı bildirimdeki düğmeye bastığında oturumlu bir istekle üretilir (kişi başına tek geçerli anahtar,
+// 24 saat). Veritabanında yalnızca özeti (SHA-256) tutulur.
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS site_reviews (
+    user_id INTEGER NOT NULL,
+    campaign TEXT NOT NULL,
+    score_look INTEGER NOT NULL,
+    score_ease INTEGER,
+    score_speed INTEGER,
+    score_voice INTEGER,
+    comment TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, campaign),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS site_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    body TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_site_messages_user ON site_messages(user_id, created_at);
+
+  CREATE TABLE IF NOT EXISTS site_feedback_links (
+    token_hash TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    expires_at DATETIME NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS team_broadcasts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sent_by INTEGER,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    with_review_link INTEGER NOT NULL DEFAULT 0,
+    recipients INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+const SITE_REVIEW_CAMPAIGN = 'tasarim-2026-11';
+const SITE_MESSAGE_KINDS = ['oneri', 'gorus', 'sikayet', 'destek'];
+const SITE_MESSAGE_MAX = 2000;
+const SITE_COMMENT_MAX = 1000;
+const SITE_MESSAGES_PER_DAY = 10;
+const SITE_LINK_HOURS = 24;
+const TEAM_SENDER_NAME = 'Sauran Geliştirici Ekibi';
+const TEAM_TITLE_MAX = 80;
+const TEAM_BODY_MAX = 600;
+const TEAM_BUTTON_MAX = 30;
+const TEAM_BROADCAST_COOLDOWN_MIN = 10;
+
+const hashSiteToken = (token) => crypto.createHash('sha256').update(String(token)).digest('hex');
+
+// Oturumlu kullanıcı için yeni anahtar üretir; önceki anahtarları geçersiz kılar (kişi başına tek geçerli anahtar).
+function mintSiteFeedbackLink(userId) {
+  const token = crypto.randomBytes(24).toString('base64url');
+  db.transaction(() => {
+    db.prepare(`DELETE FROM site_feedback_links WHERE user_id = ?`).run(userId);
+    db.prepare(`INSERT INTO site_feedback_links (token_hash, user_id, expires_at) VALUES (?, ?, datetime('now', ?))`)
+      .run(hashSiteToken(token), userId, `+${SITE_LINK_HOURS} hours`);
+  })();
+  return token;
+}
+
+// Geçerli bağlantı anahtarının sahibini döndürür; askıdaki hesap için null.
+function getSiteFeedbackLinkUser(token) {
+  if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{20,64}$/.test(token)) return null;
+  return db.prepare(`
+    SELECT users.id, users.username FROM site_feedback_links
+    INNER JOIN users ON users.id = site_feedback_links.user_id
+    WHERE site_feedback_links.token_hash = ? AND site_feedback_links.expires_at > datetime('now') AND users.account_status != 'suspended'
+  `).get(hashSiteToken(token)) || null;
+}
+
+function getSiteReview(userId) {
+  return db.prepare(`
+    SELECT score_look AS look, score_ease AS ease, score_speed AS speed, score_voice AS voice, comment, updated_at
+    FROM site_reviews WHERE user_id = ? AND campaign = ?
+  `).get(userId, SITE_REVIEW_CAMPAIGN) || null;
+}
+
+function siteScore(value) {
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 1 && n <= 5 ? n : null;
+}
+
+// Kişi başına tek değerlendirme: yeniden gönderilirse günceller.
+function saveSiteReview(userId, input) {
+  const scores = (input && typeof input.scores === 'object' && input.scores) || {};
+  const look = siteScore(scores.look);
+  if (!look) return { success: false, error: 'Genel görünüm için 1 ile 5 arasında bir puan seç.' };
+  const comment = String((input && input.comment) || '').trim().slice(0, SITE_COMMENT_MAX) || null;
+  db.prepare(`
+    INSERT INTO site_reviews (user_id, campaign, score_look, score_ease, score_speed, score_voice, comment)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, campaign) DO UPDATE SET
+      score_look = excluded.score_look, score_ease = excluded.score_ease, score_speed = excluded.score_speed,
+      score_voice = excluded.score_voice, comment = excluded.comment, updated_at = datetime('now')
+  `).run(userId, SITE_REVIEW_CAMPAIGN, look, siteScore(scores.ease), siteScore(scores.speed), siteScore(scores.voice), comment);
+  return { success: true, review: getSiteReview(userId) };
+}
+
+function createSiteMessage(userId, input) {
+  const kind = String((input && input.kind) || '');
+  if (!SITE_MESSAGE_KINDS.includes(kind)) return { success: false, status: 400, error: 'Bir konu seç: öneri, görüş, şikayet ya da destek.' };
+  const body = String((input && input.body) || '').trim().slice(0, SITE_MESSAGE_MAX);
+  if (body.length < 3) return { success: false, status: 400, error: 'Mesajın çok kısa.' };
+  const { c } = db.prepare(`SELECT COUNT(*) AS c FROM site_messages WHERE user_id = ? AND created_at > datetime('now', '-1 day')`).get(userId);
+  if (c >= SITE_MESSAGES_PER_DAY) return { success: false, status: 429, error: 'Bugün için gönderim sınırına ulaştın. Yarın tekrar yazabilirsin.' };
+  const info = db.prepare(`INSERT INTO site_messages (user_id, kind, body) VALUES (?, ?, ?)`).run(userId, kind, body);
+  return { success: true, id: info.lastInsertRowid };
+}
+
+// Yönetim paneli (salt okuma): ortalamalar + son değerlendirmeler + son mesajlar.
+function getSiteFeedbackOverview(limit = 200) {
+  const n = Math.min(Math.max(Number(limit) || 200, 1), 500);
+  const summary = db.prepare(`
+    SELECT COUNT(*) AS count, AVG(score_look) AS look, AVG(score_ease) AS ease, AVG(score_speed) AS speed, AVG(score_voice) AS voice
+    FROM site_reviews WHERE campaign = ?
+  `).get(SITE_REVIEW_CAMPAIGN);
+  const reviews = db.prepare(`
+    SELECT site_reviews.user_id, users.username, score_look AS look, score_ease AS ease, score_speed AS speed, score_voice AS voice,
+           site_reviews.comment, site_reviews.updated_at
+    FROM site_reviews INNER JOIN users ON users.id = site_reviews.user_id
+    WHERE campaign = ? ORDER BY site_reviews.updated_at DESC LIMIT ?
+  `).all(SITE_REVIEW_CAMPAIGN, n);
+  const kinds = Object.fromEntries(SITE_MESSAGE_KINDS.map((k) => [k, 0]));
+  db.prepare(`SELECT kind, COUNT(*) AS c FROM site_messages GROUP BY kind`).all().forEach((r) => { if (r.kind in kinds) kinds[r.kind] = r.c; });
+  return { campaign: SITE_REVIEW_CAMPAIGN, summary, kinds, reviews };
+}
+
+// Mesajlar sayfa sayfa (en yeni önce); konu süzgeci sunucuda uygulanır. before_id: önceki sayfanın son kaydı.
+function listSiteMessages({ kind, beforeId, limit } = {}) {
+  const n = Math.min(Math.max(Number(limit) || 50, 1), 200);
+  const k = SITE_MESSAGE_KINDS.includes(kind) ? kind : null;
+  const before = Number.isInteger(Number(beforeId)) && Number(beforeId) > 0 ? Number(beforeId) : null;
+  const rows = db.prepare(`
+    SELECT site_messages.id, site_messages.user_id, users.username, site_messages.kind, site_messages.body, site_messages.created_at
+    FROM site_messages INNER JOIN users ON users.id = site_messages.user_id
+    WHERE (? IS NULL OR site_messages.kind = ?) AND (? IS NULL OR site_messages.id < ?)
+    ORDER BY site_messages.id DESC LIMIT ?
+  `).all(k, k, before, before, n + 1);
+  return { messages: rows.slice(0, n), has_more: rows.length > n };
+}
+
+// "Sauran Geliştirici Ekibi" adına toplu bildirim. Alıcılar: askıda olmayan tüm hesaplar.
+function countTeamBroadcastRecipients() {
+  return db.prepare(`SELECT COUNT(*) AS c FROM users WHERE account_status != 'suspended'`).get().c;
+}
+
+function listTeamBroadcasts(limit = 10) {
+  return db.prepare(`
+    SELECT team_broadcasts.id, team_broadcasts.title, team_broadcasts.with_review_link, team_broadcasts.recipients, team_broadcasts.created_at, users.username AS sent_by
+    FROM team_broadcasts LEFT JOIN users ON users.id = team_broadcasts.sent_by
+    ORDER BY team_broadcasts.id DESC LIMIT ?
+  `).all(Math.min(Math.max(Number(limit) || 10, 1), 50));
+}
+
+function cleanTeamText(value, max) {
+  return String(value || '').replace(/\r\n?/g, '\n').trim().slice(0, max);
+}
+
+// Bildirimleri tek işlemde yazar; gerçek zamanlı dağıtım (socket/push) çağıranın işidir (dönen liste ile).
+function sendTeamBroadcast(sentBy, input) {
+  const title = cleanTeamText(input && input.title, TEAM_TITLE_MAX);
+  const body = cleanTeamText(input && input.body, TEAM_BODY_MAX);
+  const withReviewLink = !!(input && input.with_review_link);
+  const buttonLabel = withReviewLink ? (cleanTeamText(input && input.button_label, TEAM_BUTTON_MAX) || 'Değerlendir') : null;
+  if (!title) return { success: false, status: 400, error: 'Başlık boş olamaz.' };
+  if (!body) return { success: false, status: 400, error: 'Mesaj boş olamaz.' };
+
+  const recent = db.prepare(`SELECT id FROM team_broadcasts WHERE created_at > datetime('now', ?)`).get(`-${TEAM_BROADCAST_COOLDOWN_MIN} minutes`);
+  if (recent) return { success: false, status: 429, error: `Son ${TEAM_BROADCAST_COOLDOWN_MIN} dakika içinde zaten bir toplu bildirim gönderildi. Çift gönderimi önlemek için biraz bekle.` };
+
+  const expected = Number(input && input.confirm_recipients);
+  const recipients = db.prepare(`SELECT id FROM users WHERE account_status != 'suspended' ORDER BY id`).all().map((r) => r.id);
+  if (expected !== recipients.length) return { success: false, status: 409, error: 'Alıcı sayısı değişti. Önizlemeyi yenileyip tekrar onayla.', recipients: recipients.length };
+
+  const run = db.transaction(() => {
+    const broadcastId = db.prepare(`INSERT INTO team_broadcasts (sent_by, title, body, with_review_link, recipients) VALUES (?, ?, ?, ?, ?)`)
+      .run(sentBy, title, body, withReviewLink ? 1 : 0, recipients.length).lastInsertRowid;
+    const delivered = [];
+    // Bildirimde kişiye özel anahtar YOK: herkes aynı veriyi alır; anahtar düğmeye basılınca üretilir.
+    const data = { broadcast_id: broadcastId, sender: TEAM_SENDER_NAME, title, body };
+    if (withReviewLink) { data.button_label = buttonLabel; data.link = '/degerlendirme.html'; }
+    for (const userId of recipients) {
+      const notif = createNotification(userId, 'team_message', data);
+      if (!notif.suppressed) delivered.push(userId);
+    }
+    return { broadcastId, delivered };
+  });
+  const { broadcastId, delivered } = run();
+  return { success: true, id: broadcastId, recipients: recipients.length, delivered, title, body, link: withReviewLink ? '/degerlendirme.html' : null, button_label: buttonLabel };
+}
+
+// Süresi dolan değerlendirme bağlantılarını temizler.
+function purgeExpiredSiteFeedbackLinks() {
+  return db.prepare(`DELETE FROM site_feedback_links WHERE expires_at <= datetime('now')`).run().changes;
 }
 
 // =====================================================
@@ -7860,7 +8076,8 @@ const INDEFINITE_RETENTION = {
   inactive_warning_days: 30,    // silmeden en az bu kadar gün önce e-posta uyarısı; kullanıcı girerse sayaç sıfırlanır
   invite_idle_days: 180,        // hiç kullanılmayan/kullanılmayı bırakılmış davet kodu
   pending_friend_days: 90,      // yanıtlanmayan arkadaşlık isteği (bildirimle aynı süre)
-  feedback_days: 730            // öneri panosu girdisi
+  feedback_days: 730,           // öneri panosu girdisi
+  site_feedback_days: 730       // resmi sitedeki değerlendirme (son güncellemeden) ve öneri/görüş/şikayet mesajı
 };
 
 for (const [table, col, sql] of [
@@ -7946,7 +8163,9 @@ function purgeExpiredIndefiniteData(now = new Date()) {
       .run(sqlTimeAgo(now, cfg.invite_idle_days), sqlTimeAgo(now, 7)).changes
       + db.prepare(`DELETE FROM hub_invites WHERE expires_at IS NOT NULL AND expires_at < ?`).run(new Date(now.getTime() - 7 * 86400000).toISOString()).changes,
     pending_friend_requests: db.prepare(`DELETE FROM friendships WHERE status = 'pending' AND created_at < ?`).run(sqlTimeAgo(now, cfg.pending_friend_days)).changes,
-    feedback: db.prepare(`DELETE FROM feedback WHERE created_at < ?`).run(sqlTimeAgo(now, cfg.feedback_days)).changes
+    feedback: db.prepare(`DELETE FROM feedback WHERE created_at < ?`).run(sqlTimeAgo(now, cfg.feedback_days)).changes,
+    site_feedback: db.prepare(`DELETE FROM site_messages WHERE created_at < ?`).run(sqlTimeAgo(now, cfg.site_feedback_days)).changes
+      + db.prepare(`DELETE FROM site_reviews WHERE updated_at < ?`).run(sqlTimeAgo(now, cfg.site_feedback_days)).changes
   }))();
 }
 
@@ -8888,6 +9107,18 @@ module.exports = {
   createFeedback,
   listFeedback,
   voteFeedback,
+  getSiteFeedbackLinkUser,
+  getSiteReview,
+  saveSiteReview,
+  createSiteMessage,
+  getSiteFeedbackOverview,
+  listSiteMessages,
+  mintSiteFeedbackLink,
+  countTeamBroadcastRecipients,
+  listTeamBroadcasts,
+  sendTeamBroadcast,
+  purgeExpiredSiteFeedbackLinks,
+  TEAM_SENDER_NAME,
   getActiveVoiceMute,
   muteInVoiceRoom,
   unmuteInVoiceRoom,

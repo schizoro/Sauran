@@ -65,6 +65,25 @@
         .adm-about { font-size: 13px; color: #c5c6c7; white-space: pre-wrap; word-break: break-word; }
         .adm-apply-btn { padding: 9px 16px; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 12.5px; color: #5cc8ff; background: rgba(92,200,255,0.1); border: 1px solid rgba(92,200,255,0.4); }
         .adm-apply-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .sfb-stars { color: #ffc857; letter-spacing: 1px; white-space: nowrap; }
+        .sfb-kind { font-size: 10.5px; font-weight: bold; padding: 3px 9px; border-radius: 999px; background: rgba(255,255,255,0.06); white-space: nowrap; }
+        .sfb-kind.oneri { background: rgba(92,200,255,0.12); color: #5cc8ff; }
+        .sfb-kind.gorus { background: rgba(179,102,245,0.15); color: #d3a6ff; }
+        .sfb-kind.sikayet { background: rgba(255,46,70,0.15); color: #ff6b7d; }
+        .sfb-kind.destek { background: rgba(61,220,151,0.13); color: #3ddc97; }
+        .sfb-body { white-space: pre-wrap; }
+        .adm-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #5cc8ff; margin: 0 0 12px; }
+        .bc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .bc-field { display: block; font-size: 12px; color: #9ca3af; margin: 12px 0 5px; }
+        .bc-input { width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); color: #e2f8f6; border-radius: 10px; padding: 9px 12px; font: inherit; font-size: 13px; outline: none; }
+        textarea.bc-input { min-height: 120px; resize: vertical; }
+        .bc-preview { border-radius: 14px; padding: 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); }
+        .bc-tag { display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: .06em; padding: 3px 8px; border-radius: 999px; background: rgba(179,102,245,.16); color: #d3a6ff; margin-bottom: 6px; text-transform: uppercase; }
+        .bc-prev-body { white-space: pre-wrap; margin-top: 4px; font-size: 13px; }
+        .bc-prev-btn { display: inline-block; margin-top: 10px; padding: 7px 14px; border-radius: 10px; background: linear-gradient(135deg,#8b4ae0,#b366f5); color: #fff; font-weight: bold; font-size: 12.5px; }
+        .bc-send { padding: 11px 18px; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 13px; color: #fff; background: linear-gradient(135deg,#8b4ae0,#b366f5); border: 0; }
+        .bc-send:disabled { opacity: .45; cursor: not-allowed; }
+        @media (max-width: 720px) { .bc-grid { grid-template-columns: 1fr; } }
         .adm-mod-link { display: inline-block; margin-top: 14px; font-size: 12.5px; color: #5cc8ff; }
         @media (max-width: 720px) {
             body { padding: 14px; }
@@ -85,6 +104,8 @@
                 <button type="button" id="tab-users" class="active">Kullanıcılar</button>
                 <button type="button" id="tab-audit" style="display:none;">Audit Log</button>
                 <button type="button" id="tab-csp">Güvenlik Kuralı</button>
+                <button type="button" id="tab-sfb">Geri Bildirim</button>
+                <button type="button" id="tab-bc" style="display:none;">Toplu Bildirim</button>
                 <a href="/" id="t-back">← Uygulama</a>
                 <a href="moderation.html" id="t-moderation">Moderasyon Paneli</a>
             </div>
@@ -148,6 +169,64 @@
                 <div id="csp-table-wrap"></div>
                 <div id="csp-empty" class="adm-state" style="display:none;"></div>
                 <p id="csp-note" class="adm-muted" style="font-size:11px;margin:12px 0 0;"></p>
+            </div>
+          </div>
+
+          <div id="adm-sfb-view" style="display:none;">
+            <div id="sfb-stats" class="adm-stats"></div>
+            <div class="adm-glass" style="margin-bottom:16px;">
+                <h2 class="adm-h2">Tasarım puanları</h2>
+                <div id="sfb-reviews"></div>
+            </div>
+            <div class="adm-glass">
+                <div class="adm-toolbar" style="justify-content:space-between;align-items:center;">
+                    <h2 class="adm-h2" style="margin:0;">Öneri, görüş, şikayet ve destek</h2>
+                    <select id="sfb-kind">
+                        <option value="">Tümü</option><option value="oneri">Öneri</option><option value="gorus">Görüş</option>
+                        <option value="sikayet">Şikayet</option><option value="destek">Destek</option>
+                    </select>
+                </div>
+                <div id="sfb-messages"></div>
+                <div style="text-align:center;margin-top:12px;"><button id="sfb-more" type="button" class="adm-apply-btn" style="display:none;">Daha eski mesajlar</button></div>
+                <p class="adm-muted" style="font-size:11px;margin:12px 0 0;">Bu kayıtlar sauran.online/degerlendirme.html sayfasından gelir ve yalnızca yönetim paneline açıktır (uygulamadaki herkese açık öneri panosundan ayrıdır). Kullanıcı hesabını silerse kayıtları da silinir; kayıtlar 730 gün sonra otomatik silinir. Puan tablosu en son güncellenen 200 değerlendirmeyi gösterir, ortalamalar tümünü kapsar.</p>
+            </div>
+          </div>
+
+          <div id="adm-bc-view" style="display:none;">
+            <div class="adm-glass">
+                <h2 class="adm-h2">Tüm kullanıcılara bildirim</h2>
+                <div class="bc-grid">
+                    <div>
+                        <label class="bc-field">Gönderen</label>
+                        <input class="bc-input" id="bc-sender" value="Sauran Geliştirici Ekibi" disabled>
+                        <label class="bc-field" for="bc-title">Başlık (en çok 80)</label>
+                        <input class="bc-input" id="bc-title" maxlength="80" value="Sauran'ı birlikte geliştirelim: görüşünüz bizim için değerli">
+                        <label class="bc-field" for="bc-body">Mesaj (en çok 600)</label>
+                        <textarea class="bc-input" id="bc-body" maxlength="600">Değerli kullanıcımız,
+
+Sauran'ı tercih ettiğiniz için teşekkür ederiz. Arayüzde yaptığımız yenilikleri sizin deneyiminize göre şekillendirmek istiyoruz.
+
+Kısa değerlendirme formumuzda tasarımı 1–5 arası puanlayabilir; öneri, görüş ve şikayetlerinizi doğrudan geliştirici ekibimize iletebilirsiniz. Tüm geri bildirimler ekibimiz tarafından tek tek incelenmektedir.
+
+Saygılarımızla,
+Sauran Geliştirici Ekibi</textarea>
+                        <label class="bc-field" style="display:flex;align-items:center;gap:8px;color:#c5c6c7;">
+                            <input type="checkbox" id="bc-link" checked> Değerlendirme sayfasının bağlantısını ekle
+                        </label>
+                        <label class="bc-field" for="bc-btn">Düğme yazısı</label>
+                        <input class="bc-input" id="bc-btn" maxlength="30" value="Formu Aç">
+                    </div>
+                    <div>
+                        <label class="bc-field">Kullanıcının bildirimlerde göreceği</label>
+                        <div class="bc-preview" id="bc-preview"></div>
+                        <p id="bc-count" style="margin:16px 0 10px;font-weight:600;"></p>
+                        <button type="button" class="bc-send" id="bc-send" disabled>Tüm kullanıcılara gönder</button>
+                        <p id="bc-msg" style="font-size:12.5px;margin-top:10px;"></p>
+                        <p class="adm-muted" style="font-size:11px;margin:8px 0 0;">Askıdaki hesaplar hariç herkese gider. Sistem bildirimidir: kullanıcının bildirim ayarlarından bağımsız olarak doğrudan Bildirimler paneline düşer; ayrıca bildirim izni vermiş tüm cihazlarda (telefon, ana ekrana eklenen web uygulaması, tarayıcı, masaüstü uygulaması) uygulama açık olsa bile cihazın bildirim paneline gönderilir. Bildirim iznini hiç vermemiş cihazlara işletim sistemi gereği gönderilemez; onlar bildirimi uygulamayı açınca görür. Kullanıcı düğmeye bastığında kendisine özel, 24 saat geçerli bir anahtar üretilir; böylece sayfa uygulama dışındaki tarayıcıda açılsa da giriş yapmadan değerlendirme yapabilir. Çift gönderimi önlemek için 10 dakikada en fazla bir toplu bildirim gönderilebilir. Gönderilen bildirim geri alınamaz.</p>
+                    </div>
+                </div>
+                <h2 class="adm-h2" style="margin-top:22px;">Son gönderimler</h2>
+                <div id="bc-history"></div>
             </div>
           </div>
 
@@ -571,10 +650,116 @@
                 </tbody></table>` : '';
         }
 
+        const SFB_KIND = { oneri: 'Öneri', gorus: 'Görüş', sikayet: 'Şikayet', destek: 'Destek' };
+        const stars = (n) => n ? `<span class="sfb-stars" title="${n}/5">${'★'.repeat(n)}${'☆'.repeat(5 - n)}</span>` : '<span class="adm-muted">—</span>';
+        let sfbData = null;
+        const sfbMsg = { rows: [], hasMore: false };
+
+        async function loadSfbMessages(reset) {
+            if (reset) sfbMsg.rows = [];
+            const q = new URLSearchParams({ limit: '50' });
+            if ($('sfb-kind').value) q.set('kind', $('sfb-kind').value);
+            const last = sfbMsg.rows[sfbMsg.rows.length - 1];
+            if (last) q.set('before_id', String(last.id));
+            const data = await api('/api/admin/site-feedback/messages?' + q.toString());
+            sfbMsg.rows = sfbMsg.rows.concat(data.messages || []);
+            sfbMsg.hasMore = !!data.has_more;
+            renderSfbMessages();
+        }
+
+        function renderSfbMessages() {
+            const rows = sfbMsg.rows;
+            $('sfb-more').style.display = sfbMsg.hasMore ? '' : 'none';
+            $('sfb-messages').innerHTML = rows.length ? `
+                <table class="adm-table"><thead><tr><th>Konu</th><th>Kullanıcı</th><th>Mesaj</th><th>Tarih</th></tr></thead>
+                <tbody style="cursor:default;">${rows.map((m) => `
+                    <tr style="cursor:default;">
+                        <td data-label="Konu"><span class="sfb-kind ${esc(m.kind)}">${esc(SFB_KIND[m.kind] || m.kind)}</span></td>
+                        <td data-label="Kullanıcı">${esc(m.username)} <span class="adm-muted">#${Number(m.user_id) || ''}</span></td>
+                        <td data-label="Mesaj" class="sfb-body">${esc(m.body)}</td>
+                        <td data-label="Tarih">${fmtDate(m.created_at)}</td>
+                    </tr>`).join('')}</tbody></table>` : '<div class="adm-state" style="padding:30px;">Henüz mesaj yok.</div>';
+        }
+
+        async function loadSfb() {
+            sfbData = await api('/api/admin/site-feedback');
+            const s = sfbData.summary || {};
+            const avg = (v) => v == null ? '—' : (Math.round(v * 10) / 10).toLocaleString('tr-TR');
+            const k = sfbData.kinds || {};
+            const tiles = [
+                [s.count || 0, 'Değerlendirme'], [avg(s.look), 'Genel görünüm'], [avg(s.ease), 'Kullanım kolaylığı'],
+                [avg(s.speed), 'Hız ve akıcılık'], [avg(s.voice), 'Sesli odalar'],
+                [k.oneri || 0, 'Öneri'], [k.gorus || 0, 'Görüş'], [k.sikayet || 0, 'Şikayet'], [k.destek || 0, 'Destek talebi']
+            ];
+            $('sfb-stats').innerHTML = tiles.map(([v, l]) => `<div class="adm-glass adm-stat"><div class="adm-stat-value">${esc(v)}</div><div class="adm-stat-label">${esc(l)}</div></div>`).join('');
+            const reviews = sfbData.reviews || [];
+            $('sfb-reviews').innerHTML = reviews.length ? `
+                <table class="adm-table"><thead><tr><th>Kullanıcı</th><th>Görünüm</th><th>Kolaylık</th><th>Hız</th><th>Ses</th><th>Yorum</th><th>Tarih</th></tr></thead>
+                <tbody style="cursor:default;">${reviews.map((r) => `
+                    <tr style="cursor:default;">
+                        <td data-label="Kullanıcı">${esc(r.username)}</td>
+                        <td data-label="Görünüm">${stars(r.look)}</td><td data-label="Kolaylık">${stars(r.ease)}</td>
+                        <td data-label="Hız">${stars(r.speed)}</td><td data-label="Ses">${stars(r.voice)}</td>
+                        <td data-label="Yorum" class="sfb-body">${r.comment ? esc(r.comment) : '<span class="adm-muted">—</span>'}</td>
+                        <td data-label="Tarih">${fmtDate(r.updated_at)}</td>
+                    </tr>`).join('')}</tbody></table>` : '<div class="adm-state" style="padding:30px;">Henüz değerlendirme yok.</div>';
+            await loadSfbMessages(true);
+        }
+
+        let bcRecipients = null;
+        function renderBcPreview() {
+            const link = $('bc-link').checked;
+            $('bc-btn').disabled = !link;
+            $('bc-preview').innerHTML = `
+                <div class="bc-tag">Sauran Geliştirici Ekibi</div>
+                <div><strong>${esc($('bc-title').value.trim()) || '<span class="adm-muted">Başlık</span>'}</strong></div>
+                <div class="bc-prev-body">${esc($('bc-body').value.trim()) || '<span class="adm-muted">Mesaj</span>'}</div>
+                ${link ? `<span class="bc-prev-btn">${esc($('bc-btn').value.trim() || 'Değerlendir')}</span>` : ''}`;
+            $('bc-send').disabled = !(bcRecipients && $('bc-title').value.trim() && $('bc-body').value.trim());
+        }
+
+        async function loadBc() {
+            const data = await api('/api/admin/team-broadcast');
+            bcRecipients = data.recipients;
+            $('bc-count').textContent = `Bu bildirim ${data.recipients} kullanıcıya gidecek.`;
+            const h = data.history || [];
+            $('bc-history').innerHTML = h.length ? `
+                <table class="adm-table"><thead><tr><th>Tarih</th><th>Başlık</th><th>Bağlantı</th><th>Alıcı</th><th>Gönderen</th></tr></thead>
+                <tbody style="cursor:default;">${h.map((b) => `
+                    <tr style="cursor:default;">
+                        <td data-label="Tarih">${fmtDate(b.created_at)}</td><td data-label="Başlık">${esc(b.title)}</td>
+                        <td data-label="Bağlantı">${b.with_review_link ? 'Değerlendirme' : '—'}</td>
+                        <td data-label="Alıcı">${Number(b.recipients) || 0}</td><td data-label="Gönderen">${esc(b.sent_by || '—')}</td>
+                    </tr>`).join('')}</tbody></table>` : '<div class="adm-muted" style="font-size:12.5px;">Henüz gönderim yok.</div>';
+            renderBcPreview();
+        }
+
+        async function sendBc() {
+            const btn = $('bc-send'), msg = $('bc-msg');
+            if (!confirm(`"${$('bc-title').value.trim()}" bildirimi ${bcRecipients} kullanıcıya "Sauran Geliştirici Ekibi" adıyla gönderilsin mi?\n\nBu işlem geri alınamaz.`)) return;
+            btn.disabled = true;
+            msg.style.color = '#9ca3af';
+            msg.textContent = 'Gönderiliyor…';
+            const res = await fetch('/api/admin/team-broadcast', {
+                method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: $('bc-title').value, body: $('bc-body').value, with_review_link: $('bc-link').checked, button_label: $('bc-btn').value, confirm_recipients: bcRecipients })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (data.success) { msg.style.color = '#3ddc97'; msg.textContent = `Gönderildi: ${data.recipients} kullanıcı.`; }
+            else { msg.style.color = '#ff6b7d'; msg.textContent = data.error || 'Gönderilemedi.'; }
+            loadBc().catch(() => {});
+        }
+
         function showView(name) {
             $('adm-users-view').style.display = name === 'users' ? 'block' : 'none';
             $('adm-audit-view').style.display = name === 'audit' ? 'block' : 'none';
             $('adm-csp-view').style.display = name === 'csp' ? 'block' : 'none';
+            $('adm-sfb-view').style.display = name === 'sfb' ? 'block' : 'none';
+            $('adm-bc-view').style.display = name === 'bc' ? 'block' : 'none';
+            $('tab-sfb').classList.toggle('active', name === 'sfb');
+            $('tab-bc').classList.toggle('active', name === 'bc');
+            if (name === 'sfb') loadSfb().catch(showError);
+            if (name === 'bc') loadBc().catch(showError);
             $('tab-users').classList.toggle('active', name === 'users');
             $('tab-audit').classList.toggle('active', name === 'audit');
             $('tab-csp').classList.toggle('active', name === 'csp');
@@ -588,7 +773,7 @@
             try {
                 const res = await fetch('/api/me', { credentials: 'include' });
                 const data = await res.json();
-                if (data.success && data.user.platform_role === 'founder') { isFounder = true; $('tab-audit').style.display = ''; }
+                if (data.success && data.user.platform_role === 'founder') { isFounder = true; $('tab-audit').style.display = ''; $('tab-bc').style.display = ''; }
             } catch (e) {}
         }
 
@@ -598,6 +783,13 @@
             $('tab-audit').addEventListener('click', () => showView('audit'));
             $('tab-csp').addEventListener('click', () => showView('csp'));
             $('csp-refresh').addEventListener('click', () => loadCsp().catch(showError));
+            $('tab-sfb').addEventListener('click', () => showView('sfb'));
+            $('tab-bc').addEventListener('click', () => showView('bc'));
+            $('sfb-kind').addEventListener('change', () => loadSfbMessages(true).catch(showError));
+            $('sfb-more').addEventListener('click', () => loadSfbMessages(false).catch(showError));
+            ['bc-title', 'bc-body', 'bc-btn'].forEach((id) => $(id).addEventListener('input', renderBcPreview));
+            $('bc-link').addEventListener('change', renderBcPreview);
+            $('bc-send').addEventListener('click', () => sendBc().catch((e) => { $('bc-msg').textContent = e.message; }));
             ['au-action', 'au-actor', 'au-target', 'au-from', 'au-to'].forEach((id) => {
                 $(id).addEventListener(id === 'au-actor' || id === 'au-target' ? 'input' : 'change', () => { audit.page = 1; loadAudit().catch(showError); });
             });

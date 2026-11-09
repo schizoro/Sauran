@@ -190,6 +190,18 @@ const {
   createFeedback,
   listFeedback,
   voteFeedback,
+  getSiteFeedbackLinkUser,
+  getSiteReview,
+  saveSiteReview,
+  createSiteMessage,
+  getSiteFeedbackOverview,
+  listSiteMessages,
+  mintSiteFeedbackLink,
+  countTeamBroadcastRecipients,
+  listTeamBroadcasts,
+  sendTeamBroadcast,
+  purgeExpiredSiteFeedbackLinks,
+  TEAM_SENDER_NAME,
   calculateAge,
   isMinorAge,
   isMinorUntil,
@@ -504,6 +516,8 @@ const hubCreateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, keyFn: b
 const inviteCreateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla davet oluşturuldu. Biraz sonra tekrar dene.' });
 const reportLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, keyFn: byIp, message: 'Çok fazla bildirim gönderildi. Biraz sonra tekrar dene.' });
 const feedbackLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, keyFn: byIp, message: 'Çok fazla öneri gönderildi. Biraz sonra tekrar dene.' });
+const siteFeedbackLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 40, keyFn: byIp, message: 'Çok fazla gönderim yapıldı. Biraz sonra tekrar dene.' });
+const siteFeedbackLinkLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla istek. Biraz sonra tekrar dene.' });
 const adminWriteLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla yönetim işlemi yapıldı. Biraz sonra tekrar dene.' });
 const fileUploadLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla dosya gönderildi. Biraz sonra tekrar dene.' });
 
@@ -1809,6 +1823,105 @@ app.post('/api/feedback/:id/vote', (req, res) => {
     console.error('Oy verme hatası:', error);
     res.status(500).json({ success: false, error: 'Oy verilemedi.' });
   }
+});
+
+// =====================================================
+// RESMİ SİTE: TASARIM DEĞERLENDİRMESİ + ÖNERİ / GÖRÜŞ / ŞİKAYET (degerlendirme.html)
+// =====================================================
+// Kimlik: oturum çerezi ya da kişiye özel kısa ömürlü anahtar (X-Sauran-Review-Token başlığı; bildirimdeki düğmeye basınca üretilir).
+// Bağlantı adreste # (fragment) içinde taşınır: sunucuya, kayıtlara ya da Referer başlığına hiç gitmez; sayfa onu yalnızca bu başlıkla gönderir.
+// Geçerli kişiye özel bağlantı önce gelir: aynı tarayıcıda başka bir hesap açık olsa bile bağlantıya tıklayan kişi adına yazılır.
+function getSiteFeedbackUser(req) {
+  const linkUser = getSiteFeedbackLinkUser(req.get('x-sauran-review-token'));
+  if (linkUser) return linkUser;
+  const sessionUser = getUserFromRequest(req);
+  return sessionUser ? { id: sessionUser.id, username: sessionUser.username } : null;
+}
+
+function requireSiteFeedbackUser(req, res) {
+  const user = getSiteFeedbackUser(req);
+  if (!user) res.status(401).json({ success: false, error: 'Kimliğin doğrulanamadı. Uygulamadan gelen bağlantıyı kullan ya da Sauran hesabınla giriş yap.' });
+  return user;
+}
+
+// Bildirimdeki "Değerlendir" düğmesi: oturumlu kullanıcıya 24 saatlik kişisel anahtar verir (uygulama dışı tarayıcıda açılabilsin diye).
+app.post('/api/site-feedback/link', siteFeedbackLinkLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  res.json({ success: true, token: mintSiteFeedbackLink(user.id) });
+});
+
+app.get('/api/site-feedback/me', (req, res) => {
+  const user = getSiteFeedbackUser(req);
+  if (!user) return res.json({ success: true, identified: false });
+  res.json({ success: true, identified: true, username: user.username, review: getSiteReview(user.id) });
+});
+
+app.post('/api/site-feedback/review', siteFeedbackLimiter, (req, res) => {
+  const user = requireSiteFeedbackUser(req, res);
+  if (!user) return;
+  try {
+    const result = saveSiteReview(user.id, req.body || {});
+    return res.status(result.success ? 200 : 400).json(result);
+  } catch (error) {
+    console.error('Site değerlendirmesi kaydedilemedi:', error);
+    res.status(500).json({ success: false, error: 'Değerlendirme kaydedilemedi.' });
+  }
+});
+
+app.post('/api/site-feedback/message', siteFeedbackLimiter, (req, res) => {
+  const user = requireSiteFeedbackUser(req, res);
+  if (!user) return;
+  try {
+    const result = createSiteMessage(user.id, req.body || {});
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    return res.json(result);
+  } catch (error) {
+    console.error('Site mesajı kaydedilemedi:', error);
+    res.status(500).json({ success: false, error: 'Mesaj gönderilemedi.' });
+  }
+});
+
+app.get('/api/admin/site-feedback', (req, res) => {
+  if (!requirePlatformRole(req, res, 'admin')) return;
+  res.json({ success: true, ...getSiteFeedbackOverview(req.query.limit) });
+});
+
+app.get('/api/admin/site-feedback/messages', (req, res) => {
+  if (!requirePlatformRole(req, res, 'admin')) return;
+  res.json({ success: true, ...listSiteMessages({ kind: req.query.kind, beforeId: req.query.before_id, limit: req.query.limit }) });
+});
+
+// ── "Sauran Geliştirici Ekibi" adına tüm kullanıcılara bildirim (yalnızca kurucu) ──
+app.get('/api/admin/team-broadcast', (req, res) => {
+  if (!requirePlatformRole(req, res, 'founder')) return;
+  res.json({ success: true, sender: TEAM_SENDER_NAME, recipients: countTeamBroadcastRecipients(), history: listTeamBroadcasts(10) });
+});
+
+app.post('/api/admin/team-broadcast', (req, res) => {
+  const user = requirePlatformRole(req, res, 'founder');
+  if (!user) return;
+  let result;
+  try {
+    result = sendTeamBroadcast(user.id, req.body || {});
+  } catch (error) {
+    console.error('Toplu bildirim gönderilemedi:', error);
+    return res.status(500).json({ success: false, error: 'Bildirim gönderilemedi.' });
+  }
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error, recipients: result.recipients });
+  // Kayıtlar herkesin Bildirimler paneline yazıldı; gerçek zamanlı dağıtım arka planda 25'erlik gruplar hâlinde yapılır
+  // (olay döngüsü ve push servisleri bir anda yüklenmesin; her grup arasında diğer işlere sıra verilir).
+  res.json({ success: true, id: result.id, recipients: result.recipients });
+  const data = { broadcast_id: result.id, sender: TEAM_SENDER_NAME, title: result.title, body: result.body, ...(result.link ? { link: result.link, button_label: result.button_label } : {}) };
+  const queue = result.delivered.slice();
+  const next = () => {
+    for (const userId of queue.splice(0, 25)) {
+      try { pushNotification(userId, 'team_message', data); } catch (error) { console.error('Toplu bildirim dağıtım hatası:', error); }
+    }
+    if (queue.length) setTimeout(next, 200);
+    else console.log(`Geliştirici Ekibi bildirimi #${result.id}: ${result.recipients} alıcı, dağıtım tamam.`);
+  };
+  setImmediate(next);
 });
 
 // =====================================================
@@ -3925,7 +4038,8 @@ function userHasVisibleSocket(userId) {
   return false;
 }
 
-async function dispatchWebPush(userId, type, payload) {
+// options.system: "Sauran Geliştirici Ekibi" sistem duyurusu; kullanıcının bildirim kategorisi/masaüstü tercihinden bağımsız gönderilir.
+async function dispatchWebPush(userId, type, payload, options = {}) {
 
   const webPushOn = push.isConfigured();
   const fcmOn = fcm.isConfigured();
@@ -3937,11 +4051,13 @@ async function dispatchWebPush(userId, type, payload) {
   const acct = db.prepare(`SELECT account_status FROM users WHERE id = ?`).get(userId);
   if (!acct || acct.account_status === 'suspended') return;
 
-  const prefs = getNotificationPreferences(userId);
-  const categoryColumn = NOTIFICATION_CATEGORY_MAP[type];
-  if (categoryColumn && prefs[categoryColumn] === 0) return;
-  if (prefs.desktop_enabled === 0) return;
-  if (userHasVisibleSocket(userId)) return;
+  if (!options.system) {
+    const prefs = getNotificationPreferences(userId);
+    const categoryColumn = NOTIFICATION_CATEGORY_MAP[type];
+    if (categoryColumn && prefs[categoryColumn] === 0) return;
+    if (prefs.desktop_enabled === 0) return;
+    if (userHasVisibleSocket(userId)) return;
+  }
 
   if (webPushOn) {
     const subscriptions = listPushSubscriptions(userId);
@@ -4117,6 +4233,18 @@ function pushNotification(userId, type, data) {
 
   // Askıdaki hesap için ne uygulama içi ne de Web Push bildirimi üretilir.
   if (isAccountSuspended(userId)) return;
+
+  // "Sauran Geliştirici Ekibi" sistem duyurusu: bildirim tercihlerine (kategori, uygulama içi, masaüstü, ses) BAĞLI DEĞİLDİR.
+  // Kaydı zaten herkesin Bildirimler paneline düşer. Ayrıca bildirim izni olan TÜM cihazlara (uygulama açık olsa bile) tür bazlı genel bir
+  // telefon/masaüstü bildirimi gider; açık oturumlar da cihazın bildirim paneline bir sistem bildirimi düşürür (uygulama içi açılır kutu ve ses yok).
+  if (type === 'team_message') {
+    dispatchWebPush(userId, type, { title: 'Sauran', body: `${TEAM_SENDER_NAME}: ${data?.title || 'Yeni bir mesajın var.'}`, url: '/', tag: 'notif-team_message' }, { system: true })
+      .catch(error => console.error('Web push gönderilemedi:', error));
+    (activeUsers.get(userId) || []).forEach(sid => io.to(sid).emit('notification_received', {
+      type, data, channels: { inapp: false, desktop: false, sound: false }
+    }));
+    return;
+  }
 
   const prefs = getNotificationPreferences(userId);
   const categoryColumn = NOTIFICATION_CATEGORY_MAP[type];
@@ -5773,6 +5901,7 @@ server.listen(PORT, () => {
       const r = purgeExpiredIndefiniteData();
       logDataLifecycle('indefinite_data_purged', r);
       if (r.invites || r.pending_friend_requests || r.feedback) console.log(`Süresi dolan davet/istek/öneri silindi: davet=${r.invites}, istek=${r.pending_friend_requests}, öneri=${r.feedback}.`);
+      purgeExpiredSiteFeedbackLinks();
     } catch (error) { console.error('Süresiz veri temizleme hatası:', error); }
   };
   runIndefiniteCleanup();
