@@ -3425,6 +3425,30 @@ function handlePendingNotificationOpen() {
 }
 
 
+// Oturum kartı için cihaz bilgisi: simge, cihaz adı ve hangi uygulama/tarayıcı.
+function deviceInfo(ua) {
+    ua = ua || '';
+    const svg = (p) => `<svg viewBox="0 0 24 24">${p}</svg>`;
+    const phone = svg('<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 18h2"/>');
+    const laptop = svg('<rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/>');
+    const app = svg('<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 8h18M8 21h8M12 18v3"/>');
+    const isApp = /electron|sauran/i.test(ua);
+    const isNative = /capacitor|; wv\)/i.test(ua);
+    let name = t('unknown-device');
+    let icon = laptop;
+    if (/iphone/i.test(ua)) { name = 'iPhone'; icon = phone; }
+    else if (/ipad/i.test(ua)) { name = 'iPad'; icon = phone; }
+    else if (/android/i.test(ua)) { name = 'Android'; icon = phone; }
+    else if (/macintosh/i.test(ua)) name = 'Mac';
+    else if (/windows/i.test(ua)) name = 'Windows';
+    else if (/linux/i.test(ua)) name = 'Linux';
+    if (isApp) icon = app;
+    const browser = /edg\//i.test(ua) ? 'Edge' : /opr\/|opera/i.test(ua) ? 'Opera' : /firefox/i.test(ua) ? 'Firefox'
+        : /chrome|crios/i.test(ua) ? 'Chrome' : /safari/i.test(ua) ? 'Safari' : '';
+    const where = isApp ? t('session-desktop-app') : isNative ? t('session-mobile-app') : (browser ? `${browser} ${t('session-browser')}` : t('session-browser-generic'));
+    return { icon, name, app: where };
+}
+
 function describeUserAgent(ua) {
 
     ua = ua || '';
@@ -3695,22 +3719,34 @@ async function loadSessions() {
         const data = await response.json();
         if (!data.success) return;
 
-        container.innerHTML = data.sessions.map((s) => {
-            const date = serverDate(s.created_at).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        // Cihaz kartları: önce bu cihaz, sonra diğerleri. Diğer cihazda "Çıkış yap" o cihazı anında çıkış ekranına düşürür.
+        const card = (s) => {
+            const d = deviceInfo(s.user_agent);
+            const date = serverDate(s.created_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
             return `
-                <div class="settings-blocked-row">
-                    <span class="settings-blocked-name">
-                        ${describeUserAgent(s.user_agent)} — ${date}
-                        ${s.is_current ? ` <strong style="color:#57f287;">(${t('this-device')})</strong>` : ''}
+                <div class="session-card${s.is_current ? ' is-current' : ''}">
+                    <span class="session-ico" aria-hidden="true">${d.icon}</span>
+                    <span class="session-txt">
+                        <b>${escapeHtml(d.name)}${s.is_current ? ` <i class="session-badge">${escapeHtml(t('this-device-badge'))}</i>` : ''}</b>
+                        <small>${escapeHtml(d.app)} · ${escapeHtml(t('session-signed-in'))} ${escapeHtml(date)}</small>
                     </span>
-                    ${!s.is_current ? `<button class="settings-unblock-btn" data-revoke-session="${s.id}" type="button">${t('revoke')}</button>` : ''}
-                </div>
-            `;
-        }).join('');
+                    ${!s.is_current ? `<button class="session-out-btn" data-revoke-session="${s.id}" type="button">${escapeHtml(t('session-sign-out'))}</button>` : ''}
+                </div>`;
+        };
+        const mine = data.sessions.filter((s) => s.is_current);
+        const others = data.sessions.filter((s) => !s.is_current);
+        container.className = 'session-list';
+        container.innerHTML = mine.map(card).join('')
+            + (others.length ? `<div class="session-group-head">${escapeHtml(t('session-other-devices'))} <b>${others.length}</b></div>` + others.map(card).join('')
+                : `<div class="session-empty">${escapeHtml(t('session-no-others'))}</div>`);
+        const allBtn = document.getElementById('settings-logout-all-btn');
+        if (allBtn) allBtn.hidden = others.length === 0;
 
         container.querySelectorAll('[data-revoke-session]').forEach((btn) => {
             btn.addEventListener('click', async () => {
-                await fetch(`/api/sessions/${btn.dataset.revokeSession}`, { method: 'DELETE', credentials: 'include' });
+                btn.disabled = true;
+                const r = await fetch(`/api/sessions/${btn.dataset.revokeSession}`, { method: 'DELETE', credentials: 'include' }).catch(() => null);
+                if (r && r.ok) showToast(t('session-signed-out-done'));
                 loadSessions();
             });
         });
@@ -4242,10 +4278,20 @@ const I18N = {
     'hub-ban-picker-empty': { tr: 'Yasaklanabilecek katılımcı yok.', en: 'No members available to ban.' },
     'unban': { tr: 'Yasağı Kaldır', en: 'Unban' },
     'label-sessions': { tr: 'Aktif Oturumlar', en: 'Active Sessions' },
-    'logout-all': { tr: 'Tüm Cihazlardan Çıkış Yap', en: 'Log Out of All Devices' },
+    'logout-all': { tr: 'Diğer tüm cihazlardan çıkış yap', en: 'Sign out of all other devices' },
     'delete-account': { tr: 'Hesabı Sil', en: 'Delete Account' },
     'unknown-device': { tr: 'Bilinmeyen Cihaz', en: 'Unknown Device' },
     'this-device': { tr: 'bu cihaz', en: 'this device' },
+    'this-device-badge': { tr: 'Bu cihaz', en: 'This device' },
+    'session-signed-in': { tr: 'giriş', en: 'signed in' },
+    'session-sign-out': { tr: 'Çıkış yap', en: 'Sign out' },
+    'session-other-devices': { tr: 'Diğer cihazlar', en: 'Other devices' },
+    'session-no-others': { tr: 'Başka bir cihazda açık oturumun yok.', en: 'You are not signed in on any other device.' },
+    'session-signed-out-done': { tr: 'O cihazdan çıkış yapıldı.', en: 'Signed out of that device.' },
+    'session-desktop-app': { tr: 'Sauran masaüstü uygulaması', en: 'Sauran desktop app' },
+    'session-mobile-app': { tr: 'Sauran uygulaması', en: 'Sauran app' },
+    'session-browser': { tr: 'tarayıcı', en: 'browser' },
+    'session-browser-generic': { tr: 'Tarayıcı', en: 'Browser' },
     'revoke': { tr: 'Kapat', en: 'Revoke' },
     'confirm-logout-all': { tr: 'Bu cihaz dışındaki tüm oturumlar kapatılacak. Emin misin?', en: 'All sessions except this device will be signed out. Are you sure?' },
     'logout-all-done': { tr: 'Diğer tüm cihazlardan çıkış yapıldı.', en: 'Signed out of all other devices.' },
@@ -4277,6 +4323,7 @@ const I18N = {
     'conn-back': { tr: 'Yeniden bağlandı', en: 'Reconnected' },
     'lc-room-join-hint': { tr: 'Katılmak için tıkla', en: 'Click to join' },
     'lc-room-join': { tr: 'Katıl', en: 'Join' },
+    'session-revoked-toast': { tr: 'Bu cihazdaki oturumun kapatıldı. Devam etmek için yeniden giriş yap.', en: 'Your session on this device was signed out. Sign in again to continue.' },
     'members-in-voice': { tr: 'Seste', en: 'In voice' },
     'members-here': { tr: 'Burada', en: 'Here' },
     'members-away': { tr: 'Uzakta', en: 'Away' },
@@ -5339,10 +5386,14 @@ function connectToChat() {
 
     // Bağlantı koparsa kullanıcıya söylenir (mesajlar ve çevrimiçi durumu sessizce donmasın). Kısa kopmalarda şerit
     // titremesin diye 1,5 sn beklenir; geri gelince kısa bir "Yeniden bağlandı" gösterilip kapanır.
+    // Bu cihazın oturumu başka bir cihazdan kapatıldı (tek oturum ya da "tüm cihazlardan çıkış"): hemen çıkış ekranına geçilir.
+    socket.on('session_revoked', () => handleSessionRevoked());
+
     socket.on('disconnect', (reason) => {
         // 'io client disconnect': bilerek kapatıldı (çıkış). 'io server disconnect': sunucu oturumu kapattı (süresi doldu, askı,
         // hesap silme); Socket.IO bu durumda yeniden bağlanmaz, "yeniden bağlanılıyor" yazısı yanıltıcı olur.
-        if (reason === 'io client disconnect' || reason === 'io server disconnect') { setConnectionBanner('reset'); return; }
+        if (reason === 'io server disconnect') { setConnectionBanner('reset'); checkSessionStillValid(); return; }
+        if (reason === 'io client disconnect') { setConnectionBanner('reset'); return; }
         setConnectionBanner('lost');
     });
     socket.on('connect', () => setConnectionBanner('ok'));
@@ -5359,6 +5410,9 @@ function connectToChat() {
                 'Socket bağlantı hatası:',
                 error.message
             );
+
+            // Uygulama kapalı/arka plandayken oturum kapatıldıysa yeniden bağlanma oturum hatası verir: çıkış ekranına geçilir.
+            if (/oturum/i.test(String(error?.message || ''))) { checkSessionStillValid(); return; }
 
 
             showAuthError(
@@ -6581,6 +6635,26 @@ async function handleAccountSuspended(data) {
 
     accountSuspendedHandled = false;
 
+}
+
+// Oturum sunucuda geçerli değilse (iptal edildi / süresi doldu) bu cihazda da hemen çıkış yapılır.
+let sessionRevokedHandled = false;
+async function handleSessionRevoked() {
+    if (sessionRevokedHandled || !currentUser) return;
+    sessionRevokedHandled = true;
+    try {
+        await logout();
+        showToast(t('session-revoked-toast'));
+    } finally {
+        sessionRevokedHandled = false;
+    }
+}
+async function checkSessionStillValid() {
+    if (!currentUser) return;
+    try {
+        const response = await fetch('/api/me', { credentials: 'include' });
+        if (response.status === 401) handleSessionRevoked();
+    } catch (_) { /* ağ hatası: oturum hakkında karar verilmez, bağlantı geri gelince yeniden denenir */ }
 }
 
 async function logout() {
