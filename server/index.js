@@ -77,6 +77,7 @@ const {
   removeFriend,
   areFriends,
   listFriends,
+  listDmConversations,
   listIncomingRequests,
   getUserPublicProfile,
   saveDmMessage,
@@ -4877,6 +4878,18 @@ app.get('/api/friends', (req, res) => {
   } catch (error) {
     console.error('Arkadaş listesi hatası:', error);
     res.status(500).json({ success: false, error: 'Arkadaşlar alınamadı.' });
+  }
+});
+
+app.get('/api/dm/conversations', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const conversations = listDmConversations(user.id).map(c => ({ ...c, online: isVisiblyOnline(c.id, c.status) }));
+    return res.json({ success: true, conversations });
+  } catch (error) {
+    console.error('Sohbet listesi hatası:', error);
+    res.status(500).json({ success: false, error: 'Sohbetler alınamadı.' });
   }
 });
 

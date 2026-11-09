@@ -6170,6 +6170,24 @@ function listFriends(userId) {
   `).all(userId, userId, userId).map((f) => { const { avatar_visibility, activity_text, activity_at, show_activity, activity_auto, ...rest } = f; rest.activity = freshActivity({ activity_text, activity_at, show_activity, activity_auto }); if (!hasFeature(f.id, 'name_effect')) rest.name_effect = 'none'; return maskAvatarFor(userId, f.id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']); });
 }
 
+// Özel sohbet listesi (telefondaki Mesajlar sekmesi): arkadaşlarla son mesajı olan sohbetler, en yeni üstte.
+// Önizleme yalnızca metin mesajında içerikten gelir; diğer türlerde kısa bir etiket gösterilir. Silinmiş satırlar atlanır.
+const DM_PREVIEW_LABEL = { dm_voice: 'Sesli mesaj', dm_image: 'Fotoğraf', dm_video: 'Video', dm_file: 'Dosya', dm_sticker: 'Çıkartma', dm_call: 'Arama' };
+function listDmConversations(userId) {
+  const last = db.prepare(`SELECT id, user_id, kind, content, created_at FROM messages WHERE room = ? AND kind != 'deleted' ORDER BY id DESC LIMIT 1`);
+  return listFriends(userId).map((f) => {
+    const m = last.get(dmRoom(userId, f.id));
+    if (!m) return null;
+    const text = m.kind === 'dm' ? String(m.content || '').replace(/\s+/g, ' ').trim() : '';
+    return {
+      ...f,
+      last: { id: m.id, kind: m.kind, mine: m.user_id === userId, at: m.created_at,
+        preview: text ? (text.length > 90 ? text.slice(0, 90) + '…' : text) : (DM_PREVIEW_LABEL[m.kind] || 'Mesaj') },
+      unread: unreadDmCount(userId, f.id)
+    };
+  }).filter(Boolean).sort((a, b) => b.last.id - a.last.id);
+}
+
 function listIncomingRequests(userId) {
   return db.prepare(`
     SELECT friendships.id, users.id AS user_id, users.username
@@ -9129,6 +9147,7 @@ module.exports = {
   areFriends,
   getFriendshipStatus,
   listFriends,
+  listDmConversations,
   listIncomingRequests,
   getUserPublicProfile,
   saveDmMessage,

@@ -9843,7 +9843,7 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
 
     } else {
 
-        body = `<span class="dm-msg-content">${gifMessageHtml(msg.content) || hubEmojiHtml(escapeHtml(msg.content), msg.emoji_map)}</span>`;
+        body = `<span class="dm-msg-content">${gifMessageHtml(msg.content) || hubEmojiHtml(inlineMarkdown(escapeHtml(msg.content)), msg.emoji_map)}</span>`;
 
     }
 
@@ -11409,6 +11409,12 @@ msgSearchInput.addEventListener('input', () => {
 msgSearchInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') { clearTimeout(msgSearch.timer); runMessageSearch(false); }
     if (event.key === 'Escape') closeMessageSearch();
+});
+document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || event.defaultPrevented || event.target === msgSearchInput) return;
+    if (getComputedStyle(msgSearchPanel).display === 'none') return;
+    const overlayOpen = [...document.querySelectorAll('.modal-overlay')].some((o) => o.style.display === 'flex' || o.style.display === 'block');
+    if (!overlayOpen) closeMessageSearch();
 });
 msgSearchResults.addEventListener('click', (event) => {
     if (event.target.closest('[data-search-more]')) { runMessageSearch(true); return; }
@@ -17776,10 +17782,20 @@ function gifMessageHtml(content) {
     return `<img class="chat-gif" src="${escapeAttr(c)}" alt="GIF" loading="lazy" decoding="async" referrerpolicy="no-referrer">`;
 }
 
+// Satır içi biçim (kaçışlanmış HTML üzerinde): `kod`, **kalın**, *eğik*, ~~üstü çizili~~. Alt çizgi biçimi yok (bağlantıları bozmasın).
+function inlineMarkdown(escaped) {
+    const codes = [];
+    let s = String(escaped).replace(/`([^`\n]+)`/g, (m, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
+    s = s.replace(/\*\*(?=\S)([^*\n]*?\S)\*\*/g, '<strong>$1</strong>')
+        .replace(/~~(?=\S)([^~\n]*?\S)~~/g, '<s>$1</s>')
+        .replace(/(^|[^*\p{L}\p{N}])\*(?=\S)([^*\n]*?\S)\*(?![*\p{L}\p{N}])/gu, '$1<em>$2</em>');
+    return s.replace(/\u0000(\d+)\u0000/g, (m, i) => `<code class="msg-code">${codes[Number(i)]}</code>`);
+}
+
 function renderMentionText(content, mentions, emojiMap) {
     const gifHtml = gifMessageHtml(content);
     if (gifHtml) return gifHtml;
-    let html = hubEmojiHtml(escapeHtml(content || ''), emojiMap);
+    let html = hubEmojiHtml(inlineMarkdown(escapeHtml(content || '')), emojiMap);
     if (!mentions) return html;
     const names = (mentions.users || []).map((u) => ({ name: u.username, me: u.id === currentUser?.id }));
     if (mentions.everyone) names.push({ name: 'everyone', me: true, everyone: true });

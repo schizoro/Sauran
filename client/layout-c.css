@@ -817,3 +817,50 @@ body.lc .subs-note { margin: 14px 0 0 !important; padding: 12px 14px; border-rad
   body.lc .lc-modal.subs-modal-box { width: 100% !important; max-height: 92vh; }
   body.lc .subs-card { padding: 16px !important; }
 }
+
+/* ═══════════════ TELEFON: MESAJLAR SAYFASI + KEŞFET'TE ALT ÇUBUK ═══════════════ */
+.lc-msgs { display: none; }
+@media (max-width: 720px) and (min-height: 501px) {
+  body.lc[data-view="discover"] .mnav { display: flex !important; }
+  body.lc.lc-msgs-open .lc-msgs {
+    display: flex; flex-direction: column; position: fixed; inset: 0 0 calc(58px + env(safe-area-inset-bottom)) 0; z-index: 115;
+    background: var(--lc-bg-main, #0b0e13); padding-top: env(safe-area-inset-top);
+  }
+  body.lc.dm-open .lc-msgs, body.lc.call-open .lc-msgs { display: none !important; }
+  .lc-msgs-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 8px; }
+  .lc-msgs-head h2 { margin: 0; font-size: 22px; font-weight: 800; color: var(--text-primary); }
+  .lc-msgs-new { width: 38px; height: 38px; border: 0; border-radius: 12px; display: grid; place-items: center; background: rgba(179, 102, 245, 0.16); color: #d3a6ff; cursor: pointer; }
+  .lc-msgs-new svg, .lc-msgs-search svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .lc-msgs-search { display: flex; align-items: center; gap: 8px; margin: 0 16px 8px; padding: 0 12px; height: 42px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(0, 0, 0, 0.28); color: var(--text-tertiary); }
+  .lc-msgs-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--text-primary); font: inherit; font-size: 15px; }
+  .lc-msgs-list { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 8px 12px; overscroll-behavior: contain; }
+  .lc-msgs-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 8px; border: 0; border-radius: 14px; background: none; color: inherit; text-align: left; cursor: pointer; font: inherit; }
+  .lc-msgs-row:active { background: rgba(255, 255, 255, 0.06); }
+  .lc-msgs-av { position: relative; flex: none; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--user-color, #5b6cff); color: #fff; font-weight: 800; font-size: 18px; }
+  .lc-msgs-av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+  .lc-msgs-st { position: absolute; right: 0; bottom: 0; width: 13px; height: 13px; border-radius: 50%; background: #6b7280; box-shadow: 0 0 0 3px var(--lc-bg-main, #0b0e13); }
+  .lc-msgs-st.on { background: #3ddc97; }
+  .lc-msgs-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .lc-msgs-top, .lc-msgs-bot { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .lc-msgs-top b { flex: 1; min-width: 0; font-size: 15px; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lc-msgs-top time { flex: none; font-size: 12px; color: var(--text-tertiary, var(--text-secondary)); }
+  .lc-msgs-prev { flex: 1; min-width: 0; font-size: 13.5px; color: var(--text-tertiary, var(--text-secondary)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lc-msgs-prev em { font-style: normal; color: var(--text-secondary); }
+  .lc-msgs-row.is-unread .lc-msgs-top b, .lc-msgs-row.is-unread .lc-msgs-prev { color: var(--text-primary); font-weight: 800; }
+  .lc-msgs-row.is-unread time { color: #d3a6ff; font-weight: 700; }
+  .lc-msgs-badge { flex: none; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; display: grid; place-items: center; background: #b366f5; color: #fff; font-style: normal; font-size: 11.5px; font-weight: 800; }
+  .lc-msgs-empty { padding: 40px 20px; text-align: center; color: var(--text-secondary); font-size: 14px; line-height: 1.5; }
+  .lc-msgs-empty small { color: var(--text-tertiary, var(--text-secondary)); font-size: 12.5px; }
+}
+
+/* ═══════════════ TELEFON: GRUPLAR ÇEKMECESİ TAM SAYFA + ANA MENÜ KISAYOLLARI + SATIR İÇİ KOD ═══════════════ */
+.msg-code { padding: 1px 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.1); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .92em; }
+@media (max-width: 720px) and (min-height: 501px) {
+  body.lc .lobby-nav { left: 0 !important; right: 0 !important; top: 0 !important; bottom: calc(58px + env(safe-area-inset-bottom)) !important; width: auto !important; border-radius: 0 !important; padding: calc(14px + env(safe-area-inset-top)) 16px 12px !important; background: var(--lc-bg-main, #0b0e13) !important; box-shadow: none !important; border: 0 !important; transform: translateX(-105%); }
+  body.lc.lobby-drawer-open .lobby-nav { transform: none; }
+  body.lc.drawer-groups .friends-groups-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  body.lc.drawer-groups .friends-groups-head > :first-child { font-size: 22px !important; font-weight: 800 !important; text-transform: none !important; letter-spacing: 0 !important; color: var(--text-primary) !important; }
+  body.lc.drawer-groups .friends-groups-add { width: 38px !important; height: 38px !important; border: 0 !important; border-radius: 12px !important; background: rgba(179, 102, 245, 0.16) !important; color: #d3a6ff !important; font-size: 20px !important; }
+  body.lc #hub-list-header { display: flex; gap: 8px !important; }
+  body.lc #hub-list-header > button { flex: 1 1 auto; padding: 8px 10px !important; font-size: 12.5px !important; white-space: nowrap; }
+}

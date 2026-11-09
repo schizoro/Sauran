@@ -27,7 +27,75 @@
     document.body.appendChild(nav);
 
     const body = document.body;
-    function closeAll() { body.classList.remove('lobby-drawer-open', 'drawer-friends', 'drawer-groups', 'drawer-friendlist'); }
+    function closeAll() { body.classList.remove('lobby-drawer-open', 'drawer-friends', 'drawer-groups', 'drawer-friendlist', 'lc-msgs-open'); }
+
+    // ── Mesajlar sayfası (Sıkı Düzen, telefon): son mesajı olan özel sohbetler, en yeni üstte ──
+    const msgs = document.createElement('section');
+    msgs.id = 'lc-msgs';
+    msgs.className = 'lc-msgs';
+    msgs.setAttribute('aria-label', 'Mesajlar');
+    msgs.innerHTML = `<header class="lc-msgs-head"><h2>Mesajlar</h2><button type="button" class="lc-msgs-new" id="lc-msgs-new" aria-label="Yeni sohbet" title="Yeni sohbet"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></header>
+        <div class="lc-msgs-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input id="lc-msgs-q" type="search" placeholder="Sohbetlerde ara" autocomplete="off" aria-label="Sohbetlerde ara"></div>
+        <div class="lc-msgs-list" id="lc-msgs-list"></div>`;
+    document.body.appendChild(msgs);
+    let convs = null;
+    const fmtTime = (at) => {
+        const d = typeof serverDate === 'function' ? serverDate(at) : new Date(at);
+        if (isNaN(d)) return '';
+        const now = new Date();
+        if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+        const y = new Date(now); y.setDate(now.getDate() - 1);
+        if (d.toDateString() === y.toDateString()) return 'Dün';
+        return d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
+    };
+    function renderMsgs() {
+        const list = $('lc-msgs-list');
+        if (!list) return;
+        if (convs === null) { list.innerHTML = '<div class="lc-msgs-empty">Yükleniyor…</div>'; return; }
+        const q = ($('lc-msgs-q').value || '').trim().toLocaleLowerCase('tr');
+        const rows = convs.filter((c) => !q || c.username.toLocaleLowerCase('tr').includes(q));
+        if (!rows.length) {
+            list.innerHTML = `<div class="lc-msgs-empty">${q ? 'Eşleşen sohbet yok.' : 'Henüz özel sohbetin yok.<br><small>Arkadaşlar sekmesinden birine mesaj göndererek başlayabilirsin.</small>'}</div>`;
+            return;
+        }
+        list.innerHTML = rows.map((c) => {
+            const color = typeof resolveUserColor === 'function' ? resolveUserColor(c.id, c.username, c.profile_color) : '#5b6cff';
+            const av = c.avatar_data ? `<img src="${escA(c.avatar_data)}" alt="">` : esc(c.username.charAt(0).toUpperCase());
+            const unread = c.unread > 0;
+            return `<button type="button" class="lc-msgs-row${unread ? ' is-unread' : ''}" data-uid="${c.id}" data-uname="${escA(c.username)}">
+                <span class="lc-msgs-av" style="--user-color:${escA(color)}">${av}<i class="lc-msgs-st${c.online ? ' on' : ''}"></i></span>
+                <span class="lc-msgs-txt"><span class="lc-msgs-top"><b>${esc(c.username)}</b><time>${esc(fmtTime(c.last.at))}</time></span>
+                <span class="lc-msgs-bot"><span class="lc-msgs-prev">${c.last.mine ? '<em>Sen:</em> ' : ''}${esc(c.last.preview)}</span>${unread ? `<i class="lc-msgs-badge">${c.unread > 99 ? '99+' : c.unread}</i>` : ''}</span></span>
+            </button>`;
+        }).join('');
+    }
+    async function loadMsgs() {
+        renderMsgs();
+        try {
+            const r = await fetch('/api/dm/conversations', { credentials: 'include' });
+            const d = await r.json();
+            convs = d && d.success ? d.conversations : [];
+        } catch (_) { if (convs === null) convs = []; }
+        renderMsgs();
+    }
+    function openMsgs() {
+        const wasOpen = body.classList.contains('lc-msgs-open');
+        closeAll();
+        if (wasOpen) return;
+        body.classList.add('lc-msgs-open');
+        loadMsgs();
+    }
+    $('lc-msgs-q').addEventListener('input', renderMsgs);
+    $('lc-msgs-new').addEventListener('click', () => { closeAll(); sync(); document.dispatchEvent(new Event('sauran:open-friends')); setTimeout(sync, 0); });
+    $('lc-msgs-list').addEventListener('click', (e) => {
+        const row = e.target.closest('[data-uid]');
+        if (!row) return;
+        closeAll(); sync();
+        if (typeof openDm === 'function') openDm(Number(row.dataset.uid), row.dataset.uname);
+    });
+    // Açıkken yeni mesaj gelirse liste tazelenir (okunmamış rozetini yansıtan nokta değişince)
+    const dmDot = $('rail-friends-dot');
+    if (dmDot) new MutationObserver(() => { if (body.classList.contains('lc-msgs-open')) loadMsgs(); }).observe(dmDot, { attributes: true });
     function toggleMode(mode) {
         const open = body.classList.contains('lobby-drawer-open') && body.classList.contains(mode);
         closeAll();
@@ -96,7 +164,11 @@
         if (k === 'groups') { $('rail-groups')?.click(); }
         else if (k === 'discover') { closeAll(); $('rail-discover')?.click(); }
         else if (k === 'home') { closeAll(); $('rail-home')?.click(); }
-        else if (k === 'dms') { $('rail-friends')?.click(); }
+        else if (k === 'dms') {
+            // Sıkı Düzen: sohbet listesi sayfası; klasik görünümde eski çekmece
+            if (body.classList.contains('lc')) { openMsgs(); setTimeout(sync, 0); return; }
+            $('rail-friends')?.click();
+        }
         else if (k === 'friends') {
             // "Sıkı Düzen" (layout-c.js): Arkadaşlar tam sayfa açılır (çekmece yerine)
             if (body.classList.contains('lc')) { closeAll(); document.dispatchEvent(new Event('sauran:open-friends')); setTimeout(sync, 0); return; }
@@ -111,10 +183,10 @@
         const drawer = body.classList.contains('lobby-drawer-open');
         const on = {
             groups: drawer && body.classList.contains('drawer-groups'),
-            dms: drawer && body.classList.contains('drawer-friends'),
-            friends: (drawer && body.classList.contains('drawer-friendlist')) || (!drawer && body.classList.contains('lc-friends-page')),
-            discover: view === 'discover' && !drawer,
-            home: !drawer && view !== 'discover' && (view === 'hubs' || view === '') && !body.classList.contains('lc-friends-page'),
+            dms: (drawer && body.classList.contains('drawer-friends')) || body.classList.contains('lc-msgs-open'),
+            friends: (drawer && body.classList.contains('drawer-friendlist')) || (!drawer && !body.classList.contains('lc-msgs-open') && body.classList.contains('lc-friends-page')),
+            discover: view === 'discover' && !drawer && !body.classList.contains('lc-msgs-open'),
+            home: !drawer && view !== 'discover' && (view === 'hubs' || view === '') && !body.classList.contains('lc-friends-page') && !body.classList.contains('lc-msgs-open'),
             profile: false
         };
         nav.querySelectorAll('.mnav-btn').forEach((b) => b.classList.toggle('on', Boolean(on[b.dataset.m])));
