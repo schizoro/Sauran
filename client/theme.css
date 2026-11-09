@@ -2003,8 +2003,13 @@ body.hubset-open { overflow: hidden; }
 
 /* Gönderiliyor / gönderilemedi */
 .msg-pending { opacity: 0.55; pointer-events: none; transition: opacity 0.2s; }
-.msg-failed { opacity: 0.8; box-shadow: inset 3px 0 0 var(--danger); border-radius: 10px; }
-.msg-failed::after { content: 'Gönderilemedi'; display: block; font-size: 11px; color: var(--danger); padding: 2px 0 4px 8px; }
+.msg-failed { opacity: 0.85; box-shadow: inset 3px 0 0 var(--danger); border-radius: 10px; flex-wrap: wrap; }
+/* Gönderilemeyen mesajın altında: Gönderilemedi · Tekrar dene · Sil (script.js showFailedSendBar) */
+.msg-fail-bar { flex-basis: 100%; display: flex; align-items: center; gap: 4px; padding: 2px 0 4px 8px; font-size: 12px; color: var(--danger); }
+.msg-fail-bar button { border: 0; background: none; padding: 2px 6px; border-radius: 6px; font: inherit; font-size: 12px; font-weight: 700; color: var(--accent); cursor: pointer; }
+.msg-fail-bar button:hover { background: var(--accent-soft); }
+.msg-fail-bar button[data-msg-discard] { color: var(--text-tertiary); }
+.msg-fail-bar span::after { content: '·'; margin-left: 6px; color: var(--text-tertiary); }
 
 .settings-connection-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .settings-connection-row .profile-field-label { margin: 0; }

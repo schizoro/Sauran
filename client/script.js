@@ -4183,6 +4183,8 @@ const I18N = {
     'typing-many': { tr: 'yazıyor…', en: 'are typing…' },
     'typing-several': { tr: 'Birkaç kişi yazıyor…', en: 'Several people are typing…' },
     'msg-send-failed': { tr: 'Gönderilemedi', en: 'Not sent' },
+    'msg-retry': { tr: 'Tekrar dene', en: 'Retry' },
+    'msg-discard': { tr: 'Sil', en: 'Delete' },
     'mention-toast': { tr: 'senden bahsetti', en: 'mentioned you' },
     'mention-everyone-hint': { tr: 'Lobideki herkese bildirim', en: 'Notify everyone in the lobby' },
     'mention-badge-title': { tr: 'Senden bahsedildi', en: 'You were mentioned' },
@@ -9315,7 +9317,7 @@ function appendDmMessage(msg, opts) {
 
     row.appendChild(wrap);
     wireMsgAvatars(row);
-    if (opts && opts.clientId) trackPendingSend(opts.clientId, row, 'dm');
+    if (opts && opts.clientId) trackPendingSend(opts.clientId, row, 'dm', msg);
 
     placeFeedItem(dmFeed, row, opts);
 
@@ -9373,9 +9375,11 @@ function optimisticMessage(content, kind, extra) {
     };
 }
 
-function trackPendingSend(clientId, el, kind) {
+function trackPendingSend(clientId, el, kind, msg) {
     el.classList.add('msg-pending');
     el.dataset.clientId = clientId;
+    // "Tekrar dene" için: aynı içerik aynı yere (lobi/DM, yanıt hedefi) yeniden gönderilir.
+    if (msg) el._sendInfo = { kind, content: msg.content, reply: msg.reply_to_message_id || null, hubId: kind === 'hub' ? currentHub?.id : null, to: kind === 'dm' ? msg.to_user_id : null };
     // Süre dolunca "gönderilemedi" görünür ama kayıt bir süre tutulur: bağlantı geri gelip mesaj geç ulaşırsa
     // sunucunun yanıtı bu balonla eşleşir (ikinci bir kopya eklenmez, "gönderilemedi" kalkar).
     const timer = setTimeout(() => markPendingFailed(clientId, { final: false }), 15000);
@@ -9390,10 +9394,45 @@ function markPendingFailed(clientId, { final = true } = {}) {
     entry.el.classList.remove('msg-pending');
     entry.el.classList.add('msg-failed');
     entry.el.title = t('msg-send-failed');
+    showFailedSendBar(entry.el);
     if (final) { pendingSends.delete(clientId); return; }
     entry.failed = true;
     entry.timer = setTimeout(() => pendingSends.delete(clientId), 5 * 60 * 1000);
 }
+
+// Gönderilemeyen mesajın altında "Gönderilemedi · Tekrar dene · Sil" (metin kaybolmaz, yeniden yazmak gerekmez).
+function showFailedSendBar(el) {
+    if (!el || el.querySelector(':scope > .msg-fail-bar')) return;
+    const bar = document.createElement('div');
+    bar.className = 'msg-fail-bar';
+    bar.setAttribute('role', 'status');
+    bar.innerHTML = `<span>${escapeHtml(t('msg-send-failed'))}</span>`
+        + (el._sendInfo ? `<button type="button" data-msg-retry>${escapeHtml(t('msg-retry'))}</button>` : '')
+        + `<button type="button" data-msg-discard>${escapeHtml(t('msg-discard'))}</button>`;
+    el.appendChild(bar);
+}
+
+document.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-msg-retry], [data-msg-discard]');
+    if (!btn) return;
+    const el = btn.closest('.msg-failed');
+    if (!el) return;
+    event.stopPropagation();
+    const info = el._sendInfo;
+    pendingSends.delete(el.dataset.clientId);
+    el.remove();
+    if (!btn.hasAttribute('data-msg-retry') || !info || !socket) return;
+    const clientId = newClientId();
+    if (info.kind === 'hub') {
+        if (!currentHub || currentHub.id !== info.hubId) return;
+        appendHubMessage(optimisticMessage(info.content, 'text', { reply_to_message_id: info.reply }), { forceScroll: true, clientId });
+        socket.emit('hub_chat_message', { hub_id: info.hubId, content: info.content, reply_to_message_id: info.reply, client_id: clientId });
+    } else {
+        if (activeDmUserId !== info.to) return;
+        appendDmMessage(optimisticMessage(info.content, 'dm', { to_user_id: info.to, reply_to_message_id: info.reply }), { forceScroll: true, clientId });
+        socket.emit('dm_message', { to_user_id: info.to, content: info.content, reply_to_message_id: info.reply, client_id: clientId });
+    }
+});
 
 // Sunucudan dönen mesaj bekleyen geçici mesajla eşleşirse onun yerine geçer (true döner) ve yeni satır eklenmez.
 function resolvePendingSend(msg) {
@@ -9404,6 +9443,7 @@ function resolvePendingSend(msg) {
     if (!entry.el.isConnected) return false; // akış bu arada yeniden çizildiyse mesaj normal yoldan eklenir
     entry.el.classList.remove('msg-pending', 'msg-failed');
     entry.el.removeAttribute('title');
+    entry.el.querySelector(':scope > .msg-fail-bar')?.remove();
     if (entry.kind === 'hub') {
         entry.el.dataset.messageId = msg.id;
         renderHubMessageIntoWrap(entry.el, msg);
@@ -17237,7 +17277,7 @@ function appendHubMessage(msg, opts) {
     wrap.dataset.userId = msg.user_id;
 
     renderHubMessageIntoWrap(wrap, msg);
-    if (opts && opts.clientId) trackPendingSend(opts.clientId, wrap, 'hub');
+    if (opts && opts.clientId) trackPendingSend(opts.clientId, wrap, 'hub', msg);
 
     placeFeedItem(hubFeed, wrap, opts);
 
