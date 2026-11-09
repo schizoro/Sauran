@@ -275,6 +275,12 @@
         dressPopItem(startMenu.querySelector('[data-action="share"]'), 'pin', 'cyan', tr('lc-start-share-sub', 'Bağlantı ya da duyuru paylaş'));
     }
 
+    // Özel mesaj başlığı: arama ve sesli arama düğmeleri emoji yerine sade simge (kimlikleri ve işleyicileri aynı).
+    const dmSearch = $('dm-search-btn');
+    if (dmSearch) dmSearch.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>';
+    const dmCall = $('dm-call-btn');
+    if (dmCall) { dmCall.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>'; dmCall.setAttribute('aria-label', dmCall.title || tr('dm-call', 'Sesli ara')); }
+
     // Lobi bilgisi penceresi shell.js tarafından açılışta üretilir: göründüğünde sınıf eklenir.
     new MutationObserver(() => { const b = document.querySelector('#hub-info-modal .modal-box'); if (b && !b.classList.contains('lc-modal')) b.classList.add('lc-modal', 'lc-modal-hub-info'); })
         .observe(document.body, { childList: true });

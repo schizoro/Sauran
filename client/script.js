@@ -9761,7 +9761,12 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
 
     }
 
-    wrap.innerHTML = `${actions}${forwardedTag}${replyQuote}<div class="dm-msg-line">${body}<span class="dm-msg-time">${time}${editedTag}</span></div>${linkPreviewHtml(msg)}${reactionsRow}`;
+    // Sıkı Düzen: lobideki gibi düz satır — üstte ad ve saat, altta mesaj (saat satır sonunda tekrar yazılmaz).
+    const lcFlat = document.body.classList.contains('lc');
+    const author = msg.sender_deleted ? t('deleted-account-label') : (isMine ? (currentUser?.username || msg.username || '') : (msg.username || ''));
+    const head = lcFlat && msg.kind !== 'deleted' ? `<div class="dm-msg-head"><b>${escapeHtml(author)}</b><span class="dm-msg-time">${time}${editedTag}</span></div>` : '';
+    const lineTime = lcFlat && msg.kind !== 'deleted' ? '' : `<span class="dm-msg-time">${time}${editedTag}</span>`;
+    wrap.innerHTML = `${actions}${head}${forwardedTag}${replyQuote}<div class="dm-msg-line">${body}${lineTime}</div>${linkPreviewHtml(msg)}${reactionsRow}`;
 
     wireVoiceCards(wrap);
     enableLongPress(wrap);

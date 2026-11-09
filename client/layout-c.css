@@ -618,3 +618,30 @@ body.lc .lc-pop > button {
 body.lc .lc-pop > button:hover, body.lc .lc-pop > button:focus-visible { background: rgba(255, 255, 255, 0.06) !important; outline: none; }
 body.lc .lc-pop > button:focus-visible { box-shadow: inset 0 0 0 2px var(--accent) !important; }
 body.lc .lc-pop .lc-mi-ico { width: 34px; height: 34px; }
+
+/* ═══════════════ ÖZEL MESAJ EKRANI (yeni görünüm) ═══════════════
+   Düz satır: herkes solda, üstte ad + saat. Sohbet teması / balon stili olan (ücretli) mesajlar balonlu kalır. */
+body.lc #dm-modal .modal-header { gap: 6px !important; }
+body.lc #dm-modal #dm-modal-title { flex: 1; min-width: 0; }
+body.lc #dm-modal .dm-call-btn, body.lc #dm-modal #dm-close-btn {
+  flex: none; margin-left: 0 !important; width: 36px !important; height: 36px !important; padding: 0 !important; border-radius: 11px !important;
+  border: 0 !important; background: rgba(255, 255, 255, 0.06) !important; color: var(--text-secondary) !important;
+  display: grid !important; place-items: center; font-size: 14px !important; box-shadow: none !important; cursor: pointer;
+}
+body.lc #dm-modal .dm-call-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+body.lc #dm-modal .dm-call-btn:hover, body.lc #dm-modal #dm-close-btn:hover { background: rgba(255, 255, 255, 0.12) !important; color: var(--text-primary) !important; }
+body.lc #dm-modal .dm-call-btn.in-call { background: rgba(255, 90, 110, 0.16) !important; color: #ff8d9b !important; }
+body.lc #dm-feed .dm-msg-row, body.lc #dm-feed .dm-msg-row.msg-mine {
+  flex-direction: row !important; justify-content: flex-start !important; align-items: flex-start !important; gap: 12px !important;
+  padding: 6px 16px !important; margin: 0 !important; border-radius: 6px; align-self: stretch !important; width: auto !important; max-width: none !important;
+}
+body.lc #dm-feed .dm-msg-row:hover { background: rgba(255, 255, 255, 0.025); }
+body.lc #dm-feed .dm-msg { align-items: flex-start !important; text-align: left !important; min-width: 0; flex: 1; max-width: none !important; }
+body.lc #dm-feed .dm-msg:not([class*="chat-theme-"]):not([class*="bubble-"]) {
+  background: none !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; border-radius: 0 !important;
+}
+body.lc #dm-feed .dm-msg[class*="chat-theme-"], body.lc #dm-feed .dm-msg[class*="bubble-"] { flex: 0 1 auto; max-width: min(560px, 100%) !important; }
+body.lc .dm-msg-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+body.lc .dm-msg-head b { font-size: 14.5px; font-weight: 800; color: var(--text-primary); }
+body.lc .dm-msg-head .dm-msg-time { font-size: 11.5px; color: var(--text-tertiary, var(--text-secondary)); margin: 0 !important; }
+body.lc #dm-feed .dm-msg-content { font-size: 15px; line-height: 1.5; color: var(--text-primary); }
