@@ -3014,7 +3014,7 @@ if ('serviceWorker' in navigator) {
         }
 
         if (event.data?.type === 'open-hub' && currentUser) {
-            openHub(event.data.hubId);
+            openHub(event.data.hubId, { channelId: Number(event.data.channelId) || null });
         }
 
         // Web Push bildirimi kullanıcıya/sohbete özgü bilgi taşımaz: dokununca tür bazlı genel ekran açılır.
@@ -3198,7 +3198,7 @@ function openFromNotificationUrl(url) {
         const userId = Number(params.get('open_dm'));
         const hubId = Number(params.get('open_hub'));
         if (userId) openDm(userId, params.get('name') || '');
-        else if (hubId) openHub(hubId);
+        else if (hubId) openHub(hubId, { channelId: Number(params.get('channel')) || null });
     } catch (_) { /* yoksay */ }
 }
 
@@ -3370,7 +3370,7 @@ function maybeNotifyIncomingHubMessage(msg) {
     showSystemNotification(currentHub.type === 'group' ? groupDisplayName(currentHub) : currentHub.name, `${msg.username}: ${dmPreviewText(msg)}`, {
         tag: `hub-${currentHub.id}`,
         renotify: true,
-        data: { url: `/?open_hub=${currentHub.id}` }
+        data: { url: `/?open_hub=${currentHub.id}${msg.channel_id ? `&channel=${msg.channel_id}` : ''}` }
     }).catch((error) => console.error('Lobi bildirimi gösterilemedi:', error));
 
 }
@@ -3420,7 +3420,7 @@ function handlePendingNotificationOpen() {
     history.replaceState(null, '', location.pathname);
 
     if (userId) openDm(userId, params.get('name') || '');
-    else openHub(hubId);
+    else openHub(hubId, { channelId: Number(params.get('channel')) || null });
 
 }
 
@@ -4277,6 +4277,18 @@ const I18N = {
     'conn-back': { tr: 'Yeniden bağlandı', en: 'Reconnected' },
     'lc-room-join-hint': { tr: 'Katılmak için tıkla', en: 'Click to join' },
     'lc-room-join': { tr: 'Katıl', en: 'Join' },
+    'channel-text-label': { tr: 'Metin kanalları', en: 'Text channels' },
+    'channel-add': { tr: 'Metin kanalı aç', en: 'Create text channel' },
+    'channel-new-title': { tr: 'Yeni metin kanalı', en: 'New text channel' },
+    'channel-name-ph': { tr: 'Kanal adı (ör. duyurular)', en: 'Channel name (e.g. announcements)' },
+    'channel-rename-title': { tr: 'Kanalın adını değiştir', en: 'Rename channel' },
+    'channel-rename-ok': { tr: 'Kaydet', en: 'Save' },
+    'channel-rename': { tr: 'Adını değiştir', en: 'Rename' },
+    'channel-delete': { tr: 'Kanalı sil', en: 'Delete channel' },
+    'channel-delete-confirm': { tr: '"{name}" kanalı silinsin mi? İçindeki {n} mesaj da kalıcı olarak silinecek. Bu işlem geri alınamaz.', en: 'Delete the "{name}" channel? Its {n} messages will be permanently deleted too. This cannot be undone.' },
+    'channel-last': { tr: 'Lobide en az bir metin kanalı kalmalı.', en: 'A lobby needs at least one text channel.' },
+    'channel-deleted-moved': { tr: 'Bulunduğun kanal silindi; ilk kanala geçtin.', en: 'The channel you were in was deleted; you moved to the first channel.' },
+    'generic-error': { tr: 'Bir şeyler ters gitti. Tekrar dene.', en: 'Something went wrong. Try again.' },
     'lc-room-here': { tr: 'Buradasın', en: "You're here" },
     'lc-room-talking': { tr: 'kişi konuşuyor', en: 'talking' },
     'lc-room-empty': { tr: 'Boş', en: 'Empty' },
@@ -5463,11 +5475,19 @@ function connectToChat() {
         'hub_message',
         (msg) => {
 
+            const inThisHub = currentHub && Number(msg.hub_id ?? currentHub.id) === currentHub.id;
+            // Aynı lobinin başka bir metin kanalına geldi: akışa eklenmez (o kanalın okunmamışını hub_unread_ping sayar).
+            if (inThisHub && msg.channel_id && currentChannelId && Number(msg.channel_id) !== currentChannelId) {
+                resolvePendingSend(msg);
+                if (currentUser && msg.user_id === currentUser.id) startSlowModeCooldown(currentHub.slow_mode_seconds);
+                else maybeNotifyIncomingHubMessage(msg);
+                return;
+            }
             if (!resolvePendingSend(msg) && !feedPaging.hub.hasNewer) appendHubMessage(msg);
-            if (currentHub && Number(msg.hub_id ?? currentHub.id) === currentHub.id && currentUser && msg.user_id === currentUser.id) startSlowModeCooldown(currentHub.slow_mode_seconds);
+            if (inThisHub && currentUser && msg.user_id === currentUser.id) startSlowModeCooldown(currentHub.slow_mode_seconds);
             typingDoneBy('hub', msg.user_id);
 
-            if (currentHub && document.visibilityState === 'visible') markReadSoon('hub', currentHub.id, msg.id);
+            if (inThisHub && document.visibilityState === 'visible') markCurrentHubRead(msg.id);
 
             if (msg.user_id !== currentUser.id) maybeNotifyIncomingHubMessage(msg);
 
@@ -5480,21 +5500,31 @@ function connectToChat() {
     socket.on('hub_unread_ping', (data) => {
         const hubId = Number(data?.hub_id);
         if (!hubId) return;
-        // Şu an bu lobiye bakıyorsa mesaj zaten akışa gelir ve okundu sayılır.
-        if (currentHub?.id === hubId && document.body.dataset.view === 'hub-detail' && document.visibilityState === 'visible') return;
+        const channelId = Number(data?.channel_id) || null;
+        // Şu an bu lobinin bu kanalına bakıyorsa mesaj zaten akışa gelir ve okundu sayılır.
+        const viewingHub = currentHub?.id === hubId && document.body.dataset.view === 'hub-detail' && document.visibilityState === 'visible';
+        if (viewingHub && (!channelId || channelId === currentChannelId)) return;
         const info = unreadHubCounts.get(hubId) || { count: 0, muted: false };
-        unreadHubCounts.set(hubId, { ...info, count: Math.min(info.count + 1, 100) });
+        const channels = { ...(info.channels || {}) };
+        if (channelId) { const c = channels[channelId] || { count: 0, mentions: 0 }; channels[channelId] = { ...c, count: Math.min((c.count || 0) + 1, 100) }; }
+        unreadHubCounts.set(hubId, { ...info, count: Math.min(info.count + 1, 100), channels });
         renderHubUnreadBadges();
+        if (currentHub?.id === hubId) announceChannels();
     });
 
     // Biri senden (ya da @everyone ile) bahsetti. Doğrudan bahsetme lobi sessizde olsa da bildirilir; @everyone sunucuda zaten süzülür.
     socket.on('hub_mention', (data) => {
         const hubId = Number(data?.hub_id);
-        const viewing = currentHub?.id === hubId && document.body.dataset.view === 'hub-detail' && document.visibilityState === 'visible';
+        const mentionChannel = Number(data?.channel_id) || null;
+        const viewing = currentHub?.id === hubId && document.body.dataset.view === 'hub-detail' && document.visibilityState === 'visible'
+            && (!mentionChannel || mentionChannel === currentChannelId);
         if (viewing) return;
         const info = unreadHubCounts.get(hubId) || { count: 1, muted: false };
-        unreadHubCounts.set(hubId, { ...info, mentions: (info.mentions || 0) + 1 });
+        const channels = { ...(info.channels || {}) };
+        if (mentionChannel) { const c = channels[mentionChannel] || { count: 1, mentions: 0 }; channels[mentionChannel] = { ...c, mentions: (c.mentions || 0) + 1 }; }
+        unreadHubCounts.set(hubId, { ...info, mentions: (info.mentions || 0) + 1, channels });
         renderHubUnreadBadges();
+        if (currentHub?.id === hubId) announceChannels();
         const label = data.everyone
             ? `📣 ${data.from_username} @everyone · ${data.hub_name}`
             : `@ ${data.from_username} ${t('mention-toast')} · ${data.hub_name}`;
@@ -5502,7 +5532,7 @@ function connectToChat() {
         playNotifSound();
         if (notifDesktopEnabled && (getBrowserNotifState() === 'granted' || getNativeNotify()) && shouldShowSystemNotification()) {
             showSystemNotification(data.hub_name, `${data.from_username}: ${data.preview || ''}`, {
-                tag: `mention-${hubId}`, renotify: true, data: { url: `/?open_hub=${hubId}` }
+                tag: `mention-${hubId}`, renotify: true, data: { url: `/?open_hub=${hubId}${mentionChannel ? `&channel=${mentionChannel}` : ''}` }
             }).catch(() => {});
         }
     });
@@ -5517,6 +5547,8 @@ function connectToChat() {
         } else if (data?.type === 'hub') {
             unreadHubCounts.delete(id);
             renderHubUnreadBadges();
+        } else if (data?.type === 'channel' && data.hub_id) {
+            dropChannelUnread(Number(data.hub_id), id);
         }
     });
 
@@ -5785,8 +5817,10 @@ function connectToChat() {
         loadHubList();
     });
 
+    socket.on('hub_channels_changed', applyChannelsChanged);
+
     socket.on('hub_chat_cleared', (data) => {
-        if (currentHub && data.hub_id === currentHub.id) {
+        if (currentHub && data.hub_id === currentHub.id && (!data.channel_id || data.channel_id === currentChannelId)) {
             loadHubMessages(currentHub.id);
             showToast(t('hub-chat-cleared'));
         }
@@ -6590,6 +6624,7 @@ async function logout() {
     setConnectionBanner('reset');
 
     currentHub = null;
+    currentChannelId = null;
 
     switchToView('hubs');
 
@@ -6782,8 +6817,20 @@ async function refreshUnreadCounts() {
 
         unreadHubCounts.clear();
         Object.entries(data.hubs || {}).forEach(([id, info]) => {
-            if (Number(id) !== currentHub?.id || document.visibilityState !== 'visible') unreadHubCounts.set(Number(id), info);
+            const hubId = Number(id);
+            if (hubId === currentHub?.id && document.visibilityState === 'visible') {
+                // Açık lobide yalnızca açık kanal okunmuş sayılır; diğer kanalların okunmamışı kalır.
+                if (!info.channels || !currentChannelId) return;
+                const channels = { ...info.channels };
+                delete channels[currentChannelId];
+                const list = Object.values(channels);
+                if (!list.length) return;
+                unreadHubCounts.set(hubId, { ...info, channels, count: list.reduce((n, c) => n + (c.count || 0), 0), mentions: list.reduce((n, c) => n + (c.mentions || 0), 0) });
+                return;
+            }
+            unreadHubCounts.set(hubId, info);
         });
+        if (currentHub) announceChannels();
 
         updateFriendsToggleBadge();
         refreshFriendsSidebar();
@@ -6846,8 +6893,7 @@ function markOpenChatsRead() {
         markReadSoon('dm', activeDmUserId, latestFeedMessageId(dmFeed));
     }
     if (currentHub && document.body.dataset.view === 'hub-detail') {
-        unreadHubCounts.delete(currentHub.id);
-        markReadSoon('hub', currentHub.id, latestFeedMessageId(hubFeed));
+        markCurrentHubRead(latestFeedMessageId(hubFeed));
     }
 }
 
@@ -9449,7 +9495,7 @@ function trackPendingSend(clientId, el, kind, msg) {
     el.classList.add('msg-pending');
     el.dataset.clientId = clientId;
     // "Tekrar dene" için: aynı içerik aynı yere (lobi/DM, yanıt hedefi) yeniden gönderilir.
-    if (msg) el._sendInfo = { kind, content: msg.content, reply: msg.reply_to_message_id || null, hubId: kind === 'hub' ? currentHub?.id : null, to: kind === 'dm' ? msg.to_user_id : null };
+    if (msg) el._sendInfo = { kind, content: msg.content, reply: msg.reply_to_message_id || null, hubId: kind === 'hub' ? currentHub?.id : null, channelId: kind === 'hub' ? currentChannelId : null, to: kind === 'dm' ? msg.to_user_id : null };
     // Süre dolunca "gönderilemedi" görünür ama kayıt bir süre tutulur: bağlantı geri gelip mesaj geç ulaşırsa
     // sunucunun yanıtı bu balonla eşleşir (ikinci bir kopya eklenmez, "gönderilemedi" kalkar).
     const timer = setTimeout(() => markPendingFailed(clientId, { final: false }), 15000);
@@ -9498,9 +9544,9 @@ document.addEventListener('click', (event) => {
     if (!btn.hasAttribute('data-msg-retry') || !info || !socket) return;
     const clientId = newClientId();
     if (info.kind === 'hub') {
-        if (!currentHub || currentHub.id !== info.hubId) return;
+        if (!currentHub || currentHub.id !== info.hubId || (info.channelId && info.channelId !== currentChannelId)) return;
         appendHubMessage(optimisticMessage(info.content, 'text', { reply_to_message_id: info.reply }), { forceScroll: true, clientId });
-        socket.emit('hub_chat_message', { hub_id: info.hubId, content: info.content, reply_to_message_id: info.reply, client_id: clientId });
+        socket.emit('hub_chat_message', { hub_id: info.hubId, channel_id: info.channelId, content: info.content, reply_to_message_id: info.reply, client_id: clientId });
     } else {
         if (activeDmUserId !== info.to) return;
         appendDmMessage(optimisticMessage(info.content, 'dm', { to_user_id: info.to, reply_to_message_id: info.reply }), { forceScroll: true, clientId });
@@ -9577,7 +9623,7 @@ async function loadOlderMessages(kind) {
     const feed = kind === 'hub' ? hubFeed : dmFeed;
     const key = paging.key;
     const url = kind === 'hub'
-        ? `/api/hubs/${key}/messages?before=${paging.oldestId}`
+        ? `/api/hubs/${key}/messages?before=${paging.oldestId}${channelParam('&')}`
         : `/api/dm/${key}/messages?before=${paging.oldestId}`;
 
     paging.loading = true;
@@ -10430,7 +10476,7 @@ window.addEventListener('offline', () => { if (socket && currentUser) setConnect
 const composerDrafts = new Map(); // 'dm:<kullanıcı>' | 'hub:<lobi>' -> metin
 function draftKey(kind) {
     if (kind === 'dm') return activeDmUserId ? `dm:${activeDmUserId}` : null;
-    return currentHub ? `hub:${currentHub.id}` : null;
+    return currentHub ? `hub:${currentHub.id}${currentChannelId ? ':' + currentChannelId : ''}` : null;
 }
 function stashDraft(kind) {
     const key = draftKey(kind);
@@ -11127,6 +11173,7 @@ function handleTypingSignal(data) {
     const scope = data?.scope === 'dm' ? 'dm' : data?.scope === 'hub' ? 'hub' : null;
     if (!scope || data.user_id === currentUser?.id) return;
     if (Number(data.id) !== currentTypingKey(scope)) return; // yalnızca açık sohbet için gösterilir
+    if (scope === 'hub' && data.channel_id && currentChannelId && Number(data.channel_id) !== currentChannelId) return; // başka kanalda yazıyor
     const map = typingState[scope];
     const prev = map.get(data.user_id);
     if (prev) clearTimeout(prev.timer);
@@ -11153,19 +11200,19 @@ function emitTyping(scope, input) {
     if (!socket || !id) return;
     const sent = typingSent[scope];
     if (!input.value.trim()) {
-        if (sent.key === id && sent.at) { socket.emit('typing_stop', { scope, id }); sent.at = 0; }
+        if (sent.key === id && sent.at) { socket.emit('typing_stop', { scope, id, channel_id: scope === 'hub' ? currentChannelId : null }); sent.at = 0; }
         return;
     }
     const now = Date.now();
     if (sent.key === id && now - sent.at < TYPING_SEND_MS) return;
     sent.key = id;
     sent.at = now;
-    socket.emit('typing', { scope, id });
+    socket.emit('typing', { scope, id, channel_id: scope === 'hub' ? currentChannelId : null });
 }
 
 function typingSendStop(scope) {
     const id = currentTypingKey(scope);
-    if (socket && id && typingSent[scope].at) socket.emit('typing_stop', { scope, id });
+    if (socket && id && typingSent[scope].at) socket.emit('typing_stop', { scope, id, channel_id: scope === 'hub' ? currentChannelId : null });
     typingSent[scope].at = 0;
 }
 
@@ -11249,10 +11296,10 @@ function renderMessageSearchResults() {
         const name = r.username || t('deleted-account-label');
         const avatar = r.avatar_data ? `<img src="${escapeAttr(r.avatar_data)}" alt="">` : escapeHtml(name.charAt(0).toUpperCase());
         return `
-            <button type="button" class="msg-search-item" role="listitem" data-jump="${Number(r.id)}">
+            <button type="button" class="msg-search-item" role="listitem" data-jump="${Number(r.id)}" data-channel="${Number(r.channel_id) || ''}">
                 <span class="msg-search-avatar" style="--user-color:${getUserColor(name)};">${avatar}</span>
                 <span class="msg-search-body">
-                    <span class="msg-search-meta"><strong>${escapeHtml(name)}</strong> · ${escapeHtml(date)} ${escapeHtml(time)}</span>
+                    <span class="msg-search-meta"><strong>${escapeHtml(name)}</strong>${msgSearch.kind === 'hub' && hubChannels().length > 1 && r.channel_id ? ` · #${escapeHtml((hubChannels().find((c) => c.id === Number(r.channel_id)) || {}).name || '')}` : ''} · ${escapeHtml(date)} ${escapeHtml(time)}</span>
                     <span class="msg-search-text">${highlightSearchWords(r.content, msgSearch.words)}</span>
                 </span>
             </button>
@@ -11273,6 +11320,12 @@ msgSearchResults.addEventListener('click', (event) => {
     const item = event.target.closest('[data-jump]');
     if (!item) return;
     if (window.innerWidth <= 768) closeMessageSearch();
+    const targetChannel = Number(item.dataset.channel) || null;
+    if (msgSearch.kind === 'hub' && targetChannel && currentChannelId && targetChannel !== currentChannelId) {
+        const messageId = Number(item.dataset.jump);
+        switchHubChannel(targetChannel, { load: false }).then(() => { hubFeed.innerHTML = ''; jumpToMessage('hub', messageId); });
+        return;
+    }
     jumpToMessage(msgSearch.kind, Number(item.dataset.jump));
 });
 document.getElementById('msg-search-close').addEventListener('click', closeMessageSearch);
@@ -11295,11 +11348,13 @@ async function jumpToMessage(kind, messageId) {
 
     const key = kind === 'hub' ? currentHub?.id : activeDmUserId;
     if (!key) return;
-    const url = kind === 'hub' ? `/api/hubs/${key}/messages?around=${messageId}` : `/api/dm/${key}/messages?around=${messageId}`;
+    const url = kind === 'hub' ? `/api/hubs/${key}/messages?around=${messageId}${channelParam('&')}` : `/api/dm/${key}/messages?around=${messageId}`;
+    const channelAtStart = currentChannelId;
     try {
         const response = await fetch(url, { credentials: 'include' });
         const data = await response.json();
         if (!data.success || (kind === 'hub' ? currentHub?.id : activeDmUserId) !== key) return;
+        if (kind === 'hub' && currentChannelId !== channelAtStart) return;
         feed.innerHTML = '';
         feed._stickBottom = false;
         const append = kind === 'hub' ? appendHubMessage : appendDmMessage;
@@ -11362,7 +11417,7 @@ async function loadNewerMessages(kind) {
     const key = paging.key;
     paging.loadingNewer = true;
     try {
-        const url = kind === 'hub' ? `/api/hubs/${key}/messages?after=${paging.newestId}` : `/api/dm/${key}/messages?after=${paging.newestId}`;
+        const url = kind === 'hub' ? `/api/hubs/${key}/messages?after=${paging.newestId}${channelParam('&')}` : `/api/dm/${key}/messages?after=${paging.newestId}`;
         const data = await (await fetch(url, { credentials: 'include' })).json();
         if (feedPaging[kind] !== paging || !data.success) return;
         const append = kind === 'hub' ? appendHubMessage : appendDmMessage;
@@ -11444,12 +11499,15 @@ const touchComposer = window.matchMedia('(hover: none) and (pointer: coarse)');
 const hubVoiceBtn = document.getElementById('hub-voice-btn');
 wireAttachMenu('hub', async (file) => {
 
+    if (!currentHub) return;
+    const hubAtPick = currentHub.id;
+    const channelAtPick = currentChannelId; // sıkıştırma sürerken kanal değişse de dosya seçildiği kanala gider
     const fileData = await handleAttachedFile(file);
-    if (!fileData || !currentHub) return;
+    if (!fileData) return;
 
     try {
 
-        const response = await fetch(`/api/hubs/${currentHub.id}/file`, {
+        const response = await fetch(`/api/hubs/${hubAtPick}/file${channelAtPick ? `?channel_id=${channelAtPick}` : ''}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
@@ -11471,7 +11529,7 @@ wireStickerPicker('hub', async (stickerId) => {
 
     try {
 
-        const response = await fetch(`/api/hubs/${currentHub.id}/sticker`, {
+        const response = await fetch(`/api/hubs/${currentHub.id}/sticker${channelParam()}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
@@ -13131,7 +13189,7 @@ document.getElementById('hub-clear-chat-btn').addEventListener('click', async ()
 
     try {
 
-        const response = await fetch(`/api/hubs/${currentHub.id}/messages`, { method: 'DELETE', credentials: 'include' });
+        const response = await fetch(`/api/hubs/${currentHub.id}/messages${channelParam()}`, { method: 'DELETE', credentials: 'include' });
         const data = await response.json();
 
         if (!data.success) {
@@ -13167,6 +13225,9 @@ const MODLOG_ACTIONS = {
     voice_room_create: ['➕', 'Sesli oda açıldı', 'Voice room created'],
     voice_room_delete: ['🗑️', 'Sesli oda silindi', 'Voice room deleted'],
     chat_clear: ['🧹', 'Sohbet temizlendi', 'Chat cleared'],
+    channel_create: ['➕', 'Metin kanalı açıldı', 'Text channel created'],
+    channel_rename: ['✏️', 'Metin kanalının adı değişti', 'Text channel renamed'],
+    channel_delete: ['🗑️', 'Metin kanalı silindi', 'Text channel deleted'],
     slow_mode: ['🐢', 'Yavaş mod değişti', 'Slow mode changed'],
     word_filter: ['🚫', 'Kelime filtresi güncellendi', 'Word filter updated'],
     hub_update: ['⚙️', 'Lobi ayarları değişti', 'Lobby settings changed'],
@@ -14177,6 +14238,148 @@ const shareSubmitBtn = document.getElementById('share-submit-btn');
 // =====================================================
 
 let currentHub = null;
+
+// ── Lobi metin kanalları ─────────────────────────────────────────────
+// Her lobide en az bir kanal ("chat") vardır; gruplarda kanal yoktur (currentChannelId null, hiçbir süzgeç uygulanmaz).
+let currentChannelId = null;
+const CHANNEL_PREF_KEY = 'sauran.channel.';
+function hubChannels() { return currentHub && Array.isArray(currentHub.channels) ? currentHub.channels : []; }
+function currentChannel() { return hubChannels().find((c) => c.id === currentChannelId) || null; }
+function channelParam(prefix = '?') { return currentChannelId ? `${prefix}channel_id=${currentChannelId}` : ''; }
+function canManageChannels() {
+    return Boolean(currentHub && currentHub.type !== 'group' && (currentHub.is_owner || currentHub.my_permission_tier === 'owner' || currentHub.my_permission_tier === 'moderator'));
+}
+function pickChannelFor(hub, wanted) {
+    const list = hub && Array.isArray(hub.channels) ? hub.channels : [];
+    if (!list.length) return null;
+    let id = Number(wanted) || null;
+    if (!id) { try { id = Number(localStorage.getItem(CHANNEL_PREF_KEY + hub.id)) || null; } catch (_) { id = null; } }
+    return (list.find((c) => c.id === id) || list[0]).id;
+}
+function announceChannels() {
+    renderClassicChannelPicker();
+    document.dispatchEvent(new CustomEvent('sauran:channels'));
+}
+// Klasik yerleşim (sauran.layout=classic) kanal listesini çizmez: lobi başlığına sade bir kanal seçici konur.
+function renderClassicChannelPicker() {
+    const header = document.querySelector('#hub-detail-view .hub-detail-header');
+    if (!header) return;
+    let select = document.getElementById('hub-channel-select');
+    const list = hubChannels();
+    if (document.body.classList.contains('lc') || list.length < 2) { if (select) select.hidden = true; return; }
+    if (!select) {
+        select = document.createElement('select');
+        select.id = 'hub-channel-select';
+        select.className = 'hub-channel-select';
+        select.setAttribute('aria-label', t('channel-text-label'));
+        select.addEventListener('change', () => switchHubChannel(Number(select.value)));
+        header.appendChild(select);
+    }
+    select.hidden = false;
+    select.textContent = '';
+    list.forEach((c) => {
+        const unread = c.id !== currentChannelId ? channelUnread(c.id) : null;
+        const opt = document.createElement('option');
+        opt.value = String(c.id);
+        opt.textContent = `# ${c.name}${unread && unread.count ? ` (${unread.count > 99 ? '99+' : unread.count})` : ''}`;
+        select.appendChild(opt);
+    });
+    select.value = String(currentChannelId);
+}
+function channelUnread(channelId) {
+    const info = currentHub && unreadHubCounts.get(currentHub.id);
+    return (info && info.channels && info.channels[channelId]) || null;
+}
+// Bir kanalın okunmamışını yerel sayaçtan düşer (lobinin toplamı da güncellenir).
+function dropChannelUnread(hubId, channelId) {
+    const info = unreadHubCounts.get(hubId);
+    if (info) {
+        if (info.channels && channelId) {
+            const channels = { ...info.channels };
+            delete channels[channelId];
+            const list = Object.values(channels);
+            if (!list.length) unreadHubCounts.delete(hubId);
+            else unreadHubCounts.set(hubId, { ...info, channels, count: list.reduce((n, c) => n + (c.count || 0), 0), mentions: list.reduce((n, c) => n + (c.mentions || 0), 0) });
+        } else {
+            unreadHubCounts.delete(hubId);
+        }
+    }
+    renderHubUnreadBadges();
+    if (currentHub?.id === hubId) announceChannels();
+}
+// Açık lobinin açık kanalını okundu say (kanalsız gruplarda lobinin kendisi).
+function markCurrentHubRead(messageId) {
+    if (!currentHub) return;
+    dropChannelUnread(currentHub.id, currentChannelId);
+    if (!messageId) return;
+    if (currentChannelId) markReadSoon('channel', currentChannelId, messageId);
+    else markReadSoon('hub', currentHub.id, messageId);
+}
+async function switchHubChannel(channelId, { load = true } = {}) {
+    if (!currentHub || !hubChannels().some((c) => c.id === channelId)) return;
+    if (channelId === currentChannelId) { if (load) document.dispatchEvent(new CustomEvent('sauran:channel-picked')); return; }
+    typingSendStop('hub');
+    stashDraft('hub');
+    cancelMessageReply('hub');
+    clearTyping('hub');
+    currentChannelId = channelId;
+    // Yeni kanalın mesajları gelene kadar eski kanalın akışı görünmesin (yanlış okundu işareti ve kaybolan gönderim olmasın).
+    hubFeed.innerHTML = '';
+    feedPaging.hub = { key: null, oldestId: null, hasMore: false, loading: false };
+    try { localStorage.setItem(CHANNEL_PREF_KEY + currentHub.id, String(channelId)); } catch (_) { /* yoksay */ }
+    restoreDraft('hub');
+    dropChannelUnread(currentHub.id, channelId);
+    announceChannels();
+    document.dispatchEvent(new CustomEvent('sauran:channel-picked'));
+    if (load) await loadHubMessages(currentHub.id);
+}
+async function channelRequest(method, path, body) {
+    const response = await fetch(`/api/hubs/${currentHub.id}/channels${path}`, {
+        method, credentials: 'include', headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined
+    });
+    const data = await response.json().catch(() => ({ success: false }));
+    if (!data.success) showToast(data.error || t('generic-error'));
+    return data;
+}
+async function createChannelPrompt() {
+    if (!canManageChannels()) return;
+    const name = await askText({ title: t('channel-new-title'), placeholder: t('channel-name-ph'), okLabel: t('ask-create'), maxLength: 32 });
+    if (!name || !name.trim() || !currentHub) return;
+    const data = await channelRequest('POST', '', { name: name.trim() });
+    if (data.success && data.channel) {
+        if (!hubChannels().some((c) => c.id === data.channel.id)) currentHub.channels = [...hubChannels(), data.channel];
+        switchHubChannel(data.channel.id);
+    }
+}
+async function renameChannelPrompt(channelId) {
+    const ch = hubChannels().find((c) => c.id === channelId);
+    if (!ch || !canManageChannels()) return;
+    const name = await askText({ title: t('channel-rename-title'), value: ch.name, okLabel: t('channel-rename-ok'), maxLength: 32 });
+    if (!name || !name.trim() || name.trim() === ch.name) return;
+    const data = await channelRequest('PATCH', `/${channelId}`, { name: name.trim() });
+    if (data.success && data.channel) { ch.name = data.channel.name; announceChannels(); }
+}
+async function deleteChannelConfirm(channelId) {
+    const ch = hubChannels().find((c) => c.id === channelId);
+    if (!ch || !canManageChannels()) return;
+    if (hubChannels().length <= 1) { showToast(t('channel-last')); return; }
+    let count = 0;
+    try { count = (await (await fetch(`/api/hubs/${currentHub.id}/channels/${channelId}/stats`, { credentials: 'include' })).json()).messages || 0; } catch (_) { count = 0; }
+    if (!confirm(t('channel-delete-confirm').replace('{name}', ch.name).replace('{n}', String(count)))) return;
+    await channelRequest('DELETE', `/${channelId}`);
+}
+// Sunucu kanal listesini değiştirdi (açma / ad / silme). Açık kanal silindiyse ilk kanala geçilir.
+function applyChannelsChanged(data) {
+    if (!currentHub || Number(data?.hub_id) !== currentHub.id || !Array.isArray(data.channels)) return;
+    currentHub.channels = data.channels;
+    if (currentChannelId && !data.channels.some((c) => c.id === currentChannelId)) {
+        const fallback = Number(data.fallback) || data.channels[0]?.id || null;
+        currentChannelId = null;
+        if (fallback) { switchHubChannel(fallback); showToast(t('channel-deleted-moved')); }
+        return;
+    }
+    announceChannels();
+}
 let hubCreateImageData = null;
 
 
@@ -15056,13 +15259,11 @@ function groupSystemText(msg) {
     }
 }
 
-async function openHub(hubId) {
+async function openHub(hubId, opts = {}) {
 
     nativeNotifyCancel(`hub-${hubId}`);
     clearTyping('hub');
     if (msgSearchPanel?.dataset.kind === 'hub') closeMessageSearch();
-    unreadHubCounts.delete(hubId);
-    renderHubUnreadBadges();
 
     try {
 
@@ -15072,13 +15273,18 @@ async function openHub(hubId) {
         if (!data.success) return;
 
         const hubChanged = !currentHub || currentHub.id !== data.hub.id;
-        if (hubChanged) { stashDraft('hub'); cancelMessageReply('hub'); }
+        const nextChannel = pickChannelFor(data.hub, opts.channelId || (hubChanged ? null : currentChannelId));
+        const channelChanged = nextChannel !== currentChannelId;
+        if (hubChanged || channelChanged) { stashDraft('hub'); cancelMessageReply('hub'); }
         currentHub = data.hub;
-        if (hubChanged) restoreDraft('hub');
+        currentChannelId = nextChannel;
+        if (hubChanged || channelChanged) restoreDraft('hub');
+        dropChannelUnread(hubId, currentChannelId);
         resetSlowModeForHub();
 
         switchToView('hub-detail');
         renderHubDetail();
+        announceChannels();
         loadLobbySupporters(currentHub.id);
 
         if (socket) {
@@ -17161,7 +17367,7 @@ hubChatForm.addEventListener(
         const clientId = newClientId();
         appendHubMessage(optimisticMessage(content, 'text', { reply_to_message_id: hubReplyTarget }), { forceScroll: true, clientId });
         typingSendStop('hub');
-        socket.emit('hub_chat_message', { hub_id: currentHub.id, content, reply_to_message_id: hubReplyTarget, client_id: clientId });
+        socket.emit('hub_chat_message', { hub_id: currentHub.id, channel_id: currentChannelId, content, reply_to_message_id: hubReplyTarget, client_id: clientId });
         startSlowModeCooldown(currentHub.slow_mode_seconds);
         if (pendingSends.get(clientId)) pendingSends.get(clientId).content = content;
 
@@ -17342,7 +17548,7 @@ setupVoiceRecorder(hubVoiceBtn, (audioData, duration) => {
 
     if (!currentHub) return;
 
-    fetch(`/api/hubs/${currentHub.id}/voice`, {
+    fetch(`/api/hubs/${currentHub.id}/voice${channelParam()}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -17365,10 +17571,13 @@ async function loadHubMessages(hubId) {
 
     try {
 
-        const response = await fetch(`/api/hubs/${hubId}/messages`, { credentials: 'include' });
+        const channelAtStart = currentChannelId;
+        const response = await fetch(`/api/hubs/${hubId}/messages${channelParam()}`, { credentials: 'include' });
         const data = await response.json();
 
         if (!data.success) return;
+        // Bu arada başka lobiye/kanala geçildiyse eski yanıt akışı ezmesin.
+        if (currentHub?.id !== hubId || currentChannelId !== channelAtStart) return;
 
         hubFeed.innerHTML = '';
         feedPaging.hub = { key: null, oldestId: null, hasMore: false, loading: false };
@@ -17380,7 +17589,7 @@ async function loadHubMessages(hubId) {
 
         data.messages.forEach((m) => appendHubMessage(m));
         resetFeedPaging('hub', hubId, data.messages, data.has_more);
-        if (currentHub?.id === hubId) markReadSoon('hub', hubId, data.messages[data.messages.length - 1].id);
+        if (currentHub?.id === hubId) markCurrentHubRead(data.messages[data.messages.length - 1].id);
 
     } catch (error) {
 
@@ -17666,7 +17875,7 @@ pollSubmitBtn.addEventListener(
 
         try {
 
-            const response = await fetch(`/api/hubs/${currentHub.id}/poll`, {
+            const response = await fetch(`/api/hubs/${currentHub.id}/poll${channelParam()}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -17732,7 +17941,7 @@ shareSubmitBtn.addEventListener(
 
         try {
 
-            const response = await fetch(`/api/hubs/${currentHub.id}/share`, {
+            const response = await fetch(`/api/hubs/${currentHub.id}/share${channelParam()}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',

@@ -190,6 +190,14 @@ const {
   createFeedback,
   listFeedback,
   voteFeedback,
+  listHubChannels,
+  resolveHubChannel,
+  inHubChannel,
+  createHubChannel,
+  renameHubChannel,
+  deleteHubChannel,
+  countChannelMessages,
+  canManageHubChannels,
   getSiteFeedbackLinkUser,
   getSiteReview,
   saveSiteReview,
@@ -3420,9 +3428,14 @@ app.get('/api/hubs/:id/messages', (req, res) => {
   try {
     // ?before=<id>: daha eski sayfa · ?after=<id>: daha yeni sayfa · ?around=<id>: aramadan gidilen mesajın çevresi.
     const num = (v) => (/^[0-9]{1,15}$/.test(String(v || '')) ? Number(v) : null);
-    if (num(req.query.around)) return res.json({ success: true, ...getHubMessagesAround(hubId, user.id, num(req.query.around)) });
-    if (num(req.query.after)) return res.json({ success: true, ...getHubMessagesAfter(hubId, user.id, num(req.query.after)) });
-    res.json({ success: true, ...getHubMessagesPage(hubId, user.id, { before: num(req.query.before), limit: req.query.limit }) });
+    const channelId = resolveHubChannel(hubId, req.query.channel_id);
+    if (channelId === false) return res.status(404).json({ success: false, error: 'Kanal bulunamadı.' });
+    const page = inHubChannel(channelId, () => {
+      if (num(req.query.around)) return getHubMessagesAround(hubId, user.id, num(req.query.around));
+      if (num(req.query.after)) return getHubMessagesAfter(hubId, user.id, num(req.query.after));
+      return getHubMessagesPage(hubId, user.id, { before: num(req.query.before), limit: req.query.limit });
+    });
+    res.json({ success: true, channel_id: channelId, ...page });
   } catch (error) {
     console.error('Lobi mesaj hatası:', error);
     res.status(500).json({ success: false, error: 'Mesajlar alınamadı.' });
@@ -3440,9 +3453,11 @@ app.post('/api/hubs/:id/poll', contentWriteLimiter, (req, res) => {
   }
 
   if (slowModeBlocked(res, hubId, user.id)) return;
+  const channelId = resolveHubChannel(hubId, req.body?.channel_id ?? req.query.channel_id);
+  if (channelId === false) return res.status(404).json({ success: false, error: 'Kanal bulunamadı.' });
 
   try {
-    const result = createHubPoll(hubId, user.id, user.username, req.body?.question, req.body?.options);
+    const result = inHubChannel(channelId, () => createHubPoll(hubId, user.id, user.username, req.body?.question, req.body?.options));
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -3497,9 +3512,11 @@ app.post('/api/hubs/:id/share', fileUploadLimiter, (req, res) => {
   }
 
   if (slowModeBlocked(res, hubId, user.id)) return;
+  const channelId = resolveHubChannel(hubId, req.body?.channel_id ?? req.query.channel_id);
+  if (channelId === false) return res.status(404).json({ success: false, error: 'Kanal bulunamadı.' });
 
   try {
-    const result = createHubShare(hubId, user.id, user.username, req.body?.content, req.body?.url);
+    const result = inHubChannel(channelId, () => createHubShare(hubId, user.id, user.username, req.body?.content, req.body?.url));
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -3527,9 +3544,11 @@ app.post('/api/hubs/:id/voice', fileUploadLimiter, (req, res) => {
   }
 
   if (slowModeBlocked(res, hubId, user.id)) return;
+  const channelId = resolveHubChannel(hubId, req.body?.channel_id ?? req.query.channel_id);
+  if (channelId === false) return res.status(404).json({ success: false, error: 'Kanal bulunamadı.' });
 
   try {
-    const result = createHubVoiceMessage(hubId, user.id, user.username, req.body?.audio_data, req.body?.duration);
+    const result = inHubChannel(channelId, () => createHubVoiceMessage(hubId, user.id, user.username, req.body?.audio_data, req.body?.duration));
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -3557,9 +3576,11 @@ app.post('/api/hubs/:id/file', fileUploadLimiter, (req, res) => {
   }
 
   if (slowModeBlocked(res, hubId, user.id)) return;
+  const channelId = resolveHubChannel(hubId, req.body?.channel_id ?? req.query.channel_id);
+  if (channelId === false) return res.status(404).json({ success: false, error: 'Kanal bulunamadı.' });
 
   try {
-    const result = createHubFileMessage(hubId, user.id, user.username, req.body?.file);
+    const result = inHubChannel(channelId, () => createHubFileMessage(hubId, user.id, user.username, req.body?.file));
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -3587,9 +3608,11 @@ app.post('/api/hubs/:id/sticker', contentWriteLimiter, (req, res) => {
   }
 
   if (slowModeBlocked(res, hubId, user.id)) return;
+  const channelId = resolveHubChannel(hubId, req.body?.channel_id ?? req.query.channel_id);
+  if (channelId === false) return res.status(404).json({ success: false, error: 'Kanal bulunamadı.' });
 
   try {
-    const result = createHubSticker(hubId, user.id, user.username, req.body?.sticker_id);
+    const result = inHubChannel(channelId, () => createHubSticker(hubId, user.id, user.username, req.body?.sticker_id));
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -3662,6 +3685,65 @@ app.get('/api/hubs/:id/voice-rooms', (req, res) => {
   }));
 
   return res.json({ success: true, rooms });
+});
+
+// =====================================================
+// LOBİ METİN KANALLARI (kurucu + moderatörler yönetir; gruplarda yok)
+// =====================================================
+app.get('/api/hubs/:id/channels', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const hubId = Number(req.params.id);
+  if (!isHubMember(hubId, user.id)) return res.status(403).json({ success: false, error: 'Bu Lobi\'a üye değilsin.' });
+  resolveHubChannel(hubId, null);
+  res.json({ success: true, channels: listHubChannels(hubId), can_manage: canManageHubChannels(hubId, user.id) });
+});
+
+app.post('/api/hubs/:id/channels', contentWriteLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const hubId = Number(req.params.id);
+  const result = createHubChannel(hubId, user.id, req.body?.name);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+  io.to(`hub:${hubId}`).emit('hub_channels_changed', { hub_id: hubId, channels: listHubChannels(hubId), created: result.channel.id });
+  logModAction(hubId, user.id, 'channel_create', null, { channel_name: result.channel.name });
+  res.json(result);
+});
+
+app.patch('/api/hubs/:id/channels/:channelId', contentWriteLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const hubId = Number(req.params.id);
+  const result = renameHubChannel(hubId, user.id, req.params.channelId, req.body?.name);
+  if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+  io.to(`hub:${hubId}`).emit('hub_channels_changed', { hub_id: hubId, channels: listHubChannels(hubId) });
+  logModAction(hubId, user.id, 'channel_rename', null, { old_name: result.old_name, channel_name: result.channel.name });
+  res.json({ success: true, channel: result.channel });
+});
+
+// Silmeden önce onay penceresinde "X mesaj da silinecek" yazabilmek için.
+app.get('/api/hubs/:id/channels/:channelId/stats', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const hubId = Number(req.params.id);
+  if (!canManageHubChannels(hubId, user.id)) return res.status(403).json({ success: false, error: 'Bu işlem için yetkin yok.' });
+  res.json({ success: true, messages: countChannelMessages(hubId, req.params.channelId) });
+});
+
+app.delete('/api/hubs/:id/channels/:channelId', contentWriteLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const hubId = Number(req.params.id);
+  try {
+    const result = deleteHubChannel(hubId, user.id, req.params.channelId);
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    io.to(`hub:${hubId}`).emit('hub_channels_changed', { hub_id: hubId, channels: listHubChannels(hubId), deleted: result.channel.id, fallback: result.fallback_channel_id });
+    logModAction(hubId, user.id, 'channel_delete', null, { channel_name: result.channel.name, messages: result.deleted_messages });
+    res.json({ success: true, deleted_messages: result.deleted_messages });
+  } catch (error) {
+    console.error('Kanal silme hatası:', error);
+    res.status(500).json({ success: false, error: 'Kanal silinemedi.' });
+  }
 });
 
 app.post('/api/hubs/:id/voice-rooms', (req, res) => {
@@ -4136,7 +4218,7 @@ function emitHubMessage(hubId, message) {
   // Lobiye o an bakmayan üyelerin okunmamış sayacı için hafif bir sinyal (mesaj içeriği taşımaz).
   try {
     const rooms = listHubMemberIds(hubId).filter((id) => id !== message?.user_id).map((id) => `user:${id}`);
-    if (rooms.length) io.to(rooms).emit('hub_unread_ping', { hub_id: hubId, message_id: message?.id || null });
+    if (rooms.length) io.to(rooms).emit('hub_unread_ping', { hub_id: hubId, channel_id: message?.channel_id || null, message_id: message?.id || null });
   } catch (error) {
     console.error('Okunmamış sinyali gönderilemedi:', error && error.message);
   }
@@ -4161,7 +4243,7 @@ function dispatchHubMessagePush(hubId, message) {
     dispatchWebPush(memberId, 'hub_message', {
       title: info.name,
       body,
-      url: `/?open_hub=${hubId}`,
+      url: `/?open_hub=${hubId}${message.channel_id ? `&channel=${message.channel_id}` : ''}`,
       tag: `hub-${hubId}`
     }).catch(error => console.error('Web push gönderilemedi:', error));
   }
@@ -4179,7 +4261,7 @@ function notifyHubMentions(hubId, message) {
     const unmuted = new Set(info.member_ids);
     const direct = new Set(mentions.users.map((u) => u.id));
     const preview = String(message.content || '').slice(0, 120);
-    const payload = { hub_id: hubId, hub_name: info.name, message_id: message.id, from_username: message.username, preview };
+    const payload = { hub_id: hubId, channel_id: message.channel_id || null, hub_name: info.name, message_id: message.id, from_username: message.username, preview };
 
     const send = (userId, everyone) => {
       if (userId === message.user_id) return;
@@ -4187,7 +4269,7 @@ function notifyHubMentions(hubId, message) {
       dispatchWebPush(userId, 'hub_mention', {
         title: info.name,
         body: everyone ? `${message.username} @everyone: ${preview}` : `${message.username} senden bahsetti: ${preview}`,
-        url: `/?open_hub=${hubId}`,
+        url: `/?open_hub=${hubId}${message.channel_id ? `&channel=${message.channel_id}` : ''}`,
         tag: `mention-${hubId}`
       }).catch((error) => console.error('Bahsetme bildirimi gönderilemedi:', error && error.message));
     };
@@ -4464,13 +4546,15 @@ app.delete('/api/hubs/:id/messages', (req, res) => {
   const hubId = Number(req.params.id);
 
   try {
-    const result = clearHubMessages(hubId, user.id);
+    const channelId = req.query.channel_id ? resolveHubChannel(hubId, req.query.channel_id) : null;
+    if (channelId === false) return res.status(404).json({ success: false, error: 'Kanal bulunamadı.' });
+    const result = clearHubMessages(hubId, user.id, channelId);
 
     if (!result.success) {
       return res.status(403).json(result);
     }
 
-    io.to(`hub:${hubId}`).emit('hub_chat_cleared', { hub_id: hubId });
+    io.to(`hub:${hubId}`).emit('hub_chat_cleared', { hub_id: hubId, channel_id: channelId || null });
     logModAction(hubId, user.id, 'chat_clear');
 
     return res.json(result);
@@ -5187,7 +5271,7 @@ app.post('/api/read-state', readStateLimiter, (req, res) => {
   const result = markScopeRead(user.id, type, id, req.body?.message_id);
   if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
   // Kullanıcının diğer cihazlarındaki sayaç da sıfırlansın.
-  io.to(`user:${user.id}`).emit('read_state_updated', { type, id, last_read_id: result.last_read_id });
+  io.to(`user:${user.id}`).emit('read_state_updated', { type, id, last_read_id: result.last_read_id, ...(result.hub_id ? { hub_id: result.hub_id } : {}) });
   return res.json({ success: true, last_read_id: result.last_read_id });
 });
 
@@ -5520,8 +5604,14 @@ io.on('connection', (socket) => {
         return;
       }
 
+      const channelId = resolveHubChannel(hubId, data?.channel_id);
+      if (channelId === false) {
+        socket.emit('message_error', 'Bu kanal artık yok. Başka bir kanal seç.', clientId);
+        return;
+      }
+
       const replyToMessageId = data?.reply_to_message_id ? Number(data.reply_to_message_id) : null;
-      const message = saveHubMessage(hubId, socket.userId, socket.username, filtered.text, replyToMessageId);
+      const message = inHubChannel(channelId, () => saveHubMessage(hubId, socket.userId, socket.username, filtered.text, replyToMessageId));
       // İstemcinin "gönderiliyor" diye hemen gösterdiği geçici mesajı gerçek mesajla eşleştirmesi için yalnızca geri yansıtılır.
 
       markSlowModePost(hubId, socket.userId);
@@ -5658,7 +5748,7 @@ io.on('connection', (socket) => {
     const payload = { user_id: socket.userId, username: socket.username, stop: Boolean(stop) };
     if (scope === 'hub') {
       if (!socket.rooms.has(`hub:${id}`)) return;
-      socket.to(`hub:${id}`).emit('typing', { ...payload, scope: 'hub', id });
+      socket.to(`hub:${id}`).emit('typing', { ...payload, scope: 'hub', id, channel_id: Number(data?.channel_id) || null });
     } else if (scope === 'dm') {
       if (id === socket.userId || !areFriends(socket.userId, id)) return;
       io.to(`user:${id}`).emit('typing', { ...payload, scope: 'dm', id: socket.userId });

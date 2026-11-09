@@ -360,10 +360,28 @@ body.lc.lc-show-friends.lc-desk .topbar { display: none !important; }
 /* ═══════════════ ODA KARTLARI (kimlik seçimi 2B) ═══════════════
    Sohbet tek bir kart; ses odaları canlı kartlar: durum satırı, Katıl düğmesi, dolu oda yeşil ışıkla öne çıkar.
    Kart sarmalayıcısını (.lc-room-card) script.js renderVoiceRoomsList yalnızca body.lc iken üretir. */
-.lc-chat-card { width: calc(100% - 16px) !important; margin: 10px 8px 0 !important; padding: 10px 12px !important; border-radius: 12px !important; gap: 10px !important;
-  background: var(--bg-surface-2, #151a23) !important; color: var(--text-primary) !important; font-weight: 700 !important; border: 1px solid var(--lc-line) !important; }
-.lc-chat-card.on { background: rgba(92, 200, 255, 0.08) !important; border-color: rgba(92, 200, 255, 0.32) !important; }
-.lc-chat-card:hover { background: rgba(92, 200, 255, 0.11) !important; }
+/* Metin kanalları: ilk kanal "chat"; açık olan kanal camgöbeği çerçeveyle, okunmamışı olan kalın yazıyla görünür. */
+.lc-channels { display: flex; flex-direction: column; gap: 3px; padding: 0 8px; }
+.lc-chan { position: relative; display: flex; align-items: center; gap: 2px; padding-right: 4px; border-radius: 10px; border: 1px solid transparent; }
+.lc-chan:hover { background: var(--lc-hover); }
+.lc-chan.on { background: rgba(92, 200, 255, 0.08); border-color: rgba(92, 200, 255, 0.32); }
+.lc-chan-btn { flex: 1; min-width: 0; display: flex; align-items: center; gap: 9px; padding: 7px 8px; border: 0; background: none; color: var(--text-secondary); font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; border-radius: 10px; }
+.lc-chan-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.lc-chan.on .lc-chan-btn, .lc-chan:hover .lc-chan-btn, .lc-chan.has-unread .lc-chan-btn { color: var(--text-primary); }
+.lc-chan.has-unread .lc-chan-btn { font-weight: 800; }
+.lc-chan .lc-chat-ico { width: 24px; height: 24px; border-radius: 7px; }
+.lc-chan:not(.on) .lc-chat-ico { background: rgba(255, 255, 255, 0.06); color: var(--text-tertiary); }
+.lc-chan-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lc-chan-badge { flex: none; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #ff4d5e; color: #fff; font-size: 10.5px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
+.lc-chan-badge.soft { background: rgba(255, 255, 255, 0.14); color: var(--text-primary); }
+.lc-chan-act { flex: none; width: 26px; height: 26px; border: 0; padding: 0; border-radius: 7px; background: none; color: var(--text-tertiary); cursor: pointer; display: none; place-items: center; }
+.lc-chan-act svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.lc-chan-act:hover { background: rgba(255, 255, 255, 0.08); color: var(--text-primary); }
+.lc-chan-del:hover { background: rgba(255, 122, 134, 0.14); color: var(--danger); }
+.lc-chan:hover .lc-chan-act, .lc-chan:focus-within .lc-chan-act { display: grid; }
+@media (hover: none) { .lc-chan.on .lc-chan-act { display: grid; } }
+.lc-hash-ico { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; background: rgba(92, 200, 255, 0.14); color: var(--accent); }
+.lc-hash-ico svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linejoin: round; }
 .lc-chat-ico { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: rgba(92, 200, 255, 0.14); color: var(--accent); flex: none; }
 .lc-chat-ico svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linejoin: round; }
 .lc-rooms-lbl { text-transform: none !important; letter-spacing: 0 !important; font-size: 12.5px !important; color: var(--text-secondary) !important; padding: 16px 10px 6px 14px !important; }

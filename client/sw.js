@@ -95,7 +95,7 @@ self.addEventListener('notificationclick', (event) => {
             const client = windows[0];
             await client.focus();
             if (dmUserId) client.postMessage({ type: 'open-dm', userId: dmUserId, username: dmName });
-            else if (hubId) client.postMessage({ type: 'open-hub', hubId });
+            else if (hubId) client.postMessage({ type: 'open-hub', hubId, channelId: Number(url.searchParams.get('channel')) || null });
             else if (!url) client.postMessage({ type: 'open-general', notificationType });
             return;
         }

@@ -2995,6 +2995,9 @@ body.drawer-friendlist .friends-directory { display: flex; flex-direction: colum
 #notifications-modal .nc-new .nc-time { right: 30px; }
 #notifications-modal .notification-text { font-size: 13.5px; line-height: 1.5; color: var(--text-primary); margin-bottom: 10px; }
 #notifications-modal .notification-text strong { color: #fff; }
+/* Klasik yerleşimde lobi başlığındaki kanal seçici (script.js renderClassicChannelPicker) */
+.hub-channel-select { margin-left: 8px; max-width: 180px; padding: 6px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.25); color: var(--text-primary); font: inherit; font-size: 13px; }
+.hub-channel-select[hidden] { display: none; }
 /* Uygulama içi yazı giriş penceresi (script.js askText) */
 .ask-text-overlay { display: flex; z-index: calc(var(--z-modal, 1000) + 50); }
 .ask-text-box { width: min(420px, calc(100vw - 32px)); padding: 22px 20px 18px; border-radius: 18px; display: flex; flex-direction: column; gap: 12px; }

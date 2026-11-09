@@ -27,6 +27,8 @@
         members: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c1-3.5 3.5-5 6.5-5s5.5 1.5 6.5 5M16 4.5a3.5 3.5 0 0 1 0 7M18 15c2 .6 3.2 2.2 3.8 5"/></svg>',
         chevron: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
         chat: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H10l-5 4v-4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/></svg>',
+        pen: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/></svg>',
+        trash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
         expand: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>'
     };
     // script.js'teki global let değişkenleri: doğrudan ad ile okunur (eval yok; CSP 'unsafe-eval' gerektirmez).
@@ -135,7 +137,8 @@
         <div class="lc-col-head" id="lc-col-head"><span class="lc-col-title" id="lc-col-title"></span><button type="button" class="lc-icon-btn" id="lc-add-friend">${ICON.plus}</button><button type="button" class="lc-icon-btn" id="lc-col-menu">${ICON.chevron}</button></div>
         <div class="lc-col-body">
             <div class="lc-hub-sec" id="lc-hub-sec">
-                <button type="button" class="lc-ch lc-chat-card on" id="lc-ch-chat"><span class="lc-chat-ico">${ICON.chat}</span>${tr('lc-chat-card', 'Sohbet')}</button>
+                <div class="lc-lbl lc-rooms-lbl"><span>${tr('channel-text-label', 'Metin kanalları')}</span><button type="button" class="lc-icon-btn lc-lbl-btn" id="lc-ch-add" hidden>${ICON.plus}</button></div>
+                <div id="lc-channels" class="lc-channels" role="list"></div>
                 <div class="lc-lbl lc-rooms-lbl"><span>${tr('lc-voice-rooms-label', 'Ses odaları')}</span><button type="button" class="lc-icon-btn lc-lbl-btn" id="lc-room-add">${ICON.plus}</button></div>
                 <div id="lc-rooms-slot" class="lc-rooms-slot"></div>
             </div>
@@ -166,7 +169,67 @@
 
     // Lobi adının yanındaki ⌄: lobi bilgi penceresi (takviye, üyeler, ayrılma…); yoksa lobi ayarları.
     $('lc-col-menu').addEventListener('click', () => { const b = $('topbar-lobby-badge'); if (b) b.click(); else $('hub-settings-open-btn')?.click(); });
-    $('lc-ch-chat').addEventListener('click', () => $('hub-feed')?.scrollTo({ top: $('hub-feed').scrollHeight, behavior: 'smooth' }));
+    label('lc-ch-add', tr('channel-add', 'Metin kanalı aç'));
+    $('lc-ch-add').addEventListener('click', () => { if (typeof createChannelPrompt === 'function') createChannelPrompt(); });
+
+    // ── Metin kanalları listesi (script.js 'sauran:channels' duyurusunda yeniden çizilir) ──
+    function renderChannels() {
+        const box = $('lc-channels');
+        if (!box) return;
+        const hub = get('currentHub');
+        const list = hub && hub.type !== 'group' && Array.isArray(hub.channels) ? hub.channels : [];
+        const cur = typeof currentChannelId !== 'undefined' ? currentChannelId : null;
+        const manage = typeof canManageChannels === 'function' && canManageChannels();
+        $('lc-ch-add').hidden = !manage;
+        box.textContent = '';
+        list.forEach((c) => {
+            const row = document.createElement('div');
+            row.className = 'lc-chan' + (c.id === cur ? ' on' : '');
+            row.setAttribute('role', 'listitem');
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'lc-chan-btn';
+            if (c.id === cur) btn.setAttribute('aria-current', 'true');
+            btn.innerHTML = `<span class="lc-chat-ico">${ICON.chat}</span>`;
+            const name = document.createElement('span');
+            name.className = 'lc-chan-name';
+            name.textContent = c.name;
+            btn.appendChild(name);
+            const unread = c.id !== cur && typeof channelUnread === 'function' ? channelUnread(c.id) : null;
+            if (unread && (unread.count || unread.mentions)) {
+                row.classList.add('has-unread');
+                const badge = document.createElement('span');
+                badge.className = 'lc-chan-badge' + (unread.mentions ? '' : ' soft');
+                badge.textContent = unread.mentions ? `@${unread.mentions > 99 ? '99+' : unread.mentions}` : (unread.count > 99 ? '99+' : String(unread.count));
+                btn.appendChild(badge);
+            }
+            btn.addEventListener('click', () => { if (typeof switchHubChannel === 'function') switchHubChannel(c.id); });
+            row.appendChild(btn);
+            if (manage) {
+                const ren = document.createElement('button');
+                ren.type = 'button';
+                ren.className = 'lc-chan-act';
+                ren.innerHTML = ICON.pen;
+                ren.title = tr('channel-rename', 'Adını değiştir');
+                ren.setAttribute('aria-label', `${c.name}: ${ren.title}`);
+                ren.addEventListener('click', () => renameChannelPrompt(c.id));
+                row.appendChild(ren);
+                if (list.length > 1) {
+                    const del = document.createElement('button');
+                    del.type = 'button';
+                    del.className = 'lc-chan-act lc-chan-del';
+                    del.innerHTML = ICON.trash;
+                    del.title = tr('channel-delete', 'Kanalı sil');
+                    del.setAttribute('aria-label', `${c.name}: ${del.title}`);
+                    del.addEventListener('click', () => deleteChannelConfirm(c.id));
+                    row.appendChild(del);
+                }
+            }
+            box.appendChild(row);
+        });
+        sync();
+    }
+    document.addEventListener('sauran:channels', renderChannels);
     $('lc-room-add').addEventListener('click', () => $('hub-voice-room-add-btn')?.click());
     $('lc-voice-open').addEventListener('click', () => $('call-mini-expand-btn')?.click());
     $('lc-voice-leave').addEventListener('click', () => ($('call-leave-btn') || $('call-mini-leave-btn'))?.click());
@@ -203,7 +266,7 @@
     if (header) {
         const ch = document.createElement('span');
         ch.className = 'lc-head-ch';
-        ch.innerHTML = `<span class="lc-hash">#</span><span class="lc-head-txt"><b>${tr('lc-chat', 'sohbet')}</b><span class="lc-head-hub" id="lc-head-hub"></span></span>`;
+        ch.innerHTML = `<span class="lc-hash lc-hash-ico">${ICON.chat}</span><span class="lc-head-txt"><b>${tr('lc-chat', 'sohbet')}</b><span class="lc-head-hub" id="lc-head-hub"></span></span>`;
         ch.setAttribute('role', 'button');
         ch.tabIndex = 0;
         ch.addEventListener('click', () => $('lc-col-menu')?.click());
@@ -246,6 +309,7 @@
     backdrop.addEventListener('click', closeDrawer);
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && body.classList.contains('lc-drawer')) closeDrawer(); });
     rail.addEventListener('click', (e) => { if (e.target.closest('.lc-ico')) closeDrawer(); });
+    document.addEventListener('sauran:channel-picked', () => closeDrawer());
     col.addEventListener('click', (e) => {
         if (!body.classList.contains('lc-drawer')) return;
         if (e.target.closest('#lc-mic, #lc-deaf, .hub-voice-room-toggle')) return;
@@ -333,7 +397,8 @@
         $('lc-add-friend').hidden = Boolean(inHub && !isGroup);
         const groupName = isGroup ? ((typeof groupDisplayName === 'function' ? groupDisplayName(hub) : '') || hub.name || tr('groups-title', 'Grup')) : '';
         const chName = document.querySelector('.lc-head-ch b');
-        if (chName) chName.textContent = isGroup ? groupName : tr('lc-chat', 'sohbet');
+        const channelName = !isGroup && typeof currentChannel === 'function' ? (currentChannel() || {}).name : '';
+        if (chName) chName.textContent = isGroup ? groupName : (channelName || tr('lc-chat', 'sohbet'));
         const hash = document.querySelector('.lc-head-ch .lc-hash');
         if (hash) hash.hidden = Boolean(isGroup);
         const ctx = $('topbar-context-title');

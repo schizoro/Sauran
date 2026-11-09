@@ -1496,7 +1496,7 @@ function getDeletedDmMessages(userId, token, limit = 50) {
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
-           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions, messages.link_preview
+           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions, messages.link_preview, messages.channel_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE messages.room = ? AND messages.hub_id IS NULL
     ORDER BY messages.id DESC LIMIT ?
@@ -3982,6 +3982,8 @@ function getHubDetail(hubId, userId) {
     accent_color: boost.level >= 4 ? (hub.accent_color || null) : null,
     content_updated_at: boost.level >= 4 ? (hub.content_updated_at || null) : null,
     voice_limits: { rooms: maxVoiceRoomsForHub(hubId), participants: boost.level >= 4 ? HUB_VOICE_PARTICIPANTS_L4 : 25 },
+    channels: hub.type === 'group' ? [] : (ensureDefaultChannel(hubId), listHubChannels(hubId)),
+    channel_limit: hub.type === 'group' ? 0 : maxTextChannelsForHub(hubId),
     boost,
     roles,
     members,
@@ -4190,11 +4192,11 @@ function getHubMessages(hubId, limit = 50, viewerId = null, beforeId = null) {
            messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
-           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions, messages.link_preview
+           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions, messages.link_preview, messages.channel_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
-    WHERE hub_id = ? AND (? IS NULL OR messages.id < ?)
+    WHERE hub_id = ? AND (? IS NULL OR messages.id < ?) AND (? IS NULL OR messages.channel_id = ?)
     ORDER BY messages.id DESC LIMIT ?
-  `).all(hubId, beforeId ? Number(beforeId) : null, beforeId ? Number(beforeId) : null, limit);
+  `).all(hubId, beforeId ? Number(beforeId) : null, beforeId ? Number(beforeId) : null, activeHubChannelId, activeHubChannelId, limit);
 
   return rows.reverse().map((row) => hydrateMessage(row, viewerId));
 }
@@ -4205,7 +4207,7 @@ function getMessageById(id, viewerId = null) {
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
-           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions, messages.link_preview
+           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions, messages.link_preview, messages.channel_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE messages.id = ?
   `).get(id), viewerId);
@@ -4685,13 +4687,13 @@ function searchScopeMessages({ viewerId, hubId = null, room = null, query, befor
 
   const rows = fts
     ? db.prepare(`
-        SELECT messages.id, messages.hub_id, messages.user_id, messages.username, messages.content, messages.kind, messages.created_at, users.avatar_data
+        SELECT messages.id, messages.hub_id, messages.channel_id, messages.user_id, messages.username, messages.content, messages.kind, messages.created_at, users.avatar_data
         FROM message_search JOIN messages ON messages.id = message_search.rowid LEFT JOIN users ON users.id = messages.user_id
         WHERE message_search MATCH ? AND ${where.join(' AND ')}
         ORDER BY messages.id DESC LIMIT ?
       `).all(fts, ...params, size + 1)
     : db.prepare(`
-        SELECT messages.id, messages.hub_id, messages.user_id, messages.username, messages.content, messages.kind, messages.created_at, users.avatar_data
+        SELECT messages.id, messages.hub_id, messages.channel_id, messages.user_id, messages.username, messages.content, messages.kind, messages.created_at, users.avatar_data
         FROM messages LEFT JOIN users ON users.id = messages.user_id
         WHERE ${where.join(' AND ')}
         ORDER BY messages.id DESC LIMIT ?
@@ -4715,7 +4717,7 @@ function searchDmMessages(userId, otherId, query, before) {
 function getScopeMessagesAfter({ hubId = null, room = null, afterId, viewerId, limit = 25 }) {
   const size = Math.min(Math.max(Number(limit) || 25, 1), 50);
   const ids = hubId
-    ? db.prepare(`SELECT id FROM messages WHERE hub_id = ? AND id > ? ORDER BY id ASC LIMIT ?`).all(hubId, afterId, size + 1)
+    ? db.prepare(`SELECT id FROM messages WHERE hub_id = ? AND id > ? AND (? IS NULL OR channel_id = ?) ORDER BY id ASC LIMIT ?`).all(hubId, afterId, activeHubChannelId, activeHubChannelId, size + 1)
     : db.prepare(`SELECT id FROM messages WHERE room = ? AND hub_id IS NULL AND id > ? ORDER BY id ASC LIMIT ?`).all(room, afterId, size + 1);
   const hasNewer = ids.length > size;
   return { messages: ids.slice(0, size).map((r) => getMessageById(r.id, viewerId)).filter(Boolean), has_newer: hasNewer };
@@ -4777,12 +4779,167 @@ function resolveHubMentions(hubId, authorId, content) {
   return { users: users.slice(0, 20), everyone };
 }
 
+// =====================================================
+// LOBİ METİN KANALLARI
+// =====================================================
+// Her lobide en az bir metin kanalı vardır; ilki "chat" adıyla otomatik açılır (eski mesajlar ona taşınır).
+// Kurucu ve moderatörler kanal açar, adını değiştirir, siler (silinen kanalın mesajları da silinir; son kanal silinemez).
+// Gruplarda (type = 'group') kanal yoktur: channel_id NULL kalır ve hiçbir süzgeç uygulanmaz.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS hub_channels (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hub_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (hub_id) REFERENCES hubs(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_hub_channels_hub ON hub_channels(hub_id, position, id);
+  CREATE TABLE IF NOT EXISTS channel_read_states (
+    user_id INTEGER NOT NULL,
+    channel_id INTEGER NOT NULL,
+    last_read_id INTEGER NOT NULL DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, channel_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (channel_id) REFERENCES hub_channels(id) ON DELETE CASCADE
+  );
+`);
+if (!db.prepare(`PRAGMA table_info(messages)`).all().some((c) => c.name === 'channel_id')) {
+  db.exec(`ALTER TABLE messages ADD COLUMN channel_id INTEGER`);
+}
+db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel_id, id)`);
+
+const DEFAULT_CHANNEL_NAME = 'chat';
+const CHANNEL_NAME_MAX = 32;
+const HUB_TEXT_CHANNELS_BY_LEVEL = { 1: 5, 2: 8, 3: 12, 4: 20 };
+
+function maxTextChannelsForHub(hubId) { return HUB_TEXT_CHANNELS_BY_LEVEL[hubLevel(hubId)] || HUB_TEXT_CHANNELS_BY_LEVEL[1]; }
+
+function listHubChannels(hubId) {
+  return db.prepare(`SELECT id, name, position FROM hub_channels WHERE hub_id = ? ORDER BY position, id`).all(hubId);
+}
+
+// Lobinin ilk kanalını döndürür; hiç yoksa "chat" kanalını açar ve kanalsız eski mesajları ona taşır. Gruplarda null.
+function ensureDefaultChannel(hubId) {
+  const hub = db.prepare(`SELECT created_by, type FROM hubs WHERE id = ?`).get(hubId);
+  if (!hub || hub.type === 'group') return null;
+  const first = db.prepare(`SELECT id FROM hub_channels WHERE hub_id = ? ORDER BY position, id LIMIT 1`).get(hubId);
+  if (first) return first.id;
+  return db.transaction(() => {
+    const id = Number(db.prepare(`INSERT INTO hub_channels (hub_id, name, position, created_by) VALUES (?, ?, 0, ?)`).run(hubId, DEFAULT_CHANNEL_NAME, hub.created_by).lastInsertRowid);
+    db.prepare(`UPDATE messages SET channel_id = ? WHERE hub_id = ? AND channel_id IS NULL`).run(id, hubId);
+    return id;
+  })();
+}
+
+// Açılışta: kanalı olmayan tüm lobilere "chat" kanalı açılır ve eski mesajlar ona taşınır (tek işlemde; sonra iş kalmaz).
+db.transaction(() => {
+  for (const { id } of db.prepare(`SELECT id FROM hubs WHERE COALESCE(type, '') != 'group' AND id NOT IN (SELECT hub_id FROM hub_channels)`).all()) {
+    ensureDefaultChannel(id);
+  }
+  // Güvence: kanalı olan bir lobide kanalsız kalmış mesaj (ör. dağıtım sırasında eski süreçten yazılmış) görünmez olmasın, ilk kanala geçsin.
+  db.prepare(`
+    UPDATE messages SET channel_id = (SELECT hub_channels.id FROM hub_channels WHERE hub_channels.hub_id = messages.hub_id ORDER BY position, id LIMIT 1)
+    WHERE channel_id IS NULL AND hub_id IN (SELECT hub_id FROM hub_channels)
+  `).run();
+})();
+
+// İstekte gelen kanal bu lobiye aitse onu, hiç kanal verilmemişse ilk kanalı döndürür; geçersiz kanal için false. Gruplarda null.
+function resolveHubChannel(hubId, channelId) {
+  const def = ensureDefaultChannel(hubId);
+  if (def === null) return null;
+  if (channelId === undefined || channelId === null || channelId === '') return def;
+  const row = db.prepare(`SELECT id FROM hub_channels WHERE id = ? AND hub_id = ?`).get(Number(channelId), hubId);
+  return row ? row.id : false;
+}
+
+// Mesaj oluşturan/okuyan işlevler için etkin kanal (senkron çağrı süresince). Mesaj yazan INSERT'ler hubChannelFor ile okur.
+let activeHubChannelId = null;
+function inHubChannel(channelId, fn) {
+  const prev = activeHubChannelId;
+  activeHubChannelId = channelId == null ? null : Number(channelId);
+  try { return fn(); } finally { activeHubChannelId = prev; }
+}
+function hubChannelFor(hubId) {
+  if (activeHubChannelId) {
+    const row = db.prepare(`SELECT id FROM hub_channels WHERE id = ? AND hub_id = ?`).get(activeHubChannelId, hubId);
+    if (row) return row.id;
+  }
+  return ensureDefaultChannel(hubId);
+}
+
+function canManageHubChannels(hubId, userId) {
+  return !isGroupHub(hubId) && hasAtLeastTier(hubId, userId, 'moderator');
+}
+
+// Denetim karakterleri, yön değiştiriciler ve görünmez karakterler atılır (benzer görünen ad hilesi ve çift ad denetimini atlatma olmasın).
+function cleanChannelName(value) {
+  return String(value || '').replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g, '').replace(/\s+/g, ' ').trim().slice(0, CHANNEL_NAME_MAX);
+}
+
+// Türkçe büyük/küçük harf duyarsız (İ/i, I/ı) karşılaştırma.
+function channelNameTaken(hubId, name, exceptId = null) {
+  const key = name.toLocaleLowerCase('tr');
+  return db.prepare(`SELECT id, name FROM hub_channels WHERE hub_id = ?`).all(hubId)
+    .some((c) => c.id !== exceptId && c.name.toLocaleLowerCase('tr') === key);
+}
+
+function createHubChannel(hubId, userId, rawName) {
+  if (isGroupHub(hubId)) return { success: false, status: 400, error: 'Bu işlem gruplarda kullanılamaz.' };
+  if (!canManageHubChannels(hubId, userId)) return { success: false, status: 403, error: 'Kanal açmak için lobi sahibi ya da moderatör olmalısın.' };
+  const name = cleanChannelName(rawName);
+  if (!name) return { success: false, status: 400, error: 'Kanal adı gerekli.' };
+  ensureDefaultChannel(hubId);
+  if (channelNameTaken(hubId, name)) return { success: false, status: 409, error: 'Bu adla bir kanal zaten var.' };
+  const limit = maxTextChannelsForHub(hubId);
+  const count = db.prepare(`SELECT COUNT(*) AS c FROM hub_channels WHERE hub_id = ?`).get(hubId).c;
+  if (count >= limit) {
+    return { success: false, status: 400, error: `Bu lobide en fazla ${limit} metin kanalı olabilir${hubLevel(hubId) < 4 ? '; lobi seviyesi yükseldikçe sınır artar' : ''}.` };
+  }
+  const position = db.prepare(`SELECT COALESCE(MAX(position), 0) + 1 AS p FROM hub_channels WHERE hub_id = ?`).get(hubId).p;
+  const id = db.prepare(`INSERT INTO hub_channels (hub_id, name, position, created_by) VALUES (?, ?, ?, ?)`).run(hubId, name, position, userId).lastInsertRowid;
+  return { success: true, channel: db.prepare(`SELECT id, name, position FROM hub_channels WHERE id = ?`).get(id) };
+}
+
+function renameHubChannel(hubId, userId, channelId, rawName) {
+  if (!canManageHubChannels(hubId, userId)) return { success: false, status: 403, error: 'Kanal adını değiştirmek için lobi sahibi ya da moderatör olmalısın.' };
+  const channel = db.prepare(`SELECT id, name FROM hub_channels WHERE id = ? AND hub_id = ?`).get(Number(channelId), hubId);
+  if (!channel) return { success: false, status: 404, error: 'Kanal bulunamadı.' };
+  const name = cleanChannelName(rawName);
+  if (!name) return { success: false, status: 400, error: 'Kanal adı gerekli.' };
+  if (channelNameTaken(hubId, name, channel.id)) return { success: false, status: 409, error: 'Bu adla bir kanal zaten var.' };
+  db.prepare(`UPDATE hub_channels SET name = ? WHERE id = ?`).run(name, channel.id);
+  return { success: true, channel: db.prepare(`SELECT id, name, position FROM hub_channels WHERE id = ?`).get(channel.id), old_name: channel.name };
+}
+
+function countChannelMessages(hubId, channelId) {
+  return db.prepare(`SELECT COUNT(*) AS c FROM messages WHERE hub_id = ? AND channel_id = ? AND kind != 'deleted'`).get(hubId, Number(channelId)).c;
+}
+
+// Kanalı ve içindeki mesajları siler (tepkiler/anket oyları CASCADE; başka sohbetlere iletilmiş kopyalar içeriksiz kalır).
+function deleteHubChannel(hubId, userId, channelId) {
+  if (!canManageHubChannels(hubId, userId)) return { success: false, status: 403, error: 'Kanalı silmek için lobi sahibi ya da moderatör olmalısın.' };
+  const channel = db.prepare(`SELECT id, name FROM hub_channels WHERE id = ? AND hub_id = ?`).get(Number(channelId), hubId);
+  if (!channel) return { success: false, status: 404, error: 'Kanal bulunamadı.' };
+  const count = db.prepare(`SELECT COUNT(*) AS c FROM hub_channels WHERE hub_id = ?`).get(hubId).c;
+  if (count <= 1) return { success: false, status: 400, error: 'Lobide en az bir metin kanalı kalmalı.' };
+  const deleted = db.transaction(() => {
+    const r = db.prepare(`DELETE FROM messages WHERE hub_id = ? AND channel_id = ?`).run(hubId, channel.id);
+    db.prepare(`DELETE FROM hub_channels WHERE id = ?`).run(channel.id);
+    sweepMessageOrphans();
+    return r.changes;
+  })();
+  return { success: true, channel, deleted_messages: deleted, fallback_channel_id: ensureDefaultChannel(hubId) };
+}
+
 function saveHubMessage(hubId, userId, username, content, replyToMessageId = null) {
   // Yanıtlanan mesaj aynı Lobi'a ait değilse (ör. silinmiş/başka Lobi) sessizce
   // yok sayılır — mesaj yine de gönderilir, sadece yanıt bağlantısı kurulmaz.
   let validReplyId = null;
   if (replyToMessageId) {
-    const parent = db.prepare(`SELECT id FROM messages WHERE id = ? AND hub_id = ?`).get(replyToMessageId, hubId);
+    const parent = db.prepare(`SELECT id FROM messages WHERE id = ? AND hub_id = ? AND (channel_id IS NULL OR channel_id = ?)`).get(replyToMessageId, hubId, hubChannelFor(hubId));
     if (parent) validReplyId = parent.id;
   }
 
@@ -4790,9 +4947,9 @@ function saveHubMessage(hubId, userId, username, content, replyToMessageId = nul
 
   const messageId = db.transaction(() => {
     const info = db.prepare(`
-      INSERT INTO messages (user_id, username, content, room, hub_id, kind, reply_to_message_id, mentions)
-      VALUES (?, ?, ?, ?, ?, 'text', ?, ?)
-    `).run(userId, username, content, `hub_${hubId}`, hubId, validReplyId, mentions ? JSON.stringify(mentions) : null);
+      INSERT INTO messages (user_id, username, content, room, hub_id, channel_id, kind, reply_to_message_id, mentions)
+      VALUES (?, ?, ?, ?, ?, ?, 'text', ?, ?)
+    `).run(userId, username, content, `hub_${hubId}`, hubId, hubChannelFor(hubId), validReplyId, mentions ? JSON.stringify(mentions) : null);
     if (mentions) {
       const targets = new Set(mentions.users.map((u) => u.id));
       if (mentions.everyone) listHubMemberIds(hubId).forEach((id) => { if (id !== userId) targets.add(id); });
@@ -4825,9 +4982,9 @@ function createHubPoll(hubId, userId, username, question, options) {
   const payload = JSON.stringify({ question, options: cleanOptions });
 
   const info = db.prepare(`
-    INSERT INTO messages (user_id, username, content, room, hub_id, kind, payload)
-    VALUES (?, ?, ?, ?, ?, 'poll', ?)
-  `).run(userId, username, question, `hub_${hubId}`, hubId, payload);
+    INSERT INTO messages (user_id, username, content, room, hub_id, channel_id, kind, payload)
+    VALUES (?, ?, ?, ?, ?, ?, 'poll', ?)
+  `).run(userId, username, question, `hub_${hubId}`, hubId, hubChannelFor(hubId), payload);
 
   return { success: true, message: getMessageById(info.lastInsertRowid) };
 }
@@ -4868,9 +5025,9 @@ function createHubShare(hubId, userId, username, content, url) {
   const payload = JSON.stringify({ url: url || null });
 
   const info = db.prepare(`
-    INSERT INTO messages (user_id, username, content, room, hub_id, kind, payload)
-    VALUES (?, ?, ?, ?, ?, 'share', ?)
-  `).run(userId, username, content, `hub_${hubId}`, hubId, payload);
+    INSERT INTO messages (user_id, username, content, room, hub_id, channel_id, kind, payload)
+    VALUES (?, ?, ?, ?, ?, ?, 'share', ?)
+  `).run(userId, username, content, `hub_${hubId}`, hubId, hubChannelFor(hubId), payload);
 
   return { success: true, message: getMessageById(info.lastInsertRowid) };
 }
@@ -4887,9 +5044,9 @@ function createHubVoiceMessage(hubId, userId, username, audioData, duration) {
   const payload = JSON.stringify({ audio: audioData, duration: Number(duration) || 0 });
 
   const info = db.prepare(`
-    INSERT INTO messages (user_id, username, content, room, hub_id, kind, payload)
-    VALUES (?, ?, '', ?, ?, 'voice', ?)
-  `).run(userId, username, `hub_${hubId}`, hubId, payload);
+    INSERT INTO messages (user_id, username, content, room, hub_id, channel_id, kind, payload)
+    VALUES (?, ?, '', ?, ?, ?, 'voice', ?)
+  `).run(userId, username, `hub_${hubId}`, hubId, hubChannelFor(hubId), payload);
 
   return { success: true, message: getMessageById(info.lastInsertRowid) };
 }
@@ -5001,9 +5158,9 @@ function createHubFileMessage(hubId, userId, username, file) {
   });
 
   const info = db.prepare(`
-    INSERT INTO messages (user_id, username, content, room, hub_id, kind, payload)
-    VALUES (?, ?, '', ?, ?, ?, ?)
-  `).run(userId, username, `hub_${hubId}`, hubId, kind, payload);
+    INSERT INTO messages (user_id, username, content, room, hub_id, channel_id, kind, payload)
+    VALUES (?, ?, '', ?, ?, ?, ?, ?)
+  `).run(userId, username, `hub_${hubId}`, hubId, hubChannelFor(hubId), kind, payload);
 
   return { success: true, message: getMessageById(info.lastInsertRowid) };
 }
@@ -5156,9 +5313,9 @@ function createHubSticker(hubId, userId, username, stickerId) {
   const payload = JSON.stringify({ id: stickerId });
 
   const info = db.prepare(`
-    INSERT INTO messages (user_id, username, content, room, hub_id, kind, payload)
-    VALUES (?, ?, '', ?, ?, 'sticker', ?)
-  `).run(userId, username, `hub_${hubId}`, hubId, payload);
+    INSERT INTO messages (user_id, username, content, room, hub_id, channel_id, kind, payload)
+    VALUES (?, ?, '', ?, ?, ?, 'sticker', ?)
+  `).run(userId, username, `hub_${hubId}`, hubId, hubChannelFor(hubId), payload);
 
   return { success: true, message: getMessageById(info.lastInsertRowid) };
 }
@@ -5564,12 +5721,43 @@ if (!readStatesExisted) {
 
 const UNREAD_CAP = 100; // 99+ göstermek için yeterli; daha fazlası sayılmaz (hız)
 
-function unreadHubCount(userId, hubId) {
+function hubReadBaseline(userId, hubId) {
   const state = db.prepare(`SELECT last_read_id FROM read_states WHERE user_id = ? AND scope = 'hub' AND scope_id = ?`).get(userId, hubId);
-  const since = state ? state.last_read_id : (db.prepare(`
+  return state ? state.last_read_id : (db.prepare(`
     SELECT COALESCE(MAX(messages.id), 0) AS m FROM messages, hub_members
     WHERE messages.hub_id = ? AND hub_members.hub_id = ? AND hub_members.user_id = ? AND messages.created_at < hub_members.joined_at
   `).get(hubId, hubId, userId).m);
+}
+
+// Kanal bazında okunmamış ve bahsedilme sayısı. Kanalın kendi okundu kaydı yoksa lobinin eski okundu kaydı başlangıç sayılır.
+function unreadChannelDetail(userId, hubId) {
+  const base = hubReadBaseline(userId, hubId);
+  const out = {};
+  for (const ch of db.prepare(`
+    SELECT hub_channels.id, COALESCE(channel_read_states.last_read_id, ?) AS since
+    FROM hub_channels LEFT JOIN channel_read_states ON channel_read_states.channel_id = hub_channels.id AND channel_read_states.user_id = ?
+    WHERE hub_channels.hub_id = ?
+  `).all(base, userId, hubId)) {
+    const count = db.prepare(`
+      SELECT COUNT(*) AS c FROM (
+        SELECT 1 FROM messages WHERE channel_id = ? AND id > ? AND kind != 'deleted' AND (user_id IS NULL OR user_id != ?) LIMIT ${UNREAD_CAP}
+      )
+    `).get(ch.id, ch.since, userId).c;
+    if (!count) continue;
+    const mentions = db.prepare(`
+      SELECT COUNT(*) AS c FROM message_mentions JOIN messages ON messages.id = message_mentions.message_id
+      WHERE message_mentions.user_id = ? AND message_mentions.hub_id = ? AND messages.channel_id = ? AND message_mentions.message_id > ?
+    `).get(userId, hubId, ch.id, ch.since).c;
+    out[ch.id] = { count, mentions };
+  }
+  return out;
+}
+
+function unreadHubCount(userId, hubId) {
+  if (db.prepare(`SELECT 1 FROM hub_channels WHERE hub_id = ? LIMIT 1`).get(hubId)) {
+    return Math.min(UNREAD_CAP, Object.values(unreadChannelDetail(userId, hubId)).reduce((n, c) => n + c.count, 0));
+  }
+  const since = hubReadBaseline(userId, hubId);
   return db.prepare(`
     SELECT COUNT(*) AS c FROM (
       SELECT 1 FROM messages WHERE hub_id = ? AND id > ? AND kind != 'deleted' AND (user_id IS NULL OR user_id != ?) LIMIT ${UNREAD_CAP}
@@ -5591,6 +5779,16 @@ function unreadDmCount(userId, otherId) {
 function getUnreadCounts(userId) {
   const hubs = {};
   for (const h of db.prepare(`SELECT hub_id, muted FROM hub_members WHERE user_id = ?`).all(userId)) {
+    if (db.prepare(`SELECT 1 FROM hub_channels WHERE hub_id = ? LIMIT 1`).get(h.hub_id)) {
+      const channels = unreadChannelDetail(userId, h.hub_id);
+      const list = Object.values(channels);
+      if (!list.length) continue;
+      hubs[h.hub_id] = {
+        count: Math.min(UNREAD_CAP, list.reduce((n, c) => n + c.count, 0)), muted: Boolean(h.muted),
+        mentions: list.reduce((n, c) => n + c.mentions, 0), channels
+      };
+      continue;
+    }
     const count = unreadHubCount(userId, h.hub_id);
     if (!count) continue;
     const state = db.prepare(`SELECT last_read_id FROM read_states WHERE user_id = ? AND scope = 'hub' AND scope_id = ?`).get(userId, h.hub_id);
@@ -5611,6 +5809,19 @@ function getUnreadCounts(userId) {
 
 // Okundu işareti: yalnızca üyesi olunan lobi / arkadaş olunan DM için; asla geri gitmez (eski bir cihaz yeni okumayı ezmez).
 function markScopeRead(userId, scope, scopeId, messageId) {
+  if (scope === 'channel') {
+    const channel = db.prepare(`SELECT id, hub_id FROM hub_channels WHERE id = ?`).get(scopeId);
+    if (!channel || !isHubMember(channel.hub_id, userId)) return { success: false, status: 403, error: 'Bu kanala erişimin yok.' };
+    const upTo = Number(messageId) || Number.MAX_SAFE_INTEGER;
+    const lastId = db.prepare(`SELECT COALESCE(MAX(id), 0) AS m FROM messages WHERE channel_id = ? AND id <= ?`).get(channel.id, upTo).m;
+    db.prepare(`
+      INSERT INTO channel_read_states (user_id, channel_id, last_read_id) VALUES (?, ?, ?)
+      ON CONFLICT(user_id, channel_id) DO UPDATE SET
+        last_read_id = MAX(channel_read_states.last_read_id, excluded.last_read_id), updated_at = CURRENT_TIMESTAMP
+    `).run(userId, channel.id, lastId);
+    const stored = db.prepare(`SELECT last_read_id FROM channel_read_states WHERE user_id = ? AND channel_id = ?`).get(userId, channel.id).last_read_id;
+    return { success: true, last_read_id: stored, hub_id: channel.hub_id };
+  }
   if (scope === 'hub') {
     if (!isHubMember(scopeId, userId)) return { success: false, status: 403, error: 'Bu Lobi\'a üye değilsin.' };
   } else if (scope === 'dm') {
@@ -5647,13 +5858,15 @@ function listMyVoiceMutes(hubId, userId) {
 
 // Lobi sohbetini tamamen temizler. Yalnızca Lobi sahibi ve lobi moderatörleri.
 // Tepkiler ve anket oyları messages'a bağlı ON DELETE CASCADE ile birlikte silinir.
-function clearHubMessages(hubId, userId) {
+function clearHubMessages(hubId, userId, channelId = null) {
   if (!hasAtLeastTier(hubId, userId, 'moderator')) {
     return { success: false, error: 'Bu işlem için yetkin yok.' };
   }
 
   const info = db.transaction(() => {
-    const r = db.prepare(`DELETE FROM messages WHERE hub_id = ?`).run(hubId);
+    const r = channelId
+      ? db.prepare(`DELETE FROM messages WHERE hub_id = ? AND channel_id = ?`).run(hubId, channelId)
+      : db.prepare(`DELETE FROM messages WHERE hub_id = ?`).run(hubId);
     sweepMessageOrphans(); // bu lobi mesajlarının başka sohbetlere iletilmiş kopyaları içeriksiz kalır
     return r;
   })();
@@ -6731,7 +6944,7 @@ function getDmMessages(userId, otherUserId, limit = 50, beforeId = null) {
            messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
-           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions, messages.link_preview
+           messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions, messages.link_preview, messages.channel_id
     FROM messages LEFT JOIN users ON users.id = messages.user_id
     WHERE room = ? AND (? IS NULL OR messages.id < ?)
     ORDER BY messages.id DESC LIMIT ?
@@ -8514,7 +8727,7 @@ const MOD_LOG_RETENTION_DAYS = 180;
 const MOD_LOG_CATEGORIES = {
   members: ['member_kick', 'member_ban', 'member_unban', 'mod_add', 'mod_remove', 'join_approve', 'join_reject'],
   voice: ['voice_mute', 'voice_unmute', 'voice_kick', 'voice_unblock', 'voice_room_create', 'voice_room_delete'],
-  chat: ['chat_clear', 'slow_mode', 'word_filter'],
+  chat: ['chat_clear', 'slow_mode', 'word_filter', 'channel_create', 'channel_rename', 'channel_delete'],
   settings: ['hub_update', 'invite_revoke']
 };
 
@@ -9107,6 +9320,14 @@ module.exports = {
   createFeedback,
   listFeedback,
   voteFeedback,
+  listHubChannels,
+  resolveHubChannel,
+  inHubChannel,
+  createHubChannel,
+  renameHubChannel,
+  deleteHubChannel,
+  countChannelMessages,
+  canManageHubChannels,
   getSiteFeedbackLinkUser,
   getSiteReview,
   saveSiteReview,
