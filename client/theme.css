@@ -3374,3 +3374,29 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
 .unread-divider { display: flex; align-items: center; gap: 10px; margin: 14px 4px 8px; color: #ff8d9b; font-size: 12px; font-weight: 800; letter-spacing: .02em; }
 .unread-divider::before, .unread-divider::after { content: ""; flex: 1; height: 1px; background: rgba(242, 63, 67, 0.75); }
 .unread-divider span { flex: none; padding: 2px 10px; border-radius: 999px; background: rgba(242, 63, 67, 0.12); border: 1px solid rgba(242, 63, 67, 0.45); }
+
+/* Kişi başına ses düzeyi */
+.call-hub-room-person[data-user-id]:not(.is-self) { cursor: pointer; }
+.call-hub-room-person.has-user-vol::after { content: ""; position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; border-radius: 50%; background: #f0b232; }
+.call-hub-room-person { position: relative; }
+.user-vol-pop { position: fixed; z-index: 2600; width: 250px; padding: 12px; border-radius: 14px; background: #151a23; border: 1px solid #2a3140; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55); color: var(--text-primary); display: flex; flex-direction: column; gap: 10px; }
+.user-vol-head b { display: block; font-size: 14px; font-weight: 800; }
+.user-vol-head small { display: block; font-size: 11.5px; color: var(--text-tertiary, var(--text-secondary)); }
+.user-vol-row { display: flex; align-items: center; gap: 8px; }
+.user-vol-ico svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.user-vol-row input[type="range"] { flex: 1; accent-color: #b366f5; }
+.user-vol-row output { min-width: 40px; text-align: right; font-weight: 800; color: #d3a6ff; font-size: 13px; }
+.user-vol-mute { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.user-vol-mute input { accent-color: #f23f43; width: 16px; height: 16px; }
+.user-vol-reset { align-self: flex-start; padding: 0; border: 0; background: none; color: var(--text-tertiary, var(--text-secondary)); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
+
+/* Yükleme ilerlemesi (tepsi) */
+.attach-tray-prog { position: absolute; left: 0; right: 0; bottom: 0; height: 22px; border-radius: 0 0 11px 11px; background: rgba(8, 10, 16, 0.78); overflow: hidden; display: grid; place-items: center; }
+.attach-tray-prog i { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(179, 102, 245, 0.55); transition: width .2s; }
+.attach-tray-prog.done i { background: rgba(61, 220, 151, 0.6); }
+.attach-tray-prog.fail i { width: 100% !important; background: rgba(242, 63, 67, 0.55); }
+.attach-tray-prog.prep i { width: 35% !important; animation: trayPrep 1s ease-in-out infinite alternate; }
+.attach-tray-prog b { position: relative; font-size: 11px; font-weight: 800; color: #fff; }
+.attach-tray-item.is-sending img { filter: brightness(.75); }
+@keyframes trayPrep { from { left: 0; } to { left: 65%; } }
+@media (prefers-reduced-motion: reduce) { .attach-tray-prog.prep i { animation: none; } }

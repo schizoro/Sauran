@@ -13,7 +13,8 @@
         hub: { input: 'hub-message-input', drop: 'hub-detail-view', ready: () => typeof currentHub !== 'undefined' && currentHub },
         dm: { input: 'dm-message-input', drop: 'dm-modal', ready: () => typeof activeDmUserId !== 'undefined' && activeDmUserId && !(typeof dmReadOnly !== 'undefined' && dmReadOnly) }
     };
-    const state = { hub: [], dm: [] }; // { file, url }
+    const state = { hub: [], dm: [] }; // { file, url, status: 'wait'|'prep'|'up'|'done'|'fail', pct, ctrl }
+    const sending = { hub: false, dm: false };
 
     function trayFor(kind) {
         const input = document.getElementById(KINDS[kind].input);
@@ -32,6 +33,13 @@
                 if (!b) return;
                 e.preventDefault();
                 const i = Number(b.dataset.trayRemove);
+                const it = state[kind][i];
+                if (sending[kind]) {
+                    // Gönderim sırasında: o dosya iptal edilir (yüklenmekteyse yarıda kesilir, bekliyorsa atlanır).
+                    if (it) { it.cancelled = true; if (it.ctrl) it.ctrl.abort(); it.status = 'fail'; }
+                    render(kind);
+                    return;
+                }
                 const [gone] = state[kind].splice(i, 1);
                 if (gone && gone.url) URL.revokeObjectURL(gone.url);
                 render(kind);
@@ -53,8 +61,11 @@
             const thumb = f.type.startsWith('image/') && it.url
                 ? `<img src="${it.url}" alt="">`
                 : `<span class="attach-tray-icon">${f.type.startsWith('video/') ? '<svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v4h4"/></svg>'}<small>${esc(f.name)}</small></span>`;
-            return `<div class="attach-tray-item" title="${esc(f.name)} · ${esc(fmtSize(f.size))}">${thumb}<button type="button" class="attach-tray-x" data-tray-remove="${i}" aria-label="${esc(f.name)} kaldır">×</button></div>`;
-        }).join('')}</div><div class="attach-tray-meta">${items.length} dosya · ${esc(fmtSize(total))}<span> · Gönder'e basınca gönderilir</span></div>`;
+            const st = it.status || 'wait';
+            const bar = sending[kind] ? `<div class="attach-tray-prog ${st}"><i style="width:${st === 'done' ? 100 : Math.round((it.pct || 0) * 100)}%"></i><b>${st === 'done' ? '✓' : st === 'fail' ? '!' : st === 'prep' ? '…' : st === 'up' ? Math.round((it.pct || 0) * 100) + '%' : ''}</b></div>` : '';
+            const x = st === 'done' ? '' : `<button type="button" class="attach-tray-x" data-tray-remove="${i}" aria-label="${esc(f.name)} ${sending[kind] ? 'iptal' : 'kaldır'}">×</button>`;
+            return `<div class="attach-tray-item${sending[kind] ? ' is-sending' : ''}" title="${esc(f.name)} · ${esc(fmtSize(f.size))}">${thumb}${bar}${x}</div>`;
+        }).join('')}</div><div class="attach-tray-meta">${sending[kind] ? `Gönderiliyor · ${items.filter((x) => x.status === 'done').length}/${items.length}<span> · × ile iptal edebilirsin</span>` : `${items.length} dosya · ${esc(fmtSize(total))}<span> · Gönder'e basınca gönderilir</span>`}</div>`;
     }
 
     // Dış API: + menüsü de buraya ekler
@@ -89,14 +100,33 @@
         e.preventDefault();
         e.stopImmediatePropagation();
         const send = window.attachSenders && window.attachSenders[kind];
-        if (!send) return;
-        const items = state[kind].slice();
-        state[kind] = [];
+        if (!send || sending[kind]) return;
+        const items = state[kind];
+        sending[kind] = true;
+        items.forEach((it) => { it.status = 'wait'; it.pct = 0; });
         render(kind);
         for (const it of items) {
-            try { await send(it.file); } catch (err) { console.error('Dosya gönderilemedi:', err); }
-            if (it.url) URL.revokeObjectURL(it.url);
+            if (it.cancelled) continue;
+            it.ctrl = new AbortController();
+            it.status = 'prep';
+            render(kind);
+            try {
+                await send(it.file, {
+                    signal: it.ctrl.signal,
+                    onProgress: (p) => { it.status = 'up'; it.pct = p; render(kind); }
+                });
+                it.status = 'done';
+            } catch (err) {
+                it.status = 'fail';
+                if (!(err && err.aborted)) console.error('Dosya gönderilemedi:', err);
+            }
+            render(kind);
         }
+        await new Promise((r) => setTimeout(r, 500));
+        sending[kind] = false;
+        items.forEach((it) => { if (it.url) URL.revokeObjectURL(it.url); });
+        state[kind] = [];
+        render(kind);
         const input = document.getElementById(KINDS[kind].input);
         if (input && input.value.trim()) {
             bypass.add(form);
@@ -148,7 +178,7 @@
     setInterval(() => {
         const h = typeof currentHub !== 'undefined' && currentHub ? `${currentHub.id}:${typeof currentChannelId !== 'undefined' ? currentChannelId : ''}` : null;
         const d = typeof activeDmUserId !== 'undefined' ? activeDmUserId : null;
-        if (h !== lastHub) { if (state.hub.length) clear('hub'); lastHub = h; }
-        if (d !== lastDm) { if (state.dm.length) clear('dm'); lastDm = d; }
+        if (h !== lastHub) { if (state.hub.length && !sending.hub) clear('hub'); lastHub = h; }
+        if (d !== lastDm) { if (state.dm.length && !sending.dm) clear('dm'); lastDm = d; }
     }, 500);
 })();

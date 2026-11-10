@@ -956,3 +956,15 @@ body[data-my-status="invisible"] #lc-dock #lc-user-id .lc-user-av, body[data-my-
 .lc-members-hint button { align-self: flex-start; padding: 0; border: 0; background: none; color: #b9a6d8; font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
 @keyframes lcHintIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .lc-members-hint { animation: none; } }
+
+/* Kanal bildirim ayarı */
+.lc-chan-notify-state { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; margin-left: auto; color: var(--text-tertiary, var(--text-secondary)); }
+.lc-chan-notify-state svg, .lc-chan-notify svg, .lc-notify-ico svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.lc-notify-pop { position: fixed; z-index: 500; width: 250px; padding: 6px; border-radius: 14px; background: #151a23; border: 1px solid #2a3140; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55); }
+.lc-notify-head { padding: 6px 8px 8px; font-size: 12px; font-weight: 800; color: var(--text-tertiary, var(--text-secondary)); }
+.lc-notify-pop button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border: 0; border-radius: 10px; background: none; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
+.lc-notify-pop button:hover { background: rgba(255, 255, 255, 0.06); }
+.lc-notify-pop button.on { background: rgba(179, 102, 245, 0.16); }
+.lc-notify-pop b { display: block; font-size: 13.5px; font-weight: 700; }
+.lc-notify-pop small { display: block; font-size: 11.5px; color: var(--text-tertiary, var(--text-secondary)); }
+.lc-notify-ico { flex: none; width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.06); color: #d3a6ff; }

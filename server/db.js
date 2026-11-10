@@ -4008,7 +4008,7 @@ function getHubDetail(hubId, userId) {
     accent_color: boost.level >= 4 ? (hub.accent_color || null) : null,
     content_updated_at: boost.level >= 4 ? (hub.content_updated_at || null) : null,
     voice_limits: { rooms: maxVoiceRoomsForHub(hubId), participants: boost.level >= 4 ? HUB_VOICE_PARTICIPANTS_L4 : 25 },
-    channels: hub.type === 'group' ? [] : (ensureDefaultChannel(hubId), listHubChannels(hubId)),
+    channels: hub.type === 'group' ? [] : (ensureDefaultChannel(hubId), listHubChannels(hubId).map((c) => ({ ...c, notify_mode: getChannelNotifyMode(userId, c.id) }))),
     channel_limit: hub.type === 'group' ? 0 : maxTextChannelsForHub(hubId),
     boost,
     roles,
@@ -7222,6 +7222,32 @@ db.exec(`
 
 const MAX_PUSH_SUBSCRIPTIONS_PER_USER = 10;
 
+// ── Kanal başına bildirim tercihi (kişiye özel). Satır yoksa 'all'. Kanal silinince satır da gider (CASCADE). ──
+db.exec(`
+  CREATE TABLE IF NOT EXISTS channel_notify (
+    user_id INTEGER NOT NULL,
+    channel_id INTEGER NOT NULL,
+    mode TEXT NOT NULL,
+    PRIMARY KEY (user_id, channel_id),
+    FOREIGN KEY (channel_id) REFERENCES hub_channels(id) ON DELETE CASCADE
+  );
+`);
+const CHANNEL_NOTIFY_MODES = ['all', 'mentions', 'none'];
+function getChannelNotifyMode(userId, channelId) {
+  if (!channelId) return 'all';
+  const row = db.prepare(`SELECT mode FROM channel_notify WHERE user_id = ? AND channel_id = ?`).get(userId, channelId);
+  return row && CHANNEL_NOTIFY_MODES.includes(row.mode) ? row.mode : 'all';
+}
+function setChannelNotifyMode(userId, hubId, channelId, mode) {
+  if (!CHANNEL_NOTIFY_MODES.includes(mode)) return { success: false, status: 400, error: 'Geçersiz seçim.' };
+  if (!isHubMember(hubId, userId)) return { success: false, status: 403, error: 'Bu Lobi\'nin üyesi değilsin.' };
+  const ch = db.prepare(`SELECT id FROM hub_channels WHERE id = ? AND hub_id = ?`).get(Number(channelId), hubId);
+  if (!ch) return { success: false, status: 404, error: 'Kanal bulunamadı.' };
+  if (mode === 'all') db.prepare(`DELETE FROM channel_notify WHERE user_id = ? AND channel_id = ?`).run(userId, ch.id);
+  else db.prepare(`INSERT INTO channel_notify (user_id, channel_id, mode) VALUES (?, ?, ?) ON CONFLICT(user_id, channel_id) DO UPDATE SET mode = excluded.mode`).run(userId, ch.id, mode);
+  return { success: true, channel_id: ch.id, mode };
+}
+
 function getHubPushInfo(hubId) {
   const hub = db.prepare(`SELECT name, type FROM hubs WHERE id = ?`).get(hubId);
   if (!hub) return null;
@@ -9372,6 +9398,8 @@ module.exports = {
   setHubAccent,
   MAX_VOICE_ROOMS_PER_HUB,
   getHubPushInfo,
+  getChannelNotifyMode,
+  setChannelNotifyMode,
   savePushSubscription,
   removePushSubscription,
   listPushSubscriptions,

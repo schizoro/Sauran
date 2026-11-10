@@ -466,6 +466,47 @@
     $('lc-ch-add').addEventListener('click', () => { if (typeof createChannelPrompt === 'function') createChannelPrompt(); });
 
     // ── Metin kanalları listesi (script.js 'sauran:channels' duyurusunda yeniden çizilir) ──
+    const CH_BELL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0"/></svg>';
+    const CH_BELL_OFF = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 9.5-4.9M18 11v5l1.5 2H8M10 20a2 2 0 0 0 4 0M4 4l16 16"/></svg>';
+    const CH_AT = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5"/><path d="M15.5 12v1.5a2.5 2.5 0 0 0 5 0V12a8.5 8.5 0 1 0-3.4 6.8"/></svg>';
+    // Kanal bildirim menüsü: Tüm mesajlar · Yalnızca bahsedilince · Bildirim yok (kişiye özel)
+    function openChannelNotifyMenu(anchor, hub, channel) {
+        document.querySelector('.lc-notify-pop')?.remove();
+        const pop = document.createElement('div');
+        pop.className = 'lc-notify-pop';
+        pop.setAttribute('role', 'menu');
+        const opts = [
+            ['all', CH_BELL, tr('ch-notify-all', 'Tüm mesajlar'), tr('ch-notify-all-sub', 'Her yeni mesajda bildirim')],
+            ['mentions', CH_AT, tr('ch-notify-mentions', 'Yalnızca bahsedilince'), tr('ch-notify-mentions-sub', '@adın ya da @everyone geçince')],
+            ['none', CH_BELL_OFF, tr('ch-notify-none', 'Bildirim yok'), tr('ch-notify-none-sub', 'Bu kanaldan hiç bildirim gelmez')]
+        ];
+        const cur = channel.notify_mode || 'all';
+        const esc = (v) => (typeof escapeHtml === 'function' ? escapeHtml(v) : String(v));
+        pop.innerHTML = `<div class="lc-notify-head">#${esc(channel.name)}</div>` + opts.map(([k, ico, t1, t2]) =>
+            `<button type="button" role="menuitemradio" aria-checked="${k === cur}" data-mode="${k}" class="${k === cur ? 'on' : ''}"><span class="lc-notify-ico">${ico}</span><span><b>${esc(t1)}</b><small>${esc(t2)}</small></span></button>`).join('');
+        document.body.appendChild(pop);
+        const r = anchor.getBoundingClientRect();
+        pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8))}px`;
+        pop.style.top = `${Math.max(8, Math.min(r.bottom + 6, window.innerHeight - pop.offsetHeight - 8))}px`;
+        const close = (ev) => { if (!ev || !pop.contains(ev.target)) { pop.remove(); document.removeEventListener('pointerdown', close, true); } };
+        setTimeout(() => document.addEventListener('pointerdown', close, true), 0);
+        pop.addEventListener('click', async (ev) => {
+            const b = ev.target.closest('[data-mode]');
+            if (!b) return;
+            const mode = b.dataset.mode;
+            pop.remove();
+            document.removeEventListener('pointerdown', close, true);
+            try {
+                const res = await fetch(`/api/hubs/${hub.id}/channels/${channel.id}/notify`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode }) });
+                const d = await res.json().catch(() => ({}));
+                if (!res.ok || !d.success) throw new Error(d.error || '');
+                channel.notify_mode = mode;
+                renderChannels();
+                if (typeof showToast === 'function') showToast(tr('ch-notify-saved', 'Bildirim ayarı kaydedildi'));
+            } catch (err) { if (typeof showNotice === 'function') showNotice(err.message || 'Kaydedilemedi.'); }
+        });
+    }
+
     function renderChannels() {
         const box = $('lc-channels');
         if (!box) return;
@@ -496,8 +537,25 @@
                 badge.textContent = unread.mentions ? `@${unread.mentions > 99 ? '99+' : unread.mentions}` : (unread.count > 99 ? '99+' : String(unread.count));
                 btn.appendChild(badge);
             }
+            const mode = c.notify_mode || 'all';
+            if (mode !== 'all') {
+                const st = document.createElement('span');
+                st.className = 'lc-chan-notify-state';
+                st.title = mode === 'none' ? tr('ch-notify-none', 'Bildirim yok') : tr('ch-notify-mentions', 'Yalnızca bahsedilince');
+                st.innerHTML = mode === 'none' ? CH_BELL_OFF : CH_AT;
+                btn.appendChild(st);
+            }
             btn.addEventListener('click', () => { if (typeof switchHubChannel === 'function') switchHubChannel(c.id); });
             row.appendChild(btn);
+            // Kanal bildirimi (herkes için, kişiye özel)
+            const nb = document.createElement('button');
+            nb.type = 'button';
+            nb.className = 'lc-chan-act lc-chan-notify';
+            nb.innerHTML = mode === 'none' ? CH_BELL_OFF : mode === 'mentions' ? CH_AT : CH_BELL;
+            nb.title = tr('ch-notify-title', 'Bildirim ayarı');
+            nb.setAttribute('aria-label', `${c.name}: ${nb.title}`);
+            nb.addEventListener('click', (e) => { e.stopPropagation(); openChannelNotifyMenu(nb, hub, c); });
+            row.appendChild(nb);
             if (manage) {
                 const ren = document.createElement('button');
                 ren.type = 'button';

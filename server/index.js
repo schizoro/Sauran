@@ -163,6 +163,8 @@ const {
   setHubContent,
   setHubAccent,
   getHubPushInfo,
+  getChannelNotifyMode,
+  setChannelNotifyMode,
   savePushSubscription,
   removePushSubscription,
   listPushSubscriptions,
@@ -434,7 +436,7 @@ const jsonImage = express.json({ limit: '12mb' });
 const jsonFile = express.json({ limit: '140mb' });
 const { compressEmoji, compressProfileImage, decodeImageDataUrl } = require('./emojiimage');
 const IMAGE_BODY_PATHS = [/^\/api\/me\/emojis\/?$/, /^\/api\/hubs\/\d+\/emojis\/?$/, /^\/api\/me\/stickers\/?$/, /^\/api\/hubs\/\d+\/stickers\/?$/, /^\/api\/profile\/(avatar|banner)\/?$/, /^\/api\/hubs\/?$/, /^\/api\/hubs\/\d+\/?$/, /^\/api\/hubs\/\d+\/banner\/?$/];
-const FILE_BODY_PATHS = [/^\/api\/hubs\/\d+\/(file|voice|share)\/?$/];
+const FILE_BODY_PATHS = [/^\/api\/hubs\/\d+\/(file|voice|share)\/?$/, /^\/api\/dm\/\d+\/file\/?$/];
 
 app.use((req, res, next) => {
   const isFile = FILE_BODY_PATHS.some((re) => re.test(req.path));
@@ -3419,6 +3421,19 @@ app.patch('/api/hubs/:id/pin', (req, res) => {
   }
 });
 
+app.patch('/api/hubs/:id/channels/:channelId/notify', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const result = setChannelNotifyMode(user.id, Number(req.params.id), Number(req.params.channelId), String(req.body?.mode || ''));
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    return res.json(result);
+  } catch (error) {
+    console.error('Kanal bildirim ayarı hatası:', error);
+    res.status(500).json({ success: false, error: 'Kaydedilemedi.' });
+  }
+});
+
 app.patch('/api/hubs/:id/mute', (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
@@ -3634,6 +3649,21 @@ app.post('/api/hubs/:id/file', fileUploadLimiter, (req, res) => {
   } catch (error) {
     console.error('Dosya mesajı hatası:', error);
     res.status(500).json({ success: false, error: 'Gönderilemedi.' });
+  }
+});
+
+// Özel mesaja dosya (HTTP): socket yolu ile aynı kurallar; istemci yükleme ilerlemesini gösterebilsin diye.
+app.post('/api/dm/:userId/file', fileUploadLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const result = createDmFileMessage(user.id, user.username, Number(req.params.userId), req.body?.file);
+    if (!result.success) return res.status(400).json(result);
+    emitDmMessage(result.message);
+    return res.json({ success: true, id: result.message.id });
+  } catch (error) {
+    console.error('DM dosyası hatası:', error);
+    res.status(500).json({ success: false, error: 'Dosya gönderilemedi.' });
   }
 });
 
@@ -4284,6 +4314,7 @@ function dispatchHubMessagePush(hubId, message) {
   for (const memberId of info.member_ids) {
     if (memberId === message.user_id) continue;
     if (mentioned.has(memberId) || message.mentions?.everyone) continue; // bahsedilene ayrıca "seni bahsetti" bildirimi gider
+    if (message.channel_id && getChannelNotifyMode(memberId, message.channel_id) !== 'all') continue; // kanal: yalnızca bahsedilince / hiç
 
     dispatchWebPush(memberId, 'hub_message', {
       title: info.name,
@@ -4310,6 +4341,8 @@ function notifyHubMentions(hubId, message) {
 
     const send = (userId, everyone) => {
       if (userId === message.user_id) return;
+      // Kanalın bildirimini "hiç" yapan bahsetme de almaz; "yalnızca bahsedilince" alır.
+      if (message.channel_id && getChannelNotifyMode(userId, message.channel_id) === 'none') return;
       io.to(`user:${userId}`).emit('hub_mention', { ...payload, everyone });
       dispatchWebPush(userId, 'hub_mention', {
         title: info.name,

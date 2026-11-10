@@ -562,12 +562,14 @@ let activeDmUsername = '';
 let deletedDmThreads = [];
 let dmReadOnly = false;
 
-wireAttachMenu('dm', async (file) => {
+wireAttachMenu('dm', async (file, opts = {}) => {
 
+    const toId = activeDmUserId;
     const fileData = await handleAttachedFile(file);
-    if (!fileData || !activeDmUserId || !socket) return;
-
-    socket.emit('dm_file_message', { to_user_id: activeDmUserId, file: fileData });
+    if (!fileData || !toId) return;
+    if (opts.signal?.aborted) throw Object.assign(new Error('aborted'), { aborted: true });
+    const data = await uploadJsonWithProgress(`/api/dm/${toId}/file`, { file: fileData }, opts);
+    if (!data.success) { showToast(data.error || 'Gönderilemedi.'); throw new Error(data.error || 'failed'); }
 
 });
 
@@ -3376,6 +3378,10 @@ function dmPreviewText(msg) {
 function maybeNotifyIncomingHubMessage(msg) {
 
     if (!notifDesktopEnabled || !notifHubMessageEnabled || !currentHub || currentHub.my_muted) return;
+    // Kanal bildirim ayarı: "Bildirim yok" → hiç; "Yalnızca bahsedilince" → yalnızca benden (ya da @everyone) bahsedilmişse.
+    const chMode = msg.channel_id ? ((currentHub.channels || []).find((c) => c.id === Number(msg.channel_id))?.notify_mode || 'all') : 'all';
+    if (chMode === 'none') return;
+    if (chMode === 'mentions' && !messageMentionsMe(msg)) return;
     if (getBrowserNotifState() !== 'granted' && !getNativeNotify()) return;
     if (!shouldShowSystemNotification()) return;
 
@@ -4570,6 +4576,19 @@ const I18N = {
     'confirm-delete-message': { tr: 'Bu mesajı silmek istediğine emin misin?', en: 'Are you sure you want to delete this message?' },
     'message-deleted': { tr: 'Bu mesaj silindi', en: 'This message was deleted' },
     'unread-divider': { tr: 'Yeni mesajlar', en: 'New messages' },
+    'user-vol-title': { tr: 'Ses düzeyi', en: 'Volume' },
+    'user-vol-sub': { tr: 'Yalnızca senin duyduğun ses değişir', en: 'Only changes what you hear' },
+    'user-vol-mute': { tr: 'Bende sustur', en: 'Mute for me' },
+    'user-vol-reset': { tr: 'Varsayılana döndür', en: 'Reset' },
+    'user-vol-hint': { tr: 'Ses düzeyini ayarlamak için tıkla', en: 'Click to adjust volume' },
+    'ch-notify-title': { tr: 'Bildirim ayarı', en: 'Notification setting' },
+    'ch-notify-all': { tr: 'Tüm mesajlar', en: 'All messages' },
+    'ch-notify-all-sub': { tr: 'Her yeni mesajda bildirim', en: 'Notify on every new message' },
+    'ch-notify-mentions': { tr: 'Yalnızca bahsedilince', en: 'Only mentions' },
+    'ch-notify-mentions-sub': { tr: '@adın ya da @everyone geçince', en: 'When @you or @everyone is used' },
+    'ch-notify-none': { tr: 'Bildirim yok', en: 'Nothing' },
+    'ch-notify-none-sub': { tr: 'Bu kanaldan hiç bildirim gelmez', en: 'No notifications from this channel' },
+    'ch-notify-saved': { tr: 'Bildirim ayarı kaydedildi', en: 'Notification setting saved' },
     'message-deleted-by-mod': { tr: 'Bu mesaj bir moderatör tarafından silindi', en: 'This message was deleted by a moderator' },
     'message-mod-delete': { tr: 'Mesajı sil (moderatör)', en: 'Delete message (moderator)' },
     'confirm-mod-delete': { tr: '{u} kullanıcısının bu mesajı herkes için silinsin mi? Bu işlem moderasyon kaydına yazılır.', en: "Delete {u}'s message for everyone? This is recorded in the moderation log." },
@@ -11004,6 +11023,22 @@ function wireAttachMenu(prefix, onFile) {
 }
 
 
+// JSON gövdeli yükleme (ilerleme + iptal). opts: { onProgress(0..1), signal }. Sunucu yanıtını (JSON) döndürür.
+function uploadJsonWithProgress(url, body, opts = {}) {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url);
+        xhr.withCredentials = true;
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.upload.onprogress = (e) => { if (e.lengthComputable && opts.onProgress) opts.onProgress(e.loaded / e.total); };
+        xhr.onload = () => { let d = null; try { d = JSON.parse(xhr.responseText); } catch (_) { /* yoksay */ } resolve(d || { success: false, error: 'Gönderilemedi.' }); };
+        xhr.onerror = () => reject(new Error('network'));
+        xhr.onabort = () => reject(Object.assign(new Error('aborted'), { aborted: true }));
+        if (opts.signal) { if (opts.signal.aborted) { xhr.abort(); return; } opts.signal.addEventListener('abort', () => xhr.abort(), { once: true }); }
+        xhr.send(JSON.stringify(body));
+    });
+}
+
 async function handleAttachedFile(file) {
 
     if (!file) return null;
@@ -11732,29 +11767,22 @@ const touchComposer = window.matchMedia('(hover: none) and (pointer: coarse)');
     input.form?.addEventListener('submit', () => setTimeout(() => autosizeComposer(input), 0));
 });
 const hubVoiceBtn = document.getElementById('hub-voice-btn');
-wireAttachMenu('hub', async (file) => {
+wireAttachMenu('hub', async (file, opts = {}) => {
 
     if (!currentHub) return;
     const hubAtPick = currentHub.id;
     const channelAtPick = currentChannelId; // sıkıştırma sürerken kanal değişse de dosya seçildiği kanala gider
     const fileData = await handleAttachedFile(file);
     if (!fileData) return;
+    if (opts.signal?.aborted) throw Object.assign(new Error('aborted'), { aborted: true });
 
     try {
-
-        const response = await fetch(`/api/hubs/${hubAtPick}/file${channelAtPick ? `?channel_id=${channelAtPick}` : ''}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ file: fileData })
-        });
-
-        const data = await response.json();
-        if (!data.success) showToast(data.error || 'Gönderilemedi.');
-
+        const data = await uploadJsonWithProgress(`/api/hubs/${hubAtPick}/file${channelAtPick ? `?channel_id=${channelAtPick}` : ''}`, { file: fileData }, opts);
+        if (!data.success) { showToast(data.error || 'Gönderilemedi.'); throw new Error(data.error || 'failed'); }
     } catch (error) {
-        console.error('Lobi dosyası gönderilemedi:', error);
-        showToast('Gönderilemedi.');
+        if (error && error.aborted) throw error;
+        if (error && error.message === 'network') { console.error('Lobi dosyası gönderilemedi:', error); showToast('Gönderilemedi.'); }
+        throw error;
     }
 
 });
@@ -12470,7 +12498,7 @@ function toggleLocalMute() {
 callMuteBtn.addEventListener('click', toggleLocalMute);
 
 function applyDeafenToAudio() {
-    document.querySelectorAll('audio[data-call-audio]').forEach((el) => { el.muted = voiceDeafened; });
+    document.querySelectorAll('audio[data-call-audio]').forEach((el) => applyUserVolumeToEl(el));
 }
 
 function setLocalDeafened(deafened) {
@@ -12502,6 +12530,61 @@ document.addEventListener('click', (event) => {
     if (btn.dataset.voiceAction === 'mic') toggleLocalMute();
     else setLocalDeafened(!voiceDeafened);
 
+});
+
+// ── Kişi başına ses düzeyi (yalnızca bu cihazda, yalnızca dinleyen için) ──
+const USER_VOLUME_KEY = 'sauran_user_volume';
+function loadUserVolumes() { try { return JSON.parse(localStorage.getItem(USER_VOLUME_KEY) || '{}') || {}; } catch (_) { return {}; } }
+function userVolumeOf(userId) {
+    const v = loadUserVolumes()[String(userId)] || {};
+    return { volume: Number.isFinite(v.v) ? Math.max(0, Math.min(100, v.v)) : 100, muted: Boolean(v.m) };
+}
+function saveUserVolume(userId, volume, muted) {
+    const all = loadUserVolumes();
+    if (volume === 100 && !muted) delete all[String(userId)]; else all[String(userId)] = { v: Math.round(volume), m: Boolean(muted) };
+    try { localStorage.setItem(USER_VOLUME_KEY, JSON.stringify(all)); } catch (_) { /* yoksay */ }
+    document.querySelectorAll(`audio[data-call-audio][data-user-id="${Number(userId)}"]`).forEach((el) => applyUserVolumeToEl(el));
+}
+function applyUserVolumeToEl(el) {
+    if (!el) return;
+    const uid = el.dataset.userId;
+    const pref = uid ? userVolumeOf(uid) : { volume: 100, muted: false };
+    el.volume = pref.volume / 100;
+    el.muted = voiceDeafened || pref.muted;
+}
+
+// Sesli oda ekranında bir kişinin kartına dokununca: ses düzeyi kaydırıcısı + "Bende sustur"
+function openUserVolumePopover(anchor, userId, username) {
+    document.querySelector('.user-vol-pop')?.remove();
+    const pref = userVolumeOf(userId);
+    const pop = document.createElement('div');
+    pop.className = 'user-vol-pop';
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-label', `${username}: ${t('user-vol-title')}`);
+    pop.innerHTML = `<div class="user-vol-head"><b>${escapeHtml(username)}</b><small>${escapeHtml(t('user-vol-sub'))}</small></div>
+        <label class="user-vol-row"><span class="user-vol-ico" aria-hidden="true">${AUDIO_ICONS.speaker}</span>
+            <input type="range" min="0" max="100" step="1" value="${pref.volume}" aria-label="${escapeAttr(t('user-vol-title'))}"><output>${pref.volume}%</output></label>
+        <label class="user-vol-mute"><input type="checkbox" ${pref.muted ? 'checked' : ''}><span>${escapeHtml(t('user-vol-mute'))}</span></label>
+        <button type="button" class="user-vol-reset">${escapeHtml(t('user-vol-reset'))}</button>`;
+    document.body.appendChild(pop);
+    const range = pop.querySelector('input[type="range"]');
+    const out = pop.querySelector('output');
+    const mute = pop.querySelector('input[type="checkbox"]');
+    const save = () => { out.textContent = `${range.value}%`; saveUserVolume(userId, Number(range.value), mute.checked); };
+    range.addEventListener('input', save);
+    mute.addEventListener('change', save);
+    pop.querySelector('.user-vol-reset').addEventListener('click', () => { range.value = 100; mute.checked = false; save(); });
+    const r = anchor.getBoundingClientRect();
+    pop.style.left = `${Math.max(8, Math.min(r.left + r.width / 2 - pop.offsetWidth / 2, window.innerWidth - pop.offsetWidth - 8))}px`;
+    const below = r.bottom + 8 + pop.offsetHeight < window.innerHeight;
+    pop.style.top = `${below ? r.bottom + 8 : Math.max(8, r.top - pop.offsetHeight - 8)}px`;
+    const close = (ev) => { if (!pop.contains(ev.target) && !anchor.contains(ev.target)) { pop.remove(); document.removeEventListener('pointerdown', close, true); } };
+    setTimeout(() => document.addEventListener('pointerdown', close, true), 0);
+}
+document.getElementById('call-hub-room-grid')?.addEventListener('click', (e) => {
+    const card = e.target.closest('.call-hub-room-person[data-user-id]');
+    if (!card || card.classList.contains('is-self')) return;
+    openUserVolumePopover(card, Number(card.dataset.userId), card.dataset.username || '');
 });
 
 function voiceUserIdForDailyParticipant(p) {
@@ -13055,7 +13138,7 @@ function renderHubRoomGrid(participants) {
     const grid = document.getElementById('call-hub-room-grid');
 
     grid.innerHTML = (participants || []).map((p) => `
-        <div class="call-hub-room-person${p.user_id === currentUser?.id ? ' is-self' : ''}${isVoicePlus(p.user_id) ? ' plus-voice' : ''}">
+        <div class="call-hub-room-person${p.user_id === currentUser?.id ? ' is-self' : ''}${isVoicePlus(p.user_id) ? ' plus-voice' : ''}${p.user_id !== currentUser?.id && (userVolumeOf(p.user_id).muted || userVolumeOf(p.user_id).volume < 100) ? ' has-user-vol' : ''}" data-user-id="${Number(p.user_id)}" data-username="${escapeAttr(p.username || '')}"${p.user_id !== currentUser?.id ? ` title="${escapeAttr(t('user-vol-hint'))}"` : ''}>
             <span class="call-hub-room-avatar${voiceFrameParts(p.user_id).cls}" style="--user-color:${resolveUserColor(p.user_id, p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}${voiceFrameParts(p.user_id).overlay}</span>
             <span class="call-hub-room-name">${usernameCardHtml(p.username, isVoicePlus(p.user_id), nameFxOf(p.user_id))}</span>
             ${p.user_id === currentUser?.id ? `<span class="voice-self-tag">${t('voice-room-you')}</span>` : ''}
@@ -16306,7 +16389,9 @@ function wireCallAudioUnlock() {
 
         const current = audioEl.srcObject && audioEl.srcObject.getAudioTracks ? audioEl.srcObject.getAudioTracks()[0] : null;
         if (!current || current.id !== event.track.id) audioEl.srcObject = new MediaStream([event.track]);
-        audioEl.muted = voiceDeafened;
+        const voiceUid = voiceUserIdForDailyParticipant(event.participant);
+        if (voiceUid) audioEl.dataset.userId = String(voiceUid);
+        applyUserVolumeToEl(audioEl);
         // Önce çıkış ayarlanır, sonra çalınır: aksi hâlde ilk anlar varsayılan çıkıştan gelir.
         applySinkToAudioEl(audioEl).finally(() => audioEl.play().catch(() => {}));
 
