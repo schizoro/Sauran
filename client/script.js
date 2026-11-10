@@ -4809,6 +4809,10 @@ const I18N = {
     'confirm-delete-message': { tr: 'Bu mesajı silmek istediğine emin misin?', en: 'Are you sure you want to delete this message?' },
     'message-deleted': { tr: 'Bu mesaj silindi', en: 'This message was deleted' },
     'unread-divider': { tr: 'Yeni mesajlar', en: 'New messages' },
+    'warning-prefix': { tr: 'Uyarı: ', en: 'Warning: ' },
+    'lc-modal-join-sub': { tr: 'Arkadaşının paylaştığı davet kodunu yapıştır.', en: 'Paste the invite code your friend shared.' },
+    'lc-modal-feedback-sub': { tr: 'Önerin panoda görünür; diğer kullanıcılar oylayabilir.', en: 'Your suggestion appears on the board; others can vote on it.' },
+    'lc-modal-group-sub': { tr: 'Arkadaşlarını seç, birlikte sohbet edin.', en: 'Pick your friends and chat together.' },
     'cstatus-set': { tr: 'Özel durum ayarla', en: 'Set custom status' },
     'cstatus-edit': { tr: 'Özel durumu düzenle', en: 'Edit custom status' },
     'cstatus-add': { tr: 'Özel durum ekle', en: 'Add custom status' },
@@ -5769,8 +5773,8 @@ function connectToChat() {
             markPendingFailed(clientId);
 
             showNotice(
-                'Uyarı: ' +
-                errorMessage
+                t('warning-prefix') +
+                (window.translateServerError ? window.translateServerError(errorMessage) : errorMessage)
             );
 
         }
@@ -10506,7 +10510,7 @@ function showToast(message, durationMs = 3200) {
 
     const toast = document.createElement('div');
     toast.className = 'toast';
-    toast.textContent = message;
+    toast.textContent = window.translateServerError ? window.translateServerError(message) : message;
 
     container.appendChild(toast);
 
@@ -11305,7 +11309,7 @@ function uploadJsonWithProgress(url, body, opts = {}) {
         xhr.withCredentials = true;
         xhr.setRequestHeader('Content-Type', 'application/json');
         xhr.upload.onprogress = (e) => { if (e.lengthComputable && opts.onProgress) opts.onProgress(e.loaded / e.total); };
-        xhr.onload = () => { let d = null; try { d = JSON.parse(xhr.responseText); } catch (_) { /* yoksay */ } resolve(d || { success: false, error: 'Gönderilemedi.' }); };
+        xhr.onload = () => { let d = null; try { d = JSON.parse(xhr.responseText); } catch (_) { /* yoksay */ } d = d || { success: false, error: 'Gönderilemedi.' }; if (typeof d.error === 'string' && window.translateServerError) d.error = window.translateServerError(d.error); resolve(d); };
         xhr.onerror = () => reject(new Error('network'));
         xhr.onabort = () => reject(Object.assign(new Error('aborted'), { aborted: true }));
         if (opts.signal) { if (opts.signal.aborted) { xhr.abort(); return; } opts.signal.addEventListener('abort', () => xhr.abort(), { once: true }); }

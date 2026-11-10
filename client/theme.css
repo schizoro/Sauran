@@ -3473,3 +3473,6 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
 .sk-bar.sk-thin { height: 9px; opacity: .8; }
 @keyframes skShimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @media (prefers-reduced-motion: reduce) { .sk-av, .sk-bar { animation: none; } }
+
+/* Pencere kutusu klavye odağı aldığında (modal-a11y.js) çerçeve çizilmez; içerideki öğelerin odak çerçevesi korunur. */
+[role="dialog"] > [tabindex="-1"]:focus, [role="dialog"][tabindex="-1"]:focus { outline: none; }
