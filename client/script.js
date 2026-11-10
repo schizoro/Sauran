@@ -2209,6 +2209,7 @@ function renderProfile() {
         currentUser.status ||
         'active'
     );
+    renderMyCustomStatus();
 
     renderProfileColorPicker();
 
@@ -2256,6 +2257,238 @@ function renderStatus(status) {
     } catch (_) { /* açılışta (değişkenler henüz tanımlı değilken) çağrılabilir */ }
     document.dispatchEvent(new CustomEvent('sauran:my-status', { detail: { status } }));
 
+}
+
+
+// =====================================================
+// ÖZEL DURUM YAZISI (emoji + kısa metin + bitiş süresi)
+// =====================================================
+// Not: üst düzey let/const yok (açılışta erken çağrılabilir) — durum window üzerinde tutulur.
+function customStatusLive(cs) {
+    if (!cs || (!cs.text && !cs.emoji)) return null;
+    if (cs.until && !(new Date(cs.until).getTime() > Date.now())) return null;
+    return cs;
+}
+function customStatusText(cs) {
+    const c = customStatusLive(cs);
+    return c ? `${c.emoji ? c.emoji + ' ' : ''}${c.text || ''}`.trim() : '';
+}
+function renderMyCustomStatus() {
+    if (!currentUser) return;
+    const cs = customStatusLive(currentUser.custom_status);
+    const txt = customStatusText(cs);
+    const cur = document.getElementById('cstatus-current');
+    if (cur) {
+        const until = cs && cs.until ? new Date(cs.until).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : '';
+        cur.textContent = txt ? `${txt}${until ? ' · ' + t('cstatus-until') + ' ' + until : ''}` : '';
+        cur.style.display = txt ? '' : 'none';
+    }
+    const openLbl = document.getElementById('cstatus-open-label');
+    if (openLbl) openLbl.textContent = t(txt ? 'cstatus-edit' : 'cstatus-set');
+    const prof = document.getElementById('profile-cstatus');
+    if (prof) {
+        prof.classList.toggle('is-empty', !txt);
+        prof.textContent = txt || `＋ ${t('cstatus-add')}`;
+    }
+    clearTimeout(window.__myCsTimer);
+    if (cs && cs.until) {
+        const ms = new Date(cs.until).getTime() - Date.now() + 500;
+        if (ms > 0 && ms < 2147483000) window.__myCsTimer = setTimeout(renderMyCustomStatus, ms);
+    }
+    try {
+        if (currentHub && Array.isArray(currentHub.members)) {
+            const me = currentHub.members.find((m) => m.user_id === currentUser.id);
+            if (me && customStatusText(me.custom_status) !== txt) { me.custom_status = cs; renderHubMembers(); }
+        }
+    } catch (_) { /* açılışta çağrılabilir */ }
+}
+
+function openCustomStatusEditor() {
+    const prevEd = document.querySelector('.cstatus-backdrop');
+    if (prevEd) { if (prevEd._close) prevEd._close(); else prevEd.remove(); }
+    const opener = document.activeElement;
+    const cur = customStatusLive(currentUser?.custom_status) || {};
+    const EMOJIS = ['💬', '🎮', '🎧', '📚', '💼', '🍕', '😴', '🏃', '🎬', '✈️', '🤒', '🎉', '🔥', '☕', '🏠', '❤️'];
+    let emoji = cur.emoji || '💬';
+    let expiry = cur.text ? (cur.until ? 'today' : 'never') : 'today';
+    const chips = [['60', t('cstatus-1h')], ['240', t('cstatus-4h')], ['today', t('cstatus-today')], ['never', t('cstatus-never')]];
+    const back = document.createElement('div');
+    back.className = 'cstatus-backdrop';
+    back.innerHTML = `<div class="cstatus-card" role="dialog" aria-modal="true" aria-labelledby="cstatus-title">
+        <div class="cstatus-head"><b id="cstatus-title">${escapeHtml(t('cstatus-title'))}</b><button type="button" class="cstatus-x" aria-label="${escapeAttr(t('close'))}">×</button></div>
+        <div class="cstatus-field">
+            <button type="button" class="cstatus-emoji-btn" aria-label="${escapeAttr(t('cstatus-emoji'))}" aria-expanded="false">${escapeHtml(emoji)}</button>
+            <input type="text" class="cstatus-input" maxlength="60" placeholder="${escapeAttr(t('cstatus-ph'))}" value="${escapeAttr(cur.text || '')}" aria-label="${escapeAttr(t('cstatus-title'))}">
+            <span class="cstatus-count">${(cur.text || '').length}/60</span>
+        </div>
+        <div class="cstatus-emojis" hidden>${EMOJIS.map((e) => `<button type="button" data-e="${e}">${e}</button>`).join('')}</div>
+        <div class="cstatus-label">${escapeHtml(t('cstatus-clear-after'))}</div>
+        <div class="cstatus-chips" role="radiogroup" aria-label="${escapeAttr(t('cstatus-clear-after'))}">${chips.map(([k, l]) => `<button type="button" role="radio" data-exp="${k}" aria-checked="${k === expiry}" class="${k === expiry ? 'on' : ''}">${escapeHtml(l)}</button>`).join('')}</div>
+        <p class="cstatus-error" role="alert"></p>
+        <div class="cstatus-actions">
+            <button type="button" class="cstatus-clear"${cur.text || cur.emoji ? '' : ' hidden'}>${escapeHtml(t('cstatus-clear'))}</button>
+            <button type="button" class="cstatus-save">${escapeHtml(t('save'))}</button>
+        </div>
+    </div>`;
+    document.body.appendChild(back);
+    const card = back.querySelector('.cstatus-card');
+    const input = back.querySelector('.cstatus-input');
+    const count = back.querySelector('.cstatus-count');
+    const emoBtn = back.querySelector('.cstatus-emoji-btn');
+    const grid = back.querySelector('.cstatus-emojis');
+    const err = back.querySelector('.cstatus-error');
+    const close = () => { back.remove(); document.removeEventListener('keydown', onKey, true); if (opener && opener.focus && document.contains(opener)) opener.focus(); };
+    const onKey = (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+        else if (e.key === 'Enter' && e.target === input) { e.preventDefault(); save(); }
+        else if (e.key === 'Tab') {
+            const f = Array.from(card.querySelectorAll('button:not([hidden]), input')).filter((x) => x.offsetParent !== null);
+            if (!f.length) return;
+            if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
+            else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
+        }
+    };
+    document.addEventListener('keydown', onKey, true);
+    back._close = close;
+    back.addEventListener('pointerdown', (e) => { if (e.target === back) close(); });
+    back.querySelector('.cstatus-x').addEventListener('click', close);
+    input.addEventListener('input', () => { count.textContent = `${input.value.length}/60`; err.textContent = ''; });
+    emoBtn.addEventListener('click', () => { grid.hidden = !grid.hidden; emoBtn.setAttribute('aria-expanded', String(!grid.hidden)); });
+    grid.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-e]');
+        if (!b) return;
+        emoji = b.dataset.e; emoBtn.textContent = emoji; grid.hidden = true; emoBtn.setAttribute('aria-expanded', 'false'); input.focus();
+    });
+    back.querySelector('.cstatus-chips').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-exp]');
+        if (!b) return;
+        expiry = b.dataset.exp;
+        back.querySelectorAll('[data-exp]').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', String(x === b)); });
+    });
+    const send = async (body) => {
+        const res = await fetch('/api/profile/custom-status', { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) throw new Error(data.error || t('generic-error'));
+        currentUser.custom_status = data.custom_status || null;
+        renderMyCustomStatus();
+        return data;
+    };
+    async function save() {
+        const text = input.value.trim();
+        if (!text) return clearIt();
+        let minutes = null;
+        if (expiry === 'today') { const end = new Date(); end.setHours(23, 59, 59, 0); minutes = Math.max(1, Math.ceil((end - Date.now()) / 60000)); }
+        else if (expiry !== 'never') minutes = Number(expiry);
+        try { await send({ emoji, text, minutes }); close(); showToast(t('cstatus-saved')); } catch (e2) { err.textContent = e2.message; }
+    }
+    async function clearIt() {
+        try { await send({ emoji: '', text: '' }); close(); showToast(t('cstatus-cleared')); } catch (e2) { err.textContent = e2.message; }
+    }
+    back.querySelector('.cstatus-save').addEventListener('click', save);
+    back.querySelector('.cstatus-clear').addEventListener('click', clearIt);
+    setTimeout(() => input.focus(), 0);
+}
+document.getElementById('cstatus-open-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    statusDropdown.style.display = 'none';
+    openCustomStatusEditor();
+});
+document.getElementById('profile-cstatus')?.addEventListener('click', () => openCustomStatusEditor());
+
+// =====================================================
+// MESAJ DÜZENLEME GEÇMİŞİ (lobi: yazar + kurucu/moderatör)
+// =====================================================
+async function openEditHistory(anchor, messageId) {
+    const prevPop = document.querySelector('.edits-pop');
+    if (prevPop) { if (prevPop._close) prevPop._close(); else prevPop.remove(); }
+    const pop = document.createElement('div');
+    pop.className = 'edits-pop';
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-label', t('edits-title'));
+    pop.innerHTML = `<div class="edits-head"><b>${escapeHtml(t('edits-title'))}</b><button type="button" class="edits-x" aria-label="${escapeAttr(t('close'))}">×</button></div>
+        <div class="edits-body" aria-busy="true">${skeletonRowsHtml('lines', 3)}</div>`;
+    document.body.appendChild(pop);
+    const place = () => {
+        if (window.innerWidth < 600) { pop.style.left = ''; pop.style.top = ''; return; }
+        const r = anchor.getBoundingClientRect();
+        pop.style.left = `${Math.max(8, Math.min(r.left - 20, window.innerWidth - pop.offsetWidth - 8))}px`;
+        const below = r.bottom + 8 + pop.offsetHeight < window.innerHeight;
+        pop.style.top = `${below ? r.bottom + 8 : Math.max(8, r.top - pop.offsetHeight - 8)}px`;
+    };
+    place();
+    const close = () => { pop.remove(); document.removeEventListener('pointerdown', outside, true); document.removeEventListener('keydown', onKey, true); };
+    const outside = (e) => { if (!pop.contains(e.target) && !anchor.contains(e.target)) close(); };
+    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); if (document.contains(anchor)) anchor.focus(); } };
+    setTimeout(() => { if (document.contains(pop)) document.addEventListener('pointerdown', outside, true); }, 0);
+    document.addEventListener('keydown', onKey, true);
+    pop._close = close;
+    pop.querySelector('.edits-x').addEventListener('click', close);
+    const body = pop.querySelector('.edits-body');
+    try {
+        const res = await fetch(`/api/messages/${Number(messageId)}/edits`, { credentials: 'include' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) throw new Error(data.error || t('edits-error'));
+        if (!document.contains(pop)) return;
+        const fmt = (at) => (at ? serverDate(at).toLocaleString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
+        const rows = data.versions.map((v, i) => `<div class="edits-ver${v.current ? ' is-current' : ''}">
+            <div class="edits-meta"><span class="edits-tag">${escapeHtml(v.current ? t('edits-current') : i === 0 && !data.truncated ? t('edits-original') : data.truncated ? t('edits-older') : `${t('edits-version')} ${i + 1}`)}</span>${v.at ? `<time>${escapeHtml(fmt(v.at))}</time>` : ''}</div>
+            <div class="edits-text">${escapeHtml(v.content)}</div></div>`).reverse().join('');
+        body.innerHTML = rows + (!data.complete ? `<p class="edits-note">${escapeHtml(t('edits-incomplete'))}</p>`
+            : data.truncated ? `<p class="edits-note">${escapeHtml(t('edits-truncated'))}</p>` : '');
+    } catch (e) {
+        body.innerHTML = `<p class="edits-note">${escapeHtml(e.message || t('edits-error'))}</p>`;
+    }
+    body.removeAttribute('aria-busy');
+    place();
+}
+document.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('.edited-tag-btn');
+    if (!b) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openEditHistory(b, Number(b.dataset.editsId));
+}, true);
+
+// =====================================================
+// YÜKLEME İSKELETLERİ
+// =====================================================
+// Bir kapsayıcı yüklenirken (120 ms'den uzun sürerse) gri yer tutucular görünür; içerik gelince/başarısız olunca kalkar.
+// Mevcut içerik silinmez, yalnızca gizlenir: yükleme başarısız olursa eski hâl geri gelir.
+function skeletonRowsHtml(kind, n) {
+    const W = [72, 48, 86, 60, 38, 78, 54, 66];
+    let out = '';
+    for (let i = 0; i < n; i++) {
+        const w1 = W[i % W.length], w2 = W[(i + 3) % W.length];
+        if (kind === 'lines') out += `<div class="sk-row sk-lines"><i class="sk-bar" style="width:30%"></i><i class="sk-bar" style="width:${w1}%"></i></div>`;
+        else if (kind === 'members') out += `<div class="sk-row"><i class="sk-av sk-av-sm"></i><i class="sk-bar" style="width:${Math.min(w1, 70)}%"></i></div>`;
+        else if (kind === 'list') out += `<div class="sk-row"><i class="sk-av"></i><span class="sk-col"><i class="sk-bar" style="width:${Math.min(w1, 60)}%"></i><i class="sk-bar sk-thin" style="width:${Math.min(w2, 80)}%"></i></span></div>`;
+        else out += `<div class="sk-row sk-msg"><i class="sk-av"></i><span class="sk-col"><i class="sk-bar sk-thin" style="width:${18 + (i % 3) * 6}%"></i><i class="sk-bar" style="width:${w1}%"></i>${i % 2 ? `<i class="sk-bar" style="width:${w2 - 20}%"></i>` : ''}</span></div>`;
+    }
+    return out;
+}
+window.skeletonRowsHtml = skeletonRowsHtml;
+function skeletonOn(el, kind, n) {
+    if (!el) return;
+    skeletonOff(el);
+    const timers = (window.__skTimers = window.__skTimers || new WeakMap());
+    timers.set(el, setTimeout(() => {
+        timers.delete(el);
+        const b = document.createElement('div');
+        b.className = `sk-block sk-${kind}`;
+        b.setAttribute('aria-hidden', 'true');
+        b.innerHTML = skeletonRowsHtml(kind, n || (kind === 'members' ? 8 : 6));
+        el.classList.add('sk-loading');
+        el.setAttribute('aria-busy', 'true');
+        el.prepend(b);
+    }, 120));
+}
+function skeletonOff(el) {
+    if (!el) return;
+    const timers = window.__skTimers;
+    if (timers && timers.has(el)) { clearTimeout(timers.get(el)); timers.delete(el); }
+    el.classList.remove('sk-loading');
+    el.removeAttribute('aria-busy');
+    el.querySelectorAll(':scope > .sk-block').forEach((b) => b.remove());
 }
 
 
@@ -4576,6 +4809,30 @@ const I18N = {
     'confirm-delete-message': { tr: 'Bu mesajı silmek istediğine emin misin?', en: 'Are you sure you want to delete this message?' },
     'message-deleted': { tr: 'Bu mesaj silindi', en: 'This message was deleted' },
     'unread-divider': { tr: 'Yeni mesajlar', en: 'New messages' },
+    'cstatus-set': { tr: 'Özel durum ayarla', en: 'Set custom status' },
+    'cstatus-edit': { tr: 'Özel durumu düzenle', en: 'Edit custom status' },
+    'cstatus-add': { tr: 'Özel durum ekle', en: 'Add custom status' },
+    'cstatus-title': { tr: 'Özel durum', en: 'Custom status' },
+    'cstatus-ph': { tr: 'Ne yapıyorsun?', en: "What's happening?" },
+    'cstatus-emoji': { tr: 'Emoji seç', en: 'Pick an emoji' },
+    'cstatus-clear-after': { tr: 'Şu süre sonra kaldır', en: 'Clear after' },
+    'cstatus-1h': { tr: '1 saat', en: '1 hour' },
+    'cstatus-4h': { tr: '4 saat', en: '4 hours' },
+    'cstatus-today': { tr: 'Bugün', en: 'Today' },
+    'cstatus-never': { tr: 'Kaldırma', en: "Don't clear" },
+    'cstatus-clear': { tr: 'Temizle', en: 'Clear' },
+    'cstatus-saved': { tr: 'Özel durum kaydedildi', en: 'Custom status saved' },
+    'cstatus-cleared': { tr: 'Özel durum kaldırıldı', en: 'Custom status cleared' },
+    'cstatus-until': { tr: 'bitiş', en: 'until' },
+    'edits-title': { tr: 'Düzenleme geçmişi', en: 'Edit history' },
+    'edits-open': { tr: 'Düzenleme geçmişini gör', en: 'View edit history' },
+    'edits-current': { tr: 'Şimdiki', en: 'Current' },
+    'edits-original': { tr: 'İlk hâli', en: 'Original' },
+    'edits-version': { tr: 'Sürüm', en: 'Version' },
+    'edits-older': { tr: 'Önceki sürüm', en: 'Earlier version' },
+    'edits-truncated': { tr: 'Yalnızca son 20 düzenleme saklanır; daha eskileri gösterilmiyor.', en: 'Only the last 20 edits are kept; older ones are not shown.' },
+    'edits-incomplete': { tr: 'Bu mesaj, geçmiş kaydı başlamadan önce düzenlenmiş; önceki hâli yok.', en: 'This message was edited before history was recorded; earlier versions are unavailable.' },
+    'edits-error': { tr: 'Geçmiş yüklenemedi.', en: 'Could not load history.' },
     'user-vol-title': { tr: 'Ses düzeyi', en: 'Volume' },
     'user-vol-sub': { tr: 'Yalnızca senin duyduğun ses değişir', en: 'Only changes what you hear' },
     'user-vol-mute': { tr: 'Bende sustur', en: 'Mute for me' },
@@ -7066,11 +7323,12 @@ friendsSidebarToggleBtn2.addEventListener('click', () => {
 
 async function loadFriendsSidebar() {
 
+    if (!window.__friendsCache && friendsSidebarList && !friendsSidebarList.children.length) friendsSidebarList.innerHTML = `<div class="sk-block sk-list" aria-hidden="true">${skeletonRowsHtml('list', 6)}</div>`;
     try {
 
         const response = await fetch('/api/friends', { credentials: 'include' });
         const data = await response.json();
-        if (!data.success) return;
+        if (!data.success) { friendsSidebarList.querySelectorAll(':scope > .sk-block').forEach((b) => b.remove()); return; }
 
         try {
             const deletedRes = await fetch('/api/dm/deleted', { credentials: 'include' });
@@ -7083,6 +7341,7 @@ async function loadFriendsSidebar() {
         loadGroups();
 
     } catch (error) {
+        friendsSidebarList.querySelectorAll(':scope > .sk-block').forEach((b) => b.remove());
         console.error('Arkadaş listesi alınamadı:', error);
     }
 
@@ -7204,7 +7463,7 @@ function renderFriendsSidebar(friends) {
                     ${frameOverlay}
                     <span class="status-hex status-hex-sm friends-sidebar-status ${statusClass}" title="${escapeAttr(statusTitle)}"></span>
                 </span>
-                <span class="friends-sidebar-name">${usernameCardHtml(f.username, f.plus_active, f.name_effect)}${f.activity ? `<small class="friends-activity">🎮 ${escapeHtml(f.activity)}</small>` : ''}</span>
+                <span class="friends-sidebar-name">${usernameCardHtml(f.username, f.plus_active, f.name_effect)}${f.online && customStatusText(f.custom_status) ? `<small class="friends-activity friends-cstatus">${escapeHtml(customStatusText(f.custom_status))}</small>` : f.activity ? `<small class="friends-activity">🎮 ${escapeHtml(f.activity)}</small>` : ''}</span>
                 ${unread > 0 ? `<span class="friends-sidebar-unread">${unread}</span>` : ''}
             </div>
         `;
@@ -9200,6 +9459,12 @@ function renderOtherProfile() {
     otherProfileAvatarImg.src = hasAvatar ? profile.avatar_data : '';
     otherProfileAvatarImg.style.display = hasAvatar ? 'block' : 'none';
 
+    const otherCsEl = document.getElementById('other-profile-cstatus');
+    if (otherCsEl) {
+        const cst = customStatusText(profile.custom_status);
+        otherCsEl.style.display = cst ? '' : 'none';
+        otherCsEl.textContent = cst;
+    }
     const otherActivityEl = document.getElementById('other-profile-activity');
     if (otherActivityEl) {
         otherActivityEl.style.display = profile.activity ? '' : 'none';
@@ -9427,6 +9692,8 @@ async function openDeletedDm(token) {
 
     setDmReadOnlyMode(true, thread && thread.expires_at);
     dmModalTitle.textContent = `💬 ${t('deleted-account-label')}`;
+    window.__openDmSeq = (window.__openDmSeq || 0) + 1;
+    skeletonOff(dmFeed);
     dmFeed.innerHTML = '';
     feedPaging.dm = { key: null, oldestId: null, hasMore: false, loading: false };
 
@@ -9484,6 +9751,9 @@ async function openDm(userId, username) {
     if (dmChanged) restoreDraft('dm');
     renderDmTitle(userId, username);
     dmFeed.innerHTML = '';
+    const dmSeq = (window.__openDmSeq = (window.__openDmSeq || 0) + 1);
+    skeletonOn(dmFeed, 'feed');
+    dmModal.style.display = 'flex';
 
     // Profil görseli henüz bilinmiyorsa (ör. bildirimden açıldı) profilden al: görsel varsa görünür, yoksa kullanıcı adının baş harfi kalır.
     if (!knownAvatars.get(userId)) {
@@ -9510,6 +9780,7 @@ async function openDm(userId, username) {
         const response = await fetch(`/api/dm/${userId}/messages`, { credentials: 'include' });
         const data = await response.json();
 
+        if (window.__openDmSeq === dmSeq) skeletonOff(dmFeed);
         if (data.success && activeDmUserId === userId) {
             dmFeed._stickBottom = true;
             data.messages.forEach((m) => appendDmMessage(m));
@@ -9521,10 +9792,13 @@ async function openDm(userId, username) {
 
     } catch (error) {
 
+        if (window.__openDmSeq === dmSeq) skeletonOff(dmFeed);
         console.error('DM mesajları alınamadı:', error);
 
     }
 
+    // Yükleme sürerken kapatıldıysa ya da başka sohbete geçildiyse yeniden açılmaz.
+    if (activeDmUserId !== userId) return;
     dmModal.style.display = 'flex';
     dmMessageInput.focus();
 
@@ -9934,7 +10208,7 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
         ? serverDate(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
         : '';
 
-    const editedTag = msg.edited ? ` <span class="edited-tag">(${t('edited-tag')})</span>` : '';
+    const editedTag = msg.edited ? ` <span class="edited-tag">${t('edited-tag')}</span>` : '';
     const forwardedTag = msg.forwarded_from_message_id ? `<div class="msg-forwarded-tag">↗ ${t('message-forwarded')}</div>` : '';
     const opts = { context: 'dm', readOnly: dmReadOnly };
     const actions = buildMsgActionsBarHtml(msg, opts);
@@ -11298,6 +11572,7 @@ function closeDmPanel() {
     stashDraft('dm');
     cancelMessageReply('dm');
     activeDmUserId = null;
+    skeletonOff(dmFeed);
 }
 
 // Dokunur dokunmaz kapanır (pointerup); 'click' yedek olarak kalır (klavye / erişilebilirlik).
@@ -11611,6 +11886,7 @@ function flashMessage(el, instant) {
 // Sonuca git: mesaj akışta zaten varsa oraya kaydırılır; yoksa çevresi (öncesi + sonrası) yüklenir, akış o noktadan devam eder.
 async function jumpToMessage(kind, messageId) {
     const feed = kind === 'hub' ? hubFeed : dmFeed;
+    skeletonOff(feed);
     const existing = feed.querySelector(`[data-message-id="${messageId}"]`);
     if (existing) { flashMessage(existing.closest('.dm-msg-row') || existing); return; }
 
@@ -11669,6 +11945,7 @@ async function reloadDmMessages(userId) {
         const response = await fetch(`/api/dm/${userId}/messages`, { credentials: 'include' });
         const data = await response.json();
         if (!data.success || activeDmUserId !== userId) return;
+        skeletonOff(dmFeed);
         dmFeed.innerHTML = '';
         dmFeed._stickBottom = true;
         data.messages.forEach((m) => appendDmMessage(m));
@@ -14664,6 +14941,7 @@ async function switchHubChannel(channelId, { load = true } = {}) {
     currentChannelId = channelId;
     // Yeni kanalın mesajları gelene kadar eski kanalın akışı görünmesin (yanlış okundu işareti ve kaybolan gönderim olmasın).
     hubFeed.innerHTML = '';
+    if (load) skeletonOn(hubFeed, 'feed'); else skeletonOff(hubFeed);
     feedPaging.hub = { key: null, oldestId: null, hasMore: false, loading: false };
     try { localStorage.setItem(CHANNEL_PREF_KEY + currentHub.id, String(channelId)); } catch (_) { /* yoksay */ }
     restoreDraft('hub');
@@ -15652,6 +15930,9 @@ async function openHub(hubId, opts = {}) {
     }
 
     nativeNotifyCancel(`hub-${hubId}`);
+    // Başka lobiye geçiliyorsa: bilgi ve mesajlar gelene kadar iskelet (eski içerik gizlenir, hata olursa geri gelir).
+    const willChange = !currentHub || currentHub.id !== Number(hubId);
+    if (willChange) { skeletonOn(hubFeed, 'feed'); skeletonOn(hubMemberList, 'members'); }
     // Telefonda üstte kalabilecek Mesajlar sayfası / çekmeceler kapanır (ör. bildirimden lobi açıldı).
     document.body.classList.remove('lc-msgs-open', 'lobby-drawer-open', 'drawer-friends', 'drawer-groups', 'drawer-friendlist');
 
@@ -15660,7 +15941,7 @@ async function openHub(hubId, opts = {}) {
         const response = await fetch(`/api/hubs/${hubId}`, { credentials: 'include' });
         const data = await response.json();
 
-        if (!data.success) return;
+        if (!data.success) { if (seq === openHubSeq) { skeletonOff(hubFeed); skeletonOff(hubMemberList); } return; }
         if (seq !== openHubSeq) return; // bu arada başka bir lobi açıldı: eski yanıt yeniyi ezmesin
 
         const hubChanged = !currentHub || currentHub.id !== data.hub.id;
@@ -15673,6 +15954,7 @@ async function openHub(hubId, opts = {}) {
             clearTyping('hub');
             if (msgSearchPanel?.dataset.kind === 'hub') closeMessageSearch();
             hubFeed.innerHTML = '';
+            skeletonOn(hubFeed, 'feed');
             feedPaging.hub = { key: null, oldestId: null, hasMore: false, loading: false, newestId: null, hasNewer: false };
             renderJumpToLatest('hub');
         }
@@ -15699,6 +15981,7 @@ async function openHub(hubId, opts = {}) {
 
     } catch (error) {
 
+        if (seq === openHubSeq) { skeletonOff(hubFeed); skeletonOff(hubMemberList); }
         console.error('Lobi açılamadı:', error);
 
     }
@@ -17394,6 +17677,7 @@ function leaveCall() {
 
 function renderHubMembers() {
 
+    skeletonOff(hubMemberList);
     const myTier = currentHub.my_permission_tier;
     const canModerate = myTier === 'owner' || myTier === 'moderator';
 
@@ -17452,8 +17736,11 @@ function renderHubMembers() {
         const cardColor = m.profile_color || getUserColor(m.username);
         const roleText = m.permission_tier === 'owner' ? 'Kurucu' : m.permission_tier === 'moderator' ? 'Moderatör' : '';
         const state = grouped ? presenceOf(m) : null;
-        const subText = grouped ? `${roleText ? roleText + ' · ' : ''}${presenceText(m, state)}`
-            : (roleText || (m.online ? t('hub-info-online') : ''));
+        // Özel durum yazısı: çevrimiçiyken (seste değilken) "Burada/Uzakta" yerine görünür.
+        const csText = customStatusText(m.custom_status);
+        const showCs = Boolean(csText) && (grouped ? state !== 'voice' && state !== 'offline' : (m.online || isSelf));
+        const subText = grouped ? `${roleText ? roleText + ' · ' : ''}${showCs ? csText : presenceText(m, state)}`
+            : (roleText ? roleText + (showCs ? ' · ' + csText : '') : (showCs ? csText : (m.online ? t('hub-info-online') : '')));
         const premFx = m.premium_card ? '<span class="mc-fx" aria-hidden="true"><i class="mc-shine"></i><i class="mc-spark mc-spark-a"></i><i class="mc-spark mc-spark-b"></i><i class="mc-spark mc-spark-c"></i></span>' : '';
         return `
             ${divider}
@@ -17463,7 +17750,7 @@ function renderHubMembers() {
                     ${avatar}
                     <span class="hub-member-dot" style="background:${dotColor(m)};"></span>
                 </span>
-                <span class="hub-member-info"><span class="hub-member-name">${usernameCardHtml(m.username, m.plus_active, m.name_effect)}${tierBadge}</span>${subText ? `<span class="hub-member-sub">${escapeHtml(subText)}</span>` : ''}</span>
+                <span class="hub-member-info"><span class="hub-member-name">${usernameCardHtml(m.username, m.plus_active, m.name_effect)}${tierBadge}</span>${subText ? `<span class="hub-member-sub${showCs ? ' has-cstatus' : ''}"${showCs ? ` title="${escapeAttr(csText)}"` : ''}>${escapeHtml(subText)}</span>` : ''}</span>
                 ${showMenu ? `
                     <div class="hub-member-menu-wrap">
                         <button class="hub-member-menu-btn" type="button">⋯</button>
@@ -18112,16 +18399,17 @@ setupVoiceRecorder(dmVoiceBtn, (audioData, duration) => {
 
 async function loadHubMessages(hubId) {
 
+    const channelAtStart = currentChannelId;
     try {
 
-        const channelAtStart = currentChannelId;
         const response = await fetch(`/api/hubs/${hubId}/messages${channelParam()}`, { credentials: 'include' });
         const data = await response.json();
 
-        if (!data.success) return;
+        if (!data.success) { if (currentHub?.id === hubId && currentChannelId === channelAtStart) skeletonOff(hubFeed); return; }
         // Bu arada başka lobiye/kanala geçildiyse eski yanıt akışı ezmesin.
         if (currentHub?.id !== hubId || currentChannelId !== channelAtStart) return;
 
+        skeletonOff(hubFeed);
         hubFeed.innerHTML = '';
         hubFeed._stickBottom = true;
         feedPaging.hub = { key: null, oldestId: null, hasMore: false, loading: false };
@@ -18141,6 +18429,7 @@ async function loadHubMessages(hubId) {
 
     } catch (error) {
 
+        if (currentHub?.id === hubId && currentChannelId === channelAtStart) skeletonOff(hubFeed);
         console.error('Lobi mesajları alınamadı:', error);
 
     }
@@ -18234,7 +18523,12 @@ function renderHubMessageIntoWrap(wrap, msg) {
         ? serverDate(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
         : '';
 
-    const editedTag = msg.edited ? `<span class="edited-tag">(${t('edited-tag')})</span>` : '';
+    const canSeeEdits = Boolean(msg.edited) && msg.kind !== 'deleted' && Boolean(currentHub) && currentUser
+        && currentHub.type !== 'group'
+        && (msg.user_id === currentUser.id || currentHub.my_permission_tier === 'owner' || currentHub.my_permission_tier === 'moderator');
+    const editedTag = !msg.edited ? '' : ' ' + (canSeeEdits
+        ? `<button type="button" class="edited-tag edited-tag-btn" data-edits-id="${Number(msg.id)}" title="${escapeAttr(t('edits-open'))}">${t('edited-tag')}</button>`
+        : `<span class="edited-tag">${t('edited-tag')}</span>`);
     const pinnedTag = msg.pinned_at ? `<span class="msg-pinned-tag">${t('message-pinned')}</span>` : '';
 
     const avatar = avatarButtonHtml(msg.user_id, msg.avatar_data, msg.username, msg.avatar_frame, msg.profile_color);

@@ -42,6 +42,7 @@ const {
   saveHubMessage,
   deleteMessage,
   editMessage,
+  getMessageEditHistory,
   addReaction,
   removeReaction,
   pinMessage,
@@ -127,6 +128,8 @@ const {
   updateNameEffect,
   updateBubbleStyle,
   updateActivity,
+  setCustomStatus,
+  freshCustomStatus,
   listGiftProducts,
   giftProduct,
   listRecentGifts,
@@ -741,6 +744,7 @@ function getUserFromSessionToken(token) {
   const user = db.prepare(`
     SELECT users.id, users.username, users.email, users.about_me,
            users.status, users.avatar_visibility, users.avatar_data, users.banner_data, users.chat_theme, users.profile_color, users.bubble_style, users.profile_effect, users.profile_theme, users.name_effect, users.profile_sound_on, users.activity_text, users.show_activity,
+           users.custom_status_text, users.custom_status_emoji, users.custom_status_until,
            users.minor_until, users.platform_role, users.dev_notice_seen, users.dev_notice_new, users.account_status,
            users.role_acceptance_pending, users.role_accepted_role, users.role_notice_kind, users.role_notice_at,
            sessions.expires_at
@@ -780,6 +784,7 @@ function getUserFromSessionToken(token) {
     profile_sound_on: user.profile_sound_on !== 0,
     activity_text: user.activity_text || '',
     show_activity: user.show_activity !== 0,
+    custom_status: freshCustomStatus(user),
     is_minor: isMinorUntil(user.minor_until),
     ...platformRoleFields(user),
     dev_notice: devNoticeFor(user.dev_notice_seen, user.dev_notice_new)
@@ -1499,6 +1504,22 @@ app.patch('/api/profile/profile-sound', (req, res) => {
     return res.json(setProfileSoundOn(user.id, Boolean(body.on)));
   } catch (error) {
     console.error('Profil sesi hatası:', error);
+    return res.status(500).json({ success: false, error: 'Güncellenemedi.' });
+  }
+});
+
+// Özel durum yazısı: { emoji, text, minutes } (minutes boş = süresiz; emoji ve metin boş = temizle)
+app.patch('/api/profile/custom-status', contentWriteLimiter, (req, res) => {
+  try {
+    const user = getUserFromRequest(req);
+    if (!user) return res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
+    const body = req.body || {};
+    const result = setCustomStatus(user.id, { emoji: body.emoji, text: body.text, minutes: body.minutes == null || body.minutes === '' ? null : body.minutes });
+    if (!result.success) return res.status(400).json(result);
+    io.emit('presence_changed');
+    return res.json(result);
+  } catch (error) {
+    console.error('Özel durum hatası:', error);
     return res.status(500).json({ success: false, error: 'Güncellenemedi.' });
   }
 });
@@ -3998,6 +4019,19 @@ app.delete('/api/messages/:id/link-preview', contentWriteLimiter, (req, res) => 
   if (result.hub_id) io.to(`hub:${result.hub_id}`).emit('message_link_preview', payload);
   else if (result.to_user_id) io.to(`user:${result.user_id}`).to(`user:${result.to_user_id}`).emit('message_link_preview', payload);
   return res.json({ success: true });
+});
+
+app.get('/api/messages/:id/edits', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const result = getMessageEditHistory(Number(req.params.id), user.id);
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    return res.json(result);
+  } catch (error) {
+    console.error('Düzenleme geçmişi hatası:', error);
+    res.status(500).json({ success: false, error: 'Yüklenemedi.' });
+  }
 });
 
 app.patch('/api/messages/:id', contentWriteLimiter, (req, res) => {

@@ -64,6 +64,7 @@
     };
     const activityText = (f) => {
         if (f.voice) return `${tr('lcf-in-voice', 'Seste')} · ${f.voice.hub_name} › ${f.voice.room_name}`;
+        if (f.online && typeof customStatusText === 'function' && customStatusText(f.custom_status)) return customStatusText(f.custom_status);
         const a = f.activity;
         if (a && typeof a === 'object' && a.text) return a.text;
         if (typeof a === 'string' && a) return a;
@@ -122,7 +123,7 @@
         badge.textContent = String(n);
         const box = $('lcf-groups');
         const all = friends();
-        if (!loaded && !all.length) { box.innerHTML = `<div class="lcf-empty">${esc(tr('loading', 'Yükleniyor…'))}</div>`; return; }
+        if (!loaded && !all.length) { box.innerHTML = typeof window.skeletonRowsHtml === 'function' ? `<div class="sk-block sk-list" aria-hidden="true">${window.skeletonRowsHtml('list', 6)}</div>` : `<div class="lcf-empty">${esc(tr('loading', 'Yükleniyor…'))}</div>`; return; }
 
         const q = ($('lcf-q').value || '').trim().toLocaleLowerCase('tr');
         const match = (u) => !q || String(u.username || '').toLocaleLowerCase('tr').includes(q);

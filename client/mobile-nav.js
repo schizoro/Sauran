@@ -51,7 +51,7 @@
     function renderMsgs() {
         const list = $('lc-msgs-list');
         if (!list) return;
-        if (convs === null) { list.innerHTML = '<div class="lc-msgs-empty">Yükleniyor…</div>'; return; }
+        if (convs === null) { list.innerHTML = typeof window.skeletonRowsHtml === 'function' ? `<div class="sk-block sk-list" aria-hidden="true">${window.skeletonRowsHtml('list', 7)}</div>` : '<div class="lc-msgs-empty">Yükleniyor…</div>'; return; }
         const q = ($('lc-msgs-q').value || '').trim().toLocaleLowerCase('tr');
         const rows = convs.filter((c) => !q || c.username.toLocaleLowerCase('tr').includes(q));
         if (!rows.length) {

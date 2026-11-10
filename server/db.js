@@ -112,6 +112,12 @@ if (!userColumns.includes('activity_text')) {
   db.exec(`ALTER TABLE users ADD COLUMN activity_at DATETIME`);
   db.exec(`ALTER TABLE users ADD COLUMN show_activity INTEGER NOT NULL DEFAULT 1`);
 }
+if (!userColumns.includes('custom_status_text')) {
+  // Özel durum yazısı: emoji + kısa metin; until (UTC) geçince kendiliğinden kaybolur (NULL = süresiz).
+  db.exec(`ALTER TABLE users ADD COLUMN custom_status_text TEXT`);
+  db.exec(`ALTER TABLE users ADD COLUMN custom_status_emoji TEXT`);
+  db.exec(`ALTER TABLE users ADD COLUMN custom_status_until DATETIME`);
+}
 if (!userColumns.includes('name_effect')) {
   // Sauran Plus: kullanıcı adı metni için animasyonlu efekt (none/gradient/glow/rainbow/shimmer).
   db.exec(`ALTER TABLE users ADD COLUMN name_effect TEXT DEFAULT 'none'`);
@@ -2552,6 +2558,55 @@ function updateActivity(userId, { text, show, auto }) {
   return { success: true, activity_text: row.activity_text || '', show_activity: Boolean(row.show_activity) };
 }
 
+// ── Özel durum yazısı ──
+const CUSTOM_STATUS_MAX_CHARS = 60;
+const CUSTOM_STATUS_MAX_MINUTES = 7 * 24 * 60;
+
+function setCustomStatus(userId, { emoji, text, minutes }) {
+  const clean = String(text || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  const emo = String(emoji || '').replace(/\s+/g, '').trim();
+  if (clean.length > CUSTOM_STATUS_MAX_CHARS) return { success: false, error: `En fazla ${CUSTOM_STATUS_MAX_CHARS} karakter.` };
+  if (/https?:\/\/|www\./i.test(clean)) return { success: false, error: 'Bağlantı yazılamaz.' };
+  // Emoji alanı: tek emoji (birleşik emojiler birkaç kod birimi tutar); harf/rakam kabul edilmez.
+  if (emo && (emo.length > 16 || /[\p{L}\p{N}<>&"']/u.test(emo))) return { success: false, error: 'Geçersiz emoji.' };
+  if (!clean && !emo) {
+    db.prepare(`UPDATE users SET custom_status_text = NULL, custom_status_emoji = NULL, custom_status_until = NULL WHERE id = ?`).run(userId);
+    return { success: true, custom_status: null };
+  }
+  let until = null;
+  if (minutes != null) {
+    const m = Math.round(Number(minutes));
+    if (!Number.isFinite(m) || m < 1 || m > CUSTOM_STATUS_MAX_MINUTES) return { success: false, error: 'Geçersiz süre.' };
+    until = new Date(Date.now() + m * 60000).toISOString().slice(0, 19).replace('T', ' ');
+  }
+  db.prepare(`UPDATE users SET custom_status_text = ?, custom_status_emoji = ?, custom_status_until = ? WHERE id = ?`).run(clean || null, emo || null, until, userId);
+  return { success: true, custom_status: freshCustomStatus({ custom_status_text: clean, custom_status_emoji: emo, custom_status_until: until }) };
+}
+
+// Süresi geçmemişse { emoji, text, until } döner, yoksa null.
+function freshCustomStatus(row) {
+  if (!row || (!row.custom_status_text && !row.custom_status_emoji)) return null;
+  if (row.custom_status_until) {
+    const until = new Date(String(row.custom_status_until).replace(' ', 'T') + 'Z').getTime();
+    if (!(until > Date.now())) return null;
+  }
+  return {
+    emoji: row.custom_status_emoji || '',
+    text: row.custom_status_text || '',
+    until: row.custom_status_until ? String(row.custom_status_until).replace(' ', 'T') + 'Z' : null
+  };
+}
+
+// Başkasına gösterilecek özel durum: kişi görünmezse ya da 18 yaş altı ve arkadaş değilse gösterilmez.
+function customStatusFor(viewerId, row) {
+  if (!row) return null;
+  if (viewerId !== row.id) {
+    if (row.status === 'invisible') return null;
+    if (!presenceVisibleTo(viewerId, row.id, row.minor_until)) return null;
+  }
+  return freshCustomStatus(row);
+}
+
 function freshActivity(row) {
   if (!row || !row.show_activity || !row.activity_text || !row.activity_at) return null;
   const at = new Date(String(row.activity_at).replace(' ', 'T') + 'Z').getTime();
@@ -3971,13 +4026,15 @@ function getHubDetail(hubId, userId) {
 
   const members = db.prepare(`
     SELECT hub_members.user_id, hub_members.role_id, hub_members.permission_tier, users.username, users.card_style, users.status, users.avatar_data, users.avatar_visibility, users.minor_until, users.profile_color, users.name_effect,
+           users.custom_status_text, users.custom_status_emoji, users.custom_status_until,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) END) AS avatar_frame,
            EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) AS plus_active
     FROM hub_members
     INNER JOIN users ON users.id = hub_members.user_id
     WHERE hub_members.hub_id = ?
   `).all(hubId).map((m) => {
-    const { avatar_visibility, minor_until, ...rest } = m;
+    const { avatar_visibility, minor_until, custom_status_text, custom_status_emoji, custom_status_until, ...rest } = m;
+    rest.custom_status = customStatusFor(userId, { id: m.user_id, status: m.status, minor_until, custom_status_text, custom_status_emoji, custom_status_until });
     if (!hasFeature(m.user_id, 'name_effect')) rest.name_effect = 'none';
     rest.premium_card = hasFeature(m.user_id, 'premium_card');
     rest.name_plate = effectiveNamePlate(m.user_id);
@@ -4592,8 +4649,46 @@ function purgeDeletedMessageResidue() {
 const MAX_MESSAGE_LENGTH = 2000;
 const MESSAGE_TOO_LONG_ERROR = `Mesajın çok uzun (en fazla ${MAX_MESSAGE_LENGTH} karakter).`;
 
+// ── Lobi mesajı düzenleme geçmişi ──
+// Her düzenlemede ESKİ metin saklanır (yalnızca lobi/grup mesajları; özel mesajlar saklanmaz). Mesaj silinince geçmiş de
+// silinir (tetikleyici + CASCADE). Mesaj başına en fazla MESSAGE_EDITS_KEEP sürüm tutulur.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS message_edits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    edited_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_message_edits_msg ON message_edits(message_id, id);
+  CREATE TRIGGER IF NOT EXISTS trg_message_edits_purge AFTER UPDATE OF kind ON messages
+    WHEN NEW.kind = 'deleted' BEGIN DELETE FROM message_edits WHERE message_id = NEW.id; END;
+`);
+const MESSAGE_EDITS_KEEP = 20;
+
+// Geçmişi kim görebilir: mesajın yazarı; lobide (grup değil) ayrıca kurucu ve moderatörler.
+function getMessageEditHistory(messageId, viewerId) {
+  const msg = db.prepare(`SELECT id, user_id, hub_id, kind, content, created_at, edited FROM messages WHERE id = ?`).get(messageId);
+  if (!msg || msg.kind === 'deleted') return { success: false, status: 404, error: 'Mesaj bulunamadı.' };
+  if (!msg.hub_id || isGroupHub(msg.hub_id)) return { success: false, status: 403, error: 'Bu mesajın geçmişi tutulmuyor.' };
+  if (!isHubMember(msg.hub_id, viewerId)) return { success: false, status: 403, error: 'Bu Lobi\'nin üyesi değilsin.' };
+  if (msg.user_id !== viewerId) {
+    const tier = getMemberTier(msg.hub_id, viewerId);
+    if (tier !== 'owner' && tier !== 'moderator') return { success: false, status: 403, error: 'Düzenleme geçmişini yalnızca kurucu ve moderatörler görebilir.' };
+  }
+  const rows = db.prepare(`SELECT content, edited_at FROM message_edits WHERE message_id = ? ORDER BY id ASC`).all(messageId);
+  // Sürümler: her eski metin, bir öncekinin değiştirildiği andan geçerlidir; ilki mesajın gönderildiği andan.
+  // Sınıra ulaşıldıysa en eski kayıtlar budanmış olabilir: ilk satır "ilk hâl" sayılmaz, başlangıç zamanı bilinmez.
+  const truncated = rows.length >= MESSAGE_EDITS_KEEP;
+  const versions = [];
+  let from = truncated ? null : msg.created_at;
+  rows.forEach((r) => { versions.push({ content: r.content, at: from }); from = r.edited_at; });
+  versions.push({ content: msg.content, at: rows.length ? from : null, current: true });
+  return { success: true, id: msg.id, versions, complete: rows.length > 0, truncated };
+}
+
 function editMessage(messageId, userId, newContent) {
-  const msg = db.prepare(`SELECT user_id, hub_id, to_user_id, kind FROM messages WHERE id = ?`).get(messageId);
+  const msg = db.prepare(`SELECT user_id, hub_id, to_user_id, kind, content FROM messages WHERE id = ?`).get(messageId);
   if (!msg) return { success: false, error: 'Mesaj bulunamadı.' };
   if (msg.user_id !== userId) return { success: false, error: 'Yalnızca kendi mesajını düzenleyebilirsin.' };
   if (!['text', 'dm'].includes(msg.kind)) return { success: false, error: 'Bu mesaj türü düzenlenemez.' };
@@ -4608,7 +4703,18 @@ function editMessage(messageId, userId, newContent) {
     newContent = filtered.text;
   }
 
-  db.prepare(`UPDATE messages SET content = ?, edited = 1, link_preview = CASE WHEN link_preview LIKE '%"suppressed":true%' THEN link_preview ELSE NULL END WHERE id = ?`).run(newContent, messageId);
+  if (newContent === msg.content) {
+    return { success: true, hub_id: msg.hub_id, to_user_id: msg.to_user_id, message: getMessageById(messageId), unchanged: true };
+  }
+
+  db.transaction(() => {
+    if (msg.hub_id && !isGroupHub(msg.hub_id)) {
+      db.prepare(`INSERT INTO message_edits (message_id, content) VALUES (?, ?)`).run(messageId, msg.content || '');
+      db.prepare(`DELETE FROM message_edits WHERE message_id = ? AND id NOT IN (SELECT id FROM message_edits WHERE message_id = ? ORDER BY id DESC LIMIT ?)`)
+        .run(messageId, messageId, MESSAGE_EDITS_KEEP);
+    }
+    db.prepare(`UPDATE messages SET content = ?, edited = 1, link_preview = CASE WHEN link_preview LIKE '%"suppressed":true%' THEN link_preview ELSE NULL END WHERE id = ?`).run(newContent, messageId);
+  })();
 
   return {
     success: true,
@@ -6222,13 +6328,14 @@ function getFriendshipStatus(a, b) {
 function listFriends(userId) {
   return db.prepare(`
     SELECT users.id, users.username, users.status, users.avatar_data, users.avatar_visibility, users.profile_color, users.name_effect, users.activity_text, users.activity_at, users.show_activity, users.activity_auto,
+           users.minor_until AS cs_minor, users.custom_status_text, users.custom_status_emoji, users.custom_status_until,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = users.id) END) AS avatar_frame,
            EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = users.id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) AS plus_active
     FROM friendships
     INNER JOIN users ON users.id = CASE WHEN friendships.user_low = ? THEN friendships.user_high ELSE friendships.user_low END
     WHERE friendships.status = 'accepted' AND (friendships.user_low = ? OR friendships.user_high = ?)
     ORDER BY users.username COLLATE NOCASE
-  `).all(userId, userId, userId).map((f) => { const { avatar_visibility, activity_text, activity_at, show_activity, activity_auto, ...rest } = f; rest.activity = freshActivity({ activity_text, activity_at, show_activity, activity_auto }); if (!hasFeature(f.id, 'name_effect')) rest.name_effect = 'none'; return maskAvatarFor(userId, f.id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']); });
+  `).all(userId, userId, userId).map((f) => { const { avatar_visibility, activity_text, activity_at, show_activity, activity_auto, cs_minor, custom_status_text, custom_status_emoji, custom_status_until, ...rest } = f; rest.activity = freshActivity({ activity_text, activity_at, show_activity, activity_auto }); rest.custom_status = customStatusFor(userId, { id: f.id, status: f.status, minor_until: cs_minor, custom_status_text, custom_status_emoji, custom_status_until }); if (!hasFeature(f.id, 'name_effect')) rest.name_effect = 'none'; return maskAvatarFor(userId, f.id, rest, avatar_visibility, ['avatar_data', 'avatar_frame']); });
 }
 
 // Özel sohbet listesi (telefondaki Mesajlar sekmesi): arkadaşlarla son mesajı olan sohbetler, en yeni üstte.
@@ -6480,7 +6587,8 @@ function confirmPasswordReset(email, code, newPassword) {
 
 function getUserPublicProfile(viewerId, targetId) {
   const user = db.prepare(`
-    SELECT id, username, status, about_me, avatar_data, banner_data, avatar_visibility, minor_until, profile_color, profile_effect, profile_theme, name_effect, profile_sound_on, activity_text, activity_at, show_activity, activity_auto
+    SELECT id, username, status, about_me, avatar_data, banner_data, avatar_visibility, minor_until, profile_color, profile_effect, profile_theme, name_effect, profile_sound_on, activity_text, activity_at, show_activity, activity_auto,
+           custom_status_text, custom_status_emoji, custom_status_until
     FROM users WHERE id = ?
   `).get(targetId);
 
@@ -6507,6 +6615,7 @@ function getUserPublicProfile(viewerId, targetId) {
     name_effect: hasFeature(targetId, 'name_effect') ? (user.name_effect || 'none') : 'none',
     name_plate: effectiveNamePlate(targetId),
     activity: (isSelf || (viewerId != null && areFriends(viewerId, targetId))) ? freshActivity(user) : null,
+    custom_status: customStatusFor(viewerId, user),
     plus_active: hasActivePlus(targetId),
     atmosphere: visible && user.profile_sound_on !== 0 ? effectiveAtmosphere(targetId) : 'none',
     profile_sound: visible ? effectiveProfileSound(targetId) : '',
@@ -9203,6 +9312,7 @@ module.exports = {
   saveHubMessage,
   deleteMessage,
   editMessage,
+  getMessageEditHistory,
   createHubVoiceMessage,
   createHubFileMessage,
   createHubSticker,
@@ -9300,6 +9410,8 @@ module.exports = {
   BUBBLE_STYLES,
   updateBubbleStyle,
   updateActivity,
+  setCustomStatus,
+  freshCustomStatus,
   GIFT_PRODUCTS,
   listGiftProducts,
   giftProduct,
