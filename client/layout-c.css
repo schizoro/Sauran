@@ -894,3 +894,54 @@ body.lc .subs-note { margin: 14px 0 0 !important; padding: 12px 14px; border-rad
   body.lc .lcf-body { padding-bottom: calc(90px + env(safe-area-inset-bottom)) !important; }
   body.lc .discover-view { padding-bottom: calc(96px + env(safe-area-inset-bottom)) !important; }
 }
+
+/* ═══════════════ TELEFON ANA EKRANI: SABİTLENENLER + GELEN KUTUSU SATIRLARI ═══════════════ */
+.hub-card-top, .hub-card-preview, .hub-card-faces, .hub-card-muted, .hub-pinned, .hub-swipe-acts { display: none; }
+@media (max-width: 720px) and (min-height: 501px) {
+  body.lc #hub-list-header { padding: 4px 0 0 !important; margin: 0 !important; }
+  body.lc #hub-list-header > button { border: 0 !important; border-radius: 12px !important; min-height: 36px; font-weight: 800 !important; }
+  body.lc #hub-create-open-btn { background: rgba(179, 102, 245, 0.16) !important; color: #d3a6ff !important; }
+  body.lc #hub-friend-open-btn { background: rgba(92, 200, 255, 0.12) !important; color: #8fdcff !important; }
+  body.lc #hub-group-open-btn { background: rgba(255, 200, 87, 0.12) !important; color: #ffd58a !important; }
+  /* Sabitlenenler */
+  body.lc .hub-pinned:not([hidden]) { display: block; margin: 14px 0 4px; }
+  body.lc .hub-pinned-title { display: flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 700; color: var(--text-tertiary, var(--text-secondary)); margin-bottom: 8px; }
+  body.lc .hub-pinned-title svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  body.lc .hub-pinned-row { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  body.lc .hub-pinned-row::-webkit-scrollbar { display: none; }
+  body.lc .hub-pin-chip { flex: none; position: relative; display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.04); color: var(--text-primary); font: inherit; font-size: 13.5px; cursor: pointer; }
+  body.lc .hub-pin-chip.is-voice { border-color: rgba(61, 220, 151, 0.45); background: rgba(61, 220, 151, 0.08); }
+  body.lc .hub-pin-ico { width: 28px; height: 28px; border-radius: 9px; overflow: hidden; display: grid; place-items: center; background: #1c2430; font-weight: 800; font-size: 13px; }
+  body.lc .hub-pin-ico img { width: 100%; height: 100%; object-fit: cover; }
+  body.lc .hub-pin-chip b { font-weight: 700; max-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.lc .hub-pin-mic { width: 8px; height: 8px; border-radius: 50%; background: #3ddc97; }
+  body.lc .hub-pin-chip .hub-card-unread { position: absolute; top: -6px; right: -6px; }
+  /* Sekmeler: ince kapsül */
+  body.lc .hub-list-tabs { gap: 6px !important; padding: 12px 0 6px !important; margin: 0 !important; background: var(--lc-bg-main, #0b0e13) !important; }
+  body.lc .hub-list-tab { flex: none !important; min-height: 32px !important; padding: 0 12px !important; border-radius: 999px !important; font-size: 13px !important; font-weight: 700 !important; background: rgba(255, 255, 255, 0.04) !important; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08) !important; }
+  body.lc .hub-list-tab.on { background: rgba(179, 102, 245, 0.18) !important; color: #e7ccff !important; box-shadow: inset 0 0 0 1px rgba(179, 102, 245, 0.5) !important; }
+  body.lc .hub-list-tab-count { min-width: 0 !important; padding: 0 0 0 2px !important; background: none !important; color: inherit !important; opacity: .8; }
+  /* Gelen kutusu satırı */
+  body.lc .hub-list-grid { display: flex !important; flex-direction: column; gap: 0 !important; }
+  body.lc .hub-swipe { position: relative; overflow: hidden; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+  body.lc .hub-swipe-acts { display: flex; position: absolute; top: 0; right: 0; bottom: 0; width: 140px; }
+  body.lc .hub-swipe-acts button { flex: 1; border: 0; font: inherit; font-size: 12px; font-weight: 800; line-height: 1.2; padding: 0 6px; cursor: pointer; }
+  body.lc .hub-swipe-pin { background: #3a2a10; color: #ffd58a; }
+  body.lc .hub-swipe-mute { background: #3a1820; color: #ff9aa8; }
+  body.lc .hub-card { position: relative; z-index: 1; display: flex !important; align-items: center; gap: 12px; min-height: 0 !important; padding: 9px 2px !important; margin: 0 !important; border: 0 !important; border-radius: 0 !important; background: var(--lc-bg-main, #0b0e13) !important; box-shadow: none !important; }
+  body.lc .hub-card .hub-card-icon { width: 40px !important; height: 40px !important; border-radius: 12px !important; flex: none; font-size: 16px !important; }
+  body.lc .hub-card-text { flex: 1; min-width: 0; display: grid !important; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; row-gap: 1px; }
+  body.lc .hub-card-name { grid-column: 1; font-size: 15px !important; font-weight: 700 !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.lc .hub-card-meta { display: none !important; }
+  body.lc .hub-card-top { display: block; grid-column: 2; grid-row: 1; align-self: center; }
+  body.lc .hub-card-when { font-size: 11.5px; color: var(--text-tertiary, var(--text-secondary)); }
+  body.lc .hub-card.is-voice .hub-card-when { color: #9fe9c9; font-weight: 700; }
+  body.lc .hub-card-preview { display: block; grid-column: 1 / -1; font-size: 13px; color: var(--text-tertiary, var(--text-secondary)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 30px; }
+  body.lc .hub-card-preview em { font-style: normal; color: var(--text-secondary); }
+  body.lc .hub-card-faces { display: flex; position: absolute; right: 2px; bottom: 9px; }
+  body.lc .hub-card-face { width: 18px; height: 18px; margin-left: -6px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 10px; font-weight: 800; color: #fff; background: var(--user-color, #5b6cff); box-shadow: 0 0 0 2px var(--lc-bg-main, #0b0e13); }
+  body.lc .hub-card .hub-card-unread { position: absolute; right: 2px; bottom: 10px; }
+  body.lc .hub-card.is-voice .hub-card-unread { right: 52px; }
+  body.lc .hub-card-muted { display: block; position: absolute; left: 32px; top: 6px; width: 14px; height: 14px; border-radius: 50%; background: #2a1418 center / 9px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ff9aa8' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M4 4l16 16M9 5a6 6 0 0 1 9 5v4M6 11v5h12'/%3E%3C/svg%3E"); box-shadow: 0 0 0 2px var(--lc-bg-main, #0b0e13); }
+  body.lc .hub-card.is-muted .hub-card-name { color: var(--text-secondary) !important; }
+}

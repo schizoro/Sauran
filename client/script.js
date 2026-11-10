@@ -4361,6 +4361,15 @@ const I18N = {
     'start-poll': { tr: 'Oylama', en: 'Poll' },
     'start-share': { tr: 'Paylaşım', en: 'Share' },
     'member-count': { tr: 'kişi', en: 'members' },
+    'hub-row-no-messages': { tr: 'Henüz mesaj yok', en: 'No messages yet' },
+    'hub-row-in-voice': { tr: 'seste', en: 'in voice' },
+    'hub-row-you': { tr: 'Sen', en: 'You' },
+    'hub-row-yesterday': { tr: 'Dün', en: 'Yesterday' },
+    'hub-pinned-title': { tr: 'Sabitlenenler', en: 'Pinned' },
+    'hub-pin': { tr: 'Sabitle', en: 'Pin' },
+    'hub-unpin': { tr: 'Sabitlemeyi kaldır', en: 'Unpin' },
+    'hub-mute': { tr: 'Sessize al', en: 'Mute' },
+    'hub-unmute': { tr: 'Sesi aç', en: 'Unmute' },
     'voice-rooms-title': { tr: 'SESLİ ODALAR', en: 'VOICE ROOMS' },
     'voice-room-add': { tr: 'Oda Ekle', en: 'Add Room' },
     'voice-rooms-empty': { tr: 'Henüz sesli oda yok.', en: 'No voice rooms yet.' },
@@ -14563,6 +14572,17 @@ function hubInitialHtml(name) {
     return `<span class="hub-icon-initial" style="--user-color:${color};">${escapeHtml(initial)}</span>`;
 }
 
+function hubRowTime(at) {
+    const d = serverDate(at);
+    if (isNaN(d)) return '';
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    const y = new Date(now); y.setDate(now.getDate() - 1);
+    if (d.toDateString() === y.toDateString()) return t('hub-row-yesterday');
+    if (now - d < 6 * 864e5) return d.toLocaleDateString('tr-TR', { weekday: 'short' });
+    return d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
+}
+
 function renderHubCard(hub) {
 
     const card = document.createElement('div');
@@ -14572,12 +14592,28 @@ function renderHubCard(hub) {
         ? `<img src="${escapeAttr(hub.image_data)}" class="hub-card-icon" alt="">`
         : `<span class="hub-card-icon">${hubInitialHtml(hub.name)}</span>`;
 
+    // Ana ekran satırı: ad + son mesaj saati, altında son mesaj önizlemesi; seste olanların küçük yüzleri.
+    const last = hub.last || null;
+    const voiceN = Number(hub.voice_count) || 0;
+    const faces = (hub.voice || []).map((v) => `<i class="hub-card-face" style="--user-color:${escapeAttr(typeof resolveUserColor === 'function' ? resolveUserColor(v.user_id, v.username) : '#5b6cff')}">${escapeHtml(String(v.username || '?').charAt(0).toUpperCase())}</i>`).join('');
+    const when = last && last.at ? hubRowTime(last.at) : '';
+    const preview = last
+        ? `${last.mine ? `<em>${escapeHtml(t('hub-row-you'))}:</em> ` : `<em>${escapeHtml(last.author || '')}:</em> `}${escapeHtml(last.preview)}`
+        : escapeHtml(t('hub-row-no-messages'));
+    card.dataset.hubId = String(hub.id);
+    card.classList.toggle('is-voice', voiceN > 0);
+    card.classList.toggle('is-muted', Boolean(hub.muted));
+    card.classList.toggle('is-pinned', Boolean(hub.pinned));
     card.innerHTML = `
         ${iconHtml}
         <span class="hub-card-text">
             <span class="hub-card-name">${escapeHtml(hub.name)}</span>
             <span class="hub-card-meta">👥 ${hub.member_count} ${t('member-count')}</span>
+            <span class="hub-card-top"><span class="hub-card-when">${voiceN ? escapeHtml(t('hub-row-in-voice')) : escapeHtml(when)}</span></span>
+            <span class="hub-card-preview">${preview}</span>
         </span>
+        ${voiceN ? `<span class="hub-card-faces" title="${escapeAttr(`${voiceN} ${t('hub-row-in-voice')}`)}">${faces}</span>` : ''}
+        ${hub.muted ? '<span class="hub-card-muted" aria-label="Sessizde"></span>' : ''}
         <span class="hub-card-unread" data-hub-unread="${Number(hub.id)}" style="display:none;"></span>
     `;
 
@@ -14606,7 +14642,10 @@ async function loadHubList() {
         hubListHeader.style.display = hasHubs ? 'flex' : 'none';
         hubListContent.style.display = hasHubs ? 'block' : 'none';
 
-        data.hubs.forEach((hub) => {
+        // Gelen kutusu sırası: son hareketi olan lobi üstte (hiç mesajı olmayanlar en altta, oluşturulma sırasıyla).
+        window.__hubListCache = data.hubs;
+        const lastId = (h) => (h.last ? Number(h.last.id) : 0);
+        data.hubs.slice().sort((a, b) => lastId(b) - lastId(a)).forEach((hub) => {
 
             const card = renderHubCard(hub);
 
@@ -14618,6 +14657,7 @@ async function loadHubList() {
 
         });
 
+        document.dispatchEvent(new CustomEvent('sauran:hubs-loaded', { detail: data.hubs }));
         renderHubUnreadBadges();
         hubListGridOwned.parentElement.style.display = hubListGridOwned.children.length ? 'block' : 'none';
         hubListGridJoined.parentElement.style.display = hubListGridJoined.children.length ? 'block' : 'none';

@@ -31,6 +31,7 @@ const {
   setHubMuted,
   addHubRole,
   isHubMember,
+  setHubPinned,
   getMemberTier,
   setModerator,
   kickMember,
@@ -2491,7 +2492,19 @@ app.get('/api/hubs', (req, res) => {
   if (!user) return;
 
   try {
-    res.json({ success: true, hubs: listHubs(user.id) });
+    // Ses bilgisi (bellekte): lobide şu an seste olanlar; yalnızca üyesi olunan lobiler listelenir.
+    const voiceByHub = new Map();
+    for (const members of voiceRoomParticipants.values()) {
+      for (const p of members.values()) {
+        if (!voiceByHub.has(p.hubId)) voiceByHub.set(p.hubId, []);
+        voiceByHub.get(p.hubId).push({ user_id: p.user_id, username: p.username });
+      }
+    }
+    const hubs = listHubs(user.id).map((h) => {
+      const v = voiceByHub.get(h.id) || [];
+      return { ...h, voice_count: v.length, voice: v.slice(0, 3) };
+    });
+    res.json({ success: true, hubs });
   } catch (error) {
     console.error('Lobi listeleme hatası:', error);
     res.status(500).json({ success: false, error: 'Hublar alınamadı.' });
@@ -3382,6 +3395,19 @@ app.post('/api/hubs/:id/leave', (req, res) => {
   } catch (error) {
     console.error('Lobi ayrılma API hatası:', error);
     res.status(500).json({ success: false, error: 'Ayrılınamadı.' });
+  }
+});
+
+app.patch('/api/hubs/:id/pin', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const result = setHubPinned(Number(req.params.id), user.id, Boolean(req.body?.pinned));
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (error) {
+    console.error('Lobi sabitleme API hatası:', error);
+    res.status(500).json({ success: false, error: 'Kaydedilemedi.' });
   }
 });
 

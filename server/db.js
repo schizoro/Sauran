@@ -3810,16 +3810,42 @@ function countPendingHubJoinRequests(hubId) {
   return db.prepare(`SELECT COUNT(*) AS c FROM hub_join_requests WHERE hub_id = ? AND status = 'pending'`).get(hubId).c;
 }
 
+// Ana ekrandaki "sabitlenenler": kullanıcı başına, üyelik satırında tutulur (üyelikten çıkınca kendiliğinden gider).
+{
+  const cols = db.prepare(`PRAGMA table_info(hub_members)`).all().map((c) => c.name);
+  if (!cols.includes('pinned_at')) db.exec(`ALTER TABLE hub_members ADD COLUMN pinned_at DATETIME`);
+}
+
+// Ana ekran satırındaki son mesaj önizlemesi: metinde içerik, diğer türlerde kısa etiket. Silinmiş ve sistem satırları atlanır.
+const HUB_PREVIEW_LABEL = { poll: 'Anket', share: 'Paylaşım', image: 'Fotoğraf', video: 'Video', file: 'Dosya', voice: 'Sesli mesaj', sticker: 'Çıkartma' };
+function hubLastMessage(hubId, userId) {
+  const m = db.prepare(`SELECT id, user_id, username, kind, content, created_at FROM messages WHERE hub_id = ? AND kind NOT IN ('deleted', 'system') ORDER BY id DESC LIMIT 1`).get(hubId);
+  if (!m) return null;
+  let text = m.kind === 'text' ? String(m.content || '').replace(/\s+/g, ' ').trim() : '';
+  if (text && /^https:\/\/media[0-9]*\.giphy\.com\//.test(text)) text = 'GIF';
+  return {
+    id: m.id, at: m.created_at, mine: m.user_id === userId, author: m.username,
+    preview: text ? (text.length > 80 ? text.slice(0, 80) + '…' : text) : (HUB_PREVIEW_LABEL[m.kind] || 'Mesaj')
+  };
+}
+
 function listHubs(userId) {
   return db.prepare(`
     SELECT
       hubs.id, hubs.name, hubs.type, hubs.icon, hubs.image_data, hubs.created_at, hubs.created_by,
+      hub_members.pinned_at, hub_members.muted,
       (SELECT COUNT(*) FROM hub_members WHERE hub_members.hub_id = hubs.id) AS member_count
     FROM hubs
     INNER JOIN hub_members ON hub_members.hub_id = hubs.id AND hub_members.user_id = ?
     WHERE hubs.type != 'group'
     ORDER BY hubs.created_at DESC
-  `).all(userId).map(h => ({ ...h, is_owner: h.created_by === userId }));
+  `).all(userId).map(h => ({ ...h, is_owner: h.created_by === userId, pinned: Boolean(h.pinned_at), muted: Boolean(h.muted), last: hubLastMessage(h.id, userId) }));
+}
+
+function setHubPinned(hubId, userId, pinned) {
+  if (!isHubMember(hubId, userId)) return { success: false, error: 'Bu Lobi\'nin üyesi değilsin.' };
+  db.prepare(`UPDATE hub_members SET pinned_at = ${pinned ? 'CURRENT_TIMESTAMP' : 'NULL'} WHERE hub_id = ? AND user_id = ?`).run(hubId, userId);
+  return { success: true, pinned: Boolean(pinned) };
 }
 
 function generateInviteCode() {
@@ -9107,6 +9133,7 @@ module.exports = {
   setHubMuted,
   addHubRole,
   isHubMember,
+  setHubPinned,
   getMemberTier,
   hasAtLeastTier,
   setModerator,
