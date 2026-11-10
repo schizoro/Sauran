@@ -3478,3 +3478,8 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
 [role="dialog"] > [tabindex="-1"]:focus, [role="dialog"][tabindex="-1"]:focus { outline: none; }
 /* Üye satırının tamamı profili açar */
 .hub-member-row { cursor: pointer; }
+
+/* Görüşme bağlantı kalitesi göstergesi */
+.call-header .call-net-pill { position: fixed; left: 50%; top: 120px; transform: translateX(-50%); z-index: 2; padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; pointer-events: auto; background: rgba(240, 178, 50, 0.16); color: #f0b232; border: 1px solid rgba(240, 178, 50, 0.4); }
+.call-header .call-net-pill.is-bad { background: rgba(242, 63, 67, 0.16); color: #ff8a8d; border-color: rgba(242, 63, 67, 0.45); }
+.call-header .call-net-pill[hidden] { display: none; }

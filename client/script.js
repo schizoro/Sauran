@@ -4782,6 +4782,11 @@ const I18N = {
     'ptt-hold-key': { tr: 'Konuşmak için basılı tut · {k}', en: 'Hold to talk · {k}' },
     'ptt-talking': { tr: 'Konuşuyorsun…', en: 'Talking…' },
     'ptt-mute-hint': { tr: 'Bas-konuş açık: konuşmak için {k} tuşunu ya da 🎙 düğmesini basılı tut.', en: 'Push to talk is on: hold {k} or the 🎙 button to talk.' },
+    'net-low': { tr: 'Bağlantı zayıf', en: 'Weak connection' },
+    'net-bad': { tr: 'Bağlantı çok kötü', en: 'Very poor connection' },
+    'net-send': { tr: 'giden ses kayıplı', en: 'outgoing audio loss' },
+    'net-recv': { tr: 'gelen ses kayıplı', en: 'incoming audio loss' },
+    'net-hint': { tr: 'Ses pürüzlü gelebilir. Wi‑Fi yerine kablo/daha güçlü ağ deneyin.', en: 'Audio may sound choppy. Try a wired or stronger network.' },
     'nc-failed': { tr: 'Gürültü engelleme bu cihazda çalışmadı; kapatıldı.', en: 'Noise suppression did not work on this device; turned off.' },
     'voice-recovering': { tr: 'Ses bağlantısı yeniden kuruluyor...', en: 'Restoring audio connection...' },
     'voice-recover-failed': { tr: 'Mikrofon geri açılamadı. Mikrofon iznini kontrol et; sorun sürerse odadan çıkıp tekrar gir.', en: 'Could not restore the microphone. Check the microphone permission; if it persists, leave and rejoin.' },
@@ -16517,6 +16522,9 @@ async function joinCallFrame(roomUrl, token) {
         if (event?.type === 'audio-processor-error') noiseCancelFailed();
     });
 
+    // Bağlantı kalitesi: paket kaybı varsa hangi yönde olduğu gösterilir (ses pürüzlüyse sebep ağ mı, görülsün).
+    callFrame.on('network-quality-change', (event) => { if (frame === callFrame) renderCallNetQuality(event); });
+
     callFrame.on('left-meeting', () => { if (frame === callFrame) leaveCall(); });
     callFrame.on('error', (event) => {
         console.error('Daily.co çağrı hatası:', event);
@@ -17184,8 +17192,10 @@ const audioSession = {
 // Daily'nin (Krisp tabanlı) mikrofon işlemcisi: arka plan gürültüsünü tarayıcıda, yerelde bastırır (ses Krisp'e gönderilmez).
 // Desteklenmeyen ortamda updateInputSettings hata verir → özellik gizlenir. Tercih yalnızca bu cihazda (localStorage, açık/kapalı).
 const NC_STORAGE_KEY = 'sauran_noise_cancel';
-const noiseCancel = { supported: null, enabled: true, failedShown: false };
-try { noiseCancel.enabled = localStorage.getItem(NC_STORAGE_KEY) !== 'off'; } catch (_) { /* depolama yok → varsayılan açık */ }
+// Varsayılan KAPALI (Daily'nin kendi arayüzündeki gibi): işlemci zayıf cihazlarda Krisp sesi pürüzlü/robotik yapabiliyor ve
+// herkeste açıkken hem gönderilen hem duyulan ses işlenmiş oluyordu. Yalnızca kullanıcı açtıysa ('on') uygulanır.
+const noiseCancel = { supported: null, enabled: false, failedShown: false };
+try { noiseCancel.enabled = localStorage.getItem(NC_STORAGE_KEY) === 'on'; } catch (_) { /* depolama yok → kapalı */ }
 
 async function applyNoiseCancellation() {
     if (!callFrame || noiseCancel.supported === false || typeof callFrame.updateInputSettings !== 'function') return;
@@ -17603,8 +17613,31 @@ function resetAudioSession() {
 }
 
 
+// Görüşme bağlantı kalitesi göstergesi (Daily: networkState 'good' | 'low' | 'bad', networkStateReasons: send/recvPacketLoss)
+function renderCallNetQuality(event) {
+    const pill = document.getElementById('call-net-pill');
+    if (!pill) return;
+    const state = event ? (event.networkState || (event.threshold === 'good' ? 'good' : event.threshold ? 'low' : 'good')) : 'good';
+    if (state === 'good') { pill.hidden = true; pill.className = 'call-net-pill'; return; }
+    const reasons = Array.isArray(event.networkStateReasons) ? event.networkStateReasons : [];
+    const latest = event.stats && event.stats.stats && event.stats.stats.latest ? event.stats.stats.latest : {};
+    const pct = (v) => (Number.isFinite(v) ? ` %${Math.round(v * 100)}` : '');
+    const parts = [];
+    if (reasons.includes('sendPacketLoss')) parts.push(t('net-send') + pct(latest.sendPacketLoss ?? latest.videoSendPacketLoss));
+    if (reasons.includes('recvPacketLoss')) parts.push(t('net-recv') + pct(latest.recvPacketLoss ?? latest.videoRecvPacketLoss));
+    pill.textContent = `${state === 'bad' ? t('net-bad') : t('net-low')}${parts.length ? ' · ' + parts.join(' · ') : ''}`;
+    pill.className = `call-net-pill is-${state}`;
+    pill.hidden = false;
+    pill.title = t('net-hint');
+    if (state === 'bad') {
+        const now = Date.now();
+        if (!window.__netToastAt || now - window.__netToastAt > 120000) { window.__netToastAt = now; showToast(`${t('net-bad')} — ${t('net-hint')}`); }
+    }
+}
+
 function leaveCall() {
 
+    renderCallNetQuality(null);
     voiceJoinInFlight = false; // süren bir oda katılımı varsa iptal edilmiş sayılır
 
     // Çalarken herhangi bir yoldan çıkılırsa karşı tarafın zili de durmalı (iptal olayı).
