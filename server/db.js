@@ -5762,6 +5762,26 @@ if (!readStatesExisted) {
 
 const UNREAD_CAP = 100; // 99+ göstermek için yeterli; daha fazlası sayılmaz (hız)
 
+// Sohbet açılırken "Yeni mesajlar" çizgisi için: okunmamış ilk mesajın kimliği ve okunmamış sayısı (kendi/silinmiş hariç).
+// scope: { hubId, channelId } (kanal; kanalsızsa lobi/grup) ya da { dmOtherId }. Okundu kaydı hiç yoksa (ilk açılış) çizgi yok.
+function firstUnreadInfo(userId, scope) {
+  let since = null, where = '', arg = null;
+  if (scope.dmOtherId) {
+    const st = db.prepare(`SELECT last_read_id FROM read_states WHERE user_id = ? AND scope = 'dm' AND scope_id = ?`).get(userId, scope.dmOtherId);
+    if (!st) return null;
+    since = st.last_read_id; where = 'room = ?'; arg = dmRoom(userId, scope.dmOtherId);
+  } else if (scope.channelId) {
+    const st = db.prepare(`SELECT last_read_id FROM channel_read_states WHERE user_id = ? AND channel_id = ?`).get(userId, scope.channelId);
+    since = st ? st.last_read_id : hubReadBaseline(userId, scope.hubId); where = 'channel_id = ?'; arg = scope.channelId;
+  } else if (scope.hubId) {
+    since = hubReadBaseline(userId, scope.hubId); where = 'hub_id = ?'; arg = scope.hubId;
+  } else return null;
+  const first = db.prepare(`SELECT id FROM messages WHERE ${where} AND id > ? AND kind NOT IN ('deleted', 'system', 'dm_call') AND (user_id IS NULL OR user_id != ?) ORDER BY id ASC LIMIT 1`).get(arg, since, userId);
+  if (!first) return null;
+  const count = db.prepare(`SELECT COUNT(*) AS c FROM (SELECT 1 FROM messages WHERE ${where} AND id > ? AND kind NOT IN ('deleted', 'system', 'dm_call') AND (user_id IS NULL OR user_id != ?) LIMIT ${UNREAD_CAP})`).get(arg, since, userId).c;
+  return { first_unread_id: first.id, unread_count: count };
+}
+
 function hubReadBaseline(userId, hubId) {
   const state = db.prepare(`SELECT last_read_id FROM read_states WHERE user_id = ? AND scope = 'hub' AND scope_id = ?`).get(userId, hubId);
   return state ? state.last_read_id : (db.prepare(`
@@ -9145,6 +9165,7 @@ module.exports = {
   isHubMember,
   setHubPinned,
   getMemberTier,
+  firstUnreadInfo,
   hasAtLeastTier,
   setModerator,
   kickMember,

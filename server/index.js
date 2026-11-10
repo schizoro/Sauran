@@ -80,6 +80,7 @@ const {
   areFriends,
   listFriends,
   listDmConversations,
+  firstUnreadInfo,
   listIncomingRequests,
   getUserPublicProfile,
   saveDmMessage,
@@ -3471,7 +3472,10 @@ app.get('/api/hubs/:id/messages', (req, res) => {
       if (num(req.query.after)) return getHubMessagesAfter(hubId, user.id, num(req.query.after));
       return getHubMessagesPage(hubId, user.id, { before: num(req.query.before), limit: req.query.limit });
     });
-    res.json({ success: true, channel_id: channelId, ...page });
+    // İlk açılış sayfasında "Yeni mesajlar" çizgisi bilgisi (sayfalama isteklerinde gerekmez)
+    const firstOpen = !num(req.query.around) && !num(req.query.after) && !num(req.query.before);
+    const unread = firstOpen ? firstUnreadInfo(user.id, { hubId, channelId }) : null;
+    res.json({ success: true, channel_id: channelId, ...page, ...(unread || {}) });
   } catch (error) {
     console.error('Lobi mesaj hatası:', error);
     res.status(500).json({ success: false, error: 'Mesajlar alınamadı.' });
@@ -5301,7 +5305,8 @@ app.get('/api/dm/:userId/messages', (req, res) => {
     const num = (v) => (/^[0-9]{1,15}$/.test(String(v || '')) ? Number(v) : null);
     if (num(req.query.around)) return res.json({ success: true, ...getDmMessagesAround(user.id, otherId, num(req.query.around)) });
     if (num(req.query.after)) return res.json({ success: true, ...getDmMessagesAfter(user.id, otherId, num(req.query.after)) });
-    return res.json({ success: true, ...getDmMessagesPage(user.id, otherId, { before: num(req.query.before), limit: req.query.limit }) });
+    const unread = !num(req.query.before) ? firstUnreadInfo(user.id, { dmOtherId: otherId }) : null;
+    return res.json({ success: true, ...getDmMessagesPage(user.id, otherId, { before: num(req.query.before), limit: req.query.limit }), ...(unread || {}) });
   } catch (error) {
     console.error('DM mesaj hatası:', error);
     res.status(500).json({ success: false, error: 'Mesajlar alınamadı.' });

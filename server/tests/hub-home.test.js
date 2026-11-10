@@ -68,3 +68,34 @@ test('Lobi listesi: son mesaj önizlemesi (boşluklar sadeleşir), kendi mesajı
   assert.equal(e.mine, false);
   assert.equal(e.author, 'ali');
 });
+
+test('Yeni mesajlar: okunmamış ilk mesaj ve sayısı bildirilir; kendi mesajın ve okunmuşlar sayılmaz', async () => {
+  const ali = await login('ali');
+  const ece = await login('ece');
+  const hub = (await ece.get(`/api/hubs/${S.hubId}`)).body.hub;
+  const ch = (hub.channels || [])[0];
+  const q = ch ? `?channel_id=${ch.id}` : '';
+  // Ece şu ana kadarki her şeyi okumuş olsun
+  const before = (await ece.get(`/api/hubs/${S.hubId}/messages${q}`)).body.messages;
+  const lastId = before.length ? before[before.length - 1].id : 0;
+  if (ch && lastId) await ece.post('/api/read-state', { type: 'channel', id: ch.id, message_id: lastId });
+  else if (lastId) await ece.post('/api/read-state', { type: 'hub', id: S.hubId, message_id: lastId });
+
+  const sa = socket(srv.base, ali.cookie); await sa.ready;
+  sa.emit('join_hub', S.hubId); await new Promise((r) => setTimeout(r, 150));
+  const ids = [];
+  for (const t of ['yeni 1', 'yeni 2', 'yeni 3']) {
+    const got = sa.waitFor('hub_message', (m) => m.content === t);
+    sa.emit('hub_chat_message', { hub_id: S.hubId, channel_id: ch ? ch.id : undefined, content: t });
+    ids.push((await got).id);
+  }
+  sa.close();
+
+  const r = (await ece.get(`/api/hubs/${S.hubId}/messages${q}`)).body;
+  assert.equal(r.first_unread_id, ids[0], 'ilk okunmamış');
+  assert.equal(r.unread_count, 3);
+  const mine = (await ali.get(`/api/hubs/${S.hubId}/messages${q}`)).body;
+  assert.ok(!mine.first_unread_id || !ids.includes(mine.first_unread_id), 'kendi mesajları yeni sayılmaz');
+  const paged = (await ece.get(`/api/hubs/${S.hubId}/messages?before=${ids[2]}${ch ? '&channel_id=' + ch.id : ''}`)).body;
+  assert.equal(paged.first_unread_id, undefined, 'sayfalamada gönderilmez');
+});

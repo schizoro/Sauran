@@ -3369,3 +3369,8 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
 .login-remember input:focus-visible + .login-remember-box { box-shadow: 0 0 0 3px rgba(179, 102, 245, 0.35); }
 .login-remember b { display: block; font-size: 14px; font-weight: 700; color: var(--text-primary); }
 .login-remember small { display: block; margin-top: 2px; font-size: 12px; line-height: 1.4; color: var(--text-tertiary, var(--text-secondary)); }
+
+/* "Yeni mesajlar" çizgisi */
+.unread-divider { display: flex; align-items: center; gap: 10px; margin: 14px 4px 8px; color: #ff8d9b; font-size: 12px; font-weight: 800; letter-spacing: .02em; }
+.unread-divider::before, .unread-divider::after { content: ""; flex: 1; height: 1px; background: rgba(242, 63, 67, 0.75); }
+.unread-divider span { flex: none; padding: 2px 10px; border-radius: 999px; background: rgba(242, 63, 67, 0.12); border: 1px solid rgba(242, 63, 67, 0.45); }

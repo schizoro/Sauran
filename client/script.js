@@ -4569,6 +4569,7 @@ const I18N = {
     'remove-photo': { tr: 'Kaldır', en: 'Remove' },
     'confirm-delete-message': { tr: 'Bu mesajı silmek istediğine emin misin?', en: 'Are you sure you want to delete this message?' },
     'message-deleted': { tr: 'Bu mesaj silindi', en: 'This message was deleted' },
+    'unread-divider': { tr: 'Yeni mesajlar', en: 'New messages' },
     'message-deleted-by-mod': { tr: 'Bu mesaj bir moderatör tarafından silindi', en: 'This message was deleted by a moderator' },
     'message-mod-delete': { tr: 'Mesajı sil (moderatör)', en: 'Delete message (moderator)' },
     'confirm-mod-delete': { tr: '{u} kullanıcısının bu mesajı herkes için silinsin mi? Bu işlem moderasyon kaydına yazılır.', en: "Delete {u}'s message for everyone? This is recorded in the moderation log." },
@@ -9494,7 +9495,8 @@ async function openDm(userId, username) {
             dmFeed._stickBottom = true;
             data.messages.forEach((m) => appendDmMessage(m));
             resetFeedPaging('dm', userId, data.messages, data.has_more);
-            pinFeedToBottom(dmFeed);
+            if (data.first_unread_id) openFeedAtUnread('dm', data.first_unread_id, data.unread_count);
+            else pinFeedToBottom(dmFeed);
             if (data.messages.length) markReadSoon('dm', userId, data.messages[data.messages.length - 1].id);
         }
 
@@ -9611,6 +9613,38 @@ function keepFeedPinned(feed) {
 
 // Sohbet açılırken en alta (son mesaja) sabitle: önceki sohbetteki kaydırma durumu taşınmaz. İçerik birkaç an daha
 // yüklenebileceği için kısa süre tekrar sabitlenir; kullanıcı bu arada kendisi yukarı kaydırırsa bırakılır.
+// "Yeni mesajlar" çizgisi: ilk okunmamış mesajın üstüne konur ve sohbet oradan açılır. Mesaj ilk sayfada yoksa çevresi yüklenir
+// (o durumda en yeni mesajlar "En yeniye git" ile gelir). Çizgi sohbetten çıkılana kadar yerinde kalır.
+async function openFeedAtUnread(kind, firstId, count) {
+    const feed = kind === 'hub' ? hubFeed : dmFeed;
+    const find = () => feed.querySelector(`[data-message-id="${Number(firstId)}"]`);
+    if (!find()) { await jumpToMessage(kind, firstId); }
+    const msgEl = find();
+    if (!msgEl) { pinFeedToBottom(feed); return; }
+    const anchor = msgEl.closest('.dm-msg-row') || msgEl;
+    feed.querySelectorAll('.unread-divider').forEach((d) => d.remove());
+    const div = document.createElement('div');
+    div.className = 'unread-divider';
+    div.setAttribute('role', 'separator');
+    div.innerHTML = `<span>${escapeHtml(t('unread-divider'))}${count > 1 ? ` · ${count >= 100 ? '99+' : count}` : ''}</span>`;
+    anchor.parentNode.insertBefore(div, anchor);
+    feed._stickBottom = false;
+    const place = () => {
+        if (!div.isConnected) return;
+        const top = div.getBoundingClientRect().top - feed.getBoundingClientRect().top + feed.scrollTop - 16;
+        feed.scrollTop = Math.max(0, top);
+        feed._stickBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
+    };
+    place();
+    // Görseller sonradan yüklenip yeri kaydırabilir: kullanıcı kaydırmadıysa kısa süre yeniden hizalanır.
+    let userScrolled = false;
+    const onUser = () => { userScrolled = true; };
+    feed.addEventListener('wheel', onUser, { once: true, passive: true });
+    feed.addEventListener('touchstart', onUser, { once: true, passive: true });
+    [150, 500, 1200].forEach((ms) => setTimeout(() => { if (!userScrolled) place(); }, ms));
+    if (kind === 'hub' && typeof updateHubScrollBottomBtn === 'function') updateHubScrollBottomBtn();
+}
+
 function pinFeedToBottom(feed) {
     feed._stickBottom = true;
     const pin = () => { if (feed._stickBottom) feed.scrollTop = feed.scrollHeight; };
@@ -18015,7 +18049,9 @@ async function loadHubMessages(hubId) {
 
         data.messages.forEach((m) => appendHubMessage(m));
         resetFeedPaging('hub', hubId, data.messages, data.has_more);
-        pinFeedToBottom(hubFeed);
+        // Okunmamış varsa sohbet ilk okunmamış mesajdan, "Yeni mesajlar" çizgisiyle açılır; yoksa en alttan.
+        if (data.first_unread_id) openFeedAtUnread('hub', data.first_unread_id, data.unread_count);
+        else pinFeedToBottom(hubFeed);
         if (currentHub?.id === hubId) markCurrentHubRead(data.messages[data.messages.length - 1].id);
 
     } catch (error) {
