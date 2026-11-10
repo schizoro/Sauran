@@ -3341,3 +3341,21 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
   .hubset-card { padding: 14px !important; }
 }
 .hubset-card > .cz-block:first-child { border-top: 0 !important; padding-top: 0 !important; margin-top: 0 !important; }
+
+/* ══ Dosya önizleme tepsisi + sürükle-bırak alanı (attach-tray.js) ══ */
+.attach-tray { margin: 0 0 8px; padding: 10px; border-radius: 14px; background: rgba(18, 22, 32, 0.96); border: 1px solid rgba(255, 255, 255, 0.1); }
+.attach-tray[hidden] { display: none; }
+.attach-tray-row { display: flex; gap: 10px; overflow-x: auto; padding: 6px 6px 2px 0; scrollbar-width: thin; }
+.attach-tray-item { position: relative; flex: none; width: 72px; height: 72px; border-radius: 11px; overflow: visible; background: #1c2430; }
+.attach-tray-item img { width: 100%; height: 100%; object-fit: cover; border-radius: 11px; display: block; }
+.attach-tray-icon { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 4px; box-sizing: border-box; color: var(--text-secondary); }
+.attach-tray-icon svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.attach-tray-icon small { max-width: 100%; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.attach-tray-x { position: absolute; top: -7px; right: -7px; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #121620; background: #3a1820; color: #ff9aa8; font-size: 14px; line-height: 1; display: grid; place-items: center; cursor: pointer; padding: 0; }
+.attach-tray-meta { margin-top: 6px; font-size: 12px; color: var(--text-tertiary, var(--text-secondary)); }
+.attach-tray-meta span { opacity: .8; }
+.attach-drop { position: absolute; inset: 10px; z-index: 60; border-radius: 18px; border: 2px dashed #b366f5; background: rgba(20, 12, 34, 0.82); display: grid; place-items: center; text-align: center; color: #e7ccff; pointer-events: none; }
+.attach-drop[hidden] { display: none; }
+.attach-drop svg { width: 40px; height: 40px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.attach-drop b { display: block; margin-top: 6px; font-size: 16px; }
+.attach-drop small { display: block; margin-top: 4px; font-size: 12.5px; color: #b9a6d8; }

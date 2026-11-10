@@ -10868,7 +10868,12 @@ function clampPopupToViewport(el) {
     if (dx) el.style.marginLeft = `${Math.round(dx)}px`;
 }
 
+// Dosya göndericiler (attach-tray.js önizleme tepsisi kullanır): prefix -> async (file) => gönder
+// var: wireAttachMenu dosyanın başında (DM) bu satırdan önce çağrılıyor; let/const geçici ölü bölgeye düşerdi.
+var attachSenders = window.attachSenders || (window.attachSenders = {});
+
 function wireAttachMenu(prefix, onFile) {
+    (window.attachSenders || (window.attachSenders = {}))[prefix] = onFile; // çağrı tanımdan önce olabilir
 
     const btn = document.getElementById(`${prefix}-attach-btn`);
     const menu = document.getElementById(`${prefix}-attach-menu`);
@@ -10903,10 +10908,14 @@ function wireAttachMenu(prefix, onFile) {
     });
 
     Object.values(inputs).forEach((input) => {
-        input.addEventListener('change', () => {
-            const file = input.files?.[0];
+        if (input && input !== inputs.camera) input.multiple = true; // galeri/dosyadan birden fazla seçilebilir
+        input?.addEventListener('change', () => {
+            const files = [...(input.files || [])];
             input.value = '';
-            if (file) onFile(file);
+            if (!files.length) return;
+            // Önizleme tepsisi varsa dosyalar önce orada bekler (açıklama yazılıp birlikte gönderilir).
+            if (typeof window.attachTrayAdd === 'function') window.attachTrayAdd(prefix, files);
+            else files.forEach((f) => onFile(f));
         });
     });
 
