@@ -17794,7 +17794,11 @@ function renderHubMembers() {
 
         const userId = Number(row.dataset.userId);
 
-        row.querySelector('.hub-member-name').addEventListener('click', () => openOtherProfile(userId));
+        // Satırın tamamı profili açar (yönetim menüsü ve profil fotoğrafı düğmesi kendi işini yapar).
+        row.addEventListener('click', (event) => {
+            if (event.target.closest('.hub-member-menu-wrap, .msg-avatar-btn')) return;
+            openOtherProfile(userId);
+        });
 
         const menuBtn = row.querySelector('.hub-member-menu-btn');
         const menu = row.querySelector('.hub-member-menu');

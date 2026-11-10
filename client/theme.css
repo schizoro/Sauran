@@ -3476,3 +3476,5 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
 
 /* Pencere kutusu klavye odağı aldığında (modal-a11y.js) çerçeve çizilmez; içerideki öğelerin odak çerçevesi korunur. */
 [role="dialog"] > [tabindex="-1"]:focus, [role="dialog"][tabindex="-1"]:focus { outline: none; }
+/* Üye satırının tamamı profili açar */
+.hub-member-row { cursor: pointer; }
