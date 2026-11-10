@@ -9380,7 +9380,9 @@ async function openDeletedDm(token) {
         const data = await response.json();
 
         if (data.success) {
-            data.messages.forEach(appendDmMessage);
+            dmFeed._stickBottom = true;
+            data.messages.forEach((m) => appendDmMessage(m));
+            pinFeedToBottom(dmFeed);
         } else {
             loadFriendsSidebar();
         }
@@ -9451,8 +9453,10 @@ async function openDm(userId, username) {
         const data = await response.json();
 
         if (data.success && activeDmUserId === userId) {
+            dmFeed._stickBottom = true;
             data.messages.forEach((m) => appendDmMessage(m));
             resetFeedPaging('dm', userId, data.messages, data.has_more);
+            pinFeedToBottom(dmFeed);
             if (data.messages.length) markReadSoon('dm', userId, data.messages[data.messages.length - 1].id);
         }
 
@@ -9562,6 +9566,19 @@ function keepFeedPinned(feed) {
     const repin = () => { if (feed._stickBottom) feed.scrollTop = feed.scrollHeight; };
     if (typeof ResizeObserver === 'function') new ResizeObserver(repin).observe(feed);
     window.visualViewport?.addEventListener('resize', repin);
+    // Görsel/video/çıkartma sonradan yüklenince içerik uzar: en alttaysak en altta kal (load olayı kabarcıklanmaz → yakalama evresi).
+    feed.addEventListener('load', repin, true);
+    feed.addEventListener('loadedmetadata', repin, true);
+}
+
+// Sohbet açılırken en alta (son mesaja) sabitle: önceki sohbetteki kaydırma durumu taşınmaz. İçerik birkaç an daha
+// yüklenebileceği için kısa süre tekrar sabitlenir; kullanıcı bu arada kendisi yukarı kaydırırsa bırakılır.
+function pinFeedToBottom(feed) {
+    feed._stickBottom = true;
+    const pin = () => { if (feed._stickBottom) feed.scrollTop = feed.scrollHeight; };
+    pin();
+    requestAnimationFrame(pin);
+    [120, 350, 800, 1600].forEach((ms) => setTimeout(pin, ms));
 }
 
 // ─── Gönderilen mesaj sunucudan dönmeden "gönderiliyor" olarak hemen görünür; dönünce gerçek mesajla yer değiştirir ───
@@ -11513,8 +11530,10 @@ async function reloadDmMessages(userId) {
         const data = await response.json();
         if (!data.success || activeDmUserId !== userId) return;
         dmFeed.innerHTML = '';
+        dmFeed._stickBottom = true;
         data.messages.forEach((m) => appendDmMessage(m));
         resetFeedPaging('dm', userId, data.messages, data.has_more);
+        pinFeedToBottom(dmFeed);
     } catch (error) {
         console.error('DM mesajları alınamadı:', error);
     }
@@ -16082,8 +16101,8 @@ function attachWatchedScreenAudio() {
     }
     watchedScreenAudioEl.srcObject = new MediaStream([track]);
     watchedScreenAudioEl.muted = voiceDeafened;
-    applySinkToAudioEl(watchedScreenAudioEl);
-    watchedScreenAudioEl.play().catch(() => {});
+    const el = watchedScreenAudioEl;
+    applySinkToAudioEl(el).finally(() => el.play().catch(() => {}));
 }
 
 function detachWatchedScreenAudio() {
@@ -16588,6 +16607,17 @@ window.addEventListener('online', () => { if (callFrame) { scheduleCallRecovery(
 const AUDIO_OUT_KEY = 'sauran_audio_out';
 function loadPreferredOutput() { try { return localStorage.getItem(AUDIO_OUT_KEY) || null; } catch (_) { return null; } }
 function savePreferredOutput(id) { try { if (id) localStorage.setItem(AUDIO_OUT_KEY, id); else localStorage.removeItem(AUDIO_OUT_KEY); } catch (_) { /* yoksay */ } }
+const AUDIO_IN_KEY = 'sauran_audio_in';
+function loadPreferredInput() { try { return localStorage.getItem(AUDIO_IN_KEY) || null; } catch (_) { return null; } }
+function savePreferredInput(id) { try { if (id) localStorage.setItem(AUDIO_IN_KEY, id); else localStorage.removeItem(AUDIO_IN_KEY); } catch (_) { /* yoksay */ } }
+
+// Daily'ye çıkışı bildir: Daily 2 sn'de bir sayfadaki tüm ses öğelerini KENDİ tercih ettiği çıkışa çekiyor; aynı cihazı
+// söylemezsek ses bizim seçimimizle Daily'ninki arasında gidip gelir.
+async function syncDailyOutput() {
+    if (!callFrame || !supportsSinkId || typeof callFrame.setOutputDeviceAsync !== 'function') return;
+    try { await callFrame.setOutputDeviceAsync({ outputDeviceId: audioSession.selectedOutputId || 'default' }); }
+    catch (error) { console.warn('Daily ses çıkışı ayarlanamadı:', error?.message || error); }
+}
 
 const audioSession = {
     inputs: [],            // { id, label }
@@ -16595,6 +16625,7 @@ const audioSession = {
     selectedInputId: null,
     selectedOutputId: null,   // şu an uygulanan çıkış (cihaz bağlı değilse null = varsayılan)
     preferredOutputId: loadPreferredOutput(), // kullanıcının seçtiği çıkış (cihaz geçici olarak kaybolsa da korunur)
+    preferredInputId: loadPreferredInput(),   // kullanıcının seçtiği mikrofon (aynı kural)
     native: { available: false, routes: [], active: null },
     iosRoute: 'speaker',   // 'speaker' | 'earpiece' (yalnızca iOS ipucu modu)
     devicechangeWired: false
@@ -16706,7 +16737,6 @@ function applySinkToAudioEl(el) {
 setInterval(() => {
     if (!callFrame) return;
     document.querySelectorAll('audio[data-call-audio]').forEach((el) => {
-        applySinkToAudioEl(el);
         if (el.paused && el.srcObject) el.play().catch(() => {});
     });
 }, 4000);
@@ -16751,19 +16781,26 @@ async function refreshAudioDevices() {
 
     await refreshNativeRoutes();
 
-    // Seçili cihaz artık yoksa (kulaklık çıkarıldı) güvenli varsayılana düş.
-    if (audioSession.selectedInputId && !audioSession.inputs.some((d) => d.id === audioSession.selectedInputId)) {
-        audioSession.selectedInputId = null;
-        scheduleCallRecovery();
+    // Mikrofon: tercih edilen cihaz bağlıysa ona geç; cihaz kaybolduysa varsayılana düş (tercih silinmez, geri gelince
+    // yeniden seçilir). Liste anlık boş geldiyse (izin/devicechange sırasında) hiçbir şey değiştirilmez.
+    if (audioSession.inputs.length) {
+        const prefIn = audioSession.preferredInputId;
+        const wantIn = prefIn && audioSession.inputs.some((d) => d.id === prefIn) ? prefIn : null;
+        if (wantIn !== audioSession.selectedInputId) {
+            if (wantIn) { switchInputDevice(wantIn); }
+            else { audioSession.selectedInputId = null; scheduleCallRecovery(); }
+        }
     }
     // Çıkış: tercih edilen cihaz bağlıysa ona, değilse (geçici olarak) varsayılana. Tercih silinmez; cihaz geri gelince
     // yeniden uygulanır. Liste hiç gelmediyse (izin/anlık hata) mevcut durum korunur.
     if (audioSession.outputs.length) {
         const pref = audioSession.preferredOutputId;
         const next = pref && audioSession.outputs.some((d) => d.id === pref) ? pref : null;
-        if (next !== audioSession.selectedOutputId) {
+        if (next !== audioSession.selectedOutputId || !audioSession.dailyOutputSynced) {
             audioSession.selectedOutputId = next;
+            audioSession.dailyOutputSynced = true;
             document.querySelectorAll('audio[data-call-audio]').forEach((el) => applySinkToAudioEl(el));
+            syncDailyOutput();
         }
     }
 
@@ -16875,6 +16912,12 @@ function openDeviceMenu(kind, anchor) {
 
 async function chooseInputDevice(id) {
     closeDeviceMenu();
+    audioSession.preferredInputId = id === 'default' ? null : id;
+    savePreferredInput(audioSession.preferredInputId);
+    await switchInputDevice(id);
+}
+
+async function switchInputDevice(id) {
     if (!callFrame) return;
     try {
         await callFrame.setInputDevicesAsync({ audioDeviceId: id });
@@ -16907,11 +16950,13 @@ async function chooseOutputDevice(id) {
         .filter((el) => typeof el.setSinkId === 'function')
         .map((el) => el.setSinkId(audioSession.selectedOutputId || '')));
     const failed = results.find((r) => r.status === 'rejected');
+    if (!failed) await syncDailyOutput();
     if (failed) {
         console.warn('Ses çıkışı değiştirilemedi:', failed.reason);
         audioSession.selectedOutputId = previous;
         audioSession.preferredOutputId = previous;
         savePreferredOutput(previous);
+        syncDailyOutput();
         document.querySelectorAll('audio[data-call-audio]').forEach((el) => {
             if (typeof el.setSinkId === 'function') el.setSinkId(previous || '').catch(() => {});
         });
@@ -17003,6 +17048,7 @@ function resetAudioSession() {
     audioSession.outputs = [];
     audioSession.selectedInputId = null;
     audioSession.selectedOutputId = null; // tercih (preferredOutputId) korunur; sonraki görüşmede cihaz listesi gelince uygulanır
+    audioSession.dailyOutputSynced = false;
     audioSession.native = { available: false, routes: [], active: null };
     [callMicArrowBtn, callSpeakerBtn, callOutArrowBtn, document.getElementById('call-nc-btn')].forEach((el) => { if (el) el.style.display = 'none'; });
 }
@@ -17796,6 +17842,7 @@ async function loadHubMessages(hubId) {
         if (currentHub?.id !== hubId || currentChannelId !== channelAtStart) return;
 
         hubFeed.innerHTML = '';
+        hubFeed._stickBottom = true;
         feedPaging.hub = { key: null, oldestId: null, hasMore: false, loading: false };
 
         if (data.messages.length === 0) {
@@ -17805,6 +17852,7 @@ async function loadHubMessages(hubId) {
 
         data.messages.forEach((m) => appendHubMessage(m));
         resetFeedPaging('hub', hubId, data.messages, data.has_more);
+        pinFeedToBottom(hubFeed);
         if (currentHub?.id === hubId) markCurrentHubRead(data.messages[data.messages.length - 1].id);
 
     } catch (error) {
