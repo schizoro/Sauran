@@ -16120,10 +16120,11 @@ function wireCallAudioUnlock() {
             remoteCallAudioEls.set(sessionId, audioEl);
         }
 
-        audioEl.srcObject = new MediaStream([event.track]);
+        const current = audioEl.srcObject && audioEl.srcObject.getAudioTracks ? audioEl.srcObject.getAudioTracks()[0] : null;
+        if (!current || current.id !== event.track.id) audioEl.srcObject = new MediaStream([event.track]);
         audioEl.muted = voiceDeafened;
-        applySinkToAudioEl(audioEl);
-        audioEl.play().catch(() => {});
+        // Önce çıkış ayarlanır, sonra çalınır: aksi hâlde ilk anlar varsayılan çıkıştan gelir.
+        applySinkToAudioEl(audioEl).finally(() => audioEl.play().catch(() => {}));
 
     });
 
@@ -16140,8 +16141,14 @@ function wireCallAudioUnlock() {
         const sessionId = event.participant?.session_id;
         const audioEl = sessionId && remoteCallAudioEls.get(sessionId);
         if (audioEl) {
-            audioEl.remove();
-            remoteCallAudioEls.delete(sessionId);
+            // Kişinin sesi yenilendiğinde Daily önce yeni izi başlatıp sonra eskisini durdurabilir: yalnızca duran iz
+            // bu öğede çalıyorsa öğe kaldırılır (eskiden yeni ses de siliniyor, ses kesiliyor ya da hiç gelmiyordu).
+            const playing = audioEl.srcObject && audioEl.srcObject.getAudioTracks ? audioEl.srcObject.getAudioTracks()[0] : null;
+            if (!playing || !event.track || playing.id === event.track.id) {
+                audioEl.srcObject = null;
+                audioEl.remove();
+                remoteCallAudioEls.delete(sessionId);
+            }
         }
 
     });
@@ -16577,11 +16584,17 @@ window.addEventListener('online', () => { if (callFrame) { scheduleCallRecovery(
 //   • Yakınlık sensörü  : yalnızca yerel Android uygulamasında, ahize seçiliyken
 // Cihaz adları/kimlikleri yalnızca bellekte tutulur; sunucuya gönderilmez, depoya yazılmaz.
 
+// Seçilen ses çıkışı bu cihazda hatırlanır (yalnızca tarayıcının bu siteye özel cihaz kimliği; sunucuya gönderilmez).
+const AUDIO_OUT_KEY = 'sauran_audio_out';
+function loadPreferredOutput() { try { return localStorage.getItem(AUDIO_OUT_KEY) || null; } catch (_) { return null; } }
+function savePreferredOutput(id) { try { if (id) localStorage.setItem(AUDIO_OUT_KEY, id); else localStorage.removeItem(AUDIO_OUT_KEY); } catch (_) { /* yoksay */ } }
+
 const audioSession = {
     inputs: [],            // { id, label }
     outputs: [],           // web setSinkId çıkışları { id, label }
     selectedInputId: null,
-    selectedOutputId: null,
+    selectedOutputId: null,   // şu an uygulanan çıkış (cihaz bağlı değilse null = varsayılan)
+    preferredOutputId: loadPreferredOutput(), // kullanıcının seçtiği çıkış (cihaz geçici olarak kaybolsa da korunur)
     native: { available: false, routes: [], active: null },
     iosRoute: 'speaker',   // 'speaker' | 'earpiece' (yalnızca iOS ipucu modu)
     devicechangeWired: false
@@ -16681,10 +16694,22 @@ function audioRouteLabel(type, name) {
     return name && type !== 'speaker' && type !== 'earpiece' ? `${base} · ${name}` : base;
 }
 
+// Öğeyi seçili çıkışa yönlendirir (seçim yoksa varsayılana). Söz döner; zaten doğru çıkıştaysa dokunmaz.
 function applySinkToAudioEl(el) {
-    if (!supportsSinkId || !audioSession.selectedOutputId || typeof el.setSinkId !== 'function') return;
-    el.setSinkId(audioSession.selectedOutputId).catch((error) => console.warn('Yeni ses öğesi seçili çıkışa yönlendirilemedi:', error));
+    if (!supportsSinkId || !el || typeof el.setSinkId !== 'function') return Promise.resolve();
+    const target = audioSession.selectedOutputId || '';
+    if ((el.sinkId || '') === target) return Promise.resolve();
+    return el.setSinkId(target).catch((error) => console.warn('Ses öğesi seçili çıkışa yönlendirilemedi:', error));
 }
+
+// Bekçi: görüşme sürerken birkaç saniyede bir uzak ses öğeleri doğru çıkışta mı ve çalıyor mu kontrol edilir.
+setInterval(() => {
+    if (!callFrame) return;
+    document.querySelectorAll('audio[data-call-audio]').forEach((el) => {
+        applySinkToAudioEl(el);
+        if (el.paused && el.srcObject) el.play().catch(() => {});
+    });
+}, 4000);
 
 function isMobileNative() {
     return Boolean(getNativeVoice());
@@ -16731,9 +16756,15 @@ async function refreshAudioDevices() {
         audioSession.selectedInputId = null;
         scheduleCallRecovery();
     }
-    if (audioSession.selectedOutputId && !audioSession.outputs.some((d) => d.id === audioSession.selectedOutputId)) {
-        audioSession.selectedOutputId = null;
-        document.querySelectorAll('audio[data-call-audio]').forEach((el) => { if (typeof el.setSinkId === 'function') el.setSinkId('').catch(() => {}); });
+    // Çıkış: tercih edilen cihaz bağlıysa ona, değilse (geçici olarak) varsayılana. Tercih silinmez; cihaz geri gelince
+    // yeniden uygulanır. Liste hiç gelmediyse (izin/anlık hata) mevcut durum korunur.
+    if (audioSession.outputs.length) {
+        const pref = audioSession.preferredOutputId;
+        const next = pref && audioSession.outputs.some((d) => d.id === pref) ? pref : null;
+        if (next !== audioSession.selectedOutputId) {
+            audioSession.selectedOutputId = next;
+            document.querySelectorAll('audio[data-call-audio]').forEach((el) => applySinkToAudioEl(el));
+        }
     }
 
     updateAudioControls();
@@ -16868,6 +16899,8 @@ async function chooseOutputDevice(id) {
     }
     const previous = audioSession.selectedOutputId;
     audioSession.selectedOutputId = id === 'default' ? null : id;
+    audioSession.preferredOutputId = audioSession.selectedOutputId;
+    savePreferredOutput(audioSession.preferredOutputId);
     // Hata artık yutulmuyor: tarayıcı/masaüstü uygulaması çıkış seçimini reddederse kullanıcı bunu görür ve seçim geri alınır
     // (eskiden menü yeni cihazı seçili gösteriyor ama ses eski çıkıştan gelmeye devam ediyordu).
     const results = await Promise.allSettled([...document.querySelectorAll('audio[data-call-audio]')]
@@ -16877,6 +16910,8 @@ async function chooseOutputDevice(id) {
     if (failed) {
         console.warn('Ses çıkışı değiştirilemedi:', failed.reason);
         audioSession.selectedOutputId = previous;
+        audioSession.preferredOutputId = previous;
+        savePreferredOutput(previous);
         document.querySelectorAll('audio[data-call-audio]').forEach((el) => {
             if (typeof el.setSinkId === 'function') el.setSinkId(previous || '').catch(() => {});
         });
@@ -16967,7 +17002,7 @@ function resetAudioSession() {
     audioSession.inputs = [];
     audioSession.outputs = [];
     audioSession.selectedInputId = null;
-    audioSession.selectedOutputId = null;
+    audioSession.selectedOutputId = null; // tercih (preferredOutputId) korunur; sonraki görüşmede cihaz listesi gelince uygulanır
     audioSession.native = { available: false, routes: [], active: null };
     [callMicArrowBtn, callSpeakerBtn, callOutArrowBtn, document.getElementById('call-nc-btn')].forEach((el) => { if (el) el.style.display = 'none'; });
 }
