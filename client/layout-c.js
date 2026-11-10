@@ -590,7 +590,35 @@
             if (!desk.matches) { $('hub-members-toggle-btn')?.click(); return; } // telefonda mevcut üye paneli
             const h = body.classList.toggle('lc-members-hidden');
             try { localStorage.setItem('sauran.lc.members', h ? 'hidden' : 'shown'); } catch (_) {}
+            hideMembersHint();
             sync();
+        });
+
+        // Masaüstünde her lobiye girişte üye listesi açık gelir; nasıl kapatılacağını anlatan kısa ipucu gösterilir.
+        let hintEl = null, hintTimer = null;
+        function hideMembersHint() { clearTimeout(hintTimer); if (hintEl) { hintEl.remove(); hintEl = null; } }
+        function showMembersHint() {
+            let off = false;
+            try { off = localStorage.getItem('sauran.lc.membersHint') === 'off'; } catch (_) {}
+            if (off || !desk.matches) return;
+            hideMembersHint();
+            hintEl = document.createElement('div');
+            hintEl.className = 'lc-members-hint';
+            hintEl.setAttribute('role', 'status');
+            hintEl.innerHTML = `<span>${tr('lc-members-hint', 'Üye listesini kapatmak için buradaki Üyeler düğmesine tıkla.')}</span><button type="button">${tr('lc-members-hint-off', 'Bir daha gösterme')}</button>`;
+            hintEl.querySelector('button').addEventListener('click', () => { try { localStorage.setItem('sauran.lc.membersHint', 'off'); } catch (_) {} hideMembersHint(); });
+            document.body.appendChild(hintEl);
+            const r = mem.getBoundingClientRect();
+            hintEl.style.top = `${Math.round(r.bottom + 10)}px`;
+            hintEl.style.right = `${Math.max(12, Math.round(window.innerWidth - r.right - 6))}px`;
+            hintTimer = setTimeout(hideMembersHint, 6000);
+        }
+        document.addEventListener('sauran:hub-entered', () => {
+            if (!desk.matches) return;
+            body.classList.remove('lc-members-hidden');
+            try { localStorage.setItem('sauran.lc.members', 'shown'); } catch (_) {}
+            sync();
+            requestAnimationFrame(showMembersHint);
         });
     }
 

@@ -4346,10 +4346,18 @@ function forwardCopiesOf(rootIds) {
 
 function deleteMessage(messageId, userId) {
   const run = db.transaction(() => {
-    const msg = db.prepare(`SELECT user_id, hub_id, to_user_id, kind, forwarded_from_message_id FROM messages WHERE id = ?`).get(messageId);
+    const msg = db.prepare(`SELECT user_id, hub_id, to_user_id, kind, forwarded_from_message_id, channel_id FROM messages WHERE id = ?`).get(messageId);
     if (!msg) return { success: false, error: 'Mesaj bulunamadı.' };
     if (msg.kind === 'deleted') return { success: false, error: 'Mesaj zaten silinmiş.' };
-    if (msg.user_id !== userId) return { success: false, error: 'Yalnızca kendi mesajını silebilirsin.' };
+    let byMod = false;
+    if (msg.user_id !== userId) {
+      // Moderatör silmesi: yalnızca lobi (grup değil) mesajı; kurucu herkesinkini, moderatör yalnızca normal üyelerinkini.
+      const actorTier = msg.hub_id && !isGroupHub(msg.hub_id) ? getMemberTier(msg.hub_id, userId) : null;
+      const targetTier = msg.user_id ? getMemberTier(msg.hub_id, msg.user_id) : null;
+      const allowed = actorTier === 'owner' || (actorTier === 'moderator' && targetTier !== 'owner' && targetTier !== 'moderator');
+      if (!allowed) return { success: false, error: 'Yalnızca kendi mesajını silebilirsin.' };
+      byMod = true;
+    }
 
     let copies = [];
     if (msg.forwarded_from_message_id == null) {
@@ -4360,8 +4368,10 @@ function deleteMessage(messageId, userId) {
     }
 
     tombstoneMessageRows([messageId, ...copies.map(c => c.id)]);
+    if (byMod) db.prepare(`UPDATE messages SET payload = ? WHERE id = ?`).run(JSON.stringify({ by_mod: true }), messageId);
 
-    return { success: true, id: messageId, hub_id: msg.hub_id, to_user_id: msg.to_user_id, forward_copies: copies };
+    return { success: true, id: messageId, hub_id: msg.hub_id, to_user_id: msg.to_user_id, forward_copies: copies,
+      by_mod: byMod, target_user_id: byMod ? msg.user_id : null, channel_id: msg.channel_id || null };
   });
 
   return run();

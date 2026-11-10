@@ -694,7 +694,10 @@ function hashSessionToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-function createSession(userId, userAgent) {
+// "Beni hatırla" işaretsiz girişte sunucu tarafı ömür (çerez zaten tarayıcı kapanınca silinir; bu üst sınırdır).
+const SHORT_SESSION_DURATION = 12 * 60 * 60 * 1000;
+
+function createSession(userId, userAgent, { remember = true } = {}) {
   const acct = db.prepare(`SELECT account_status FROM users WHERE id = ?`).get(userId);
   if (acct && acct.account_status === 'suspended') {
     throw new Error('Askıdaki hesap için oturum oluşturulamaz.');
@@ -702,7 +705,7 @@ function createSession(userId, userAgent) {
 
   const token = crypto.randomBytes(32).toString('hex');
   const tokenHash = hashSessionToken(token);
-  const expiresAt = new Date(Date.now() + SESSION_DURATION).toISOString();
+  const expiresAt = new Date(Date.now() + (remember ? SESSION_DURATION : SHORT_SESSION_DURATION)).toISOString();
 
   db.prepare(`
     INSERT INTO sessions (user_id, token_hash, expires_at, user_agent)
@@ -802,12 +805,14 @@ function shouldMarkSessionCookieSecure(req) {
   return !LOCAL_HOSTS.has(host);
 }
 
+// maxAgeSeconds null → Max-Age yazılmaz: oturum çerezi (tarayıcı/uygulama kapanınca silinir).
 function buildSessionCookie(req, value, maxAgeSeconds) {
-  return `sauran_session=${value}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAgeSeconds}${shouldMarkSessionCookieSecure(req) ? '; Secure' : ''}`;
+  const age = maxAgeSeconds === null ? '' : `; Max-Age=${maxAgeSeconds}`;
+  return `sauran_session=${value}; HttpOnly; SameSite=Lax; Path=/${age}${shouldMarkSessionCookieSecure(req) ? '; Secure' : ''}`;
 }
 
-function setSessionCookie(req, res, token) {
-  res.setHeader('Set-Cookie', buildSessionCookie(req, encodeURIComponent(token), SESSION_DURATION / 1000));
+function setSessionCookie(req, res, token, { remember = true } = {}) {
+  res.setHeader('Set-Cookie', buildSessionCookie(req, encodeURIComponent(token), remember ? SESSION_DURATION / 1000 : null));
 }
 
 function clearSessionCookie(req, res) {
@@ -945,14 +950,15 @@ app.post('/api/login', ...loginLimiter, (req, res) => {
     };
 
     // İki adımlı doğrulama açıksa şifre tek başına oturum açmaz: kısa ömürlü bir "ikinci adım" bileti verilir.
+    const remember = req.body?.remember !== false;
     if (isTwoFactorEnabled(result.id)) {
       const challenge = crypto.randomBytes(24).toString('base64url');
-      loginChallenges.set(challenge, { userId: result.id, user: userPayload, expires: Date.now() + LOGIN_CHALLENGE_TTL_MS, attempts: 0 });
+      loginChallenges.set(challenge, { userId: result.id, user: userPayload, expires: Date.now() + LOGIN_CHALLENGE_TTL_MS, attempts: 0, remember });
       return res.json({ success: false, requires_2fa: true, challenge });
     }
 
-    const sessionToken = createSession(result.id, req.headers['user-agent']);
-    setSessionCookie(req, res, sessionToken);
+    const sessionToken = createSession(result.id, req.headers['user-agent'], { remember });
+    setSessionCookie(req, res, sessionToken, { remember });
 
     return res.json({ success: true, user: userPayload });
 
@@ -994,8 +1000,9 @@ app.post('/api/login/2fa', twoFactorLimiter, (req, res) => {
 
   loginChallenges.delete(key);
   try {
-    const sessionToken = createSession(challenge.userId, req.headers['user-agent']);
-    setSessionCookie(req, res, sessionToken);
+    const remember = challenge.remember !== false;
+    const sessionToken = createSession(challenge.userId, req.headers['user-agent'], { remember });
+    setSessionCookie(req, res, sessionToken, { remember });
   } catch (error) {
     return res.status(403).json({ success: false, error: 'Giriş yapılamadı.' });
   }
@@ -3909,8 +3916,12 @@ app.delete('/api/messages/:id', (req, res) => {
       return res.status(400).json(result);
     }
 
+    if (result.by_mod) {
+      const ch = result.channel_id ? (listHubChannels(result.hub_id) || []).find((c) => c.id === result.channel_id) : null;
+      logModAction(result.hub_id, user.id, 'message_delete', result.target_user_id, ch ? { channel_name: ch.name } : null);
+    }
     if (result.hub_id) {
-      io.to(`hub:${result.hub_id}`).emit('hub_message_deleted', { id: result.id });
+      io.to(`hub:${result.hub_id}`).emit('hub_message_deleted', { id: result.id, by_mod: Boolean(result.by_mod) });
     } else if (result.to_user_id) {
       io.to(`user:${user.id}`).to(`user:${result.to_user_id}`).emit('dm_message_deleted', { id: result.id });
     }
@@ -3920,7 +3931,7 @@ app.delete('/api/messages/:id', (req, res) => {
       if (c.to_user_id) io.to(`user:${c.user_id}`).to(`user:${c.to_user_id}`).emit('dm_message_deleted', { id: c.id });
     });
 
-    const { forward_copies, ...publicResult } = result;
+    const { forward_copies, target_user_id, channel_id, ...publicResult } = result;
     return res.json(publicResult);
 
   } catch (error) {

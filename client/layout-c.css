@@ -945,3 +945,14 @@ body.lc .subs-note { margin: 14px 0 0 !important; padding: 12px 14px; border-rad
   body.lc .hub-card-muted { display: block; position: absolute; left: 32px; top: 6px; width: 14px; height: 14px; border-radius: 50%; background: #2a1418 center / 9px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ff9aa8' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M4 4l16 16M9 5a6 6 0 0 1 9 5v4M6 11v5h12'/%3E%3C/svg%3E"); box-shadow: 0 0 0 2px var(--lc-bg-main, #0b0e13); }
   body.lc .hub-card.is-muted .hub-card-name { color: var(--text-secondary) !important; }
 }
+
+/* ═══════════════ KENDİ DURUMUN: avatar halkası + ÜYE PANELİ İPUCU ═══════════════ */
+body[data-my-status="idle"] #lc-dock #lc-user-id .lc-user-av, body[data-my-status="idle"] .mnav-av { box-shadow: 0 0 0 2px #f0b232 !important; }
+body[data-my-status="busy"] #lc-dock #lc-user-id .lc-user-av, body[data-my-status="busy"] .mnav-av { box-shadow: 0 0 0 2px #f23f43 !important; }
+body[data-my-status="invisible"] #lc-dock #lc-user-id .lc-user-av, body[data-my-status="invisible"] .mnav-av { box-shadow: 0 0 0 2px #80848e !important; }
+.lc-members-hint { position: fixed; z-index: 400; max-width: 260px; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px;
+  background: #1a1430; border: 1px solid rgba(179, 102, 245, 0.5); color: #e7ccff; font-size: 13px; line-height: 1.4; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5); animation: lcHintIn .2s ease; }
+.lc-members-hint::before { content: ""; position: absolute; top: -6px; right: 14px; width: 10px; height: 10px; background: #1a1430; border-left: 1px solid rgba(179, 102, 245, 0.5); border-top: 1px solid rgba(179, 102, 245, 0.5); transform: rotate(45deg); }
+.lc-members-hint button { align-self: flex-start; padding: 0; border: 0; background: none; color: #b9a6d8; font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
+@keyframes lcHintIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .lc-members-hint { animation: none; } }

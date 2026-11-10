@@ -732,6 +732,7 @@ const STATUS_INFO = {
 };
 
 const STATUS_CLASS_NAMES = ['status-active', 'status-idle', 'status-busy', 'status-invisible'];
+let presenceHubTimer = null;
 
 
 // =====================================================
@@ -1391,7 +1392,8 @@ async function login() {
 
                     body: JSON.stringify({
                         username,
-                        password
+                        password,
+                        remember: document.getElementById('login-remember-input')?.checked !== false
                     })
                 }
             );
@@ -2242,6 +2244,16 @@ function renderStatus(status) {
     statusLabel.textContent =
         info.label;
 
+    // Her yerde anında: avatar halkaları (CSS body[data-my-status]) ve açık lobideki kendi üye satırın.
+    document.body.dataset.myStatus = STATUS_INFO[status] ? status : 'active';
+    try {
+        if (currentHub && Array.isArray(currentHub.members) && currentUser) {
+            const me = currentHub.members.find((m) => m.user_id === currentUser.id);
+            if (me && me.status !== status) { me.status = status; me.online = true; renderHubMembers(); }
+        }
+    } catch (_) { /* açılışta (değişkenler henüz tanımlı değilken) çağrılabilir */ }
+    document.dispatchEvent(new CustomEvent('sauran:my-status', { detail: { status } }));
+
 }
 
 
@@ -2273,11 +2285,11 @@ statusOptionButtons.forEach(
                 statusDropdown.style.display =
                     'none';
 
-                renderStatus(status);
-
                 if (currentUser) {
                     currentUser.status = status;
                 }
+
+                renderStatus(status);
 
 
                 try {
@@ -4305,6 +4317,8 @@ const I18N = {
     'attach-sticker': { tr: 'Çıkartma', en: 'Sticker' },
     'login-username-label': { tr: 'Kullanıcı Adın', en: 'Username' },
     'login-password-label': { tr: 'Şifren', en: 'Password' },
+    'login-remember': { tr: 'Beni hatırla', en: 'Remember me' },
+    'login-remember-hint': { tr: 'Başkasının cihazındaysan işareti kaldır; uygulama kapanınca çıkış yapılır.', en: "On someone else's device? Untick it and you'll be signed out when the app closes." },
     'hub-settings-invite-friend': { tr: 'Arkadaşını Davet Et', en: 'Invite a Friend' },
     'hub-settings-invite-code': { tr: 'Davet Kodu Oluştur', en: 'Create Invite Code' },
     'hub-settings-delete': { tr: 'Lobiyi Sil', en: 'Delete Lobby' },
@@ -4327,6 +4341,10 @@ const I18N = {
     'members-in-voice': { tr: 'Seste', en: 'In voice' },
     'members-here': { tr: 'Burada', en: 'Here' },
     'members-away': { tr: 'Uzakta', en: 'Away' },
+    'members-busy': { tr: 'Meşgul', en: 'Busy' },
+    'members-hidden': { tr: 'Gizli (başkalarına çevrimdışı)', en: 'Invisible (offline to others)' },
+    'lc-members-hint': { tr: 'Üye listesini kapatmak için buradaki Üyeler düğmesine tıkla.', en: 'Click the Members button here to hide the member list.' },
+    'lc-members-hint-off': { tr: 'Bir daha gösterme', en: "Don't show again" },
     'members-offline': { tr: 'Çevrimdışı', en: 'Offline' },
     'channel-text-label': { tr: 'Metin kanalları', en: 'Text channels' },
     'channel-add': { tr: 'Metin kanalı aç', en: 'Create text channel' },
@@ -4551,6 +4569,10 @@ const I18N = {
     'remove-photo': { tr: 'Kaldır', en: 'Remove' },
     'confirm-delete-message': { tr: 'Bu mesajı silmek istediğine emin misin?', en: 'Are you sure you want to delete this message?' },
     'message-deleted': { tr: 'Bu mesaj silindi', en: 'This message was deleted' },
+    'message-deleted-by-mod': { tr: 'Bu mesaj bir moderatör tarafından silindi', en: 'This message was deleted by a moderator' },
+    'message-mod-delete': { tr: 'Mesajı sil (moderatör)', en: 'Delete message (moderator)' },
+    'confirm-mod-delete': { tr: '{u} kullanıcısının bu mesajı herkes için silinsin mi? Bu işlem moderasyon kaydına yazılır.', en: "Delete {u}'s message for everyone? This is recorded in the moderation log." },
+    'mod-delete-done': { tr: 'Mesaj silindi.', en: 'Message deleted.' },
     'media-expired': { tr: 'medya süresi doldu (silindi)', en: 'media expired (deleted)' },
     'deleted-account-label': { tr: 'Silinmiş hesap', en: 'Deleted account' },
     'deleted-account-message': { tr: 'Silinmiş hesabın mesajı', en: 'Message from a deleted account' },
@@ -5639,7 +5661,7 @@ function connectToChat() {
         'hub_message_deleted',
         (data) => {
 
-            removeHubMessage(data.id);
+            removeHubMessage(data.id, Boolean(data.by_mod));
 
         }
     );
@@ -5685,6 +5707,10 @@ function connectToChat() {
 
             refreshOnlinePanelIfOpen();
             refreshFriendsSidebar();
+            clearTimeout(presenceHubTimer);
+            presenceHubTimer = setTimeout(() => {
+                if (currentHub && document.body.dataset.view === 'hub-detail') openHub(currentHub.id, { metaOnly: true });
+            }, 700);
 
         }
     );
@@ -10218,6 +10244,15 @@ function getMessagePermissions(msg, opts) {
 
     const readOnly = Boolean(opts.readOnly);
 
+    // Moderatör silmesi (lobi, grup değil): kurucu herkesinkini, moderatör yalnızca normal üyelerinkini (ayrılmış üyeler dahil).
+    let canModDelete = false;
+    if (opts.context === 'hub' && !isMine && !isDeleted && msg.user_id && currentHub && currentHub.type !== 'group') {
+        const myTier = currentHub.my_permission_tier;
+        const author = (currentHub.members || []).find((m) => m.user_id === msg.user_id);
+        const authorTier = author ? author.permission_tier : null;
+        canModDelete = myTier === 'owner' || (myTier === 'moderator' && authorTier !== 'owner' && authorTier !== 'moderator');
+    }
+
     return {
         isMine, isDeleted, isPinned,
         canReply: !isDeleted && !readOnly,
@@ -10228,6 +10263,7 @@ function getMessagePermissions(msg, opts) {
         canEdit: isMine && !isDeleted && !readOnly && (msg.kind === 'text' || msg.kind === 'dm'),
         canDelete: isMine && !isDeleted,
         canPin,
+        canModDelete,
         canReport: !isMine && !msg.sender_deleted
     };
 
@@ -10236,7 +10272,7 @@ function getMessagePermissions(msg, opts) {
 function buildMsgActionsBarHtml(msg, opts) {
 
     const p = getMessagePermissions(msg, opts);
-    const hasAnything = p.canReply || p.canReact || p.canCopy || p.canCopyLink || p.canForward || p.canEdit || p.canDelete || p.canPin || p.canReport;
+    const hasAnything = p.canReply || p.canReact || p.canCopy || p.canCopyLink || p.canForward || p.canEdit || p.canDelete || p.canPin || p.canModDelete || p.canReport;
     if (!hasAnything) return '';
 
     const menuRowsPrimary = [];
@@ -10252,6 +10288,7 @@ function buildMsgActionsBarHtml(msg, opts) {
 
     const menuRowsMod = [];
     if (p.canPin) menuRowsMod.push(`<button data-action="pin" type="button">${p.isPinned ? `📌 ${t('message-unpin')}` : `📌 ${t('message-pin')}`}</button>`);
+    if (p.canModDelete) menuRowsMod.push(`<button data-action="mod-delete" type="button" class="hub-member-menu-danger">🗑 ${t('message-mod-delete')}</button>`);
 
     const menuRowsReport = [];
     if (p.canReport) menuRowsReport.push(`<button data-action="report" type="button">⚠ ${t('message-report')}</button>`);
@@ -10514,6 +10551,7 @@ function runMessageAction(action, msg, opts, wrap, picker) {
     if (action === 'forward') return openForwardModal(msg.id);
     if (action === 'edit') return startInlineEdit(wrap, msg, opts);
     if (action === 'delete') return deleteMessageWithConfirm(msg.id);
+    if (action === 'mod-delete') return modDeleteMessage(msg);
     if (action === 'pin') return toggleMessagePin(msg);
     if (action === 'report') return openReportModal('message', msg.id, msg.username);
 }
@@ -10536,6 +10574,16 @@ async function copyMessageLink(msg) {
     } catch (error) {
         console.error('Bağlantı kopyalanamadı:', error);
     }
+}
+
+async function modDeleteMessage(msg) {
+    if (!confirm(t('confirm-mod-delete').replace('{u}', msg.username || ''))) return;
+    try {
+        const r = await fetch(`/api/messages/${msg.id}`, { method: 'DELETE', credentials: 'include' });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || !d.success) showToast(d.error || 'Silinemedi.');
+        else showToast(t('mod-delete-done'));
+    } catch (_) { showToast('Silinemedi.'); }
 }
 
 function deleteMessageWithConfirm(messageId) {
@@ -13397,6 +13445,7 @@ const MODLOG_ACTIONS = {
     channel_create: ['➕', 'Metin kanalı açıldı', 'Text channel created'],
     channel_rename: ['✏️', 'Metin kanalının adı değişti', 'Text channel renamed'],
     channel_delete: ['🗑️', 'Metin kanalı silindi', 'Text channel deleted'],
+    message_delete: ['🧹', 'Mesaj silindi (moderatör)', 'Message deleted (moderator)'],
     slow_mode: ['🐢', 'Yavaş mod değişti', 'Slow mode changed'],
     word_filter: ['🚫', 'Kelime filtresi güncellendi', 'Word filter updated'],
     hub_update: ['⚙️', 'Lobi ayarları değişti', 'Lobby settings changed'],
@@ -13434,7 +13483,7 @@ function modlogDetails(entry) {
     if (d.room_name) parts.push(`${en ? 'Room' : 'Oda'}: ${escapeHtml(d.room_name)}`);
     // Metin kanalı işlemleri: hangi kanal (adı değiştiyse eski → yeni), silinince giden mesaj sayısı
     if (entry.action === 'channel_rename' && d.old_name) parts.push(`#${escapeHtml(d.old_name)} → #${escapeHtml(d.channel_name || '')}`);
-    else if (/^channel_/.test(entry.action) && d.channel_name) parts.push(`#${escapeHtml(d.channel_name)}`);
+    else if (/^(channel_|message_delete)/.test(entry.action) && d.channel_name) parts.push(`#${escapeHtml(d.channel_name)}`);
     if (entry.action === 'channel_delete' && Number(d.messages) > 0) parts.push(en ? `${Number(d.messages)} messages deleted` : `${Number(d.messages)} mesaj silindi`);
     if (d.duration) parts.push(escapeHtml(modlogDuration(d.duration)));
     if (entry.action === 'slow_mode') parts.push(Number(d.seconds) ? escapeHtml(formatSlowDuration(d.seconds)) : (en ? 'off' : 'kapatıldı'));
@@ -15499,6 +15548,7 @@ async function openHub(hubId, opts = {}) {
 
         const hubChanged = !currentHub || currentHub.id !== data.hub.id;
         if (hubChanged) {
+            setTimeout(() => document.dispatchEvent(new CustomEvent('sauran:hub-entered', { detail: { hub_id: data.hub.id } })), 0);
             if (currentHub) {
                 typingSendStop('hub');
                 if (socket) socket.emit('leave_hub', currentHub.id); // eski lobinin mesajları bu akışa düşmesin
@@ -17247,9 +17297,25 @@ function renderHubMembers() {
     (voiceRoomsCache || []).forEach((r) => (r.participants || []).forEach((p) => voiceRoomOf.set(p.user_id, r.name)));
 
     // Durum: Seste (bir ses odasında) · Burada (çevrimiçi) · Uzakta (çevrimiçi ama "Takılıyor") · Çevrimdışı
-    const presenceOf = (m) => (voiceRoomOf.has(m.user_id) ? 'voice' : !m.online ? 'offline' : (m.status === 'idle' ? 'away' : 'here'));
+    const myStatus = currentUser && currentUser.status;
+    const statusOf = (m) => (m.user_id === currentUser?.id && myStatus ? myStatus : m.status);
+    const presenceOf = (m) => {
+        if (voiceRoomOf.has(m.user_id)) return 'voice';
+        const self = m.user_id === currentUser?.id;
+        if (!m.online && !self) return 'offline';
+        const st = statusOf(m);
+        if (self && st === 'invisible') return 'hidden';
+        return st === 'idle' ? 'away' : st === 'busy' ? 'busy' : 'here';
+    };
     const presenceText = (m, state) => state === 'voice' ? `🔊 ${t('members-in-voice')} · ${voiceRoomOf.get(m.user_id) || ''}`
-        : state === 'away' ? t('members-away') : state === 'offline' ? t('members-offline') : t('members-here');
+        : state === 'away' ? t('members-away') : state === 'busy' ? t('members-busy') : state === 'hidden' ? t('members-hidden')
+            : state === 'offline' ? t('members-offline') : t('members-here');
+    const dotColor = (m) => {
+        const self = m.user_id === currentUser?.id;
+        if (!m.online && !self) return '#4b5563';
+        const st = statusOf(m);
+        return st === 'idle' ? '#f0b232' : st === 'busy' ? '#f23f43' : st === 'invisible' ? '#80848e' : '#57f287';
+    };
 
     const memberRowHtml = (m, idx, list, group) => {
 
@@ -17276,7 +17342,7 @@ function renderHubMembers() {
                 ${premFx}
                 <span class="hub-member-avatar-wrap">
                     ${avatar}
-                    <span class="hub-member-dot" style="background:${m.online ? '#57f287' : '#4b5563'};"></span>
+                    <span class="hub-member-dot" style="background:${dotColor(m)};"></span>
                 </span>
                 <span class="hub-member-info"><span class="hub-member-name">${usernameCardHtml(m.username, m.plus_active, m.name_effect)}${tierBadge}</span>${subText ? `<span class="hub-member-sub">${escapeHtml(subText)}</span>` : ''}</span>
                 ${showMenu ? `
@@ -18071,7 +18137,7 @@ function renderHubMessageIntoWrap(wrap, msg) {
 
     if (msg.kind === 'deleted') {
 
-        body = `<div class="hub-msg-deleted">${t('message-deleted')}</div>`;
+        body = `<div class="hub-msg-deleted">${t(msg.payload && msg.payload.by_mod ? 'message-deleted-by-mod' : 'message-deleted')}</div>`;
 
     } else if (msg.kind === 'poll') {
 
@@ -18173,12 +18239,12 @@ function updateHubMessage(msg) {
 }
 
 
-function removeHubMessage(messageId) {
+function removeHubMessage(messageId, byMod = false) {
 
     const wrap = hubFeed.querySelector(`[data-message-id="${messageId}"]`);
     if (!wrap) return;
 
-    renderHubMessageIntoWrap(wrap, { id: messageId, kind: 'deleted', username: wrap.querySelector('.username')?.textContent || '' });
+    renderHubMessageIntoWrap(wrap, { id: messageId, kind: 'deleted', username: wrap.querySelector('.username')?.textContent || '', payload: byMod ? { by_mod: true } : null });
 
 }
 
