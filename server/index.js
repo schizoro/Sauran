@@ -4410,7 +4410,26 @@ function pushNotification(userId, type, data) {
 // (2) arama bitince sohbete "Sesli arama · süre / Cevapsız / Reddedildi" kaydı yazılır. Kayıt yalnızca durum + süre + zaman içerir.
 const DM_CALL_RING_MS = 45 * 1000;
 const pendingDmCalls = new Map(); // arayanId -> { toId, callerName, at, timer }
-const activeDmCalls = new Map();  // "küçükId:büyükId" -> { callerId, calleeId, callerName, answeredAt }
+// Özel aramada kullanıcının tüm bağlantıları koparsa arama hemen bitirilmez: kısa kopmalar (ağ değişimi, uygulama arka plana)
+// için tolerans tanınır; süre içinde yeniden bağlanırsa iptal edilir (sesli odalardaki VOICE_DISCONNECT_GRACE_MS gibi).
+const DM_CALL_DISCONNECT_GRACE_MS = 25 * 1000;
+const dmCallDisconnectTimers = new Map(); // userId -> zamanlayıcı
+const activeDmCalls = new Map();
+// Güvenlik ağı: iki taraf da tolerans süresi içinde yeniden bağlanıp görüşmeye dönmezse cevaplanmış arama kayıtta asılı
+// kalmasın (kişi "meşgul" görünmesin). 6 saati aşan cevaplanmış aramalar saatte bir kapatılır.
+const DM_CALL_MAX_MS = 6 * 60 * 60 * 1000;
+setInterval(() => {
+  const now = Date.now();
+  for (const [, call] of Array.from(activeDmCalls.entries())) {
+    const started = call.answeredAt ? new Date(call.answeredAt).getTime() : NaN;
+    if (Number.isFinite(started) && now - started > DM_CALL_MAX_MS) {
+      try {
+        finishAnsweredDmCall(call.callerId, call.calleeId);
+        io.to(`user:${call.callerId}`).to(`user:${call.calleeId}`).emit('dm_call_ended', { from_user_id: call.callerId });
+      } catch (_) { /* yoksay */ }
+    }
+  }
+}, 60 * 60 * 1000).unref?.();  // "küçükId:büyükId" -> { callerId, calleeId, callerName, answeredAt }
 const dmPairKey = (a, b) => (a < b ? `${a}:${b}` : `${b}:${a}`);
 
 function logDmCall(callerId, callerName, calleeId, status, durationSec) {
@@ -5379,6 +5398,8 @@ io.on('connection', (socket) => {
 
     activeUsers.get(userId).add(socket.id);
     activeUserNames.set(userId, username);
+    // Kopma toleransı içinde geri geldi: özel arama sürer.
+    if (dmCallDisconnectTimers.has(userId)) { clearTimeout(dmCallDisconnectTimers.get(userId)); dmCallDisconnectTimers.delete(userId); }
 
     socket.join(`user:${userId}`);
 
@@ -5860,13 +5881,21 @@ io.on('connection', (socket) => {
 
       // Kullanıcının hiç bağlantısı kalmadı: çalan aramasını cevapsız say, cevaplanmış aramasını sonlandır.
       finishMissedDmCall(socket.userId, 'disconnect');
-      for (const [key, call] of Array.from(activeDmCalls.entries())) {
-        if (call.callerId === socket.userId || call.calleeId === socket.userId) {
-          const otherId = call.callerId === socket.userId ? call.calleeId : call.callerId;
-          finishAnsweredDmCall(socket.userId, otherId);
-          io.to(`user:${otherId}`).emit('dm_call_ended', { from_user_id: socket.userId });
+      const goneId = socket.userId;
+      if (dmCallDisconnectTimers.has(goneId)) clearTimeout(dmCallDisconnectTimers.get(goneId));
+      const timer = setTimeout(() => {
+        dmCallDisconnectTimers.delete(goneId);
+        if (activeUsers.has(goneId)) return; // bu arada geri geldi
+        for (const [, call] of Array.from(activeDmCalls.entries())) {
+          if (call.callerId === goneId || call.calleeId === goneId) {
+            const otherId = call.callerId === goneId ? call.calleeId : call.callerId;
+            finishAnsweredDmCall(goneId, otherId);
+            io.to(`user:${otherId}`).emit('dm_call_ended', { from_user_id: goneId });
+          }
         }
-      }
+      }, DM_CALL_DISCONNECT_GRACE_MS);
+      if (timer.unref) timer.unref();
+      dmCallDisconnectTimers.set(goneId, timer);
     }
 
     io.emit('presence_changed');

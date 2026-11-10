@@ -4361,6 +4361,7 @@ const I18N = {
     'start-poll': { tr: 'Oylama', en: 'Poll' },
     'start-share': { tr: 'Paylaşım', en: 'Share' },
     'member-count': { tr: 'kişi', en: 'members' },
+    'voice-joining-wait': { tr: 'Odaya bağlanılıyor, bir saniye…', en: 'Joining the room, one moment…' },
     'hub-row-no-messages': { tr: 'Henüz mesaj yok', en: 'No messages yet' },
     'hub-row-in-voice': { tr: 'seste', en: 'in voice' },
     'hub-row-you': { tr: 'Sen', en: 'You' },
@@ -5550,11 +5551,14 @@ function connectToChat() {
                 else maybeNotifyIncomingHubMessage(msg);
                 return;
             }
+            // Açık olmayan bir lobinin mesajı (eski odadan geç gelen yayın): akışa eklenmez; okunmamışını hub_unread_ping sayar.
+            if (!inThisHub) { resolvePendingSend(msg); return; }
             if (!resolvePendingSend(msg) && !feedPaging.hub.hasNewer) appendHubMessage(msg);
-            if (inThisHub && currentUser && msg.user_id === currentUser.id) startSlowModeCooldown(currentHub.slow_mode_seconds);
+            if (currentUser && msg.user_id === currentUser.id) startSlowModeCooldown(currentHub.slow_mode_seconds);
             typingDoneBy('hub', msg.user_id);
 
-            if (inThisHub && document.visibilityState === 'visible') markCurrentHubRead(msg.id);
+            // Eski mesajlara bakarken (hasNewer) yeni mesaj görülmedi: okundu sayılmaz.
+            if (document.visibilityState === 'visible' && !feedPaging.hub.hasNewer) markCurrentHubRead(msg.id);
 
             if (msg.user_id !== currentUser.id) maybeNotifyIncomingHubMessage(msg);
 
@@ -5721,7 +5725,7 @@ function connectToChat() {
 
                 if (!resolvePendingSend(msg) && !feedPaging.dm.hasNewer) appendDmMessage(msg);
                 typingDoneBy('dm', msg.user_id);
-                if (document.visibilityState === 'visible') markReadSoon('dm', otherId, msg.id);
+                if (document.visibilityState === 'visible' && !feedPaging.dm.hasNewer) markReadSoon('dm', otherId, msg.id);
 
             } else if (msg.kind === 'dm_call') {
 
@@ -5838,7 +5842,7 @@ function connectToChat() {
         // Arayan çalarken kapattıysa (henüz bir çağrı çerçevemiz yok) gelen arama zili de durmalı.
         if (!callFrame && data.from_user_id === incomingCallFromId) hideIncomingCall();
 
-        if (callFrame && (data.from_user_id === outgoingCallToId || data.from_user_id === incomingCallFromId)) {
+        if ((callFrame || callMode === 'dm') && (data.from_user_id === outgoingCallToId || data.from_user_id === incomingCallFromId)) {
             leaveCall();
         }
     });
@@ -5862,14 +5866,14 @@ function connectToChat() {
 
     socket.on('hub_members_changed', (data) => {
         if (currentHub && data.hub_id === currentHub.id) {
-            openHub(currentHub.id);
+            openHub(currentHub.id, { metaOnly: true });
         }
     });
 
     // Keşfet: sahibe yeni katılma isteği / isteği gönderene karar bildirimi
     socket.on('hub_join_request', () => {
         showToast(t('discover-new-request'));
-        if (currentHub && hubSettingsModal.style.display === 'flex') openHub(currentHub.id);
+        if (currentHub && hubSettingsModal.style.display === 'flex') openHub(currentHub.id, { metaOnly: true });
     });
     socket.on('lobby_super_like_owner', () => showToast(t('discover-super-received')));
     socket.on('lobby_super_like', (d) => {
@@ -5994,11 +5998,14 @@ function connectToChat() {
     // (Daily/WebRTC bağlantısı bundan bağımsız olarak açık kalır).
     socket.on('connect', async () => {
 
-        if (callMode !== 'hub-room' || !voiceSessionConfirmed) return;
+        if (callMode !== 'hub-room' || !voiceSessionConfirmed) {
+            if (currentHub) loadVoiceRooms(currentHub.id); // seste değilken de oda listesi güncellensin
+            return;
+        }
 
-        voiceRejoining = true;
-        const ack = await emitVoiceRoomJoin();
-        voiceRejoining = false;
+        const roomAtStart = currentVoiceRoomId;
+        const ack = await withVoiceRejoin(emitVoiceRoomJoin());
+        if (callMode !== 'hub-room' || currentVoiceRoomId !== roomAtStart) return; // bu arada oda değişti/çıkıldı
 
         if (!ack.success) {
             showToast(ack.error || t('voice-room-removed'));
@@ -6018,11 +6025,14 @@ function connectToChat() {
     let firstConnect = !socket.connected;
     socket.on('connect', () => {
         if (firstConnect) { firstConnect = false; return; }
+        const sending = [...pendingSends.values()].some((e) => !e.failed);
         if (currentHub && document.body.dataset.view === 'hub-detail') {
             socket.emit('join_hub', currentHub.id);
             // Hâlâ yolda olan (süresi dolmamış) mesaj varken akış yeniden çizilmez; onun balonu kaybolmasın.
-            if (![...pendingSends.values()].some((e) => !e.failed)) loadHubMessages(currentHub.id);
+            if (!sending) loadHubMessages(currentHub.id);
         }
+        // Açık özel sohbette kopukluk sırasında gelen mesajlar da yüklenir.
+        if (activeDmUserId && dmModal.style.display !== 'none' && !sending) reloadDmMessages(activeDmUserId);
     });
 
     socket.on('connect', reportAppVisibility);
@@ -9406,6 +9416,8 @@ function renderDmTitle(userId, username) {
 async function openDm(userId, username) {
 
     userId = Number(userId); // bildirim/veri özniteliğinden metin olarak gelebilir; aynı sohbet "değişti" sanılmasın
+    // Başka bir sohbetten geçiliyorsa oradaki "yazıyor…" hemen kapansın (5 sn asılı kalmasın).
+    if (activeDmUserId && activeDmUserId !== userId) typingSendStop('dm');
 
     // Bildirim bağlantısında ad taşınmaz: yoksa oturumlu API'den alınır.
     if (!username) {
@@ -11154,6 +11166,8 @@ new MutationObserver(() => {
 }
 
 function closeDmPanel() {
+    typingSendStop('dm');
+    if (msgSearchPanel?.dataset.kind === 'dm') closeMessageSearch();
     dmModal.style.display = 'none';
     stashDraft('dm');
     cancelMessageReply('dm');
@@ -12580,6 +12594,7 @@ async function loadVoiceRooms(hubId) {
         const data = await response.json();
         if (!data.success) return;
 
+        if (!currentHub || currentHub.id !== hubId) return; // bu arada lobi değişti
         voiceRoomsCache = data.rooms;
         renderVoiceRoomsList();
 
@@ -12835,19 +12850,28 @@ voiceRoomPreviewJoinBtn.addEventListener('click', () => {
     if (room) joinVoiceRoom(room);
 });
 
+let voiceJoinInFlight = false;
 async function joinVoiceRoom(room) {
 
+    // Aynı anda iki katılım (çift dokunma ya da A'dan hemen B'ye) birbirini bozuyordu: ilki bitene kadar yenisi alınmaz.
+    if (voiceJoinInFlight) { showToast(t('voice-joining-wait')); return; }
+    if (!currentHub) return;
+    if (callMode === 'dm' && !callFrame) { showToast(t('voice-joining-wait')); return; } // özel arama bağlanıyor
+    const hubId = currentHub.id;
+
     if (callFrame) leaveCall();
+    voiceJoinInFlight = true;
 
     try {
 
-        const response = await fetch(`/api/hubs/${currentHub.id}/voice-rooms/${room.id}/join`, {
+        const response = await fetch(`/api/hubs/${hubId}/voice-rooms/${room.id}/join`, {
             method: 'POST',
             credentials: 'include'
         });
 
         const data = await response.json();
 
+        if (!voiceJoinInFlight) return; // bu arada çıkıldı (leaveCall kilidi bıraktı)
         if (!data.success) {
             showNotice(data.error || 'Sesli odaya katılınamadı.');
             return;
@@ -12856,7 +12880,7 @@ async function joinVoiceRoom(room) {
         callMode = 'hub-room';
         voiceJoinStartMuted = Boolean(data.voice_mute);
         currentVoiceRoomId = room.id;
-        currentVoiceRoomHubId = currentHub.id;
+        currentVoiceRoomHubId = hubId;
         currentVoiceRoomName = room.name;
         voiceSessionConfirmed = false;
         voiceRejoining = false;
@@ -12913,6 +12937,8 @@ async function joinVoiceRoom(room) {
         console.error('Sesli odaya katılınamadı:', error);
         showNotice(error?.presenceError || voiceJoinErrorMessage(error));
         leaveCall();
+    } finally {
+        voiceJoinInFlight = false;
     }
 
 }
@@ -14564,6 +14590,8 @@ function switchToView(view) {
 
     if (view !== 'hub-detail' && currentHub) {
 
+        typingSendStop('hub');
+        if (msgSearchPanel?.dataset.kind === 'hub') closeMessageSearch();
         if (socket) {
             socket.emit('leave_hub', currentHub.id);
         }
@@ -15428,11 +15456,29 @@ function groupSystemText(msg) {
     }
 }
 
+let openHubSeq = 0;
 async function openHub(hubId, opts = {}) {
 
+    // Yalnızca bilgi tazeleme (üye girdi/çıktı): akış, arama ve yazıyor durumu korunur. Sayaç artırılmaz: arka plan
+    // tazelemesi kullanıcının başlattığı lobi geçişini iptal etmez, tam açılış gelirse tazeleme geri çekilir.
+    const seq = opts.metaOnly ? openHubSeq : ++openHubSeq;
+    if (opts.metaOnly) {
+        try {
+            const r = await fetch(`/api/hubs/${hubId}`, { credentials: 'include' });
+            const d = await r.json();
+            if (!d.success || seq !== openHubSeq || !currentHub || currentHub.id !== d.hub.id) return;
+            const keepChannel = currentChannelId;
+            currentHub = d.hub;
+            currentChannelId = pickChannelFor(d.hub, keepChannel);
+            renderHubDetail();
+            announceChannels();
+        } catch (error) { console.error('Lobi bilgisi tazelenemedi:', error); }
+        return;
+    }
+
     nativeNotifyCancel(`hub-${hubId}`);
-    clearTyping('hub');
-    if (msgSearchPanel?.dataset.kind === 'hub') closeMessageSearch();
+    // Telefonda üstte kalabilecek Mesajlar sayfası / çekmeceler kapanır (ör. bildirimden lobi açıldı).
+    document.body.classList.remove('lc-msgs-open', 'lobby-drawer-open', 'drawer-friends', 'drawer-groups', 'drawer-friendlist');
 
     try {
 
@@ -15440,8 +15486,20 @@ async function openHub(hubId, opts = {}) {
         const data = await response.json();
 
         if (!data.success) return;
+        if (seq !== openHubSeq) return; // bu arada başka bir lobi açıldı: eski yanıt yeniyi ezmesin
 
         const hubChanged = !currentHub || currentHub.id !== data.hub.id;
+        if (hubChanged) {
+            if (currentHub) {
+                typingSendStop('hub');
+                if (socket) socket.emit('leave_hub', currentHub.id); // eski lobinin mesajları bu akışa düşmesin
+            }
+            clearTyping('hub');
+            if (msgSearchPanel?.dataset.kind === 'hub') closeMessageSearch();
+            hubFeed.innerHTML = '';
+            feedPaging.hub = { key: null, oldestId: null, hasMore: false, loading: false, newestId: null, hasNewer: false };
+            renderJumpToLatest('hub');
+        }
         const nextChannel = pickChannelFor(data.hub, opts.channelId || (hubChanged ? null : currentChannelId));
         const channelChanged = nextChannel !== currentChannelId;
         if (hubChanged || channelChanged) { stashDraft('hub'); cancelMessageReply('hub'); }
@@ -15890,6 +15948,9 @@ async function joinDmCall(userId, username) {
 
     try {
 
+        // Bağlanırken de "görüşmede" sayılır: karşı taraf bu arada kapatırsa (dm_call_ended) yakalanır, üçüncü bir kişinin
+        // araması da gelen arama olarak gösterilmez.
+        callMode = 'dm';
         const response = await fetch(`/api/dm/${userId}/call/join`, {
             method: 'POST',
             credentials: 'include'
@@ -15897,16 +15958,17 @@ async function joinDmCall(userId, username) {
 
         const data = await response.json();
 
+        if (outgoingCallToId !== userId || callMode !== 'dm') return; // bağlanırken kapatıldı
         if (!data.success) {
             showNotice(data.error || 'Aramaya katılınamadı.');
             leaveCall();
             return;
         }
 
-        callMode = 'dm';
         voiceLocalMuted = false;
         voiceUserMuted = false;
         await joinCallFrame(data.room_url, data.token);
+        if (outgoingCallToId !== userId || callMode !== 'dm') { leaveCall(); return; } // katılırken kapatıldı
         dmCallBtn.classList.add('in-call');
 
         // Özel aramada da mikrofonu kapatıp açma düğmesi (ses odasıyla aynı düğme ve mantık).
@@ -15964,6 +16026,7 @@ async function joinCallFrame(roomUrl, token) {
     // avoidEval: Daily'nin arama motoru eval (Function) yerine <script> olarak yüklenir; böylece içerik güvenlik kuralı
     // (CSP) 'unsafe-eval' izni vermeden zorunlu yapılabilir. Daily'nin önerdiği ve ileride varsayılan yapacağı ayar.
     callFrame = DailyIframe.createCallObject({ dailyConfig: { avoidEval: true } });
+    const frame = callFrame; // bu katılımın çerçevesi: eski bir çerçevenin olayları yeni görüşmeyi kapatmasın
 
     // ÖNEMLİ: Tüm olay dinleyicileri join()'den ÖNCE bağlanmalı. join()'in
     // döndürdüğü promise çözülmesiyle 'joined-meeting' olayının ateşlenmesi
@@ -15991,10 +16054,19 @@ async function joinCallFrame(roomUrl, token) {
         if (event?.type === 'audio-processor-error') noiseCancelFailed();
     });
 
-    callFrame.on('left-meeting', leaveCall);
+    callFrame.on('left-meeting', () => { if (frame === callFrame) leaveCall(); });
     callFrame.on('error', (event) => {
         console.error('Daily.co çağrı hatası:', event);
-        leaveCall();
+        if (frame === callFrame) leaveCall();
+    });
+    // Özel aramada karşı taraf görüşmeden tamamen düşerse (ör. kapattı ama bildirim gelmedi) 30 sn sonra arama kapanır.
+    callFrame.on('participant-left', () => {
+        if (frame !== callFrame || callMode !== 'dm') return;
+        setTimeout(() => {
+            if (frame !== callFrame || callMode !== 'dm') return;
+            const others = Object.values(frame.participants() || {}).filter((p) => !p.local);
+            if (!others.length) leaveCall();
+        }, 30000);
     });
 
     wireCallAudioUnlock();
@@ -16038,8 +16110,8 @@ async function joinCallFrame(roomUrl, token) {
         applyNoiseCancellation();
 
     } catch (error) {
-        callFrame.destroy();
-        callFrame = null;
+        try { frame.destroy(); } catch (_) { /* yoksay */ }
+        if (callFrame === frame) callFrame = null;
         throw error;
     }
 
@@ -16441,6 +16513,7 @@ function watchLocalAudioTrack() {
 
 // Kendi aldığımız izi (seçili cihazla) Daily'ye verir; seçili cihaz artık yoksa varsayılana düşer.
 async function reacquireLocalMic() {
+    const frame = callFrame;
     let stream = null;
     const wanted = audioSession.selectedInputId;
     try {
@@ -16454,6 +16527,8 @@ async function reacquireLocalMic() {
         }
     }
     const track = stream.getAudioTracks()[0];
+    // Mikrofon izni beklenirken görüşme bittiyse yeni iz hemen kapatılır (mikrofon açık kalmasın).
+    if (!frame || frame !== callFrame) { stream.getTracks().forEach((tr) => { try { tr.stop(); } catch (_) { /* yoksay */ } }); return; }
     if (callCustomMicTrack && callCustomMicTrack !== track) { try { callCustomMicTrack.stop(); } catch (_) { /* yoksay */ } }
     callCustomMicTrack = track;
     await callFrame.setInputDevicesAsync({ audioSource: track });
@@ -16537,11 +16612,10 @@ async function syncVoicePresence() {
 
     if (callMode !== 'hub-room' || !voiceSessionConfirmed || voiceRejoining || !socket || !socket.connected) return;
 
-    voiceRejoining = true;
-    let ack;
-    try { ack = await emitVoiceRoomJoin(); } finally { voiceRejoining = false; }
+    const roomAtStart = currentVoiceRoomId;
+    const ack = await withVoiceRejoin(emitVoiceRoomJoin());
 
-    if (callMode !== 'hub-room') return;
+    if (callMode !== 'hub-room' || currentVoiceRoomId !== roomAtStart) return;
 
     if (!ack.success) {
         if (VOICE_PRESENCE_TRANSIENT_ERRORS.includes(ack.error)) return; // geçici: bir sonraki turda tekrar dene
@@ -16556,6 +16630,16 @@ async function syncVoicePresence() {
         updateVoiceSessionSummary();
         if (currentHub) renderVoiceRoomsList();
     }
+}
+
+// Aynı anda birden fazla yeniden katılma isteği olabilir (bağlantı + periyodik eşitleme): tek bir bayrak ilk biten
+// tarafından erkenden kapatılıyordu. Sayaçla, son istek bitene kadar "yeniden katılıyor" kalır.
+let voiceRejoinCount = 0;
+async function withVoiceRejoin(promise) {
+    voiceRejoinCount += 1;
+    voiceRejoining = true;
+    try { return await promise; }
+    finally { voiceRejoinCount -= 1; voiceRejoining = voiceRejoinCount > 0; }
 }
 
 function startCallHealthMonitor() {
@@ -17055,6 +17139,8 @@ function resetAudioSession() {
 
 
 function leaveCall() {
+
+    voiceJoinInFlight = false; // süren bir oda katılımı varsa iptal edilmiş sayılır
 
     // Çalarken herhangi bir yoldan çıkılırsa karşı tarafın zili de durmalı (iptal olayı).
     if (callMode === 'dm-ringing' && outgoingCallToId && socket) {
@@ -17634,6 +17720,7 @@ hubChatForm.addEventListener(
         if (pendingSends.get(clientId)) pendingSends.get(clientId).content = content;
 
         hubMessageInput.value = '';
+        composerDrafts.delete(draftKey('hub'));
         composerDrafts.delete(`hub:${currentHub.id}`);
         cancelMessageReply('hub');
 
@@ -17844,6 +17931,7 @@ async function loadHubMessages(hubId) {
         hubFeed.innerHTML = '';
         hubFeed._stickBottom = true;
         feedPaging.hub = { key: null, oldestId: null, hasMore: false, loading: false };
+        renderJumpToLatest('hub');
 
         if (data.messages.length === 0) {
             hubFeed.innerHTML = `<div class="hub-feed-empty">${t('hub-feed-empty')}</div>`;
