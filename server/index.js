@@ -42,6 +42,16 @@ const {
   saveHubMessage,
   deleteMessage,
   editMessage,
+  getMessageMediaMeta,
+  getMessageMediaData,
+  getMessageMediaLocation,
+  readMessageMediaChars,
+  recordServerEvent,
+  listServerEvents,
+  serverHeartbeatStart,
+  serverHeartbeatTick,
+  serverHeartbeatStop,
+  getServerHeartbeat,
   getMessageEditHistory,
   addReaction,
   removeReaction,
@@ -4021,6 +4031,131 @@ app.delete('/api/messages/:id/link-preview', contentWriteLimiter, (req, res) => 
   return res.json({ success: true });
 });
 
+// ── Mesaj dosyası (görsel/video/dosya/sesli mesaj) ──
+// Dosya mesajın içinde gömülü gitmez; buradan, erişim kontrolüyle verilir. Büyük dosyalar AKIŞLA gönderilir: veritabanından
+// istenen aralığın base64 karşılığı 3 MB'lık parçalar hâlinde okunup çözülür, istemci okudukça devam edilir (istemci bırakırsa
+// durulur). Böylece sunucu belleği dosya boyutundan bağımsız kalır. Küçük dosyalar (≤ 2 MB) kısa süre bellekte tutulur.
+// Güvenlik: yalnızca güvenli görsel/video/ses türleri sayfada açılır; diğer her şey (HTML, SVG, PDF…) indirme olarak verilir.
+// Önbellek her açılışta sunucuya sorar (no-cache + ETag): silinen/süresi dolan/erişimi kalkan dosya tarayıcı önbelleğinden açılmaz.
+const INLINE_MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif',
+  'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime',
+  'audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg', 'audio/wav', 'audio/aac', 'audio/x-m4a']);
+const MEDIA_SMALL_BYTES = 2 * 1024 * 1024;
+const MEDIA_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+const MEDIA_CHUNK_BYTES = 3 * 1024 * 1024; // 3'ün katı: base64 penceresi tam 4 karakterli bloklara denk gelir
+const MEDIA_MAX_STREAMS = 8;
+const mediaCache = new Map(); // id -> Buffer (küçük dosyalar)
+const mediaLocations = new Map(); // id -> { start, b64len, total, mime }
+let mediaCacheBytes = 0;
+let mediaStreams = 0;
+const mediaLimiter = rateLimit({ windowMs: 60 * 1000, max: 600, keyFn: byIp, message: 'Çok fazla dosya isteği. Biraz sonra tekrar dene.' });
+
+function mediaForget(id) {
+  if (mediaCache.has(id)) { mediaCacheBytes -= mediaCache.get(id).length; mediaCache.delete(id); }
+  mediaLocations.delete(id);
+}
+function mediaCachePut(id, buf) {
+  mediaCache.set(id, buf);
+  mediaCacheBytes += buf.length;
+  for (const [k, v] of mediaCache) {
+    if (mediaCacheBytes <= MEDIA_CACHE_MAX_BYTES) break;
+    mediaCache.delete(k); mediaCacheBytes -= v.length;
+  }
+}
+// Bayt aralığını [s, e] veritabanından parça parça okuyup yazar.
+async function streamMediaRange(res, id, loc, s, e) {
+  let pos = s;
+  while (pos <= e && !res.destroyed) {
+    const blockStart = Math.floor(pos / 3) * 3;
+    const blockEnd = Math.min(e, blockStart + MEDIA_CHUNK_BYTES - 1);
+    const c0 = (blockStart / 3) * 4;
+    const c1 = Math.min(Math.ceil((blockEnd + 1) / 3) * 4, loc.b64len);
+    const buf = Buffer.from(readMessageMediaChars(id, loc.start + c0, c1 - c0), 'base64');
+    const piece = buf.subarray(pos - blockStart, blockEnd - blockStart + 1);
+    if (!piece.length) break;
+    if (!res.write(piece)) await new Promise((r) => { res.once('drain', r); res.once('close', r); });
+    pos = blockEnd + 1;
+  }
+  res.end();
+}
+// Dosya adı: başlıkta güvenli ASCII + RFC 5987 UTF-8 (yalnız kalmış vekil karakterler temizlenir; aksi hâlde encodeURIComponent hata verir)
+function contentDisposition(name, inline) {
+  const clean = String(name || 'dosya').replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '_');
+  const ascii = clean.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  return `${inline ? 'inline' : 'attachment'}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(clean)}`;
+}
+
+app.get('/api/messages/:id/media', mediaLimiter, async (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const id = Number(req.params.id);
+  let streaming = false;
+  try {
+    const meta = getMessageMediaMeta(id, user.id);
+    if (meta.status) { mediaForget(id); return res.status(meta.status).json({ success: false, error: meta.error }); }
+
+    let loc = mediaLocations.get(id);
+    if (!loc) {
+      loc = getMessageMediaLocation(id, meta.voice);
+      if (!loc) return res.status(410).json({ success: false, error: 'Dosyanın saklama süresi doldu.' });
+      if (mediaLocations.size > 2000) mediaLocations.delete(mediaLocations.keys().next().value);
+      mediaLocations.set(id, loc);
+    }
+    const total = loc.total;
+    const mime = loc.mime || meta.mime.toLowerCase() || 'application/octet-stream';
+    const inline = INLINE_MEDIA_TYPES.has(mime);
+    const etag = `"m${id}-${total}"`;
+    res.setHeader('Content-Type', inline ? mime : 'application/octet-stream');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+    res.setHeader('Cache-Control', 'private, no-cache');
+    res.setHeader('ETag', etag);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Content-Disposition', contentDisposition(meta.name, inline && req.query.download !== '1'));
+    if (req.headers['if-none-match'] === etag) return res.status(304).end();
+
+    let s = 0;
+    let e = total - 1;
+    const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || ''));
+    if (range && (range[1] || range[2])) {
+      s = range[1] ? Number(range[1]) : Math.max(0, total - Number(range[2]));
+      e = range[1] && range[2] ? Math.min(Number(range[2]), total - 1) : total - 1;
+      if (s >= total || s > e) { res.setHeader('Content-Range', `bytes */${total}`); return res.status(416).end(); }
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${s}-${e}/${total}`);
+    }
+    res.setHeader('Content-Length', String(e - s + 1));
+    if (req.method === 'HEAD') return res.end();
+
+    // Küçük dosya: tek seferde (ve kısa süre bellekte)
+    if (total <= MEDIA_SMALL_BYTES) {
+      let buf = mediaCache.get(id);
+      if (!buf) {
+        buf = Buffer.from(readMessageMediaChars(id, loc.start, loc.b64len), 'base64');
+        mediaCachePut(id, buf);
+      }
+      return res.end(buf.subarray(s, e + 1));
+    }
+
+    // Büyük dosya: akış (aynı anda en fazla MEDIA_MAX_STREAMS)
+    if (mediaStreams >= MEDIA_MAX_STREAMS) {
+      res.removeHeader('Content-Length'); res.removeHeader('Content-Range');
+      res.setHeader('Retry-After', '2');
+      return res.status(503).json({ success: false, error: 'Sunucu meşgul, tekrar dene.' });
+    }
+    mediaStreams += 1;
+    streaming = true;
+    await streamMediaRange(res, id, loc, s, e);
+  } catch (error) {
+    reportServerError('media', error);
+    if (!res.headersSent) res.status(500).json({ success: false, error: 'Yüklenemedi.' });
+    else res.destroy();
+  } finally {
+    if (streaming) mediaStreams -= 1;
+  }
+});
+
 app.get('/api/messages/:id/edits', (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
@@ -4335,7 +4470,9 @@ function emitHubMessage(hubId, message) {
   if (!push.isConfigured() || !message?.user_id) return;
 
   // Push şifreleme/gönderimi mesajın sokete yazılmasını geciktirmesin diye bir sonraki tura bırakılır.
-  setImmediate(() => dispatchHubMessagePush(hubId, message));
+  setImmediate(() => {
+    try { dispatchHubMessagePush(hubId, message); } catch (error) { reportServerError('hub_push', error); }
+  });
 }
 
 function dispatchHubMessagePush(hubId, message) {
@@ -5469,6 +5606,16 @@ io.use((socket, next) => {
 const safeClientId = (v) => (typeof v === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(v) ? v : null);
 
 io.on('connection', (socket) => {
+  // Her olay işleyicisi korumalı: bir işleyicide hata (ya da reddedilen söz) tüm sunucuyu kapatmaz, kaydedilir.
+  const rawOn = socket.on.bind(socket);
+  socket.on = (event, handler) => rawOn(event, (...args) => {
+    try {
+      const out = handler(...args);
+      if (out && typeof out.catch === 'function') out.catch((error) => reportServerError(`socket:${event}`, error));
+    } catch (error) {
+      reportServerError(`socket:${event}`, error);
+    }
+  });
   const userId = socket.userId;
   const username = socket.username;
 
@@ -6195,9 +6342,67 @@ function gracefulShutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`${signal} alındı, kapanıyor...`);
+  serverHeartbeatStop();
   const done = () => { checkpointWal(); process.exit(0); };
   try { io.close(() => server.close(done)); } catch (_) { done(); }
   setTimeout(done, 5000).unref();
 }
+// ── Çökme koruması ve sunucu sağlığı ──
+// Yakalanmamış hata / reddedilen söz artık süreci kapatmaz: kaydedilir (yönetim paneli > Güvenlik > Sunucu sağlığı).
+const rssMb = () => process.memoryUsage().rss / (1024 * 1024);
+function reportServerError(kind, error) {
+  const msg = error && error.message ? error.message : String(error);
+  console.error(`[${kind}]`, error);
+  recordServerEvent(kind, msg, error && error.stack ? error.stack : null, rssMb());
+}
+process.on('unhandledRejection', (reason) => reportServerError('unhandled_rejection', reason));
+// Yakalanmamış istisnadan sonra süreç güvenilir değildir (Node belgesi): kaydedilir ve çıkılır; Render hemen yeniden başlatır.
+// (Socket işleyicileri ve bildirim dağıtımı ayrıca sarmalandığı için bunlardaki hatalar buraya düşmez.)
+process.on('uncaughtException', (error) => {
+  reportServerError('uncaught_exception', error);
+  setTimeout(() => process.exit(1), 200).unref();
+});
+
+// Bellek izleme: her 30 sn son durum kalıcı yazılır; sunucu habersizce ölürse (bellek taşması) bir sonraki açılışta görülür.
+const MEMORY_WARN_MB = Number(process.env.MEMORY_WARN_MB) || 400;
+let memoryPeakMb = rssMb();
+let memoryWarnedAt = 0;
+{
+  const prev = serverHeartbeatStart(memoryPeakMb);
+  if (prev && prev.state === 'running') {
+    recordServerEvent('unexpected_restart', `Sunucu düzgün kapanmadan yeniden başladı (son canlı kayıt: ${prev.last_at}; o anki bellek ${prev.rss_mb} MB, tepe ${prev.peak_mb} MB). Bellek taşması ya da çökme olabilir.`, null, null);
+  }
+  recordServerEvent('server_start', `Sunucu başladı (Node ${process.version}).`, null, memoryPeakMb);
+}
+setInterval(() => {
+  const now = rssMb();
+  if (now > memoryPeakMb) memoryPeakMb = now;
+  serverHeartbeatTick(now, memoryPeakMb);
+  if (now > MEMORY_WARN_MB && Date.now() - memoryWarnedAt > 10 * 60 * 1000) {
+    memoryWarnedAt = Date.now();
+    const m = process.memoryUsage();
+    recordServerEvent('memory_high', `Bellek yüksek: ${Math.round(now)} MB (uyarı sınırı ${MEMORY_WARN_MB} MB).`, `heap ${Math.round(m.heapUsed / 1048576)} MB / ${Math.round(m.heapTotal / 1048576)} MB, harici ${Math.round(m.external / 1048576)} MB, arrayBuffers ${Math.round((m.arrayBuffers || 0) / 1048576)} MB, medya önbelleği ${Math.round(mediaCacheBytes / 1048576)} MB`, now);
+  }
+}, 30 * 1000).unref();
+
+app.get('/api/admin/server-health', (req, res) => {
+  const user = requirePlatformRole(req, res, 'admin');
+  if (!user) return;
+  try {
+    const m = process.memoryUsage();
+    return res.json({
+      success: true,
+      uptime_sec: Math.round(process.uptime()),
+      memory: { rss_mb: Math.round(m.rss / 1048576), heap_mb: Math.round(m.heapUsed / 1048576), peak_mb: Math.round(memoryPeakMb), warn_mb: MEMORY_WARN_MB, media_cache_mb: Math.round(mediaCacheBytes / 1048576) },
+      heartbeat: getServerHeartbeat(),
+      events: listServerEvents(100)
+    });
+  } catch (error) {
+    console.error('Sunucu sağlığı alınamadı:', error);
+    return res.status(500).json({ success: false, error: 'Alınamadı.' });
+  }
+});
+
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGUSR2', () => gracefulShutdown('SIGUSR2')); // nodemon yeniden başlatması "beklenmedik" sayılmasın
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));

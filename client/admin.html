@@ -170,6 +170,15 @@
                 <div id="csp-empty" class="adm-state" style="display:none;"></div>
                 <p id="csp-note" class="adm-muted" style="font-size:11px;margin:12px 0 0;"></p>
             </div>
+            <div class="adm-glass" style="margin-top:16px;">
+                <div class="adm-toolbar" style="justify-content:space-between;align-items:center;">
+                    <span style="font-weight:700;">Sunucu sağlığı</span>
+                    <span id="sh-summary" class="adm-muted" style="font-size:12.5px;"></span>
+                </div>
+                <div id="sh-table-wrap"></div>
+                <div id="sh-empty" class="adm-state" style="display:none;">Kayıtlı hata ya da yeniden başlatma yok.</div>
+                <p class="adm-muted" style="font-size:11px;margin:12px 0 0;">Çökmeler, yakalanan hatalar, yüksek bellek uyarıları ve beklenmedik yeniden başlatmalar burada kalıcı olarak listelenir (son 300 kayıt).</p>
+            </div>
           </div>
 
           <div id="adm-sfb-view" style="display:none;">
@@ -628,7 +637,28 @@ Sauran Geliştirici Ekibi</textarea>
             $('au-next').disabled = audit.page >= pages;
         }
 
+        const SH_KIND = { unexpected_restart: 'Beklenmedik yeniden başlama', uncaught_exception: 'Yakalanmamış hata', unhandled_rejection: 'Yakalanmamış söz hatası', memory_high: 'Yüksek bellek', server_start: 'Sunucu başladı', hub_push: 'Bildirim hatası' };
+        async function loadServerHealth() {
+            const data = await api('/api/admin/server-health');
+            const up = data.uptime_sec || 0;
+            const upTxt = up >= 86400 ? `${Math.floor(up / 86400)} g ${Math.floor((up % 86400) / 3600)} sa` : up >= 3600 ? `${Math.floor(up / 3600)} sa ${Math.floor((up % 3600) / 60)} dk` : `${Math.floor(up / 60)} dk`;
+            const m = data.memory || {};
+            $('sh-summary').textContent = `Çalışma süresi ${upTxt} · Bellek ${m.rss_mb} MB (tepe ${m.peak_mb} MB, uyarı ${m.warn_mb} MB) · Medya önbelleği ${m.media_cache_mb} MB`;
+            const rows = (data.events || []).filter((e) => e.kind !== 'server_start' || (data.events || []).length < 30);
+            $('sh-empty').style.display = rows.length ? 'none' : 'block';
+            $('sh-table-wrap').innerHTML = rows.length ? `
+                <table class="adm-table"><thead><tr><th>Zaman</th><th>Tür</th><th>Mesaj</th><th>Bellek</th></tr></thead>
+                <tbody style="cursor:default;">${rows.map((e) => `
+                    <tr style="cursor:default;" title="${esc(e.detail || '')}">
+                        <td data-label="Zaman">${fmtDate(String(e.at).replace(' ', 'T') + (String(e.at).includes('Z') ? '' : 'Z'))}</td>
+                        <td data-label="Tür"><b>${esc(SH_KIND[e.kind] || e.kind)}</b></td>
+                        <td data-label="Mesaj" style="word-break:break-word;">${esc(e.message || '')}${e.detail ? `<details style="margin-top:4px;"><summary class="adm-muted" style="cursor:pointer;font-size:11px;">Ayrıntı</summary><pre style="white-space:pre-wrap;font-size:11px;margin:4px 0 0;">${esc(e.detail)}</pre></details>` : ''}</td>
+                        <td data-label="Bellek">${e.rss_mb != null ? esc(String(e.rss_mb)) + ' MB' : '<span class="adm-muted">—</span>'}</td>
+                    </tr>`).join('')}</tbody></table>` : '';
+        }
+
         async function loadCsp() {
+            loadServerHealth().catch(() => {});
             // Yenile geri bildirimi: istek sürerken düğme "Yenileniyor…" ve kapalı; bitince son yenileme saati yazılır.
             const btn = $('csp-refresh');
             btn.disabled = true;

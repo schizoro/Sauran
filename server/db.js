@@ -1499,7 +1499,7 @@ function getDeletedDmMessages(userId, token, limit = 50) {
 
   const rows = db.prepare(`
     SELECT messages.id, messages.hub_id, messages.user_id, messages.username, messages.content, messages.to_user_id,
-           messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
+           messages.kind, ${LIGHT_PAYLOAD_SQL}, messages.edited, messages.created_at, users.avatar_data,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions, messages.link_preview, messages.channel_id
@@ -4255,6 +4255,110 @@ function clampPage(limit) {
   return Math.min(Math.max(n, 1), MESSAGE_PAGE_MAX);
 }
 
+// ── Medya mesajları: dosya verisi (base64) listelerde/yayınlarda taşınmaz ──
+// Liste ve tekil mesaj sorguları payload'ı veritabanında hafifletir (data/audio alanı çıkarılır); istemci dosyayı
+// /api/messages/:id/media adresinden ister. Böylece büyük videolar içeren bir kanal açmak sunucu belleğini doldurmaz.
+const MEDIA_KINDS = ['image', 'video', 'file', 'dm_image', 'dm_video', 'dm_file', 'voice', 'dm_voice'];
+const MEDIA_KINDS_SQL = MEDIA_KINDS.map((k) => `'${k}'`).join(', ');
+const LIGHT_PAYLOAD_SQL = `CASE WHEN messages.kind IN (${MEDIA_KINDS_SQL})
+    THEN (CASE WHEN json_valid(messages.payload) THEN json_remove(messages.payload, '$.data', '$.audio') ELSE NULL END)
+    ELSE messages.payload END AS payload`;
+
+// Görüntüleyen bu mesajın dosyasını alabilir mi? { status, error } ya da { kind, mime, name, size, chars }.
+function getMessageMediaMeta(messageId, viewerId) {
+  const row = db.prepare(`
+    SELECT id, hub_id, user_id, to_user_id, room, kind, length(payload) AS chars,
+           CASE WHEN json_valid(payload) THEN json_remove(payload, '$.data', '$.audio') END AS meta
+    FROM messages WHERE id = ?
+  `).get(messageId);
+  if (!row || !MEDIA_KINDS.includes(row.kind)) return { status: 404, error: 'Dosya bulunamadı.' };
+  let allowed = false;
+  if (row.hub_id) allowed = isHubMember(row.hub_id, viewerId);
+  else if (row.to_user_id && (row.user_id === viewerId || row.to_user_id === viewerId)) allowed = true;
+  else if (row.room && String(row.room).startsWith(`dmdel_${viewerId}_`)) allowed = true; // hesabı silinmiş kişiyle korunan sohbet
+  if (!allowed) return { status: 403, error: 'Bu mesaja erişimin yok.' };
+  let meta = null;
+  try { meta = row.meta ? JSON.parse(row.meta) : null; } catch (_) { meta = null; }
+  if (!meta || meta.expired) return { status: 410, error: 'Dosyanın saklama süresi doldu.' };
+  const isVoice = row.kind === 'voice' || row.kind === 'dm_voice';
+  return { id: row.id, kind: row.kind, voice: isVoice, mime: String(meta.mime || ''), name: String(meta.name || (isVoice ? 'ses' : 'dosya')), size: Number(meta.size) || 0, chars: Number(row.chars) || 0 };
+}
+
+// Dosyanın data URL'i (tamamı; yalnızca küçük dosyalar ve veri dışa aktarma için).
+function getMessageMediaData(messageId, voice) {
+  const row = db.prepare(`SELECT json_extract(payload, ?) AS d FROM messages WHERE id = ? AND json_valid(payload)`).get(voice ? '$.audio' : '$.data', messageId);
+  return row && typeof row.d === 'string' ? row.d : null;
+}
+
+// Akışlı okuma için: ham payload metninde base64 verinin başladığı karakter (1 tabanlı), uzunluğu, gerçek bayt boyutu ve türü.
+// Ağır tarama SQLite içinde yapılır; büyük metin JavaScript'e hiç gelmez. JSON'da base64 karakterleri kaçışlanmaz.
+function getMessageMediaLocation(messageId, voice) {
+  const key = voice ? '"audio":"data:' : '"data":"data:';
+  const at = db.prepare(`SELECT instr(payload, ?) AS p FROM messages WHERE id = ?`).get(key, messageId);
+  if (!at || !at.p) return null;
+  const dataAt = at.p + key.length - 5; // 'data:' başlangıcı
+  const head = (db.prepare(`SELECT substr(payload, ?, 300) AS h FROM messages WHERE id = ?`).get(dataAt, messageId) || {}).h || '';
+  const m = /^data:([a-z0-9][a-z0-9._+-]*\/[a-z0-9][a-z0-9._+-]*)?((?:;[a-z0-9._+-]+=[a-z0-9._+-]+)*);base64,/i.exec(head);
+  if (!m) return null;
+  const start = dataAt + m[0].length;
+  const q = (db.prepare(`SELECT instr(substr(payload, ?), '"') AS q FROM messages WHERE id = ?`).get(start, messageId) || {}).q;
+  if (!q || q < 2) return null;
+  const b64len = q - 1;
+  const tail = (db.prepare(`SELECT substr(payload, ?, 2) AS t FROM messages WHERE id = ?`).get(start + b64len - 2, messageId) || {}).t || '';
+  const pad = tail.endsWith('==') ? 2 : tail.endsWith('=') ? 1 : 0;
+  return { start, b64len, total: Math.floor(b64len / 4) * 3 - pad, mime: (m[1] || '').toLowerCase() };
+}
+function readMessageMediaChars(messageId, start, len) {
+  const row = db.prepare(`SELECT substr(payload, ?, ?) AS s FROM messages WHERE id = ?`).get(start, len, messageId);
+  return row && typeof row.s === 'string' ? row.s : '';
+}
+
+// ── Sunucu olay kaydı (çökme/hata/bellek) ──
+// Kalıcı (veritabanında) tutulur: sunucu çöküp yeniden başlasa da yönetim panelinde görülebilir. En fazla SERVER_EVENTS_KEEP satır.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS server_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    kind TEXT NOT NULL,
+    message TEXT,
+    detail TEXT,
+    rss_mb INTEGER
+  );
+  CREATE TABLE IF NOT EXISTS server_heartbeat (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    started_at TEXT, last_at TEXT, rss_mb INTEGER, peak_mb INTEGER, state TEXT
+  );
+`);
+const SERVER_EVENTS_KEEP = 300;
+function recordServerEvent(kind, message, detail, rssMb) {
+  try {
+    db.prepare(`INSERT INTO server_events (kind, message, detail, rss_mb) VALUES (?, ?, ?, ?)`)
+      .run(String(kind).slice(0, 40), String(message || '').slice(0, 500), detail ? String(detail).slice(0, 4000) : null, Number.isFinite(rssMb) ? Math.round(rssMb) : null);
+    db.prepare(`DELETE FROM server_events WHERE id <= (SELECT id FROM server_events ORDER BY id DESC LIMIT 1 OFFSET ?)`).run(SERVER_EVENTS_KEEP);
+  } catch (_) { /* kayıt hatası hiçbir şeyi durdurmaz */ }
+}
+function listServerEvents(limit = 100) {
+  return db.prepare(`SELECT id, at, kind, message, detail, rss_mb FROM server_events ORDER BY id DESC LIMIT ?`).all(Math.min(Math.max(Number(limit) || 100, 1), SERVER_EVENTS_KEEP));
+}
+// Açılış: önceki çalışma düzgün kapanmadıysa (SIGTERM'siz öldü: bellek taşması, çökme) bunu kaydeder.
+function serverHeartbeatStart(rssMb) {
+  const prev = db.prepare(`SELECT * FROM server_heartbeat WHERE id = 1`).get();
+  const now = new Date().toISOString();
+  db.prepare(`INSERT INTO server_heartbeat (id, started_at, last_at, rss_mb, peak_mb, state) VALUES (1, ?, ?, ?, ?, 'running')
+    ON CONFLICT(id) DO UPDATE SET started_at = excluded.started_at, last_at = excluded.last_at, rss_mb = excluded.rss_mb, peak_mb = excluded.peak_mb, state = 'running'`)
+    .run(now, now, Math.round(rssMb), Math.round(rssMb));
+  return prev || null;
+}
+function serverHeartbeatTick(rssMb, peakMb) {
+  try { db.prepare(`UPDATE server_heartbeat SET last_at = ?, rss_mb = ?, peak_mb = ? WHERE id = 1`).run(new Date().toISOString(), Math.round(rssMb), Math.round(peakMb)); } catch (_) { /* yoksay */ }
+}
+function serverHeartbeatStop() {
+  try { db.prepare(`UPDATE server_heartbeat SET state = 'stopped', last_at = ? WHERE id = 1`).run(new Date().toISOString()); } catch (_) { /* yoksay */ }
+}
+function getServerHeartbeat() {
+  return db.prepare(`SELECT started_at, last_at, rss_mb, peak_mb, state FROM server_heartbeat WHERE id = 1`).get() || null;
+}
+
 function getHubMessagesPage(hubId, viewerId, { before, limit } = {}) {
   const size = clampPage(limit);
   const messages = getHubMessages(hubId, size + 1, viewerId, before);
@@ -4272,7 +4376,7 @@ function getDmMessagesPage(userId, otherUserId, { before, limit } = {}) {
 function getHubMessages(hubId, limit = 50, viewerId = null, beforeId = null) {
   const rows = db.prepare(`
     SELECT messages.id, messages.hub_id, messages.user_id, messages.username, messages.content, messages.kind,
-           messages.payload, messages.edited, messages.created_at, users.avatar_data,
+           ${LIGHT_PAYLOAD_SQL}, messages.edited, messages.created_at, users.avatar_data,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions, messages.link_preview, messages.channel_id
@@ -4287,7 +4391,7 @@ function getHubMessages(hubId, limit = 50, viewerId = null, beforeId = null) {
 function getMessageById(id, viewerId = null) {
   return hydrateMessage(db.prepare(`
     SELECT messages.id, messages.hub_id, messages.user_id, messages.username, messages.content, messages.to_user_id,
-           messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
+           messages.kind, ${LIGHT_PAYLOAD_SQL}, messages.edited, messages.created_at, users.avatar_data,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions, messages.link_preview, messages.channel_id
@@ -4354,6 +4458,12 @@ function hydrateMessage(row, viewerId = null) {
     result = { ...row, payload: { ...payload, counts } };
   } else if (row.payload) {
     result = { ...row, payload: JSON.parse(row.payload) };
+  }
+
+  // Medya: veri hiçbir zaman istemciye gömülü gitmez; süresi dolmadıysa indirme adresi verilir.
+  if (MEDIA_KINDS.includes(result.kind) && result.payload && typeof result.payload === 'object') {
+    const { data, audio, ...rest } = result.payload;
+    result = { ...result, payload: rest.expired ? rest : { ...rest, url: `/api/messages/${result.id}/media` } };
   }
 
   if (result.reply_to_message_id) {
@@ -4513,22 +4623,25 @@ function purgeExpiredMessages(now = new Date()) {
     const mediaCut = messageCutoff(now, cfg.media_days);
     let lastId = 0;
     for (let round = 0; round < 500; round++) {
+      // Yalnızca kimlikler okunur; veri SQLite içinde çıkarılır (büyük videolar belleğe alınmaz — eskiden 50 satırın tam
+      // verisi aynı anda yükleniyordu, bu da açılışta bellek taşmasına yol açabilirdi).
       const rows = db.prepare(`
-        SELECT id, payload FROM messages
+        SELECT id FROM messages
         WHERE id > ? AND created_at < ? AND payload IS NOT NULL AND (payload LIKE '%"data":"data:%' OR payload LIKE '%"audio":"data:%')
         ORDER BY id LIMIT 50
       `).all(lastId, mediaCut);
       if (!rows.length) break;
       lastId = rows[rows.length - 1].id;
 
+      const strip = db.prepare(`
+        UPDATE messages SET payload = json_set(json_remove(payload, '$.data', '$.audio'), '$.expired', json('true'))
+        WHERE id = ? AND json_valid(payload)
+          AND (substr(COALESCE(json_extract(payload, '$.data'), ''), 1, 5) = 'data:' OR substr(COALESCE(json_extract(payload, '$.audio'), ''), 1, 5) = 'data:')
+      `);
       db.transaction(() => {
         rows.forEach((row) => {
           const targets = [row.id, ...forwardCopiesOf([row.id]).map(c => c.id)]; // kopyalar kaynağın medya süresini AŞAMAZ
-          targets.forEach((id) => {
-            const raw = id === row.id ? row.payload : (db.prepare(`SELECT payload FROM messages WHERE id = ?`).get(id) || {}).payload;
-            const stripped = raw ? stripMediaPayload(raw) : null;
-            if (stripped) { db.prepare(`UPDATE messages SET payload = ? WHERE id = ?`).run(stripped, id); result.media += 1; }
-          });
+          targets.forEach((id) => { result.media += strip.run(id).changes; });
         });
       })();
     }
@@ -6842,33 +6955,31 @@ function getAccountExport(userId) {
   let mediaBudget = EXPORT_MEDIA_BUDGET_CHARS;
   const messages = db.prepare(`
     SELECT messages.id, messages.content, messages.room, messages.hub_id, hubs.name AS hub_name, messages.to_user_id,
-           messages.kind, messages.payload, messages.edited, messages.reply_to_message_id, messages.created_at
+           messages.kind, ${LIGHT_PAYLOAD_SQL}, length(messages.payload) AS payload_chars,
+           messages.edited, messages.reply_to_message_id, messages.created_at
     FROM messages LEFT JOIN hubs ON hubs.id = messages.hub_id
     WHERE messages.user_id = ? ORDER BY messages.id
   `).all(userId).map((row) => {
-    const { payload, ...message } = row;
+    const { payload, payload_chars, ...message } = row;
     let light = null;
     let attachment = null;
 
     if (payload) {
       try { light = JSON.parse(payload); } catch (_) { light = null; }
-      if (light && typeof light === 'object') {
-        for (const field of MEDIA_FIELDS) {
-          if (typeof light[field] === 'string' && light[field].startsWith('data:')) {
-            const data = light[field];
-            delete light[field];
-            attachment = {
-              field,
-              mime: (/^data:([^;,]+)/.exec(data) || [])[1] || null,
-              name: light.name || null,
-              size_chars: data.length
-            };
-            if (data.length <= mediaBudget) { attachment.data = data; mediaBudget -= data.length; }
-            else attachment.data_omitted = 'size_limit';
-            break;
-          }
-        }
-      }
+    }
+    // Medya verisi listeye hiç yüklenmez; bütçeye sığıyorsa yalnızca o dosya tek başına okunur (bellek taşmasın).
+    if (MEDIA_KINDS.includes(row.kind) && light && typeof light === 'object' && !light.expired) {
+      const voice = row.kind === 'voice' || row.kind === 'dm_voice';
+      attachment = { field: voice ? 'audio' : 'data', mime: light.mime || null, name: light.name || null, size_chars: Number(payload_chars) || 0 };
+      if (attachment.size_chars <= mediaBudget) {
+        const data = getMessageMediaData(row.id, voice);
+        if (data) {
+          attachment.mime = attachment.mime || (/^data:([^;,]+)/.exec(data) || [])[1] || null;
+          attachment.size_chars = data.length;
+          attachment.data = data;
+          mediaBudget -= data.length;
+        } else attachment = null;
+      } else attachment.data_omitted = 'size_limit';
     }
 
     return { ...message, payload: light, attachment };
@@ -7129,7 +7240,7 @@ function createDmFileMessage(fromId, fromUsername, toId, file) {
 function getDmMessages(userId, otherUserId, limit = 50, beforeId = null) {
   const rows = db.prepare(`
     SELECT messages.id, messages.hub_id, messages.user_id, messages.username, messages.content, messages.to_user_id,
-           messages.kind, messages.payload, messages.edited, messages.created_at, users.avatar_data,
+           messages.kind, ${LIGHT_PAYLOAD_SQL}, messages.edited, messages.created_at, users.avatar_data,
            (CASE WHEN (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) = 'plus' AND NOT EXISTS(SELECT 1 FROM entitlements WHERE entitlements.user_id = messages.user_id AND entitlements.product IN ('plus', 'premium') AND (entitlements.expires_at IS NULL OR entitlements.expires_at > datetime('now'))) THEN 'classic' ELSE (SELECT avatar_frame FROM user_equipped WHERE user_id = messages.user_id) END) AS avatar_frame,
            users.chat_theme, users.profile_color, users.name_effect, users.bubble_style,
            messages.reply_to_message_id, messages.pinned_at, messages.pinned_by, messages.forwarded_from_message_id, messages.mentions, messages.link_preview, messages.channel_id
@@ -9312,6 +9423,16 @@ module.exports = {
   saveHubMessage,
   deleteMessage,
   editMessage,
+  getMessageMediaMeta,
+  getMessageMediaData,
+  getMessageMediaLocation,
+  readMessageMediaChars,
+  recordServerEvent,
+  listServerEvents,
+  serverHeartbeatStart,
+  serverHeartbeatTick,
+  serverHeartbeatStop,
+  getServerHeartbeat,
   getMessageEditHistory,
   createHubVoiceMessage,
   createHubFileMessage,

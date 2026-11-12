@@ -10255,7 +10255,7 @@ function renderDmMessageIntoWrap(wrap, msg, isMine) {
 
     } else if (msg.kind === 'dm_voice' && msg.payload) {
 
-        body = buildVoiceCardHtml(msg.payload.audio, msg.payload.duration);
+        body = buildVoiceCardHtml(msg.payload.url || msg.payload.audio, msg.payload.duration);
 
     } else if ((msg.kind === 'dm_image' || msg.kind === 'dm_video' || msg.kind === 'dm_file') && msg.payload) {
 
@@ -11384,14 +11384,16 @@ function buildFileCardHtml(payload) {
     const size = formatFileSize(payload?.size);
 
     // Medya saklama süresi dolduysa (sunucu base64 veriyi sildi) yalnızca ad ve bir bilgi gösterilir.
-    if (!payload || payload.expired || !payload.data) {
+    // Dosya mesajın içinde gelmez: adresinden yüklenir (eski sunucu yanıtları için gömülü veri de kabul edilir).
+    const src = payload && (payload.url || payload.data);
+    if (!payload || payload.expired || !src) {
         return `<div class="file-msg-card"><span class="hub-msg-deleted">📎 ${escapeHtml(name)} — ${t('media-expired')}</span></div>`;
     }
 
     if (mime.startsWith('image/')) {
         return `
             <div class="file-msg-card image-msg-card">
-                <img class="lightbox-img" src="${escapeAttr(payload.data)}" alt="${escapeAttr(name)}" loading="lazy">
+                <img class="lightbox-img" src="${escapeAttr(src)}" alt="${escapeAttr(name)}" loading="lazy">
             </div>
         `;
     }
@@ -11399,7 +11401,7 @@ function buildFileCardHtml(payload) {
     if (mime.startsWith('video/')) {
         return `
             <div class="file-msg-card video-msg-card">
-                <video src="${escapeAttr(payload.data)}" controls preload="metadata"></video>
+                <video src="${escapeAttr(src)}" controls preload="metadata"></video>
             </div>
         `;
     }
@@ -11411,7 +11413,7 @@ function buildFileCardHtml(payload) {
                 <div class="file-msg-name">${escapeHtml(name)}</div>
                 <div class="file-msg-size">${size}</div>
             </div>
-            <a class="file-msg-download" href="${escapeAttr(payload.data)}" download="${escapeAttr(name)}">İndir</a>
+            <a class="file-msg-download" href="${escapeAttr(payload.url ? payload.url + '?download=1' : src)}" download="${escapeAttr(name)}">İndir</a>
         </div>
     `;
 
@@ -18634,7 +18636,7 @@ function renderHubMessageIntoWrap(wrap, msg) {
 
     } else if (msg.kind === 'voice' && msg.payload) {
 
-        body = buildVoiceCardHtml(msg.payload.audio, msg.payload.duration);
+        body = buildVoiceCardHtml(msg.payload.url || msg.payload.audio, msg.payload.duration);
 
     } else if ((msg.kind === 'image' || msg.kind === 'video' || msg.kind === 'file') && msg.payload) {
 
