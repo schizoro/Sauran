@@ -4815,6 +4815,7 @@ const I18N = {
     'message-deleted': { tr: 'Bu mesaj silindi', en: 'This message was deleted' },
     'unread-divider': { tr: 'Yeni mesajlar', en: 'New messages' },
     'warning-prefix': { tr: 'Uyarı: ', en: 'Warning: ' },
+    'dm-title-profile': { tr: 'Profili görüntüle', en: 'View profile' },
     'lc-modal-join-sub': { tr: 'Arkadaşının paylaştığı davet kodunu yapıştır.', en: 'Paste the invite code your friend shared.' },
     'lc-modal-feedback-sub': { tr: 'Önerin panoda görünür; diğer kullanıcılar oylayabilir.', en: 'Your suggestion appears on the board; others can vote on it.' },
     'lc-modal-group-sub': { tr: 'Arkadaşlarını seç, birlikte sohbet edin.', en: 'Pick your friends and chat together.' },
@@ -9730,10 +9731,32 @@ async function openDeletedDm(token) {
 }
 
 
+// Özel mesaj başlığı = küçük profil kartı: profil fotoğrafı (çerçevesiyle, kırpılmadan), ad, altında durum ve özel durum.
+// Kartın tamamı profili açar. Arkadaş listesi tazelenince (durum değişti) kart da güncellenir.
 function renderDmTitle(userId, username) {
-    dmModalTitle.innerHTML = `${avatarButtonHtml(userId, null, username)}<span class="dm-title-name">${usernameCardHtml(username, isVoicePlus(userId), nameFxOf(userId))}</span>`;
+    const uid = Number(userId);
+    const f = (window.__friendsCache || []).find((x) => Number(x.id) === uid);
+    let sub = '';
+    let state = '';
+    if (f) {
+        const info = f.online ? STATUS_INFO[f.status] : null;
+        state = f.online ? (f.status === 'idle' ? 'idle' : f.status === 'busy' ? 'busy' : 'on') : 'off';
+        const cs = f.online ? customStatusText(f.custom_status) : '';
+        sub = cs || (info ? info.label : t('members-offline'));
+    }
+    dmModalTitle.innerHTML = `<span class="dm-title-card${state ? ' st-' + state : ''}" role="button" tabindex="0" data-user-id="${uid}" title="${escapeAttr(t('dm-title-profile'))}">
+        ${avatarButtonHtml(uid, null, username)}
+        <span class="dm-title-text"><span class="dm-title-name">${usernameCardHtml(username, isVoicePlus(uid), nameFxOf(uid))}</span>${sub ? `<small class="dm-title-sub"><i class="dm-title-dot" aria-hidden="true"></i>${escapeHtml(sub)}</small>` : ''}</span>
+    </span>`;
     wireMsgAvatars(dmModalTitle);
+    const card = dmModalTitle.querySelector('.dm-title-card');
+    const open = (e) => { if (e.target.closest('.msg-avatar-btn')) return; openOtherProfile(uid); };
+    card.addEventListener('click', open);
+    card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openOtherProfile(uid); } });
 }
+document.addEventListener('friends-updated', () => {
+    if (activeDmUserId && dmModal.style.display !== 'none') renderDmTitle(activeDmUserId, activeDmUsername);
+});
 
 async function openDm(userId, username) {
 

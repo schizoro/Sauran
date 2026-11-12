@@ -3483,3 +3483,16 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
 .call-header .call-net-pill { position: fixed; left: 50%; top: 120px; transform: translateX(-50%); z-index: 2; padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; pointer-events: auto; background: rgba(240, 178, 50, 0.16); color: #f0b232; border: 1px solid rgba(240, 178, 50, 0.4); }
 .call-header .call-net-pill.is-bad { background: rgba(242, 63, 67, 0.16); color: #ff8a8d; border-color: rgba(242, 63, 67, 0.45); }
 .call-header .call-net-pill[hidden] { display: none; }
+
+/* Özel mesaj başlığı: profil kartı (çerçeve efektleri kırpılmaz) */
+#dm-modal-title { overflow: visible !important; }
+#dm-modal-title .dm-title-card { display: inline-flex; align-items: center; gap: 10px; min-width: 0; max-width: 100%; padding: 6px 14px 6px 6px; border-radius: 16px; cursor: pointer; transition: background .15s; }
+#dm-modal-title .dm-title-card:hover, #dm-modal-title .dm-title-card:focus-visible { background: rgba(255, 255, 255, 0.06); outline: none; }
+#dm-modal-title .dm-title-card .msg-avatar-frame-wrap, #dm-modal-title .dm-title-card > .msg-avatar-btn { flex: none; overflow: visible; }
+#dm-modal-title .dm-title-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+#dm-modal-title .dm-title-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 700; }
+#dm-modal-title .dm-title-sub { display: flex; align-items: center; gap: 5px; min-width: 0; margin-top: 2px; font-size: 12px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#dm-modal-title .dm-title-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: #6b7280; }
+#dm-modal-title .st-on .dm-title-dot { background: #57f287; }
+#dm-modal-title .st-idle .dm-title-dot { background: #f0b232; }
+#dm-modal-title .st-busy .dm-title-dot { background: #f23f43; }
