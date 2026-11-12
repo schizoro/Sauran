@@ -29,6 +29,8 @@ function retentionDays() {
 function stamp(now) { return now.toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z'); }
 
 // Tutarlı (tek anlık görüntü) bir kopya alır: VACUUM INTO. Kaynak yalnızca okunur.
+// NOT: Sohbet dosyaları DATA_DIR/media altında ayrı durur ve bu yedeğe GİRMEZ (Render disk anlık görüntüleriyle korunur). Bu yedekten
+// geri dönülürse, yedekten sonra diske yazılmış ama yedekte kaydı olmayan dosyalar bir gün sonra tutarlılık taramasıyla silinir.
 function createBackup({ minimal = true, dbPath = path.join(dataDir(), 'sauran.db'), dir = backupDir(), now = new Date() } = {}) {
   const Database = require('better-sqlite3');
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });

@@ -43,8 +43,11 @@ const {
   deleteMessage,
   editMessage,
   getMessageMediaMeta,
-  getMessageMediaData,
   getMessageMediaLocation,
+  purgeOrphanMediaFiles,
+  getStorageStats,
+  migrateOneInlineMedia,
+  vacuumDatabase,
   readMessageMediaChars,
   recordServerEvent,
   listServerEvents,
@@ -4094,15 +4097,24 @@ app.get('/api/messages/:id/media', mediaLimiter, async (req, res) => {
     const meta = getMessageMediaMeta(id, user.id);
     if (meta.status) { mediaForget(id); return res.status(meta.status).json({ success: false, error: meta.error }); }
 
-    let loc = mediaLocations.get(id);
-    if (!loc) {
-      loc = getMessageMediaLocation(id, meta.voice);
-      if (!loc) return res.status(410).json({ success: false, error: 'Dosyanın saklama süresi doldu.' });
-      if (mediaLocations.size > 2000) mediaLocations.delete(mediaLocations.keys().next().value);
-      mediaLocations.set(id, loc);
+    // Diskteki dosya (yeni yüklemeler ve taşınanlar) ya da henüz taşınmamış gömülü veri
+    let loc = null;
+    if (meta.file) {
+      if (!mediaStore.exists(meta.file)) {
+        reportServerError('media_missing', new Error(`Kayıtlı dosya diskte yok: mesaj ${id}`));
+        return res.status(410).json({ success: false, error: 'Dosya bulunamadı.' });
+      }
+    } else {
+      loc = mediaLocations.get(id);
+      if (!loc) {
+        loc = getMessageMediaLocation(id, meta.voice);
+        if (!loc) return res.status(410).json({ success: false, error: 'Dosyanın saklama süresi doldu.' });
+        if (mediaLocations.size > 2000) mediaLocations.delete(mediaLocations.keys().next().value);
+        mediaLocations.set(id, loc);
+      }
     }
-    const total = loc.total;
-    const mime = loc.mime || meta.mime.toLowerCase() || 'application/octet-stream';
+    const total = meta.file ? meta.bytes : loc.total;
+    const mime = (meta.file ? meta.fileMime : loc.mime) || meta.mime.toLowerCase() || 'application/octet-stream';
     const inline = INLINE_MEDIA_TYPES.has(mime);
     const etag = `"m${id}-${total}"`;
     res.setHeader('Content-Type', inline ? mime : 'application/octet-stream');
@@ -4127,6 +4139,18 @@ app.get('/api/messages/:id/media', mediaLimiter, async (req, res) => {
     }
     res.setHeader('Content-Length', String(e - s + 1));
     if (req.method === 'HEAD') return res.end();
+
+    // Diskten akış (işletim sistemi okur; bellek dosya boyutundan bağımsız)
+    if (meta.file) {
+      if (!total) return res.end();
+      await new Promise((resolve) => {
+        const rs = mediaStore.createReadStream(meta.file, { start: s, end: e });
+        rs.on('error', (error) => { reportServerError('media_file', error); res.destroy(); resolve(); });
+        res.on('close', () => { rs.destroy(); resolve(); });
+        rs.pipe(res);
+      });
+      return;
+    }
 
     // Küçük dosya: tek seferde (ve kısa süre bellekte)
     if (total <= MEDIA_SMALL_BYTES) {
@@ -6385,16 +6409,98 @@ setInterval(() => {
   }
 }, 30 * 1000).unref();
 
+// ── Depolama: dosyaların veritabanından diske taşınması (yönetim paneli) ──
+// Taşıma arka planda tek tek yapılır; her dosyadan önce boş alan denetlenir (MEDIA_MIGRATION_MIN_FREE_MB altına inilmez,
+// inilecekse durur). Veritabanı küçülmez — boşalan alan "Sıkıştır" (VACUUM) ile diske döner; o da yeterli boş alan ister.
+const mediaStore = require('./media-store');
+const MEDIA_MIGRATION_MIN_FREE = (Number(process.env.MEDIA_MIGRATION_MIN_FREE_MB) || 512) * 1024 * 1024;
+const mediaMigration = { state: 'idle', moved: 0, moved_bytes: 0, skipped: 0, cursor: 0, started_at: null, finished_at: null, message: null };
+let storageCache = null;
+function storageStatsCached(force) {
+  if (!force && storageCache && Date.now() - storageCache.at < 60 * 1000) return storageCache.data;
+  storageCache = { at: Date.now(), data: getStorageStats() };
+  return storageCache.data;
+}
+let mediaMigrationPromise = null; // süren döngü: bitmeden ikinci döngü/sıkıştırma başlamaz
+async function runMediaMigration() {
+  mediaMigration.state = 'running';
+  mediaMigration.started_at = new Date().toISOString();
+  mediaMigration.message = null;
+  try {
+    while (mediaMigration.state === 'running') {
+      const r = await migrateOneInlineMedia({ cursor: mediaMigration.cursor, minFreeBytes: MEDIA_MIGRATION_MIN_FREE });
+      if (r.done) { mediaMigration.state = 'done'; mediaMigration.message = 'Tüm dosyalar diske taşındı.'; break; }
+      if (r.paused) {
+        mediaMigration.state = 'disk_low';
+        mediaMigration.message = `Diskte yer az: boş ${Math.round(r.free / 1048576)} MB, sıradaki dosya için ${Math.round(r.need / 1048576)} MB gerekiyor. Önce "Sıkıştır" ile yer aç, sonra devam et.`;
+        break;
+      }
+      mediaMigration.cursor = r.id;
+      if (r.moved) { mediaMigration.moved += 1; mediaMigration.moved_bytes += r.bytes; } else mediaMigration.skipped += 1;
+      await new Promise((ok) => setTimeout(ok, 50));
+    }
+  } catch (error) {
+    reportServerError('media_migration', error);
+    mediaMigration.state = 'error';
+    mediaMigration.message = 'Taşıma hata verdi; ayrıntı olay kaydında.';
+  }
+  mediaMigration.finished_at = new Date().toISOString();
+  storageStatsCached(true);
+}
+
+app.post('/api/admin/storage', jsonSmall, (req, res) => {
+  const user = requirePlatformRole(req, res, 'admin');
+  if (!user) return;
+  const action = String(req.body?.action || '');
+  try {
+    if (action === 'migrate_start') {
+      if (mediaMigrationPromise) return res.status(409).json({ success: false, error: 'Taşıma zaten sürüyor ya da durdurulması bekleniyor.' });
+      mediaMigration.cursor = 0;
+      mediaMigrationPromise = runMediaMigration().finally(() => { mediaMigrationPromise = null; });
+      return res.json({ success: true, migration: mediaMigration });
+    }
+    if (action === 'migrate_stop') {
+      if (mediaMigration.state === 'running') { mediaMigration.state = 'stopped'; mediaMigration.message = 'Durduruldu.'; }
+      return res.json({ success: true, migration: mediaMigration });
+    }
+    if (action === 'sweep') {
+      return res.json({ success: true, removed: purgeOrphanMediaFiles(), storage: storageStatsCached(true) });
+    }
+    if (action === 'vacuum') {
+      if (mediaMigrationPromise) return res.status(409).json({ success: false, error: 'Taşıma sürerken sıkıştırılamaz; önce durdur ve bitmesini bekle.' });
+      const st = storageStatsCached(true);
+      const need = Math.max(0, st.db_bytes - st.db_free_bytes) + 256 * 1024 * 1024;
+      if (st.disk && st.disk.free < need) return res.status(409).json({ success: false, error: `Sıkıştırma için yaklaşık ${Math.round(need / 1048576)} MB boş alan gerekiyor; şu an ${Math.round(st.disk.free / 1048576)} MB var.` });
+      const before = st.db_bytes;
+      vacuumDatabase();
+      const after = storageStatsCached(true);
+      recordServerEvent('db_vacuum', `Veritabanı sıkıştırıldı: ${Math.round(before / 1048576)} MB → ${Math.round(after.db_bytes / 1048576)} MB.`, null, rssMb());
+      return res.json({ success: true, before_bytes: before, storage: after });
+    }
+    return res.status(400).json({ success: false, error: 'Geçersiz işlem.' });
+  } catch (error) {
+    reportServerError('admin_storage', error);
+    return res.status(500).json({ success: false, error: 'İşlem başarısız.' });
+  }
+});
+
+// Bağlantısı kalmayan dosyalar: açılıştan kısa süre sonra ve saatte bir temizlenir.
+setTimeout(() => { try { purgeOrphanMediaFiles(); } catch (error) { reportServerError('media_sweep', error); } }, 60 * 1000).unref();
+setInterval(() => { try { purgeOrphanMediaFiles(); } catch (error) { reportServerError('media_sweep', error); } }, 60 * 60 * 1000).unref();
+
 app.get('/api/admin/server-health', (req, res) => {
   const user = requirePlatformRole(req, res, 'admin');
   if (!user) return;
   try {
     const m = process.memoryUsage();
+    memoryPeakMb = Math.max(memoryPeakMb, m.rss / 1048576);
     return res.json({
       success: true,
       uptime_sec: Math.round(process.uptime()),
       memory: { rss_mb: Math.round(m.rss / 1048576), heap_mb: Math.round(m.heapUsed / 1048576), peak_mb: Math.round(memoryPeakMb), warn_mb: MEMORY_WARN_MB, media_cache_mb: Math.round(mediaCacheBytes / 1048576) },
       heartbeat: getServerHeartbeat(),
+      storage: storageStatsCached(),
+      migration: { ...mediaMigration, min_free_mb: Math.round(MEDIA_MIGRATION_MIN_FREE / 1048576) },
       events: listServerEvents(100)
     });
   } catch (error) {

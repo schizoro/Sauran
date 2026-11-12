@@ -4,11 +4,15 @@
 // Ayrıca: sunucu sağlığı (yönetici) olay kaydı ve beklenmedik yeniden başlatma tespiti.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const path = require('path');
 const { startServer, client, makeUser } = require('./helpers');
 
 let srv, S;
 const PNG = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000', 'hex');
 const BIG = Buffer.alloc(4000, 7); // aralık testleri için
+const OLD_IMG = Buffer.alloc(5000, 9);
+const OLD_VOICE = Buffer.alloc(3 * 1024 * 1024 + 5, 4); // 3 MB parça sınırını aşan
 
 test.before(async () => {
   srv = await startServer((dbm) => {
@@ -23,7 +27,14 @@ test.before(async () => {
     dbm.joinHubByCode(inv.code || (inv.invite && inv.invite.code), ece.id);
     // Önceki çalışma düzgün kapanmamış gibi: açılışta "beklenmedik yeniden başlama" kaydı oluşmalı.
     dbm.serverHeartbeatStart(123);
-    return { hubId, ali: ali.id, ece: ece.id, yab: yab.id, adm: adm.id };
+    // Taşıma testi için eski biçim (veritabanında gömülü) medya: lobi görseli + DM sesli mesajı
+    const ch = dbm.db.prepare(`SELECT id FROM hub_channels WHERE hub_id = ? ORDER BY id LIMIT 1`).get(hubId);
+    const oldImg = dbm.db.prepare(`INSERT INTO messages (user_id, username, content, room, hub_id, channel_id, kind, payload) VALUES (?, 'medali', '', ?, ?, ?, 'image', ?)`)
+      .run(ali.id, `hub_${hubId}`, hubId, ch ? ch.id : null, JSON.stringify({ data: `data:image/png;base64,${OLD_IMG.toString('base64')}`, name: 'eski.png', mime: 'image/png', size: OLD_IMG.length })).lastInsertRowid;
+    const room = ali.id < ece.id ? `dm_${ali.id}_${ece.id}` : `dm_${ece.id}_${ali.id}`;
+    const oldVoice = dbm.db.prepare(`INSERT INTO messages (user_id, username, content, room, to_user_id, kind, payload) VALUES (?, 'medali', '', ?, ?, 'dm_voice', ?)`)
+      .run(ali.id, room, ece.id, JSON.stringify({ audio: `data:audio/webm;base64,${OLD_VOICE.toString('base64')}`, duration: 2 })).lastInsertRowid;
+    return { hubId, ali: ali.id, ece: ece.id, yab: yab.id, adm: adm.id, oldImg: Number(oldImg), oldVoice: Number(oldVoice) };
   });
   S = srv.seeded;
 });
@@ -42,7 +53,7 @@ test('Lobi görseli: listede veri yok, adresten erişim kontrolüyle gelir', asy
   const up = await ali.post(`/api/hubs/${S.hubId}/file`, { file: { data: dataUrl('image/png', PNG), name: 'nokta.png', mime: 'image/png', size: PNG.length } });
   assert.equal(up.status, 200, up.text);
   const list = (await ali.get(`/api/hubs/${S.hubId}/messages`)).body.messages;
-  const m = list.find((x) => x.kind === 'image');
+  const m = list.find((x) => x.kind === 'image' && x.payload && x.payload.name === 'nokta.png');
   assert.ok(m, 'görsel mesajı listede');
   assert.equal(m.payload.data, undefined, 'veri listede taşınmaz');
   assert.equal(m.payload.url, `/api/messages/${m.id}/media`);
@@ -154,4 +165,89 @@ test('Sunucu sağlığı: yalnızca yönetici; beklenmedik yeniden başlama kayd
   assert.equal(h.body.heartbeat.state, 'running');
   assert.ok(h.body.events.some((e) => e.kind === 'unexpected_restart'), 'önceki düzgün kapanmamış çalışma kaydedildi');
   assert.ok(h.body.events.some((e) => e.kind === 'server_start'));
+});
+
+
+// ── Disk deposu ──
+const mediaFiles = () => {
+  const root = path.join(srv.dataDir, 'media');
+  if (!fs.existsSync(root)) return [];
+  return fs.readdirSync(root).flatMap((d) => fs.readdirSync(path.join(root, d)).filter((f) => !f.endsWith('.tmp')));
+};
+
+test('Yeni yükleme diske yazılır; iletilen kopya aynı dosyayı kullanır; silinince temizlikte diskten gider', async () => {
+  const ali = await login('medali');
+  const ece = await login('medece');
+  const adm = await login('medadm');
+  const payload = Buffer.alloc(9000, 5);
+  const beforeSet = new Set(mediaFiles());
+  const before = beforeSet.size;
+  const up = await ali.post(`/api/dm/${S.ece}/file`, { file: { data: dataUrl('image/png', payload), name: 'disk.png', mime: 'image/png', size: payload.length } });
+  assert.equal(up.status, 200, up.text);
+  assert.equal(mediaFiles().length, before + 1, 'dosya diske yazıldı');
+  const [newFile] = mediaFiles().filter((f) => !beforeSet.has(f));
+  assert.ok(newFile);
+  const m = (await ali.get(`/api/dm/${S.ece}/messages`)).body.messages.find((x) => x.id === up.body.id);
+  assert.equal(m.payload.file, undefined, 'iç dosya kimliği istemciye gitmez');
+  assert.ok(Buffer.from(await (await raw(ece, m.payload.url)).arrayBuffer()).equals(payload), 'diskten birebir');
+  const part = await raw(ece, m.payload.url, { Range: 'bytes=10-19' });
+  assert.equal(part.status, 206);
+  assert.equal((await part.arrayBuffer()).byteLength, 10);
+
+  // İlet: ece aynı dosyayı aliye geri iletir → yeni dosya yazılmaz
+  const fw = await ece.post(`/api/messages/${m.id}/forward`, { to_user_id: S.ali });
+  assert.equal(fw.status, 200, fw.text);
+  assert.equal(mediaFiles().length, before + 1, 'iletme yeni dosya yazmaz');
+  const copy = fw.body.message;
+  assert.equal((await raw(ali, copy.payload.url)).status, 200);
+
+  // Kopyayı silmek asıl mesajın dosyasına dokunmaz (temizlikten sonra da)
+  const fw2 = await ece.post(`/api/messages/${m.id}/forward`, { to_user_id: S.ali });
+  assert.equal((await ece.del(`/api/messages/${fw2.body.message.id}`)).status, 200);
+  assert.equal((await adm.post('/api/admin/storage', { action: 'sweep' })).status, 200);
+  assert.ok(mediaFiles().includes(newFile), 'paylaşılan dosya duruyor');
+  assert.ok(Buffer.from(await (await raw(ece, m.payload.url)).arrayBuffer()).equals(payload), 'asıl mesaj hâlâ açılıyor');
+
+  // Kaynağı sil → kopyalar da içeriksiz kalır, temizlik dosyayı siler
+  assert.equal((await ali.del(`/api/messages/${m.id}`)).status, 200);
+  assert.equal((await raw(ece, m.payload.url)).status, 404);
+  assert.equal((await raw(ali, copy.payload.url)).status, 404, 'kaynak silinince iletilen kopya da açılmaz');
+  const sw = await adm.post('/api/admin/storage', { action: 'sweep' });
+  assert.equal(sw.status, 200, sw.text);
+  assert.ok(sw.body.removed >= 1);
+  assert.ok(!mediaFiles().includes(newFile), 'yetim dosya diskten silindi');
+});
+
+test('Taşıma: gömülü eski dosyalar diske taşınır, içerik birebir; sıkıştırma çalışır', async () => {
+  const ali = await login('medali');
+  const ece = await login('medece');
+  const adm = await login('medadm');
+  const h0 = (await adm.get('/api/admin/server-health')).body;
+  assert.ok(h0.storage.inline_count >= 2, 'gömülü dosyalar görünür');
+  assert.ok(h0.storage.disk === null || h0.storage.disk.total > 0);
+
+  assert.equal((await adm.post('/api/admin/storage', { action: 'migrate_start' })).status, 200);
+  let h;
+  for (let i = 0; i < 100; i++) {
+    h = (await adm.get('/api/admin/server-health')).body;
+    if (h.migration.state !== 'running') break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  assert.equal(h.migration.state, 'done', JSON.stringify(h.migration));
+  assert.ok(h.migration.moved >= 2);
+
+  const img = await raw(ali, `/api/messages/${S.oldImg}/media`);
+  assert.equal(img.status, 200);
+  assert.ok(Buffer.from(await img.arrayBuffer()).equals(OLD_IMG), 'taşınan görsel birebir');
+  const voice = await raw(ece, `/api/messages/${S.oldVoice}/media`);
+  assert.equal(voice.status, 200);
+  assert.ok(Buffer.from(await voice.arrayBuffer()).equals(OLD_VOICE), 'taşınan sesli mesaj (3 MB+) birebir');
+  const listed = (await ali.get(`/api/dm/${S.ece}/messages`)).body.messages.find((x) => x.id === S.oldVoice);
+  assert.equal(listed.payload.url, `/api/messages/${S.oldVoice}/media`);
+
+  const vac = await adm.post('/api/admin/storage', { action: 'vacuum' });
+  assert.equal(vac.status, 200, vac.text);
+  const h2 = (await adm.get('/api/admin/server-health')).body;
+  assert.equal(h2.storage.inline_count, 0, 'gömülü dosya kalmadı');
+  assert.equal((await ali.post('/api/admin/storage', { action: 'sweep' })).status, 403, 'yönetici değilse yasak');
 });

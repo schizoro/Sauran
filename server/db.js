@@ -13,6 +13,9 @@ const dataDir = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 fs.mkdirSync(dataDir, { recursive: true });
 
 const dbPath = path.join(dataDir, 'sauran.db');
+if (!process.env.SQLITE_TMPDIR) {
+  try { const t = path.join(dataDir, 'tmp'); fs.mkdirSync(t, { recursive: true }); process.env.SQLITE_TMPDIR = t; } catch (_) { /* varsayılan */ }
+}
 const db = new Database(dbPath);
 
 db.pragma('journal_mode = WAL');
@@ -1143,7 +1146,18 @@ function captureMessageEvidence(reportId, message, retention) {
     }
   }
 
-  let mediaStatus = null;
+  let forcedTooLarge = false;
+  if (!mediaData && message.media_file && light && typeof light === 'object') {
+    const f = db.prepare(`SELECT bytes FROM media_files WHERE id = ?`).get(message.media_file);
+    delete light.file;
+    if (f) {
+      mediaField = (message.kind === 'voice' || message.kind === 'dm_voice') ? 'audio' : 'data';
+      mediaData = mediaFileAsDataUrl(message.media_file, EVIDENCE_MEDIA_MAX_CHARS);
+      if (!mediaData) forcedTooLarge = Math.ceil(f.bytes / 3) * 4 + 64 > EVIDENCE_MEDIA_MAX_CHARS; // değilse dosya kayıp: kanıtta medya yok
+    }
+  }
+
+  let mediaStatus = forcedTooLarge ? 'too_large' : null;
   if (mediaData) mediaStatus = mediaData.length > EVIDENCE_MEDIA_MAX_CHARS ? 'too_large' : 'stored';
 
   const lightJson = light ? JSON.stringify(light) : null;
@@ -2044,6 +2058,12 @@ function getReportTargetContext(targetType, targetId) {
       let payload = null;
       if (m.payload) {
         try { payload = JSON.parse(m.payload); } catch (_) { payload = null; }
+      }
+      if (payload && typeof payload === 'object' && typeof payload.file === 'string') {
+        const voice = m.kind === 'voice' || m.kind === 'dm_voice';
+        const dataUrl = mediaFileAsDataUrl(payload.file, 34 * 1024 * 1024);
+        delete payload.file;
+        if (dataUrl) payload[voice ? 'audio' : 'data'] = dataUrl;
       }
       // Ses/görsel/video/dosya payload'ı ham base64 veri içerir — moderasyon panelinde
       // önizleme için gerekli, bu yüzden diğer rapor context'lerinden farklı olarak aynen iletiliyor.
@@ -4259,6 +4279,151 @@ function clampPage(limit) {
 // Liste ve tekil mesaj sorguları payload'ı veritabanında hafifletir (data/audio alanı çıkarılır); istemci dosyayı
 // /api/messages/:id/media adresinden ister. Böylece büyük videolar içeren bir kanal açmak sunucu belleğini doldurmaz.
 const MEDIA_KINDS = ['image', 'video', 'file', 'dm_image', 'dm_video', 'dm_file', 'voice', 'dm_voice'];
+
+// ── Disk deposu (media-store.js): yeni dosyalar veritabanına değil diske yazılır ──
+// messages.media_file: diskteki dosyanın kimliği (iletilen kopyalar aynı dosyayı paylaşır). Mesaj silinince/mezar taşı olunca ya da
+// medya süresi dolunca bağlantı tetikleyiciyle kendiliğinden kopar; hiçbir mesajın bağlı olmadığı dosyalar düzenli temizlenir.
+const mediaStore = require('./media-store');
+{
+  const cols = db.prepare(`PRAGMA table_info(messages)`).all().map((c) => c.name);
+  if (!cols.includes('media_file')) db.exec(`ALTER TABLE messages ADD COLUMN media_file TEXT`);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_messages_media_file ON messages(media_file) WHERE media_file IS NOT NULL;
+    CREATE TABLE IF NOT EXISTS media_files (
+      id TEXT PRIMARY KEY,
+      bytes INTEGER NOT NULL,
+      mime TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TRIGGER IF NOT EXISTS trg_media_file_clear AFTER UPDATE OF kind, payload ON messages
+      WHEN NEW.media_file IS NOT NULL AND (NEW.kind = 'deleted' OR NEW.payload IS NULL
+        OR (json_valid(NEW.payload) AND json_extract(NEW.payload, '$.expired') = 1))
+      BEGIN UPDATE messages SET media_file = NULL WHERE id = NEW.id; END;
+  `);
+}
+const INLINE_MEDIA_MIN_CHARS = 2048; // bundan büyük medya payload'ı = içinde hâlâ gömülü veri var (süresi dolmuşlar küçük)
+
+// data URL'i diske yazar; { id, bytes, mime }. Mesaj eklemesiyle aynı (eşzamanlı) adımda çağrılır.
+const MEDIA_UPLOAD_RESERVE = (Number(process.env.MEDIA_UPLOAD_RESERVE_MB) || 256) * 1024 * 1024;
+const DISK_FULL_ERROR = 'Sunucuda yer kalmadı; dosya şu an gönderilemiyor. Biraz sonra tekrar dene.';
+function storeMediaDataUrl(dataUrl) {
+  const comma = dataUrl.indexOf(',');
+  const mime = dataUrl.slice(5, comma).split(';')[0].toLowerCase().slice(0, 100);
+  const buf = Buffer.from(dataUrl.slice(comma + 1), 'base64');
+  // Diskin tamamen dolmasına izin verilmez: dolarsa veritabanı da yazamaz (giriş, mesaj… hepsi durur).
+  const disk = mediaStore.diskStats();
+  if (disk && disk.free - buf.length < MEDIA_UPLOAD_RESERVE) return { error: DISK_FULL_ERROR };
+  let stored;
+  try { stored = mediaStore.writeBuffer(buf); } catch (error) {
+    if (error && error.code === 'ENOSPC') return { error: DISK_FULL_ERROR };
+    throw error;
+  }
+  try {
+    db.prepare(`INSERT INTO media_files (id, bytes, mime) VALUES (?, ?, ?)`).run(stored.id, stored.bytes, mime);
+  } catch (error) {
+    mediaStore.remove(stored.id);
+    throw error;
+  }
+  return { ...stored, mime };
+}
+// Diskteki dosyayı data URL olarak (rapor kanıtı, veri dışa aktarma, yönetici önizlemesi). maxChars aşılırsa null.
+function mediaFileAsDataUrl(fileId, maxChars = Infinity) {
+  const f = fileId ? db.prepare(`SELECT bytes, mime FROM media_files WHERE id = ?`).get(fileId) : null;
+  if (!f || Math.ceil(f.bytes / 3) * 4 + 64 > maxChars || !mediaStore.exists(fileId)) return null;
+  return `data:${f.mime || 'application/octet-stream'};base64,${mediaStore.readAll(fileId).toString('base64')}`;
+}
+
+// Hiçbir mesajın bağlı olmadığı dosyaları siler (mesaj silindi, süresi doldu, hesap silindi). Tur başına sınırlı.
+function purgeOrphanMediaFiles(limit = 500) {
+  const rows = db.prepare(`SELECT id FROM media_files WHERE NOT EXISTS (SELECT 1 FROM messages WHERE messages.media_file = media_files.id) LIMIT ?`).all(limit);
+  let removed = 0;
+  for (const r of rows) {
+    if (mediaStore.remove(r.id)) { db.prepare(`DELETE FROM media_files WHERE id = ?`).run(r.id); removed += 1; }
+  }
+  // Klasör taraması: yarım kalmış geçici dosyalar (1 sa) ve kaydı olmayan dosyalar (1 gün; ör. yedekten geri dönüş) silinir.
+  const now = Date.now();
+  const known = db.prepare(`SELECT 1 FROM media_files WHERE id = ?`);
+  for (const f of mediaStore.listFiles()) {
+    if (f.tmp) { if (now - f.mtimeMs > 3600 * 1000 && mediaStore.removePath(f.full)) removed += 1; continue; }
+    if (mediaStore.isId(f.name) && !known.get(f.name) && now - f.mtimeMs > 24 * 3600 * 1000 && mediaStore.removePath(f.full)) removed += 1;
+  }
+  return removed;
+}
+
+// Depolama durumu (yönetim paneli): disk, veritabanı, gömülü (taşınmamış) ve diskteki dosyalar, yedekler.
+function getStorageStats() {
+  const pageSize = db.pragma('page_size', { simple: true });
+  const freePages = db.pragma('freelist_count', { simple: true });
+  const fileSize = (p) => { try { return fs.statSync(p).size; } catch (_) { return 0; } };
+  const inline = db.prepare(`SELECT COUNT(*) AS c, COALESCE(SUM(octet_length(payload)), 0) AS b FROM messages WHERE kind IN (${MEDIA_KINDS_SQL}) AND media_file IS NULL AND octet_length(payload) > ?`).get(INLINE_MEDIA_MIN_CHARS);
+  const files = db.prepare(`SELECT COUNT(*) AS c, COALESCE(SUM(bytes), 0) AS b FROM media_files`).get();
+  return {
+    disk: mediaStore.diskStats(),
+    db_bytes: fileSize(dbPath) + fileSize(`${dbPath}-wal`),
+    db_free_bytes: pageSize * freePages,
+    inline_count: inline.c, inline_bytes: inline.b,
+    file_count: files.c, file_bytes: files.b,
+    backup_bytes: mediaStore.dirBytes(path.join(dataDir, 'backups'))
+  };
+}
+
+// Taşıma: id'si cursor'dan büyük ilk gömülü medyayı diske taşır. Dönen: { done } | { paused, need } | { moved, id, bytes } | { skipped, id }.
+// Veri parça parça okunup yazılır (bellek dosya boyutundan bağımsız); bitince mesaj tek işlemde dosyaya bağlanır.
+async function migrateOneInlineMedia({ cursor = 0, minFreeBytes = 512 * 1024 * 1024 } = {}) {
+  const row = db.prepare(`SELECT id, kind FROM messages WHERE id > ? AND kind IN (${MEDIA_KINDS_SQL}) AND media_file IS NULL AND octet_length(payload) > ? ORDER BY id LIMIT 1`).get(cursor, INLINE_MEDIA_MIN_CHARS);
+  if (!row) return { done: true };
+  const voice = row.kind === 'voice' || row.kind === 'dm_voice';
+  const loc = getMessageMediaLocation(row.id, voice);
+  if (!loc) return { skipped: true, id: row.id };
+  // Gereken: dosya + günlük (WAL) payı (eski veri sayfaları kadar) + rezerv
+  const need = loc.total + loc.b64len + minFreeBytes;
+  const disk = mediaStore.diskStats();
+  if (disk && disk.free < need) return { paused: true, id: row.id, need, free: disk.free };
+
+  const CHUNK = 3 * 1024 * 1024;
+  let pos = 0;
+  const stored = await mediaStore.writeChunks(() => {
+    if (pos >= loc.total) return null;
+    const end = Math.min(loc.total, pos + CHUNK);
+    const c0 = (pos / 3) * 4;
+    const c1 = Math.min(Math.ceil(end / 3) * 4, loc.b64len);
+    const buf = Buffer.from(readMessageMediaChars(row.id, loc.start + c0, c1 - c0), 'base64');
+    pos = end;
+    return buf;
+  });
+  if (stored.bytes !== loc.total) { mediaStore.remove(stored.id); return { skipped: true, id: row.id }; }
+
+  const key = voice ? '"audio":"data:' : '"data":"data:';
+  let linked = 0;
+  // Güvenli silme bu adımda kapalı: eski veri sayfalarını sıfırlamak, dosya kadar ek günlük (WAL) yazar ve diski doldurabilir;
+  // içerik zaten diskte dosya olarak duruyor. Sonra günlük kesilerek alan geri verilir.
+  db.pragma('secure_delete = OFF');
+  try {
+    linked = db.transaction(() => {
+      db.prepare(`INSERT INTO media_files (id, bytes, mime) VALUES (?, ?, ?)`).run(stored.id, stored.bytes, loc.mime || null);
+      // Bu arada silinen/süresi dolan/değişen mesaj bağlanmaz (hâlâ medya türünde ve veri aynı yerde olmalı)
+      return db.prepare(`
+        UPDATE messages SET payload = json_set(json_remove(payload, '$.data', '$.audio'), '$.file', ?), media_file = ?
+        WHERE id = ? AND media_file IS NULL AND kind IN (${MEDIA_KINDS_SQL}) AND instr(payload, ?) = ? AND json_valid(payload)
+      `).run(stored.id, stored.id, row.id, key, loc.keyAt).changes;
+    })();
+  } catch (error) {
+    mediaStore.remove(stored.id);
+    throw error;
+  } finally {
+    db.pragma('secure_delete = ON');
+    try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (_) { /* yoksay */ }
+  }
+  if (!linked) { mediaStore.remove(stored.id); try { db.prepare(`DELETE FROM media_files WHERE id = ?`).run(stored.id); } catch (_) { /* yoksay */ } return { skipped: true, id: row.id }; }
+  return { moved: true, id: row.id, bytes: stored.bytes };
+}
+
+// Veritabanını sıkıştırır (taşımadan sonra boşalan alan diske döner). Geçici olarak veritabanı kadar boş alan ister; çalışırken
+// sunucu birkaç saniye yanıt vermeyebilir.
+function vacuumDatabase() {
+  try { db.exec('VACUUM'); }
+  finally { try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (_) { /* yoksay */ } }
+}
 const MEDIA_KINDS_SQL = MEDIA_KINDS.map((k) => `'${k}'`).join(', ');
 const LIGHT_PAYLOAD_SQL = `CASE WHEN messages.kind IN (${MEDIA_KINDS_SQL})
     THEN (CASE WHEN json_valid(messages.payload) THEN json_remove(messages.payload, '$.data', '$.audio') ELSE NULL END)
@@ -4267,7 +4432,7 @@ const LIGHT_PAYLOAD_SQL = `CASE WHEN messages.kind IN (${MEDIA_KINDS_SQL})
 // Görüntüleyen bu mesajın dosyasını alabilir mi? { status, error } ya da { kind, mime, name, size, chars }.
 function getMessageMediaMeta(messageId, viewerId) {
   const row = db.prepare(`
-    SELECT id, hub_id, user_id, to_user_id, room, kind, length(payload) AS chars,
+    SELECT id, hub_id, user_id, to_user_id, room, kind, media_file, octet_length(payload) AS chars,
            CASE WHEN json_valid(payload) THEN json_remove(payload, '$.data', '$.audio') END AS meta
     FROM messages WHERE id = ?
   `).get(messageId);
@@ -4281,11 +4446,19 @@ function getMessageMediaMeta(messageId, viewerId) {
   try { meta = row.meta ? JSON.parse(row.meta) : null; } catch (_) { meta = null; }
   if (!meta || meta.expired) return { status: 410, error: 'Dosyanın saklama süresi doldu.' };
   const isVoice = row.kind === 'voice' || row.kind === 'dm_voice';
-  return { id: row.id, kind: row.kind, voice: isVoice, mime: String(meta.mime || ''), name: String(meta.name || (isVoice ? 'ses' : 'dosya')), size: Number(meta.size) || 0, chars: Number(row.chars) || 0 };
+  const out = { id: row.id, kind: row.kind, voice: isVoice, mime: String(meta.mime || ''), name: String(meta.name || (isVoice ? 'ses' : 'dosya')), size: Number(meta.size) || 0, chars: Number(row.chars) || 0, file: null };
+  if (row.media_file) {
+    const f = db.prepare(`SELECT bytes, mime FROM media_files WHERE id = ?`).get(row.media_file);
+    if (!f) return { status: 410, error: 'Dosyanın saklama süresi doldu.' };
+    out.file = row.media_file; out.bytes = f.bytes; out.fileMime = f.mime || '';
+  }
+  return out;
 }
 
 // Dosyanın data URL'i (tamamı; yalnızca küçük dosyalar ve veri dışa aktarma için).
 function getMessageMediaData(messageId, voice) {
+  const mf = db.prepare(`SELECT media_file FROM messages WHERE id = ?`).get(messageId);
+  if (mf && mf.media_file) return mediaFileAsDataUrl(mf.media_file);
   const row = db.prepare(`SELECT json_extract(payload, ?) AS d FROM messages WHERE id = ? AND json_valid(payload)`).get(voice ? '$.audio' : '$.data', messageId);
   return row && typeof row.d === 'string' ? row.d : null;
 }
@@ -4306,7 +4479,7 @@ function getMessageMediaLocation(messageId, voice) {
   const b64len = q - 1;
   const tail = (db.prepare(`SELECT substr(payload, ?, 2) AS t FROM messages WHERE id = ?`).get(start + b64len - 2, messageId) || {}).t || '';
   const pad = tail.endsWith('==') ? 2 : tail.endsWith('=') ? 1 : 0;
-  return { start, b64len, total: Math.floor(b64len / 4) * 3 - pad, mime: (m[1] || '').toLowerCase() };
+  return { start, b64len, total: Math.floor(b64len / 4) * 3 - pad, mime: (m[1] || '').toLowerCase(), keyAt: at.p };
 }
 function readMessageMediaChars(messageId, start, len) {
   const row = db.prepare(`SELECT substr(payload, ?, ?) AS s FROM messages WHERE id = ?`).get(start, len, messageId);
@@ -4462,7 +4635,7 @@ function hydrateMessage(row, viewerId = null) {
 
   // Medya: veri hiçbir zaman istemciye gömülü gitmez; süresi dolmadıysa indirme adresi verilir.
   if (MEDIA_KINDS.includes(result.kind) && result.payload && typeof result.payload === 'object') {
-    const { data, audio, ...rest } = result.payload;
+    const { data, audio, file, ...rest } = result.payload;
     result = { ...result, payload: rest.expired ? rest : { ...rest, url: `/api/messages/${result.id}/media` } };
   }
 
@@ -4598,19 +4771,6 @@ function deleteMessagesWithRelations(ids) {
   return { deleted, copies: copies.length };
 }
 
-// Medya alanlarını (base64) çıkarır; adı/türü/boyutu/süresi kalır. Hiçbir şey çıkarılamadıysa false.
-function stripMediaPayload(rawPayload) {
-  let payload; try { payload = JSON.parse(rawPayload); } catch (_) { return null; }
-  if (!payload || typeof payload !== 'object') return null;
-  let stripped = false;
-  for (const field of MEDIA_FIELDS) {
-    if (typeof payload[field] === 'string' && payload[field].startsWith('data:')) { delete payload[field]; stripped = true; }
-  }
-  if (!stripped) return null;
-  payload.expired = true;
-  return JSON.stringify(payload);
-}
-
 // Açılışta ve düzenli aralıkla çalışır; her tur sınırlı iş yapar, tekrar çalıştırmak zararsızdır.
 function purgeExpiredMessages(now = new Date()) {
   const cfg = MESSAGE_RETENTION;
@@ -4642,6 +4802,20 @@ function purgeExpiredMessages(now = new Date()) {
         rows.forEach((row) => {
           const targets = [row.id, ...forwardCopiesOf([row.id]).map(c => c.id)]; // kopyalar kaynağın medya süresini AŞAMAZ
           targets.forEach((id) => { result.media += strip.run(id).changes; });
+        });
+      })();
+    }
+
+    // 1b) diskteki dosyalar: bağlantı kopar (tetikleyici), dosyayı yetim temizliği siler
+    let fileCursor = 0;
+    const expireFile = db.prepare(`UPDATE messages SET payload = json_set(json_remove(payload, '$.file'), '$.expired', json('true')) WHERE id = ? AND media_file IS NOT NULL AND json_valid(payload)`);
+    for (let round = 0; round < 500; round++) {
+      const rows = db.prepare(`SELECT id FROM messages WHERE id > ? AND created_at < ? AND media_file IS NOT NULL ORDER BY id LIMIT 200`).all(fileCursor, mediaCut);
+      if (!rows.length) break;
+      fileCursor = rows[rows.length - 1].id;
+      db.transaction(() => {
+        rows.forEach((row) => {
+          [row.id, ...forwardCopiesOf([row.id]).map(c => c.id)].forEach((id) => { result.media += expireFile.run(id).changes; });
         });
       })();
     }
@@ -5296,12 +5470,14 @@ function createHubVoiceMessage(hubId, userId, username, audioData, duration) {
     return { success: false, error: 'Sesli mesaj çok uzun.' };
   }
 
-  const payload = JSON.stringify({ audio: audioData, duration: Number(duration) || 0 });
+  const stored = storeMediaDataUrl(audioData);
+  if (stored.error) return { success: false, error: stored.error };
+  const payload = JSON.stringify({ file: stored.id, duration: Number(duration) || 0 });
 
   const info = db.prepare(`
-    INSERT INTO messages (user_id, username, content, room, hub_id, channel_id, kind, payload)
-    VALUES (?, ?, '', ?, ?, ?, 'voice', ?)
-  `).run(userId, username, `hub_${hubId}`, hubId, hubChannelFor(hubId), payload);
+    INSERT INTO messages (user_id, username, content, room, hub_id, channel_id, kind, payload, media_file)
+    VALUES (?, ?, '', ?, ?, ?, 'voice', ?, ?)
+  `).run(userId, username, `hub_${hubId}`, hubId, hubChannelFor(hubId), payload, stored.id);
 
   return { success: true, message: getMessageById(info.lastInsertRowid) };
 }
@@ -5405,17 +5581,19 @@ function createHubFileMessage(hubId, userId, username, file) {
   const realMime = fileMimeFromDataUrl(data);
   const kind = safeFileKind(realMime);
 
+  const stored = storeMediaDataUrl(stripImageMetadata(data)); // görselse EXIF/GPS vb. üstveri çıkarılır (piksellere dokunulmaz)
+  if (stored.error) return { success: false, error: stored.error };
   const payload = JSON.stringify({
-    data: stripImageMetadata(data), // görselse EXIF/GPS vb. üstveri çıkarılır (piksellere dokunulmaz)
+    file: stored.id,
     name: String(name || 'dosya').slice(0, 200),
     mime: realMime.slice(0, 100),
     size: Number(size) || 0
   });
 
   const info = db.prepare(`
-    INSERT INTO messages (user_id, username, content, room, hub_id, channel_id, kind, payload)
-    VALUES (?, ?, '', ?, ?, ?, ?, ?)
-  `).run(userId, username, `hub_${hubId}`, hubId, hubChannelFor(hubId), kind, payload);
+    INSERT INTO messages (user_id, username, content, room, hub_id, channel_id, kind, payload, media_file)
+    VALUES (?, ?, '', ?, ?, ?, ?, ?, ?)
+  `).run(userId, username, `hub_${hubId}`, hubId, hubChannelFor(hubId), kind, payload, stored.id);
 
   return { success: true, message: getMessageById(info.lastInsertRowid) };
 }
@@ -6805,7 +6983,7 @@ function createReport(reporterId, { target_type, target_id, reason, description 
   let evidenceMessage = null;
   if (target_type === 'message') {
     evidenceMessage = db.prepare(`
-      SELECT id, user_id, username, content, kind, payload, hub_id, to_user_id, edited, created_at
+      SELECT id, user_id, username, content, kind, payload, media_file, hub_id, to_user_id, edited, created_at
       FROM messages WHERE id = ?
     `).get(targetId);
 
@@ -6970,7 +7148,10 @@ function getAccountExport(userId) {
     // Medya verisi listeye hiç yüklenmez; bütçeye sığıyorsa yalnızca o dosya tek başına okunur (bellek taşmasın).
     if (MEDIA_KINDS.includes(row.kind) && light && typeof light === 'object' && !light.expired) {
       const voice = row.kind === 'voice' || row.kind === 'dm_voice';
-      attachment = { field: voice ? 'audio' : 'data', mime: light.mime || null, name: light.name || null, size_chars: Number(payload_chars) || 0 };
+      const fileRow = typeof light.file === 'string' ? db.prepare(`SELECT bytes, mime FROM media_files WHERE id = ?`).get(light.file) : null;
+      const sizeChars = fileRow ? Math.ceil(fileRow.bytes / 3) * 4 + 64 : (Number(payload_chars) || 0);
+      delete light.file;
+      attachment = { field: voice ? 'audio' : 'data', mime: light.mime || (fileRow && fileRow.mime) || null, name: light.name || null, size_chars: sizeChars };
       if (attachment.size_chars <= mediaBudget) {
         const data = getMessageMediaData(row.id, voice);
         if (data) {
@@ -7193,12 +7374,14 @@ function saveDmVoiceMessage(fromId, fromUsername, toId, audioData, duration) {
     return { success: false, error: 'Sesli mesaj çok uzun.' };
   }
 
-  const payload = JSON.stringify({ audio: audioData, duration: Number(duration) || 0 });
+  const stored = storeMediaDataUrl(audioData);
+  if (stored.error) return { success: false, error: stored.error };
+  const payload = JSON.stringify({ file: stored.id, duration: Number(duration) || 0 });
 
   const info = db.prepare(`
-    INSERT INTO messages (user_id, username, content, room, to_user_id, kind, payload)
-    VALUES (?, ?, '', ?, ?, 'dm_voice', ?)
-  `).run(fromId, fromUsername, dmRoom(fromId, toId), toId, payload);
+    INSERT INTO messages (user_id, username, content, room, to_user_id, kind, payload, media_file)
+    VALUES (?, ?, '', ?, ?, 'dm_voice', ?, ?)
+  `).run(fromId, fromUsername, dmRoom(fromId, toId), toId, payload, stored.id);
 
   return {
     success: true,
@@ -7222,17 +7405,19 @@ function createDmFileMessage(fromId, fromUsername, toId, file) {
   const realMime = fileMimeFromDataUrl(data);
   const kind = `dm_${safeFileKind(realMime)}`;
 
+  const stored = storeMediaDataUrl(stripImageMetadata(data)); // görselse EXIF/GPS vb. üstveri çıkarılır (piksellere dokunulmaz)
+  if (stored.error) return { success: false, error: stored.error };
   const payload = JSON.stringify({
-    data: stripImageMetadata(data), // görselse EXIF/GPS vb. üstveri çıkarılır (piksellere dokunulmaz)
+    file: stored.id,
     name: String(name || 'dosya').slice(0, 200),
     mime: realMime.slice(0, 100),
     size: Number(size) || 0
   });
 
   const info = db.prepare(`
-    INSERT INTO messages (user_id, username, content, room, to_user_id, kind, payload)
-    VALUES (?, ?, '', ?, ?, ?, ?)
-  `).run(fromId, fromUsername, dmRoom(fromId, toId), toId, kind, payload);
+    INSERT INTO messages (user_id, username, content, room, to_user_id, kind, payload, media_file)
+    VALUES (?, ?, '', ?, ?, ?, ?, ?)
+  `).run(fromId, fromUsername, dmRoom(fromId, toId), toId, kind, payload, stored.id);
 
   return { success: true, message: getMessageById(info.lastInsertRowid) };
 }
@@ -7404,12 +7589,12 @@ function forwardMessageToDm(messageId, fromUserId, fromUsername, toUserId) {
   if (!areFriends(fromUserId, toUserId)) return { success: false, error: 'Sadece arkadaşlarına iletebilirsin.' };
   if (isAccountSuspended(toUserId)) return { success: false, error: DM_UNAVAILABLE_ERROR };
 
-  const fullOriginal = db.prepare(`SELECT content, payload FROM messages WHERE id = ?`).get(messageId);
+  const fullOriginal = db.prepare(`SELECT content, payload, media_file FROM messages WHERE id = ?`).get(messageId);
 
   const info = db.prepare(`
-    INSERT INTO messages (user_id, username, content, room, to_user_id, kind, payload, forwarded_from_message_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(fromUserId, fromUsername, fullOriginal.content || '', dmRoom(fromUserId, toUserId), toUserId, targetKind, fullOriginal.payload, messageId);
+    INSERT INTO messages (user_id, username, content, room, to_user_id, kind, payload, media_file, forwarded_from_message_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(fromUserId, fromUsername, fullOriginal.content || '', dmRoom(fromUserId, toUserId), toUserId, targetKind, fullOriginal.payload, fullOriginal.media_file || null, messageId);
 
   return { success: true, message: getMessageById(info.lastInsertRowid, fromUserId) };
 }
@@ -9426,6 +9611,10 @@ module.exports = {
   getMessageMediaMeta,
   getMessageMediaData,
   getMessageMediaLocation,
+  purgeOrphanMediaFiles,
+  getStorageStats,
+  migrateOneInlineMedia,
+  vacuumDatabase,
   readMessageMediaChars,
   recordServerEvent,
   listServerEvents,

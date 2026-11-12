@@ -175,9 +175,19 @@
                     <span style="font-weight:700;">Sunucu sağlığı</span>
                     <span id="sh-summary" class="adm-muted" style="font-size:12.5px;"></span>
                 </div>
+                <div id="st-box" style="margin:6px 0 14px;padding:12px;border-radius:12px;background:rgba(255,255,255,0.03);">
+                    <div style="font-weight:700;margin-bottom:6px;">Depolama</div>
+                    <div id="st-bar" style="height:10px;border-radius:6px;background:rgba(255,255,255,0.08);overflow:hidden;display:flex;"></div>
+                    <div id="st-lines" class="adm-muted" style="font-size:12.5px;margin-top:8px;line-height:1.6;"></div>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">
+                        <button id="st-migrate" type="button" class="adm-apply-btn">Dosyaları diske taşı</button>
+                        <button id="st-vacuum" type="button" class="adm-apply-btn">Veritabanını sıkıştır</button>
+                    </div>
+                    <div id="st-msg" style="font-size:12.5px;margin-top:8px;"></div>
+                </div>
                 <div id="sh-table-wrap"></div>
                 <div id="sh-empty" class="adm-state" style="display:none;">Kayıtlı hata ya da yeniden başlatma yok.</div>
-                <p class="adm-muted" style="font-size:11px;margin:12px 0 0;">Çökmeler, yakalanan hatalar, yüksek bellek uyarıları ve beklenmedik yeniden başlatmalar burada kalıcı olarak listelenir (son 300 kayıt).</p>
+                <p class="adm-muted" style="font-size:11px;margin:12px 0 0;">Çökmeler, yakalanan hatalar, yüksek bellek uyarıları ve beklenmedik yeniden başlatmalar burada kalıcı olarak listelenir (son 300 kayıt). Not: diskteki sohbet dosyaları uygulama yedeğine (yalnızca veritabanı) girmez; Render'ın günlük disk anlık görüntüleriyle (7 gün) korunur.</p>
             </div>
           </div>
 
@@ -637,9 +647,53 @@ Sauran Geliştirici Ekibi</textarea>
             $('au-next').disabled = audit.page >= pages;
         }
 
-        const SH_KIND = { unexpected_restart: 'Beklenmedik yeniden başlama', uncaught_exception: 'Yakalanmamış hata', unhandled_rejection: 'Yakalanmamış söz hatası', memory_high: 'Yüksek bellek', server_start: 'Sunucu başladı', hub_push: 'Bildirim hatası' };
+        const SH_KIND = { unexpected_restart: 'Beklenmedik yeniden başlama', uncaught_exception: 'Yakalanmamış hata', unhandled_rejection: 'Yakalanmamış söz hatası', memory_high: 'Yüksek bellek', server_start: 'Sunucu başladı', hub_push: 'Bildirim hatası', db_vacuum: 'Veritabanı sıkıştırıldı', media: 'Dosya gönderim hatası', media_file: 'Dosya okuma hatası', media_migration: 'Taşıma hatası', media_sweep: 'Dosya temizliği hatası', admin_storage: 'Depolama işlemi hatası' };
+        const MB = (b) => { const mb = (Number(b) || 0) / 1048576; return mb >= 1024 ? `${(mb / 1024).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} GB` : `${Math.round(mb)} MB`; };
+        function renderStorage(st, mig) {
+            if (!st) return;
+            const d = st.disk;
+            const segs = d ? [
+                ['Veritabanı', st.db_bytes, '#8b5cf6'], ['Diskteki dosyalar', st.file_bytes, '#22c55e'], ['Yedekler', st.backup_bytes, '#f59e0b']
+            ] : [];
+            $('st-bar').innerHTML = d ? segs.map(([, b, c]) => `<i style="display:block;width:${Math.min(100, (b / d.total) * 100)}%;background:${c};"></i>`).join('') : '';
+            $('st-lines').innerHTML = [
+                d ? `Disk: <b>${MB(d.total - d.free)}</b> dolu / ${MB(d.total)} · <b>${MB(d.free)}</b> boş` : 'Disk bilgisi alınamadı',
+                `Veritabanı: ${MB(st.db_bytes)} (içinde sıkıştırmayla geri kazanılabilecek ${MB(st.db_free_bytes)})`,
+                `Veritabanı içinde gömülü (taşınmamış) dosya: <b>${st.inline_count}</b> adet, ${MB(st.inline_bytes * 0.75)}`,
+                `Diskteki dosyalar: ${st.file_count} adet, ${MB(st.file_bytes)} · Yedekler: ${MB(st.backup_bytes)}`
+            ].join('<br>');
+            const running = mig && mig.state === 'running';
+            $('st-migrate').textContent = running ? 'Taşımayı durdur' : (st.inline_count ? 'Dosyaları diske taşı' : 'Taşınacak dosya yok');
+            $('st-migrate').disabled = !running && !st.inline_count;
+            $('st-migrate').dataset.running = running ? '1' : '';
+            const m = mig || {};
+            const stateTxt = { running: 'Taşınıyor…', done: 'Tamamlandı', disk_low: 'Disk dolmak üzere — durdu', stopped: 'Durduruldu', error: 'Hata' }[m.state];
+            $('st-msg').textContent = stateTxt ? `${stateTxt} · taşınan ${m.moved} dosya (${MB(m.moved_bytes)})${m.skipped ? ` · atlanan ${m.skipped}` : ''}${m.message ? ' · ' + m.message : ''}` : '';
+            clearTimeout(window.__stPoll);
+            if (running) window.__stPoll = setTimeout(() => loadServerHealth().catch(() => {}), 3000);
+        }
+        $('st-migrate').addEventListener('click', async () => {
+            const running = $('st-migrate').dataset.running === '1';
+            if (!running && !confirm('Veritabanı içindeki dosyalar arka planda tek tek diske taşınacak. Uygulama çalışmaya devam eder. Başlatılsın mı?')) return;
+            $('st-migrate').disabled = true;
+            try { await send('POST', '/api/admin/storage', { action: running ? 'migrate_stop' : 'migrate_start' }); } catch (e) { showError(e); }
+            loadServerHealth().catch(() => {});
+        });
+        $('st-vacuum').addEventListener('click', async () => {
+            if (!confirm('Veritabanı sıkıştırılacak: boşalan alan diske geri döner. Bu sırada uygulama birkaç saniye (büyük veritabanında daha uzun) yanıt vermeyebilir. Devam edilsin mi?')) return;
+            $('st-vacuum').disabled = true;
+            $('st-msg').textContent = 'Sıkıştırılıyor…';
+            try {
+                const r = await send('POST', '/api/admin/storage', { action: 'vacuum' });
+                $('st-msg').textContent = `Sıkıştırıldı: ${MB(r.before_bytes)} → ${MB(r.storage.db_bytes)}`;
+            } catch (e) { $('st-msg').textContent = e.message || 'Sıkıştırılamadı.'; }
+            $('st-vacuum').disabled = false;
+            loadServerHealth().catch(() => {});
+        });
+
         async function loadServerHealth() {
             const data = await api('/api/admin/server-health');
+            renderStorage(data.storage, data.migration);
             const up = data.uptime_sec || 0;
             const upTxt = up >= 86400 ? `${Math.floor(up / 86400)} g ${Math.floor((up % 86400) / 3600)} sa` : up >= 3600 ? `${Math.floor(up / 3600)} sa ${Math.floor((up % 3600) / 60)} dk` : `${Math.floor(up / 60)} dk`;
             const m = data.memory || {};
@@ -650,7 +704,7 @@ Sauran Geliştirici Ekibi</textarea>
                 <table class="adm-table"><thead><tr><th>Zaman</th><th>Tür</th><th>Mesaj</th><th>Bellek</th></tr></thead>
                 <tbody style="cursor:default;">${rows.map((e) => `
                     <tr style="cursor:default;" title="${esc(e.detail || '')}">
-                        <td data-label="Zaman">${fmtDate(String(e.at).replace(' ', 'T') + (String(e.at).includes('Z') ? '' : 'Z'))}</td>
+                        <td data-label="Zaman">${fmtDate(e.at)}</td>
                         <td data-label="Tür"><b>${esc(SH_KIND[e.kind] || e.kind)}</b></td>
                         <td data-label="Mesaj" style="word-break:break-word;">${esc(e.message || '')}${e.detail ? `<details style="margin-top:4px;"><summary class="adm-muted" style="cursor:pointer;font-size:11px;">Ayrıntı</summary><pre style="white-space:pre-wrap;font-size:11px;margin:4px 0 0;">${esc(e.detail)}</pre></details>` : ''}</td>
                         <td data-label="Bellek">${e.rss_mb != null ? esc(String(e.rss_mb)) + ' MB' : '<span class="adm-muted">—</span>'}</td>
