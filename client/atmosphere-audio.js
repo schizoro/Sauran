@@ -120,8 +120,44 @@
         if (c.onStage) c.onStage('end');
     }
 
-    // soundKey: 'cyber' | 'midnight' | 'cosmic' | 'garden'.  opts: { volume 0..1, onStage(stage) }
+    // Kendi profil sesi: 'url:<adres>' — dosya bir kez indirilip çözülür (önbellek), sonra baştan sona bir kez çalınır.
+    const urlBuffers = new Map();
+    function loadUrlBuffer(url) {
+        if (urlBuffers.has(url)) return urlBuffers.get(url);
+        const p = fetch(url, { credentials: 'include' })
+            .then((r) => { if (!r.ok) throw new Error('ses alınamadı'); return r.arrayBuffer(); })
+            .then((ab) => new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej)));
+        urlBuffers.set(url, p);
+        p.catch(() => urlBuffers.delete(url));
+        if (urlBuffers.size > 30) urlBuffers.delete(urlBuffers.keys().next().value);
+        return p;
+    }
+    function playUrl(url, opts) {
+        if (!getCtx()) return null;
+        stop();
+        const vol = Math.max(0, Math.min(1, opts.volume == null ? 0.6 : opts.volume));
+        const env = ctx.createGain();
+        env.gain.value = vol;
+        env.connect(master);
+        const c = { env, onStage: opts.onStage, key: 'url:' + url, src: null };
+        c.stopAmbient = () => { try { if (c.src) c.src.stop(); } catch (_) { /* yoksay */ } };
+        current = c;
+        if (c.onStage) c.onStage('impact');
+        loadUrlBuffer(url).then((buf) => {
+            if (current !== c) return;
+            const s = ctx.createBufferSource();
+            s.buffer = buf;
+            s.connect(env);
+            s.onended = () => { if (current === c) stop(); };
+            c.src = s;
+            s.start();
+        }).catch(() => { if (current === c) stop(); });
+        return { stop: () => { if (current === c) stop(); } };
+    }
+
+    // soundKey: 'cyber' | 'midnight' | 'cosmic' | 'garden' | 'url:<adres>'.  opts: { volume 0..1, onStage(stage) }
     function play(soundKey, opts = {}) {
+        if (typeof soundKey === 'string' && soundKey.startsWith('url:')) return playUrl(soundKey.slice(4), opts);
         const recipe = RECIPES[soundKey];
         if (!recipe || !getCtx()) return null;
         stop();

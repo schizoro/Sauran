@@ -4815,6 +4815,24 @@ const I18N = {
     'message-deleted': { tr: 'Bu mesaj silindi', en: 'This message was deleted' },
     'unread-divider': { tr: 'Yeni mesajlar', en: 'New messages' },
     'warning-prefix': { tr: 'Uyarı: ', en: 'Warning: ' },
+    'psound-title': { tr: 'Kendi profil sesin', en: 'Your profile sound' },
+    'psound-mine': { tr: 'Kendi sesin', en: 'Your sound' },
+    'psound-upload': { tr: 'Kendi sesini yükle', en: 'Upload your sound' },
+    'psound-change': { tr: 'Değiştir', en: 'Change' },
+    'psound-remove': { tr: 'Kaldır', en: 'Remove' },
+    'psound-remove-confirm': { tr: 'Kendi profil sesin kaldırılsın mı?', en: 'Remove your profile sound?' },
+    'psound-window': { tr: '7 saniyelik bölüm', en: '7-second section' },
+    'psound-sec': { tr: 'saniye', en: 'seconds' },
+    'psound-hint': { tr: 'Mor pencereyi sürükleyerek 7 saniyelik bölümü seç. Klavyede ← → ile de kaydırabilirsin.', en: 'Drag the purple window to pick a 7-second section. You can also use ← →.' },
+    'psound-hint-short': { tr: 'Ses 7 saniyeden kısa; tamamı kullanılacak.', en: 'The sound is shorter than 7 seconds; all of it will be used.' },
+    'psound-listen': { tr: 'Dinle', en: 'Listen' },
+    'psound-stop': { tr: 'Durdur', en: 'Stop' },
+    'psound-saved': { tr: 'Profil sesin kaydedildi', en: 'Profile sound saved' },
+    'psound-too-big': { tr: 'Dosya çok büyük (en fazla 10 MB).', en: 'File is too large (max 10 MB).' },
+    'psound-too-long': { tr: 'Ses çok uzun (en fazla 10 dakika).', en: 'Audio is too long (max 10 minutes).' },
+    'psound-bad-file': { tr: 'Bu ses dosyası açılamadı. MP3, WAV, OGG ya da M4A dene.', en: 'Could not open this audio file. Try MP3, WAV, OGG or M4A.' },
+    'psound-unsupported': { tr: 'Bu tarayıcı ses kırpmayı desteklemiyor.', en: 'This browser does not support audio trimming.' },
+    'psound-silent': { tr: 'Seçtiğin bölüm sessiz; başka bir yer seç.', en: 'The selected section is silent; pick another part.' },
     'dm-title-profile': { tr: 'Profili görüntüle', en: 'View profile' },
     'lc-modal-join-sub': { tr: 'Arkadaşının paylaştığı davet kodunu yapıştır.', en: 'Paste the invite code your friend shared.' },
     'lc-modal-feedback-sub': { tr: 'Önerin panoda görünür; diğer kullanıcılar oylayabilir.', en: 'Your suggestion appears on the board; others can vote on it.' },
@@ -8583,7 +8601,7 @@ async function ensureAtmoCatalog(force) {
     try {
         const r = await fetch('/api/atmospheres', { credentials: 'include' });
         const d = await r.json();
-        if (d.success) { atmoCatalog = new Map(d.items.map((a) => [a.key, a])); atmoCatalog.profileSoundOn = d.profile_sound_on; atmoCatalog.items = d.items; atmoCatalog.soundChoice = d.profile_sound_choice || ''; atmoCatalog.isPlus = Boolean(d.is_plus); }
+        if (d.success) { atmoCatalog = new Map(d.items.map((a) => [a.key, a])); atmoCatalog.profileSoundOn = d.profile_sound_on; atmoCatalog.items = d.items; atmoCatalog.soundChoice = d.profile_sound_choice || ''; atmoCatalog.customUrl = d.custom_sound_url || null; atmoCatalog.isPlus = Boolean(d.is_plus); }
     } catch (_) {}
     return atmoCatalog;
 }
@@ -8648,6 +8666,7 @@ function setAtmoStage(key, stage) {
 const ATMO_SOUND_LABELS = { cyber: '🎮 Cyber', midnight: '🌙 Midnight', cosmic: '🌌 Cosmic', garden: '🌸 Garden' };
 function effectiveOwnSound() {
     const cat = atmoCatalog; if (!cat) return '';
+    if (cat.soundChoice === 'custom') return cat.customUrl ? 'url:' + cat.customUrl : '';
     if (cat.soundChoice) return cat.soundChoice;
     const a = cat.items.find((x) => x.active);
     return a ? a.sound : '';
@@ -8659,9 +8678,28 @@ function renderSoundPicker() {
     const choice = cat.soundChoice || '';
     const opts = [['', 'Atmosphere\'imi izle'], ...Object.entries(ATMO_SOUND_LABELS)];
     box.innerHTML = opts.map(([k, label]) => `<span class="cz-sound-opt${choice === k ? ' selected' : ''}">
-        <button type="button" class="cz-sound-pick" data-sound-pick="${k}" ${!cat.isPlus && k ? 'disabled title="Plus gerekli"' : ''}>${escapeHtml(label)}</button>${k ? `<button type="button" class="cz-sound-play" data-sound-play="${k}" aria-label="Önizle">▶</button>` : ''}</span>`).join('');
+        <button type="button" class="cz-sound-pick" data-sound-pick="${k}" ${!cat.isPlus && k ? 'disabled title="Plus gerekli"' : ''}>${escapeHtml(label)}</button>${k ? `<button type="button" class="cz-sound-play" data-sound-play="${k}" aria-label="Önizle">▶</button>` : ''}</span>`).join('')
+        // Kendi sesin: yüklüyse seç/dinle/değiştir/kaldır, değilse yükle
+        + (cat.customUrl
+            ? `<span class="cz-sound-opt cz-sound-custom${choice === 'custom' ? ' selected' : ''}"><button type="button" class="cz-sound-pick" data-sound-pick="custom" ${!cat.isPlus ? 'disabled title="Plus gerekli"' : ''}>🎵 ${escapeHtml(t('psound-mine'))}</button><button type="button" class="cz-sound-play" data-sound-play="url:${escapeAttr(cat.customUrl)}" aria-label="${escapeAttr(t('psound-listen'))}">▶</button><button type="button" class="cz-sound-play" data-sound-upload aria-label="${escapeAttr(t('psound-change'))}" title="${escapeAttr(t('psound-change'))}">✎</button><button type="button" class="cz-sound-play" data-sound-remove aria-label="${escapeAttr(t('psound-remove'))}" title="${escapeAttr(t('psound-remove'))}">✕</button></span>`
+            : `<span class="cz-sound-opt cz-sound-custom"><button type="button" class="cz-sound-pick" data-sound-upload ${!cat.isPlus ? 'disabled title="Plus gerekli"' : ''}>＋ ${escapeHtml(t('psound-upload'))}</button></span>`);
 }
 document.getElementById('cz-sound-picker')?.addEventListener('click', async (e) => {
+    const up = e.target.closest('[data-sound-upload]');
+    if (up) { if (!up.disabled) pickProfileSoundFile(); return; }
+    if (e.target.closest('[data-sound-remove]')) {
+        if (!confirm(t('psound-remove-confirm'))) return;
+        try {
+            const r = await fetch('/api/profile/custom-sound', { method: 'DELETE', credentials: 'include' });
+            const d = await r.json();
+            if (!d.success) { showToast(d.error || 'Güncellenemedi.'); return; }
+            if (atmoCatalog) { atmoCatalog.customUrl = null; atmoCatalog.soundChoice = d.profile_sound || ''; }
+            stopAtmoSound('preview');
+            renderSoundPicker();
+            const prev = document.getElementById('cz-profile-sound-preview'); if (prev) prev.disabled = !effectiveOwnSound();
+        } catch (_) { showToast('Güncellenemedi.'); }
+        return;
+    }
     const play = e.target.closest('[data-sound-play]');
     if (play) { playAtmoSound(play.dataset.soundPlay, 'preview'); return; }
     const pick = e.target.closest('[data-sound-pick]');
@@ -8763,6 +8801,215 @@ document.getElementById('cz-profile-sound-preview')?.addEventListener('click', (
     const sound = effectiveOwnSound();
     if (sound) playAtmoSound(sound, 'preview');
 });
+// ── Kendi profil sesi: dosya seç → 7 saniyelik bölümü dalga üzerinde sürükleyerek seç → kaydet ──
+// Kırpma, ses düzeyi dengeleme ve yumuşak giriş/çıkış tamamen cihazda yapılır; sunucuya yalnızca 7 sn'lik WAV (≈300 KB) gider.
+const PSOUND_MAX_FILE = 10 * 1024 * 1024;
+const PSOUND_MAX_MINUTES = 10;
+// Çözmeden önce süreyi öğren (uzun dosyalar telefonda belleği doldurmasın); öğrenilemezse null.
+function audioFileDuration(file) {
+    return new Promise((resolve) => {
+        const url = URL.createObjectURL(file);
+        const a = document.createElement('audio');
+        const done = (v) => { URL.revokeObjectURL(url); a.removeAttribute('src'); resolve(v); };
+        a.preload = 'metadata';
+        a.onloadedmetadata = () => done(Number.isFinite(a.duration) ? a.duration : null);
+        a.onerror = () => done(null);
+        setTimeout(() => done(null), 4000);
+        a.src = url;
+    });
+}
+const PSOUND_WIN = 7;
+function pickProfileSoundFile() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'audio/*,.mp3,.wav,.ogg,.m4a,.aac';
+    input.addEventListener('change', () => { const f = input.files && input.files[0]; if (f) openProfileSoundTrimmer(f); });
+    input.click();
+}
+async function openProfileSoundTrimmer(file) {
+    if (file.size > PSOUND_MAX_FILE) { showToast(t('psound-too-big')); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC || !window.OfflineAudioContext) { showToast(t('psound-unsupported')); return; }
+    const dur = await audioFileDuration(file);
+    if (dur != null && dur > PSOUND_MAX_MINUTES * 60) { showToast(t('psound-too-long')); return; }
+    const ac = new AC();
+    let buf;
+    try {
+        // 22,05 kHz'e çözülür (sonuç da 22,05 kHz): bellek, cihazın 44,1/48 kHz'ine göre yarı yarıya
+        const dec = new OfflineAudioContext(2, 1, 22050);
+        buf = await new Promise((res, rej) => file.arrayBuffer().then((ab) => dec.decodeAudioData(ab, res, rej), rej));
+    } catch (_) { ac.close().catch(() => {}); showToast(t('psound-bad-file')); return; }
+    if (!buf || buf.duration < 0.5) { ac.close().catch(() => {}); showToast(t('psound-bad-file')); return; }
+
+    const total = buf.duration;
+    const win = Math.min(PSOUND_WIN, total);
+    let start = 0;
+    const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+    // Dalga: kanal(lar)ın 200 parçadaki en yüksek değeri
+    const N = 200;
+    const peaks = new Float32Array(N);
+    const chans = Array.from({ length: Math.min(2, buf.numberOfChannels) }, (_, i) => buf.getChannelData(i));
+    const per = Math.max(1, Math.floor(buf.length / N));
+    for (let i = 0; i < N; i++) {
+        let m = 0;
+        for (const ch of chans) for (let j = i * per, e = Math.min(ch.length, (i + 1) * per); j < e; j += 16) { const v = Math.abs(ch[j]); if (v > m) m = v; }
+        peaks[i] = m;
+    }
+    const pmax = Math.max(0.01, ...peaks);
+
+    const prevTrim = document.querySelector('.psound-backdrop');
+    if (prevTrim) { if (prevTrim._close) prevTrim._close(); else prevTrim.remove(); }
+    const opener = document.activeElement;
+    const back = document.createElement('div');
+    back.className = 'cstatus-backdrop psound-backdrop';
+    back.innerHTML = `<div class="cstatus-card psound-card" role="dialog" aria-modal="true" aria-labelledby="psound-title">
+        <div class="cstatus-head"><b id="psound-title">${escapeHtml(t('psound-title'))}</b><button type="button" class="cstatus-x" aria-label="${escapeAttr(t('close'))}">×</button></div>
+        <div class="psound-file">🎵 ${escapeHtml(file.name)} · ${fmt(total)}</div>
+        <div class="psound-wave"><canvas width="600" height="96" aria-hidden="true"></canvas>
+            <div class="psound-sel" tabindex="0" role="slider" aria-label="${escapeAttr(t('psound-window'))}" aria-valuemin="0" aria-valuemax="${Math.floor(total - win)}"><i class="psound-head"></i></div></div>
+        <div class="psound-times"><span class="psound-a"></span><span>${win < PSOUND_WIN ? `${Math.round(win * 10) / 10} ${t('psound-sec')}` : `7 ${t('psound-sec')}`}</span><span class="psound-b"></span></div>
+        <p class="psound-hint">${escapeHtml(t(win < PSOUND_WIN ? 'psound-hint-short' : 'psound-hint'))}</p>
+        <p class="cstatus-error" role="alert"></p>
+        <div class="cstatus-actions"><button type="button" class="cstatus-clear psound-play">▶ ${escapeHtml(t('psound-listen'))}</button><button type="button" class="cstatus-save psound-save">${escapeHtml(t('save'))}</button></div>
+    </div>`;
+    document.body.appendChild(back);
+    const wave = back.querySelector('.psound-wave');
+    const canvas = wave.querySelector('canvas');
+    const sel = back.querySelector('.psound-sel');
+    const headEl = back.querySelector('.psound-head');
+    const err = back.querySelector('.cstatus-error');
+    const playBtn = back.querySelector('.psound-play');
+    const saveBtn = back.querySelector('.psound-save');
+
+    const drawWave = () => {
+        const g = canvas.getContext('2d');
+        const w = canvas.width, h = canvas.height, bw = w / N;
+        g.clearRect(0, 0, w, h);
+        for (let i = 0; i < N; i++) {
+            const t0 = (i / N) * total;
+            const inSel = t0 >= start && t0 < start + win;
+            const bh = Math.max(3, (peaks[i] / pmax) * (h - 10));
+            g.fillStyle = inSel ? '#c58cff' : '#3a4254';
+            g.fillRect(i * bw + bw * 0.2, (h - bh) / 2, bw * 0.6, bh);
+        }
+    };
+    const draw = () => {
+        sel.style.left = `${(start / total) * 100}%`;
+        sel.style.width = `${(win / total) * 100}%`;
+        sel.setAttribute('aria-valuenow', String(Math.floor(start)));
+        sel.setAttribute('aria-valuetext', `${fmt(start)} – ${fmt(start + win)}`);
+        back.querySelector('.psound-a').textContent = fmt(start);
+        back.querySelector('.psound-b').textContent = fmt(start + win);
+        drawWave();
+    };
+    const setStart = (s) => { start = Math.max(0, Math.min(total - win, s)); draw(); };
+    draw();
+
+    // Önizleme
+    let src = null;
+    let raf = 0;
+    const stopPreview = () => {
+        if (src) { try { src.stop(); } catch (_) { /* yoksay */ } src = null; }
+        cancelAnimationFrame(raf);
+        headEl.style.opacity = '0';
+        playBtn.textContent = `▶ ${t('psound-listen')}`;
+    };
+    playBtn.addEventListener('click', () => {
+        if (src) { stopPreview(); return; }
+        if (ac.state === 'suspended') ac.resume();
+        const s = ac.createBufferSource();
+        const g = ac.createGain();
+        s.buffer = buf;
+        s.connect(g); g.connect(ac.destination);
+        const t0 = ac.currentTime;
+        g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(1, t0 + 0.08);
+        g.gain.setValueAtTime(1, t0 + Math.max(0.1, win - 0.25)); g.gain.linearRampToValueAtTime(0, t0 + win);
+        s.start(t0, start, win);
+        s.onended = () => { if (src === s) stopPreview(); };
+        src = s;
+        playBtn.textContent = `■ ${t('psound-stop')}`;
+        headEl.style.opacity = '1';
+        const tick = () => { if (src !== s) return; headEl.style.left = `${Math.min(100, ((ac.currentTime - t0) / win) * 100)}%`; raf = requestAnimationFrame(tick); };
+        tick();
+    });
+
+    // Sürükleme: pencereyi tutup kaydır; boş yere dokununca pencere oraya ortalanır.
+    let dragOff = null;
+    const posToTime = (clientX) => { const r = wave.getBoundingClientRect(); return ((clientX - r.left) / r.width) * total; };
+    wave.addEventListener('pointerdown', (e) => {
+        const tm = posToTime(e.clientX);
+        dragOff = tm >= start && tm <= start + win ? tm - start : win / 2;
+        wave.setPointerCapture(e.pointerId);
+        setStart(tm - dragOff);
+        stopPreview();
+        e.preventDefault();
+    });
+    wave.addEventListener('pointermove', (e) => { if (dragOff != null) setStart(posToTime(e.clientX) - dragOff); });
+    const endDrag = () => { dragOff = null; };
+    wave.addEventListener('pointerup', endDrag);
+    wave.addEventListener('pointercancel', endDrag);
+    sel.addEventListener('keydown', (e) => {
+        const step = e.shiftKey ? 5 : 0.5;
+        if (e.key === 'ArrowLeft') { e.preventDefault(); setStart(start - step); stopPreview(); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); setStart(start + step); stopPreview(); }
+        else if (e.key === 'Home') { e.preventDefault(); setStart(0); }
+        else if (e.key === 'End') { e.preventDefault(); setStart(total); }
+    });
+
+    const close = () => {
+        stopPreview();
+        ac.close().catch(() => {});
+        back.remove();
+        document.removeEventListener('keydown', onKey, true);
+        if (opener && opener.focus && document.contains(opener)) opener.focus();
+    };
+    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } };
+    document.addEventListener('keydown', onKey, true);
+    back._close = close;
+    back.addEventListener('pointerdown', (e) => { if (e.target === back) close(); });
+    back.querySelector('.cstatus-x').addEventListener('click', close);
+    setTimeout(() => sel.focus(), 0);
+
+    // Kaydet: tek kanal 22,05 kHz'e indir, yumuşak giriş/çıkış, ses düzeyini dengele (tepe −1 dB, ortalama sınırlı), WAV
+    saveBtn.addEventListener('click', async () => {
+        stopPreview();
+        saveBtn.disabled = true;
+        err.textContent = '';
+        try {
+            const rate = 22050;
+            const oc = new OfflineAudioContext(1, Math.ceil(win * rate), rate);
+            const s = oc.createBufferSource();
+            const g = oc.createGain();
+            s.buffer = buf;
+            g.gain.setValueAtTime(0, 0); g.gain.linearRampToValueAtTime(1, 0.08);
+            g.gain.setValueAtTime(1, Math.max(0.1, win - 0.25)); g.gain.linearRampToValueAtTime(0, win);
+            s.connect(g); g.connect(oc.destination);
+            s.start(0, start, win);
+            const out = await oc.startRendering();
+            const data = out.getChannelData(0);
+            let peak = 0, sum = 0;
+            for (let i = 0; i < data.length; i++) { const v = Math.abs(data[i]); if (v > peak) peak = v; sum += data[i] * data[i]; }
+            const rms = Math.sqrt(sum / Math.max(1, data.length));
+            if (peak < 0.003) throw new Error(t('psound-silent'));
+            const gain = Math.min(0.89 / peak, rms > 0 ? 0.2 / rms : 8, 8);
+            for (let i = 0; i < data.length; i++) data[i] *= gain;
+            const blob = encodeWavMono16(data, rate);
+            const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
+            const r = await fetch('/api/profile/custom-sound', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ audio: dataUrl }) });
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok || !d.success) throw new Error(d.error || t('generic-error'));
+            if (atmoCatalog) { atmoCatalog.customUrl = d.url; atmoCatalog.soundChoice = 'custom'; }
+            renderSoundPicker();
+            const prev = document.getElementById('cz-profile-sound-preview'); if (prev) prev.disabled = !effectiveOwnSound();
+            close();
+            showToast(t('psound-saved'));
+        } catch (e) {
+            err.textContent = e.message || t('generic-error');
+            saveBtn.disabled = false;
+        }
+    });
+}
 function closeAtmoOnLeave() { stopAtmoSound('preview'); }
 document.getElementById('cz-close-btn')?.addEventListener('click', closeAtmoOnLeave);
 document.getElementById('cz-nav')?.addEventListener('click', closeAtmoOnLeave);
@@ -8775,7 +9022,8 @@ async function setupProfileSound(profile) {
     if (!box) return;
     stopAtmoSound('profile');
     box.style.display = 'none'; ask.style.display = 'none';
-    const sound = profile && profile.profile_sound;
+    // Kendi yüklediği ses: adresten çalınır (oynatıcı 'url:' anahtarını tanır)
+    const sound = profile && (profile.profile_sound === 'custom' ? (profile.profile_sound_url ? 'url:' + profile.profile_sound_url : '') : profile.profile_sound);
     if (!sound || profile.friendship_status === 'self') return;
     // Pencerenin gösterilmesi bu çağrıdan sonra tamamlanır; sonra kontrol et. Profil kapatılmışsa ses asla başlamaz.
     await new Promise((r) => setTimeout(r, 60));

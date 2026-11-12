@@ -44,6 +44,10 @@ const {
   editMessage,
   getMessageMediaMeta,
   getMessageMediaLocation,
+  setCustomProfileSound,
+  removeCustomProfileSound,
+  getVisibleProfileSoundFile,
+  profileSoundUrl,
   purgeOrphanMediaFiles,
   getStorageStats,
   migrateOneInlineMedia,
@@ -1470,7 +1474,7 @@ app.get('/api/atmospheres', (req, res) => {
   try {
     const user = getUserFromRequest(req);
     if (!user) return res.status(401).json({ success: false, error: 'Oturum bulunamadı.' });
-    return res.json({ success: true, items: listAtmospheresFor(user.id), profile_sound_on: user.profile_sound_on !== 0, profile_sound_choice: getProfileSoundChoice(user.id), is_plus: hasFeature(user.id, 'profile_sound') });
+    return res.json({ success: true, items: listAtmospheresFor(user.id), profile_sound_on: user.profile_sound_on !== 0, profile_sound_choice: getProfileSoundChoice(user.id), custom_sound_url: profileSoundUrl(user.id), is_plus: hasFeature(user.id, 'profile_sound') });
   } catch (error) {
     console.error('Atmosphere listesi hatası:', error);
     return res.status(500).json({ success: false, error: 'Yüklenemedi.' });
@@ -1518,6 +1522,46 @@ app.patch('/api/profile/profile-sound', (req, res) => {
   } catch (error) {
     console.error('Profil sesi hatası:', error);
     return res.status(500).json({ success: false, error: 'Güncellenemedi.' });
+  }
+});
+
+// Kendi profil sesi: istemcide 7 sn'ye kırpılmış 16 bit WAV (data URL). Sunucu biçimi ve süreyi doğrular.
+// Kişi başına sınır: ses sık değiştirilerek disk doldurulamasın (oturum çerezine göre; yoksa IP)
+const bySessionOrIp = (req) => ((/(?:^|;\s*)sauran_session=([^;]+)/.exec(req.headers.cookie || '') || [])[1] || req.ip);
+const customSoundLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 10, keyFn: bySessionOrIp, message: 'Profil sesini çok sık değiştiriyorsun. Biraz sonra tekrar dene.' });
+app.post('/api/profile/custom-sound', customSoundLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const r = setCustomProfileSound(user.id, req.body?.audio);
+    if (!r.success) return res.status(r.status || 400).json({ success: false, error: r.error });
+    return res.json(r);
+  } catch (error) {
+    reportServerError('custom_sound', error);
+    return res.status(500).json({ success: false, error: 'Kaydedilemedi.' });
+  }
+});
+app.delete('/api/profile/custom-sound', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try { return res.json(removeCustomProfileSound(user.id)); }
+  catch (error) { reportServerError('custom_sound', error); return res.status(500).json({ success: false, error: 'Kaldırılamadı.' }); }
+});
+// Profil sesini dinlemek: profili görebilen oturumlu kullanıcılar (adres sürüm içerir: değişince önbellek yenilenir).
+app.get('/api/users/:id/profile-sound', profileViewLimiter, (req, res) => {
+  const viewer = requireAuth(req, res);
+  if (!viewer) return;
+  try {
+    const file = getVisibleProfileSoundFile(viewer.id, Number(req.params.id));
+    if (!file || !mediaStore.exists(file)) return res.status(404).json({ success: false, error: 'Profil sesi yok.' });
+    res.setHeader('Content-Type', 'audio/wav');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    mediaStore.createReadStream(file).on('error', () => res.destroy()).pipe(res);
+  } catch (error) {
+    reportServerError('custom_sound', error);
+    if (!res.headersSent) res.status(500).json({ success: false, error: 'Yüklenemedi.' });
   }
 });
 

@@ -148,6 +148,11 @@ if (!userColumns.includes('card_style')) {
   // Premium üye kartı stili (lobi üyeler panelinde görünür). Boş = klasik. Abonelik bitince okuma anında boş sayılır.
   db.exec(`ALTER TABLE users ADD COLUMN card_style TEXT NOT NULL DEFAULT ''`);
 }
+if (!userColumns.includes('profile_sound_file')) {
+  // Kendi profil sesi: diskteki dosyanın kimliği (media_files). profile_sound = 'custom' iken çalınır.
+  db.exec(`ALTER TABLE users ADD COLUMN profile_sound_file TEXT`);
+}
+db.exec(`CREATE INDEX IF NOT EXISTS idx_users_profile_sound_file ON users(profile_sound_file) WHERE profile_sound_file IS NOT NULL`);
 if (!userColumns.includes('profile_sound_on')) {
   // Atmosphere'in sesi profilimde (ziyaretçilere) çalsın mı? Sahip kapatabilir.
   db.exec(`ALTER TABLE users ADD COLUMN profile_sound_on INTEGER NOT NULL DEFAULT 1`);
@@ -2752,6 +2757,7 @@ function effectiveProfileSound(userId) {
   if (!hasFeature(userId, 'profile_sound')) return '';
   const row = db.prepare(`SELECT profile_sound, profile_sound_on FROM users WHERE id = ?`).get(userId);
   if (!row || row.profile_sound_on === 0) return '';
+  if (row.profile_sound === 'custom') return getProfileSoundFileId(userId) ? 'custom' : '';
   if (row.profile_sound && SOUND_KEYS.includes(row.profile_sound)) return row.profile_sound;
   const atmo = getAtmosphere(effectiveAtmosphere(userId));
   return atmo ? atmo.sound : '';
@@ -2762,8 +2768,93 @@ function getProfileSoundChoice(userId) {
   return row ? row.profile_sound : '';
 }
 
+// ── Kendi profil sesi ──
+// İstemci dosyayı kendi cihazında 7 saniyeye kırpar, ses düzeyini dengeler ve 16 bit mono WAV olarak gönderir. Sunucu WAV başlığını
+// kendisi okuyup biçimi ve süreyi doğrular (en çok 7,5 sn), dosyayı diske yazar. Eski ses, bağlantısı kalmayınca temizlikte silinir.
+const CUSTOM_SOUND_MAX_SECONDS = 7.5;
+const CUSTOM_SOUND_MAX_BYTES = 740 * 1024; // 1 MB JSON gövdesindeki base64'e sığan en büyük WAV
+function getProfileSoundFileId(userId) {
+  const row = db.prepare(`SELECT profile_sound_file FROM users WHERE id = ?`).get(userId);
+  return row && row.profile_sound_file && mediaStore.isId(row.profile_sound_file) ? row.profile_sound_file : null;
+}
+function profileSoundUrl(userId) {
+  const f = getProfileSoundFileId(userId);
+  return f ? `/api/users/${Number(userId)}/profile-sound?v=${f.slice(0, 10)}` : null;
+}
+// WAV doğrulama: RIFF/WAVE, PCM, 1–2 kanal, 16 bit, 8–48 kHz; süre veri boyutu / bayt hızı.
+function inspectWav(buf) {
+  if (buf.length < 44 || buf.toString('ascii', 0, 4) !== 'RIFF' || buf.toString('ascii', 8, 12) !== 'WAVE') return null;
+  let off = 12; let fmt = null; let dataLen = null;
+  while (off + 8 <= buf.length) {
+    const id = buf.toString('ascii', off, off + 4);
+    const len = buf.readUInt32LE(off + 4);
+    if (id === 'fmt ' && len >= 16 && off + 8 + 16 <= buf.length) {
+      fmt = { format: buf.readUInt16LE(off + 8), channels: buf.readUInt16LE(off + 10), rate: buf.readUInt32LE(off + 12), byteRate: buf.readUInt32LE(off + 16), bits: buf.readUInt16LE(off + 22) };
+    } else if (id === 'data') {
+      dataLen = Math.min(len, buf.length - off - 8);
+      if (buf.length - (off + 8 + len) > 64) return null; // veriden sonra gizlenmiş başka içerik olmasın
+      break;
+    }
+    off += 8 + len + (len % 2);
+  }
+  if (!fmt || dataLen == null || fmt.format !== 1 || fmt.bits !== 16 || fmt.channels < 1 || fmt.channels > 2 || fmt.rate < 8000 || fmt.rate > 48000) return null;
+  if (fmt.byteRate !== fmt.rate * fmt.channels * 2) return null;
+  return { seconds: dataLen / fmt.byteRate, ...fmt };
+}
+function setCustomProfileSound(userId, dataUrl) {
+  if (!hasFeature(userId, 'profile_sound')) return { success: false, status: 403, error: 'Kendi profil sesini eklemek Sauran Plus/Premium aboneliği (ya da hediye) gerektirir.' };
+  if (typeof dataUrl !== 'string' || !/^data:audio\/wav;base64,[A-Za-z0-9+/]+=*$/.test(dataUrl)) return { success: false, error: 'Geçersiz ses dosyası.' };
+  const buf = Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64');
+  if (buf.length > CUSTOM_SOUND_MAX_BYTES) return { success: false, error: 'Ses dosyası çok büyük.' };
+  const info = inspectWav(buf);
+  if (!info) return { success: false, error: 'Geçersiz ses dosyası.' };
+  if (info.seconds > CUSTOM_SOUND_MAX_SECONDS) return { success: false, error: 'Profil sesi en fazla 7 saniye olabilir.' };
+  if (info.seconds < 0.5) return { success: false, error: 'Profil sesi çok kısa.' };
+  const old = getProfileSoundFileId(userId);
+  const stored = storeMediaBuffer(buf, 'audio/wav');
+  if (stored.error) return { success: false, error: stored.error };
+  db.prepare(`UPDATE users SET profile_sound_file = ?, profile_sound = 'custom' WHERE id = ?`).run(stored.id, userId);
+  if (old) removeUnreferencedMediaFile(old);
+  return { success: true, profile_sound: 'custom', url: profileSoundUrl(userId), seconds: Math.round(info.seconds * 10) / 10 };
+}
+// Hiçbir mesajın ya da profilin bağlı olmadığı dosyayı hemen siler (saatlik temizliği beklemeden).
+function removeUnreferencedMediaFile(fileId) {
+  if (!fileId) return;
+  const used = db.prepare(`SELECT 1 FROM messages WHERE media_file = ? UNION ALL SELECT 1 FROM users WHERE profile_sound_file = ? LIMIT 1`).get(fileId, fileId);
+  if (used) return;
+  if (mediaStore.remove(fileId)) db.prepare(`DELETE FROM media_files WHERE id = ?`).run(fileId);
+}
+function removeCustomProfileSound(userId) {
+  const old = getProfileSoundFileId(userId);
+  db.prepare(`UPDATE users SET profile_sound_file = NULL, profile_sound = CASE WHEN profile_sound = 'custom' THEN '' ELSE profile_sound END WHERE id = ?`).run(userId);
+  if (old) removeUnreferencedMediaFile(old);
+  return { success: true, profile_sound: getProfileSoundChoice(userId) };
+}
+// Başkasının profil sesi dosyası: profil görünürse ve sahibi kendi sesini kullanıyorsa (Plus/Premium hâlâ etkin).
+// Ses kişinin kendi kaydı olabilir: engelleme (iki yönlü) ve 18 yaş altı için yalnızca arkadaş kuralı ("Hakkımda" ile aynı).
+function profileSoundVisibleTo(viewerId, targetId, avatarVisibility, minorUntil) {
+  if (viewerId === targetId) return true;
+  if (!avatarVisibleTo(viewerId, targetId, avatarVisibility)) return false;
+  if (viewerId != null && (isBlocked(targetId, viewerId) || isBlocked(viewerId, targetId))) return false;
+  if (isMinorUntil(minorUntil) && !(viewerId != null && areFriends(viewerId, targetId))) return false;
+  return true;
+}
+function getVisibleProfileSoundFile(viewerId, targetId) {
+  const u = db.prepare(`SELECT avatar_visibility, minor_until FROM users WHERE id = ?`).get(targetId);
+  if (!u) return null;
+  if (!profileSoundVisibleTo(viewerId, targetId, u.avatar_visibility, u.minor_until)) return null;
+  if (viewerId !== targetId && effectiveProfileSound(targetId) !== 'custom') return null;
+  return getProfileSoundFileId(targetId);
+}
+
 function setProfileSound(userId, key) {
   const value = String(key || '');
+  if (value === 'custom') {
+    if (!hasFeature(userId, 'profile_sound')) return { success: false, error: 'Profil sesi seçmek Sauran Plus/Premium aboneliği (ya da hediye) gerektirir.' };
+    if (!getProfileSoundFileId(userId)) return { success: false, error: 'Önce bir ses yükle.' };
+    db.prepare(`UPDATE users SET profile_sound = 'custom' WHERE id = ?`).run(userId);
+    return { success: true, profile_sound: 'custom' };
+  }
   if (value && !SOUND_KEYS.includes(value)) return { success: false, error: 'Geçersiz ses.' };
   if (value && !hasFeature(userId, 'profile_sound')) return { success: false, error: 'Profil sesi seçmek Sauran Plus/Premium aboneliği (ya da hediye) gerektirir.' };
   db.prepare(`UPDATE users SET profile_sound = ? WHERE id = ?`).run(value, userId);
@@ -4309,7 +4400,9 @@ const DISK_FULL_ERROR = 'Sunucuda yer kalmadı; dosya şu an gönderilemiyor. Bi
 function storeMediaDataUrl(dataUrl) {
   const comma = dataUrl.indexOf(',');
   const mime = dataUrl.slice(5, comma).split(';')[0].toLowerCase().slice(0, 100);
-  const buf = Buffer.from(dataUrl.slice(comma + 1), 'base64');
+  return storeMediaBuffer(Buffer.from(dataUrl.slice(comma + 1), 'base64'), mime);
+}
+function storeMediaBuffer(buf, mime) {
   // Diskin tamamen dolmasına izin verilmez: dolarsa veritabanı da yazamaz (giriş, mesaj… hepsi durur).
   const disk = mediaStore.diskStats();
   if (disk && disk.free - buf.length < MEDIA_UPLOAD_RESERVE) return { error: DISK_FULL_ERROR };
@@ -4335,7 +4428,8 @@ function mediaFileAsDataUrl(fileId, maxChars = Infinity) {
 
 // Hiçbir mesajın bağlı olmadığı dosyaları siler (mesaj silindi, süresi doldu, hesap silindi). Tur başına sınırlı.
 function purgeOrphanMediaFiles(limit = 500) {
-  const rows = db.prepare(`SELECT id FROM media_files WHERE NOT EXISTS (SELECT 1 FROM messages WHERE messages.media_file = media_files.id) LIMIT ?`).all(limit);
+  const rows = db.prepare(`SELECT id FROM media_files WHERE NOT EXISTS (SELECT 1 FROM messages WHERE messages.media_file = media_files.id)
+    AND NOT EXISTS (SELECT 1 FROM users WHERE users.profile_sound_file = media_files.id) LIMIT ?`).all(limit);
   let removed = 0;
   for (const r of rows) {
     if (mediaStore.remove(r.id)) { db.prepare(`DELETE FROM media_files WHERE id = ?`).run(r.id); removed += 1; }
@@ -6910,6 +7004,7 @@ function getUserPublicProfile(viewerId, targetId) {
     plus_active: hasActivePlus(targetId),
     atmosphere: visible && user.profile_sound_on !== 0 ? effectiveAtmosphere(targetId) : 'none',
     profile_sound: visible ? effectiveProfileSound(targetId) : '',
+    profile_sound_url: visible && effectiveProfileSound(targetId) === 'custom' && profileSoundVisibleTo(viewerId, targetId, user.avatar_visibility, user.minor_until) ? profileSoundUrl(targetId) : null,
     friendship_status: isSelf ? 'self' : friendship,
     blocked_by_me: blockedByMe
   };
@@ -9611,6 +9706,10 @@ module.exports = {
   getMessageMediaMeta,
   getMessageMediaData,
   getMessageMediaLocation,
+  setCustomProfileSound,
+  removeCustomProfileSound,
+  getVisibleProfileSoundFile,
+  profileSoundUrl,
   purgeOrphanMediaFiles,
   getStorageStats,
   migrateOneInlineMedia,
