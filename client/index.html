@@ -9,6 +9,61 @@
     <!-- Önceden oturum açılmış cihazda sayfa yenilenince giriş ekranı bir an görünmesin: oturum kontrolü bitene kadar gizlenir (yalnızca yerel ipucu; gerçek kontrol sunucuda). -->
     <script>try { if (localStorage.getItem('sauran_session_hint') === '1') { document.documentElement.classList.add('auth-pending'); setTimeout(function () { document.documentElement.classList.remove('auth-pending'); }, 12000); } } catch (e) { /* depolama yok */ }</script>
 
+    <!-- Kritik dosya bekçisi: sunucu güncellenirken (deploy) ya da ağ kesildiğinde bir stil/betik dosyası yüklenemezse yarım
+         biçimlenmiş arayüz gösterilmez. Onun yerine "Bağlanıyor…" ekranı çıkar ve sayfa artan aralıklarla kendiliğinden yeniden
+         yüklenir (en çok 6 deneme; sonra "Yeniden dene"). Başka hiçbir dosyaya bağlı değildir. -->
+    <script>
+    (function () {
+        var KEY = 'sauran_asset_retry';
+        var failed = [];
+        window.addEventListener('error', function (e) {
+            var t = e.target;
+            if (!t || !t.tagName) return;
+            if ((t.tagName === 'LINK' && /stylesheet/i.test(t.rel)) || (t.tagName === 'SCRIPT' && t.src)) failed.push(t.href || t.src);
+        }, true);
+        function store(get, val) { try { return get ? sessionStorage.getItem(KEY) : (val === null ? sessionStorage.removeItem(KEY) : sessionStorage.setItem(KEY, val)); } catch (_) { return null; } }
+        function en() { try { return localStorage.getItem('sauran_lang') === 'en'; } catch (_) { return false; } }
+        function overlay(tries, gaveUp) {
+            var old = document.getElementById('asset-guard');
+            if (old) old.remove();
+            var s = document.createElement('style');
+            s.textContent = '@keyframes agSpin{to{transform:rotate(360deg)}}';
+            document.head.appendChild(s);
+            var d = document.createElement('div');
+            d.id = 'asset-guard';
+            d.setAttribute('role', 'alert');
+            d.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;background:#0a0d11;color:#e6e8ee;font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;text-align:center;';
+            var title = gaveUp ? (en() ? 'Could not connect to Sauran' : 'Sauran\'a bağlanılamadı') : (en() ? 'Connecting to Sauran…' : 'Sauran\'a bağlanılıyor…');
+            var sub = gaveUp ? (en() ? 'Check your internet connection and try again.' : 'İnternet bağlantını kontrol edip tekrar dene.')
+                : (en() ? 'The server may be updating for a moment. Retrying automatically.' : 'Sunucu kısa bir süre için güncelleniyor olabilir. Otomatik olarak yeniden deneniyor.');
+            d.innerHTML = '<div style="width:44px;height:44px;border-radius:50%;background:#fff;color:#0a0d11;display:grid;place-items:center;font-weight:800;font-size:22px;">S</div>'
+                + '<div style="font-size:19px;font-weight:700;"></div><div style="max-width:360px;color:#9aa3b2;font-size:13.5px;"></div>'
+                + (gaveUp ? '<button type="button" style="margin-top:6px;padding:10px 22px;border:0;border-radius:12px;background:#5cc8ff;color:#06121c;font:inherit;font-weight:700;cursor:pointer;"></button>'
+                    : '<div style="width:26px;height:26px;border-radius:50%;border:3px solid rgba(255,255,255,.15);border-top-color:#5cc8ff;animation:agSpin .9s linear infinite;"></div>');
+            d.children[1].textContent = title;
+            d.children[2].textContent = sub;
+            if (gaveUp) {
+                d.children[3].textContent = en() ? 'Try again' : 'Yeniden dene';
+                d.children[3].onclick = function () { store(false, null); location.reload(); };
+            }
+            (document.body || document.documentElement).appendChild(d);
+        }
+        window.addEventListener('load', function () {
+            var bad = failed.slice();
+            var links = document.querySelectorAll('link[rel="stylesheet"]');
+            for (var i = 0; i < links.length; i++) {
+                try { if (!links[i].sheet || !links[i].sheet.cssRules.length) bad.push(links[i].href); } catch (_) { /* farklı köken: yoksay */ }
+            }
+            if (!bad.length) { store(false, null); return; }
+            var n = Number(store(true)) || 0;
+            if (n >= 6) { overlay(n, true); return; }
+            overlay(n, false);
+            store(false, String(n + 1));
+            setTimeout(function () { location.reload(); }, Math.min(2000 * Math.pow(1.6, n), 15000));
+        });
+    })();
+    </script>
+
     <!-- PWA / iOS "Ana Ekrana Ekle" desteği (AŞAMA 2) -->
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
