@@ -1495,6 +1495,16 @@
             </div>
             <div class="market-modal-body">
                 <p class="mk-sub">Akıcılığı seç. Yüksek FPS daha fazla internet ve işlemci kullanır; bağlantı zayıfsa kalite kendiliğinden düşebilir.</p>
+                <div class="share-notify" id="share-notify-box">
+                    <label class="share-notify-row">
+                        <span><b data-i18n="share-notify-label">Arkadaşlarıma haber ver</b><small data-i18n="share-notify-desc">Yayın başlayınca arkadaşlarına bildirim gider. Seçimin hatırlanır.</small></span>
+                        <span class="notif-toggle"><input type="checkbox" id="share-notify-toggle"><span class="notif-toggle-track"><span class="notif-toggle-thumb"></span></span></span>
+                    </label>
+                    <div class="share-notify-scope" role="radiogroup" aria-label="Kime haber verilsin">
+                        <label><input type="radio" name="share-notify-scope" value="hub"><span data-i18n="share-notify-hub">Bu lobideki arkadaşlarım</span></label>
+                        <label><input type="radio" name="share-notify-scope" value="all"><span data-i18n="share-notify-all">Tüm arkadaşlarım (lobi adı gizli)</span></label>
+                    </div>
+                </div>
                 <button type="button" class="share-fps-opt" data-fps="60">
                     <b>Akıcı — 60 FPS</b> <span class="plus-badge plus-badge-sm">✦ PLUS</span> <span class="share-fps-tag">deneysel</span>
                     <small>Oyun ve hızlı hareket için. İzleyen tarafta ölçülen gerçek FPS görünür.</small>
@@ -2191,7 +2201,7 @@
                         <div class="notif-pref-group">
                             <span class="notif-pref-group-title" data-i18n="notif-group-friends">Arkadaşlar</span>
                             <label class="notif-pref-row"><input type="checkbox" data-pref="notify_friend_request"><span data-i18n="notif-pref-friend-request">Arkadaşlık istekleri</span></label>
-                            <label class="notif-pref-row"><input type="checkbox" data-pref="notify_friend_accepted"><span data-i18n="notif-pref-friend-accepted">Arkadaşlık isteği kabul edildi</span></label>
+                            <label class="notif-pref-row"><input type="checkbox" data-pref="notify_friend_stream"><span><span data-i18n="notif-pref-friend-stream">Arkadaşın yayın başlattığında</span><span class="settings-voice-hint" data-i18n="notif-pref-friend-stream-hint">Aynı Lobide olduğun bir arkadaşın ekranını paylaşmaya başlayınca haber verir.</span></span></label>
                         </div>
 
                         <div class="notif-pref-group">
@@ -2242,6 +2252,16 @@
                         <button id="settings-ptt-change" type="button" class="settings-unblock-btn" data-i18n="ptt-change">Değiştir</button>
                     </div>
                     <p id="settings-ptt-key-hint" class="settings-voice-hint" style="display:none;" data-i18n="ptt-key-hint">Harf ya da rakam tuşu seçersen, sohbete yazı yazarken bas-konuş çalışmaz. F tuşları, Ctrl, Alt, CapsLock ya da farenin yan tuşları her zaman çalışır. Telefonda ekrandaki düğmeyi kullan.</p>
+
+                    <div class="hub-settings-divider"></div>
+                    <span class="profile-field-label" data-i18n="duck-section">Yayın</span>
+                    <label class="notif-pref-row">
+                        <input type="checkbox" id="settings-stream-duck">
+                        <span>
+                            <span data-i18n="duck-label">Yayın kısma</span>
+                            <span class="settings-voice-hint" data-i18n="duck-desc">İnsanlar konuşurken yayın sesini otomatik olarak azalt.</span>
+                        </span>
+                    </label>
 
                     <div class="hub-settings-divider"></div>
                     <span class="profile-field-label">Atmosphere sesleri</span>

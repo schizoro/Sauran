@@ -3562,3 +3562,26 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
   .hub-voice-room-member.plus-voice.is-speaking .hub-voice-member-avatar::before,
   .hub-member-row.plus-voice.is-speaking .hub-member-avatar-wrap::before { animation: none; }
 }
+
+/* ── Yayın başlatırken "Arkadaşlarıma haber ver" + oda listesinde CANLI rozeti ── */
+.share-notify { margin-top: 12px; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.035); }
+.share-notify-row { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.share-notify-row > span:first-child { flex: 1; min-width: 0; }
+.share-notify-row b { display: block; color: #e2e8f4; font-size: 14px; }
+.share-notify-row small { display: block; margin-top: 2px; color: #8e9bb0; font-size: 12px; }
+.share-notify-scope { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 13px; color: #c9d3e3; }
+.share-notify-scope label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.share-notify-scope input { accent-color: var(--accent); margin: 0; }
+.share-notify-scope.off { opacity: .45; }
+.live-badge { flex: none; margin-left: 4px; padding: 1px 6px; border-radius: 4px; background: #ed4245; color: #fff; font-size: 10px; font-weight: 800; letter-spacing: .04em; line-height: 16px; }
+
+/* ── Bildirim kartları: bilgi kartında "Tamam" yok; dokununca okundu, küçük × ile sil ── */
+#notifications-modal .notification-card.nc-info { cursor: pointer; padding-bottom: 12px; }
+#notifications-modal .notification-card .nc-del {
+  position: absolute; right: 8px; bottom: 8px; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%;
+  display: grid; place-items: center; font-size: 17px; line-height: 1; cursor: pointer;
+  background: rgba(255,255,255,.05); color: var(--text-tertiary); opacity: .75; transition: background .15s, color .15s, opacity .15s;
+}
+#notifications-modal .notification-card .nc-del:hover, #notifications-modal .notification-card .nc-del:focus-visible { background: rgba(255,90,110,.16); color: #ff8d9b; opacity: 1; }
+@media (hover: hover) and (pointer: fine) { #notifications-modal .notification-card .nc-del { opacity: 0; } #notifications-modal .notification-card:hover .nc-del, #notifications-modal .notification-card:focus-within .nc-del { opacity: .9; } }
+#notifications-modal .notification-card.nc-jump .nc-body::after { content: "Mesaja git ›"; display: block; margin-top: 6px; font-size: 11.5px; font-weight: 700; color: #5cc8ff; }

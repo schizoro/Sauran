@@ -4345,6 +4345,14 @@ const I18N = {
     'notif-pref-hub-message': { tr: 'Yeni Lobi mesaj bildirimleri', en: 'New lobby message notifications' },
     'notif-pref-friend-request': { tr: 'Arkadaşlık istekleri', en: 'Friend requests' },
     'notif-pref-friend-accepted': { tr: 'Arkadaşlık isteği kabul edildi', en: 'Friend request accepted' },
+    'notif-pref-friend-stream': { tr: 'Arkadaşın yayın başlattığında', en: 'When a friend goes live' },
+    'notif-pref-friend-stream-hint': { tr: 'Aynı Lobide olduğun bir arkadaşın ekranını paylaşmaya başlayınca haber verir.', en: 'Notifies you when a friend in one of your lobbies starts sharing their screen.' },
+    'stream-started-toast': { tr: 'yayın başlattı', en: 'went live' },
+    'share-notify-label': { tr: 'Arkadaşlarıma haber ver', en: 'Notify my friends' },
+    'share-notify-desc': { tr: 'Yayın başlayınca arkadaşlarına bildirim gider. Seçimin hatırlanır.', en: 'Your friends get a notification when you go live. Your choice is remembered.' },
+    'share-notify-hub': { tr: 'Bu lobideki arkadaşlarım', en: 'My friends in this lobby' },
+    'share-notify-all': { tr: 'Tüm arkadaşlarım (lobi adı gizli)', en: 'All my friends (lobby name hidden)' },
+    'live-badge': { tr: 'CANLI', en: 'LIVE' },
     'notif-pref-incoming-call': { tr: 'Gelen aramalar', en: 'Incoming calls' },
     'notif-pref-missed-call': { tr: 'Cevapsız aramalar', en: 'Missed calls' },
     'notif-pref-hub-event': { tr: 'Lobi bildirimleri (davet, vb.)', en: 'Lobby notifications (invites, etc.)' },
@@ -4775,6 +4783,10 @@ const I18N = {
     'ptt-label': { tr: 'Bas-konuş', en: 'Push to talk' },
     'ptt-desc': { tr: 'Mikrofonun yalnızca bir tuşu (ya da ekrandaki 🎙 düğmesini) basılı tuttuğun sürece açılır. Sesli oda ve özel aramada geçerlidir.', en: 'Your mic is live only while you hold a key (or the 🎙 button on screen). Applies to voice rooms and private calls.' },
     'ptt-key': { tr: 'Tuş:', en: 'Key:' },
+    'duck-section': { tr: 'Yayın', en: 'Streams' },
+    'duck-label': { tr: 'Yayın kısma', en: 'Stream attenuation' },
+    'duck-ios': { tr: 'iPhone ve iPad, uygulamaların yayın sesini kısmasına izin vermiyor; bu ayar orada etkisizdir.', en: 'iPhone and iPad do not let apps lower stream audio; this setting has no effect there.' },
+    'duck-desc': { tr: 'İnsanlar konuşurken yayın sesini otomatik olarak azalt.', en: 'Automatically lower stream audio while people are talking.' },
     'ptt-change': { tr: 'Değiştir', en: 'Change' },
     'ptt-press-key': { tr: 'Bir tuşa bas…', en: 'Press a key…' },
     'ptt-key-hint': { tr: 'Harf ya da rakam tuşu seçersen, sohbete yazı yazarken bas-konuş çalışmaz. F tuşları, Ctrl, Alt, CapsLock ya da farenin yan tuşları her zaman çalışır. Telefonda ekrandaki düğmeyi kullan.', en: 'If you pick a letter or digit, push to talk won\'t fire while you\'re typing in chat. F-keys, Ctrl, Alt, CapsLock or side mouse buttons always work. On phones, use the on-screen button.' },
@@ -6096,7 +6108,8 @@ function connectToChat() {
                 voice_unmuted: t('voice-unmuted-toast'),
                 hub_mention: `@ ${payload?.data?.from_username || ''} ${t('mention-toast')}`,
                 voice_kicked: `👢 ${voiceMuteByLabel(payload?.data?.by_tier)} ${t('voice-kicked-text')}`,
-                voice_unblocked: `🚪 ${payload?.data?.room_name || ''} ${t('voice-unblocked-toast')}`
+                voice_unblocked: `🚪 ${payload?.data?.room_name || ''} ${t('voice-unblocked-toast')}`,
+                stream_started: `📺 ${payload?.data?.from_username || ''} ${t('stream-started-toast')}${payload?.data?.hub_name ? ` · ${payload.data.hub_name} › ${payload.data.room_name || ''}` : ''}`
             };
             const label = labelByType[payload?.type] || t('notif-hub-invite');
             const channels = payload?.channels || {};
@@ -7928,12 +7941,8 @@ function renderNotifications(notifications) {
     `;
 
     // Bilgi amaçlı (yanıt gerektirmeyen) kartlar: okundu yapılınca listeden KALKMAZ, yalnızca kullanıcı silince gider.
-    const infoActions = (n, okLabel) => `
-        <div class="notification-actions">
-            ${n.status === 'pending' ? `<button class="notification-accept" data-dismiss type="button">${escapeHtml(okLabel)}</button>` : ''}
-            <button class="notification-delete" data-delete type="button">${escapeHtml(nui.del)}</button>
-        </div>
-    `;
+    // eslint-disable-next-line no-unused-vars
+    const infoActions = (n, okLabel) => `<button class="nc-del" data-delete type="button" aria-label="${escapeAttr(nui.del)}" title="${escapeAttr(nui.del)}">×</button>`;
     const seenClass = (n) => (n.status === 'seen' ? ' notification-seen' : '');
 
     notificationsList.innerHTML = toolbar + notifications.map((n) => {
@@ -7991,7 +8000,7 @@ function renderNotifications(notifications) {
 
             const d = n.data || {};
             return `
-                <div class="notification-card${seenClass(n)}" data-notif-id="${n.id}" data-notif-type="hub_mention">
+                <div class="notification-card nc-info nc-jump${seenClass(n)}" data-notif-id="${n.id}" data-notif-type="hub_mention" data-hub="${Number(d.hub_id) || ''}" data-channel="${Number(d.channel_id) || ''}" data-message="${Number(d.message_id) || ''}" role="button" tabindex="0">
                     <div class="notification-text">
                         @ <strong>${escapeHtml(d.from_username || '')}</strong> ${escapeHtml(t('mention-toast'))} · <strong>${escapeHtml(d.hub_name || '')}</strong>
                         ${d.preview ? `<div class="notification-preview">“${escapeHtml(d.preview)}”</div>` : ''}
@@ -8163,6 +8172,31 @@ function renderNotifications(notifications) {
             btn.remove();
             refreshNotificationsBadge();
         });
+    });
+
+    // Bilgi kartı (yanıt gerektirmeyen): karta dokunmak okundu yapar; @bahsetme kartı ayrıca o mesaja götürür.
+    notificationsList.querySelectorAll('.notification-card').forEach((card) => {
+        if (card.querySelector('.notification-accept, .notification-decline, [data-team-link]')) return; // yanıt isteyen kartlar hariç
+        card.classList.add('nc-info');
+        const open = async (event) => {
+            if (event.target.closest('button, a, input')) return;
+            card.classList.remove('nc-new');
+            if (!card.classList.contains('notification-seen')) {
+                card.classList.add('notification-seen');
+                fetch(`/api/notifications/${card.dataset.notifId}/read`, { method: 'POST', credentials: 'include' })
+                    .then(() => refreshNotificationsBadge()).catch(() => {});
+            }
+            const hubId = Number(card.dataset.hub), channelId = Number(card.dataset.channel) || null, messageId = Number(card.dataset.message);
+            if (card.dataset.notifType === 'hub_mention' && hubId) {
+                notificationsModal.style.display = 'none';
+                try {
+                    await openHub(hubId, channelId ? { channelId } : {});
+                    if (messageId) jumpToMessage('hub', messageId);
+                } catch (_) {}
+            }
+        };
+        card.addEventListener('click', open);
+        card.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(event); } });
     });
 
     notificationsList.querySelectorAll('.notification-card [data-delete]').forEach((btn) => {
@@ -12555,6 +12589,7 @@ function refreshVoiceSpeaking() {
 
     voiceSpeakingIds = next;
     updateVoiceSpeakingUi();
+    updateStreamDuck();
 }
 
 function updateVoiceSpeakingUi() {
@@ -13111,6 +13146,8 @@ function saveUserVolume(userId, volume, muted) {
 }
 function applyUserVolumeToEl(el) {
     if (!el) return;
+    // İzlenen yayının sesi kişi ayarına değil yayın kısmaya bağlıdır (aksi hâlde sağırlaştır/aç kısılmış sesi tam açar).
+    if (el === watchedScreenAudioEl) { applyStreamDuckVolume(); el.muted = voiceDeafened; return; }
     const uid = el.dataset.userId;
     const pref = uid ? userVolumeOf(uid) : { volume: 100, muted: false };
     el.volume = pref.volume / 100;
@@ -13233,7 +13270,10 @@ function emitVoiceRoomJoin() {
             { room_id: currentVoiceRoomId, hub_id: currentVoiceRoomHubId, muted: voiceLocalMuted, deafened: voiceDeafened },
             (response) => {
                 clearTimeout(timer);
-                if (response?.success) syncVoiceForceMuteFromServer(response.voice_mute || null);
+                if (response?.success) {
+                    syncVoiceForceMuteFromServer(response.voice_mute || null);
+                    try { if (callFrame?.participants?.()?.local?.screen) socket.emit('voice_room_share', { sharing: true, ...shareNotifyPrefs(), rejoin: true }); } catch (_) {}
+                }
                 resolve(response || { success: false, error: 'Odaya katılınamadı.' });
             }
         );
@@ -13311,6 +13351,7 @@ function voiceRoomMembersHtml(room) {
             <div class="hub-voice-room-member${p.user_id === currentUser?.id ? ' is-self' : ''}${isVoicePlus(p.user_id) ? ' plus-voice' : ''}${voiceSpeakingIds.has(p.user_id) ? ' is-speaking' : ''}" data-speak-user="${Number(p.user_id)}">
                 <span class="hub-voice-member-avatar${voiceFrameParts(p.user_id).cls}" style="--user-color:${resolveUserColor(p.user_id, p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}${voiceFrameParts(p.user_id).overlay}</span>
                 <span class="hub-voice-member-name">${usernameCardHtml(p.username, isVoicePlus(p.user_id), nameFxOf(p.user_id))}${voiceSelfTagHtml(p.user_id)}</span>
+                ${p.sharing ? `<span class="live-badge">${escapeHtml(t('live-badge'))}</span>` : ''}
                 ${voiceStatusIconsHtml(p, true)}
                 ${canModerateVoiceTarget(p.user_id) ? `<button class="voice-mod-mute-btn" type="button" data-mod-mute-user="${p.user_id}" data-mod-mute-room="${room.id}" data-mod-mute-name="${escapeAttr(p.username)}" data-mod-mute-active="${p.force_muted ? '1' : '0'}" title="${escapeAttr(p.force_muted ? t('hub-mutes-unmute') : t('voice-mute-action'))}">${p.force_muted ? '🔈' : '🔇'}</button><button class="voice-mod-mute-btn" type="button" data-mod-kick-user="${p.user_id}" data-mod-kick-room="${room.id}" title="${escapeAttr(t('voice-kick-action'))}">👢</button>` : ''}
             </div>
@@ -16909,6 +16950,60 @@ function screenshareOwnerIsForceMuted(sessionId) {
     return Boolean(userId && currentVoiceParticipants.find((p) => p.user_id === userId)?.force_muted);
 }
 
+// ─── Yayın kısma: izlenen yayının sesi, odada biri konuşurken yumuşakça %30'a iner ───
+// Konuşma bitince 700 ms bekler, sonra yavaşça geri açılır (kelime aralarında ses pompalanmasın).
+var STREAM_DUCK_KEY = 'sauran_stream_duck';
+var STREAM_DUCK_LEVEL = 0.3;
+var streamDuckGain = 1, streamDuckTarget = 1, streamDuckTimer = null, streamDuckReleaseTimer = null;
+function streamDuckEnabled() {
+    try { return localStorage.getItem(STREAM_DUCK_KEY) !== 'off'; } catch (_) { return true; } // varsayılan açık
+}
+function applyStreamDuckVolume() {
+    if (watchedScreenAudioEl) watchedScreenAudioEl.volume = Math.max(0, Math.min(1, streamDuckGain));
+}
+function rampStreamDuck() {
+    if (streamDuckTimer) return;
+    streamDuckTimer = setInterval(() => {
+        const down = streamDuckTarget < streamDuckGain;
+        const step = down ? 0.12 : 0.05;                 // iniş ~150 ms, çıkış ~400 ms
+        streamDuckGain = down ? Math.max(streamDuckTarget, streamDuckGain - step) : Math.min(streamDuckTarget, streamDuckGain + step);
+        applyStreamDuckVolume();
+        if (streamDuckGain === streamDuckTarget) { clearInterval(streamDuckTimer); streamDuckTimer = null; }
+    }, 25);
+}
+function updateStreamDuck() {
+    // Yalnızca BAŞKALARI konuşunca kısılır (kendi sesimiz yayını kısmaz).
+    const othersTalking = [...voiceSpeakingIds].some((id) => id !== currentUser?.id);
+    const talking = streamDuckEnabled() && Boolean(watchedScreenAudioEl) && othersTalking;
+    if (talking) {
+        clearTimeout(streamDuckReleaseTimer); streamDuckReleaseTimer = null;
+        if (streamDuckTarget !== STREAM_DUCK_LEVEL) { streamDuckTarget = STREAM_DUCK_LEVEL; rampStreamDuck(); }
+    } else if (streamDuckTarget !== 1 && !streamDuckReleaseTimer) {
+        streamDuckReleaseTimer = setTimeout(() => { streamDuckReleaseTimer = null; streamDuckTarget = 1; rampStreamDuck(); }, 700);
+    }
+}
+function resetStreamDuck() {
+    clearTimeout(streamDuckReleaseTimer); streamDuckReleaseTimer = null;
+    clearInterval(streamDuckTimer); streamDuckTimer = null;
+    streamDuckGain = streamDuckTarget = 1;
+    applyStreamDuckVolume();
+}
+(function initStreamDuckSetting() {
+    const box = document.getElementById('settings-stream-duck');
+    if (!box) return;
+    box.checked = streamDuckEnabled();
+    const ua = navigator.userAgent || '';
+    if (/iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+        const hint = box.closest('label')?.querySelector('.settings-voice-hint');
+        if (hint) hint.textContent = t('duck-ios');
+    }
+    box.addEventListener('change', () => {
+        try { localStorage.setItem(STREAM_DUCK_KEY, box.checked ? 'on' : 'off'); } catch (_) {}
+        if (!box.checked) { clearTimeout(streamDuckReleaseTimer); streamDuckReleaseTimer = null; streamDuckTarget = 1; rampStreamDuck(); }
+        else updateStreamDuck();
+    });
+})();
+
 function attachWatchedScreenAudio() {
     const sessionId = watchedScreenshareSessionId;
     const track = sessionId && remoteScreenAudioTracks.get(sessionId);
@@ -16922,6 +17017,7 @@ function attachWatchedScreenAudio() {
     }
     watchedScreenAudioEl.srcObject = new MediaStream([track]);
     watchedScreenAudioEl.muted = voiceDeafened;
+    applyStreamDuckVolume();
     const el = watchedScreenAudioEl;
     applySinkToAudioEl(el).finally(() => el.play().catch(() => {}));
 }
@@ -16934,7 +17030,33 @@ function detachWatchedScreenAudio() {
     }
 }
 
+// ─── Yayın başlatırken "Arkadaşlarıma haber ver" (hatırlanır) ───
+var SHARE_NOTIFY_KEY = 'sauran_share_notify';
+function shareNotifyPrefs() {
+    let v = null;
+    try { v = JSON.parse(localStorage.getItem(SHARE_NOTIFY_KEY) || 'null'); } catch (_) {}
+    return { notify: v?.notify !== false, scope: v?.scope === 'all' ? 'all' : 'hub' }; // varsayılan: açık, bu lobideki arkadaşlar
+}
+function saveShareNotifyPrefs(patch) {
+    try { localStorage.setItem(SHARE_NOTIFY_KEY, JSON.stringify({ ...shareNotifyPrefs(), ...patch })); } catch (_) {}
+}
+function renderShareNotifyBox() {
+    const p = shareNotifyPrefs();
+    const tog = document.getElementById('share-notify-toggle');
+    if (!tog) return;
+    tog.checked = p.notify;
+    document.querySelectorAll('input[name="share-notify-scope"]').forEach((r) => { r.checked = r.value === p.scope; r.disabled = !p.notify; });
+    document.querySelector('.share-notify-scope')?.classList.toggle('off', !p.notify);
+}
+document.getElementById('share-notify-toggle')?.addEventListener('change', (e) => { saveShareNotifyPrefs({ notify: e.target.checked }); renderShareNotifyBox(); });
+document.querySelectorAll('input[name="share-notify-scope"]').forEach((r) => r.addEventListener('change', () => { if (r.checked) saveShareNotifyPrefs({ scope: r.value }); }));
+renderShareNotifyBox();
+
 function wireCallAudioUnlock() {
+
+    // Kendi yayınımız (ekran paylaşımı) başladı/bitti: sunucu aynı Lobideki arkadaşlara bildirim gönderebilsin.
+    callFrame.on('local-screen-share-started', () => { if (callMode === 'hub-room' && socket?.connected) socket.emit('voice_room_share', { sharing: true, ...shareNotifyPrefs() }); });
+    callFrame.on('local-screen-share-stopped', () => { if (callMode === 'hub-room' && socket?.connected) socket.emit('voice_room_share', { sharing: false }); });
 
     callFrame.on('track-started', (event) => {
 
@@ -17975,6 +18097,7 @@ function leaveCall() {
     voiceLocalSpeaking = false;
     voiceRemoteSpeaking = new Set();
     voiceSpeakingIds = new Set();
+    resetStreamDuck();
     callMuteBtn.style.display = 'none';
     hubInRoomCount.textContent = '';
     hubInRoomPill.style.display = 'none';

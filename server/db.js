@@ -833,7 +833,8 @@ db.exec(`
 
 // Sesli oda katılma/ayrılma bildirimi ve sesi (13A) — mevcut kurulumlara sonradan eklenir.
 const notifPrefColumns = db.prepare(`PRAGMA table_info(notification_preferences)`).all().map(col => col.name);
-for (const column of ['notify_voice_presence', 'voice_join_sound']) {
+// notify_friend_stream: arkadaş yayın (ekran paylaşımı) başlatınca bildirim — varsayılan açık.
+for (const column of ['notify_voice_presence', 'voice_join_sound', 'notify_friend_stream']) {
   if (!notifPrefColumns.includes(column)) {
     db.exec(`ALTER TABLE notification_preferences ADD COLUMN ${column} INTEGER NOT NULL DEFAULT 1`);
   }
@@ -845,7 +846,7 @@ const NOTIFICATION_PREF_COLUMNS = [
   'notify_friend_request', 'notify_friend_accepted',
   'notify_incoming_call', 'notify_missed_call',
   'notify_hub_event', 'notify_system',
-  'notify_voice_presence', 'voice_join_sound'
+  'notify_voice_presence', 'voice_join_sound', 'notify_friend_stream'
 ];
 
 function getNotificationPreferences(userId) {
@@ -6700,6 +6701,25 @@ function areFriends(a, b) {
   return Boolean(row && row.status === 'accepted');
 }
 
+// Yayın bildirimi alıcıları: kişinin, aynı Lobiye de üye olan arkadaşları (yayını gerçekten izleyebilecek olanlar).
+// İki yönde de engel varsa listeye girmez. Lobi dışındaki arkadaşa hangi lobide olunduğu sızdırılmaz.
+function listFriendIds(userId) {
+  return db.prepare(`
+    SELECT CASE WHEN user_low = ? THEN user_high ELSE user_low END AS id
+    FROM friendships WHERE status = 'accepted' AND (user_low = ? OR user_high = ?)
+  `).all(userId, userId, userId).map((r) => r.id);
+}
+
+function listFriendIdsInHub(userId, hubId) {
+  return db.prepare(`
+    SELECT CASE WHEN f.user_low = ? THEN f.user_high ELSE f.user_low END AS id
+    FROM friendships f
+    WHERE f.status = 'accepted' AND (f.user_low = ? OR f.user_high = ?)
+      AND EXISTS (SELECT 1 FROM hub_members m WHERE m.hub_id = ? AND m.user_id = (CASE WHEN f.user_low = ? THEN f.user_high ELSE f.user_low END))
+  `).all(userId, userId, userId, hubId, userId).map((r) => r.id)
+    .filter((id) => !isBlocked(id, userId) && !isBlocked(userId, id));
+}
+
 function getFriendshipStatus(a, b) {
   const [low, high] = pairKey(a, b);
   const row = db.prepare(`SELECT status, requested_by FROM friendships WHERE user_low = ? AND user_high = ?`).get(low, high);
@@ -9756,6 +9776,8 @@ module.exports = {
   areFriends,
   getFriendshipStatus,
   listFriends,
+  listFriendIdsInHub,
+  listFriendIds,
   listDmConversations,
   listIncomingRequests,
   getUserPublicProfile,

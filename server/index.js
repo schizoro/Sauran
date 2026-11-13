@@ -97,6 +97,9 @@ const {
   removeFriend,
   areFriends,
   listFriends,
+  listFriendIdsInHub,
+  listFriendIds,
+  isBlocked,
   listDmConversations,
   firstUnreadInfo,
   listIncomingRequests,
@@ -4610,9 +4613,11 @@ function notifyHubMentions(hubId, message) {
 // göndermek için BUNU kullanmalı — kendi socket.emit + tercih kontrolünü
 // yazmamalı. AŞAMA 3/4'te buraya tarayıcı bildirimi ve ses dağıtımı eklenecek.
 
+const STREAM_NOTIFY_COOLDOWN_MS = 10 * 60 * 1000;
+const streamNotifyAt = new Map(); // userId -> son yayın bildirimi zamanı (bellek içi)
+
 const NOTIFICATION_CATEGORY_MAP = {
   friend_request: 'notify_friend_request',
-  friend_request_accepted: 'notify_friend_accepted',
   hub_invite: 'notify_hub_event',
   dm_message: 'notify_dm_message',
   hub_message: 'notify_hub_message',
@@ -4620,7 +4625,8 @@ const NOTIFICATION_CATEGORY_MAP = {
   missed_call: 'notify_missed_call',
   system: 'notify_system',
   platform_role_notice: 'notify_system',
-  platform_role_revoked: 'notify_system'
+  platform_role_revoked: 'notify_system',
+  stream_started: 'notify_friend_stream'
 };
 
 // NOT: Bildirimin veritabanına yazılması bu fonksiyonun işi DEĞİL — o iş
@@ -4667,7 +4673,8 @@ function pushNotification(userId, type, data) {
     voice_muted: `${data?.room_name || 'Bir'} sesli odasında ${data?.by_tier === 'owner' ? 'Lobi kurucusu' : 'bir moderatör'} tarafından susturuldun.`,
     voice_unmuted: `${data?.room_name || 'Bir'} sesli odasındaki susturman kaldırıldı.`,
     voice_kicked: `${data?.by_tier === 'owner' ? 'Lobi kurucusu' : 'Bir moderatör'} seni ${data?.room_name || 'bir'} sesli odasından attı.`,
-    voice_unblocked: `${data?.room_name || 'Bir'} sesli odasına artık girebilirsin.`
+    voice_unblocked: `${data?.room_name || 'Bir'} sesli odasına artık girebilirsin.`,
+    stream_started: data?.hub_name ? `${data?.from_username || 'Bir arkadaşın'} yayın başlattı: ${data.hub_name} › ${data?.room_name || 'sesli oda'}` : `${data?.from_username || 'Bir arkadaşın'} yayın başlattı.`
   }[type];
 
   if (webPushLabel) {
@@ -4779,7 +4786,8 @@ function serializeVoiceParticipants(roomId) {
     username: p.username,
     muted: p.muted || Boolean(p.forceMuted),
     deafened: p.deafened,
-    force_muted: Boolean(p.forceMuted)
+    force_muted: Boolean(p.forceMuted),
+    sharing: Boolean(p.sharing)
   }));
 }
 
@@ -6137,6 +6145,49 @@ io.on('connection', (socket) => {
 
   socket.on('app_visibility', (data) => {
     socket.data.visible = Boolean(data?.visible);
+  });
+
+  // Yayın (ekran paylaşımı) başladı/bitti. Başlayınca aynı Lobideki arkadaşlara bildirim gider (tercihe bağlı, odada olmayanlara).
+  // Kayıt tutulmaz (Bildirimler paneline düşmez); kişi başına 10 dakikada en fazla bir bildirim (aç-kapa ile spam olmasın).
+  // "Görünmez" durumdaki kişi için bildirim gönderilmez.
+  socket.on('voice_room_share', (data) => {
+    if (!socket.userId) return;
+    const roomId = socket.data.voiceRoomId;
+    const entry = voiceRoomParticipants.get(roomId)?.get(socket.userId);
+    if (!entry || entry.socketId !== socket.id) return;
+    const sharing = Boolean(data?.sharing);
+    if (Boolean(entry.sharing) === sharing) return;
+    entry.sharing = sharing;
+    // Lobi içi "CANLI" rozeti: lobiyi açık tutan herkes oda listesinde görür (telefon bildirimi değil).
+    broadcastVoiceRoom(entry.hubId, roomId, { type: 'share', user_id: socket.userId, sharing });
+    if (!sharing || data?.notify === false || data?.rejoin) return; // yeniden bağlanmada tekrar bildirim yok
+    const scopeAll = data?.scope === 'all';
+    const now = Date.now();
+    if (now - (streamNotifyAt.get(socket.userId) || 0) < STREAM_NOTIFY_COOLDOWN_MS) return;
+    try {
+      const me = db.prepare(`SELECT status FROM users WHERE id = ?`).get(socket.userId);
+      if (!me || me.status === 'invisible') return;
+      const room = getVoiceRoom(roomId);
+      const hub = db.prepare(`SELECT name FROM hubs WHERE id = ?`).get(entry.hubId);
+      if (!room || !hub) return;
+      const inRoom = voiceRoomParticipants.get(roomId);
+      const payload = { from_user_id: socket.userId, from_username: socket.username, hub_id: entry.hubId, hub_name: hub.name, room_id: roomId, room_name: room.name };
+      const inHub = new Set(listFriendIdsInHub(socket.userId, entry.hubId));
+      // "Tüm arkadaşlarım": lobide olmayan arkadaşa lobi/oda bilgisi GİTMEZ, yalnızca "X yayın başlattı".
+      const others = scopeAll
+        ? listFriendIds(socket.userId).filter((id) => !inHub.has(id) && !isBlocked(id, socket.userId) && !isBlocked(socket.userId, id))
+        : [];
+      const recipients = [...inHub].filter((fid) => !inRoom?.has(fid));
+      if (!recipients.length && !others.length) return;
+      // Bekleme süresi yalnızca gerçekten bildirim gidince başlar (görünmezken ya da kimse yokken harcanmaz).
+      streamNotifyAt.set(socket.userId, now);
+      if (streamNotifyAt.size > 5000) { for (const [uid, at] of streamNotifyAt) if (now - at > STREAM_NOTIFY_COOLDOWN_MS) streamNotifyAt.delete(uid); }
+      recipients.forEach((fid) => pushNotification(fid, 'stream_started', payload));
+      const bare = { from_user_id: socket.userId, from_username: socket.username };
+      others.forEach((fid) => pushNotification(fid, 'stream_started', bare));
+    } catch (error) {
+      console.error('Yayın bildirimi hatası:', error);
+    }
   });
 
   socket.on('voice_room_deafen', (data) => {
