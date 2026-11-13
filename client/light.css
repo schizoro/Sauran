@@ -1760,6 +1760,18 @@ html.theme-light .hub-notify-level-opts button { border: 1px solid var(--border-
 html.theme-light .hub-notify-level-opts button.selected { border-color: var(--accent-line); background: var(--accent-soft); color: var(--text-primary); }
 html.theme-light.streamer-mode::after { background: #7c3aed; color: #1a1a1a; }
 html.theme-light .chat-gif-held { border: 1px dashed var(--border-soft-strong); background: var(--bg-surface-2); color: var(--text-secondary); }
+html.theme-light .export-pick { border: 1px solid var(--border-soft); background: rgba(15, 23, 42, 0.026); }
+html.theme-light .export-pick label { color: var(--text-secondary); }
+html.theme-light .export-pick input { accent-color: var(--accent); }
+html.theme-light .standing-card { border: 1px solid var(--border-soft); background: rgba(47,209,106,.06); }
+html.theme-light .standing-card.is-limited { background: rgba(255,190,80,.07); border-color: rgba(255,190,80,.3); }
+html.theme-light .standing-card.is-at_risk { background: rgba(255,80,100,.08); border-color: rgba(255,80,100,.35); }
+html.theme-light .standing-head b { color: var(--text-primary); }
+html.theme-light .standing-head p { color: var(--text-secondary); }
+html.theme-light .standing-list li { color: var(--text-secondary); background: rgba(15, 23, 42, 0.042); }
+html.theme-light .standing-list li b { color: var(--text-primary); }
+html.theme-light .standing-list time { color: var(--text-tertiary); }
+html.theme-light .media-filtered .file-msg-card:not(.media-revealed)::after { color: #1a1a1a; background: rgba(15, 23, 42, 0.062); text-shadow: 0 1px 4px rgba(15, 23, 42, 0.27); }
 /* ── client/layout-c.css ── */
 html.theme-light body.lc.lc-desk.lc-auth .lc-rail { background: var(--lc-bg-rail); border-right: 1px solid var(--lc-line); }
 html.theme-light .lc-ico { border: 0; background: transparent; color: var(--text-secondary); }

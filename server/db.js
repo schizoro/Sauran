@@ -6872,6 +6872,7 @@ function sanitizeUiPrefs(input) {
   if (input && typeof input.streamer === 'boolean') p.streamer = input.streamer;
   if (input && typeof input.streamerAuto === 'boolean') p.streamerAuto = input.streamerAuto;
   if (input && ['off', 'cellular', 'always'].includes(input.dataSaver)) p.dataSaver = input.dataSaver;
+  if (input && ['off', 'nonfriends', 'all'].includes(input.mediaFilter)) p.mediaFilter = input.mediaFilter;
   return p;
 }
 function getUiPrefs(userId) {
@@ -7055,6 +7056,37 @@ function respondDmRequest(recipientId, senderId, accept) {
   db.prepare(`UPDATE dm_requests SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE sender_id = ? AND recipient_id = ?`)
     .run(accept ? 'accepted' : 'declined', senderId, recipientId);
   return { success: true, status: accept ? 'accepted' : 'declined' };
+}
+
+// Hesap durumu (Ayarlar > Hesap): yalnızca kişinin KENDİSİYLE ilgili, işlem yapılmış bildirimler (kim bildirdi, iç gerekçe
+// ve moderatör adı GÖSTERİLMEZ), lobi yasakları, 18 yaş altı korumaları ve politika kabulü.
+function getAccountStanding(userId) {
+  const u = db.prepare(`SELECT account_status, minor_until, age_declared, policy_version, created_at FROM users WHERE id = ?`).get(userId);
+  if (!u) return null;
+  const violations = db.prepare(`
+    SELECT r.reason, r.target_type, COALESCE(r.reviewed_at, r.created_at) AS at
+    FROM reports r
+    WHERE r.status = 'action_taken' AND (
+      (r.target_type = 'user' AND r.target_id = ?)
+      OR (r.target_type = 'message' AND (
+        r.target_id IN (SELECT id FROM messages WHERE user_id = ?)
+        OR r.id IN (SELECT report_id FROM report_evidence WHERE sender_id = ?)
+      ))
+    )
+    ORDER BY at DESC LIMIT 25
+  `).all(userId, userId, userId);
+  const since90 = Date.now() - 90 * 24 * 3600 * 1000;
+  const recent = violations.filter((v) => Date.parse(String(v.at).replace(' ', 'T') + 'Z') >= since90).length;
+  const hubBans = db.prepare(`SELECT h.name AS hub_name, b.created_at AS at FROM hub_bans b JOIN hubs h ON h.id = b.hub_id WHERE b.user_id = ? ORDER BY b.id DESC LIMIT 25`).all(userId);
+  return {
+    status: recent >= 3 ? 'at_risk' : recent > 0 ? 'limited' : 'good',
+    recent_violations: recent,
+    violations,
+    hub_bans: hubBans,
+    minor_protections: isMinorUntil(u.minor_until),
+    age_unknown: u.age_declared === 0,
+    policy_ok: u.policy_version === POLICY_VERSION
+  };
 }
 
 function getPrivacySettings(userId) {
@@ -10248,6 +10280,7 @@ module.exports = {
   listFriendIdsInHub,
   listFriendIds,
   getPrivacySettings,
+  getAccountStanding,
   dmState,
   dmFullAccess,
   listDmRequests,

@@ -3735,3 +3735,23 @@ html.streamer-mode #settings-email-reveal { display: none; }
 html.streamer-mode::after { content: "🎥 Yayıncı modu"; position: fixed; left: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 1003; padding: 4px 10px; border-radius: 999px; background: #7c3aed; color: #fff; font: 700 11px/1.6 system-ui, sans-serif; pointer-events: none; opacity: .9; }
 /* Veri tasarrufu: bekletilen GIF */
 .chat-gif-held { display: inline-flex; align-items: center; gap: 6px; padding: 18px 22px; border-radius: 12px; border: 1px dashed var(--border-soft-strong); background: var(--bg-surface-2); color: var(--text-secondary); font-weight: 700; cursor: pointer; }
+
+/* ── Hesap ve güvenlik ── */
+.export-pick { display: grid; gap: 6px; margin: 4px 0 10px; padding: 12px; border-radius: 14px; border: 1px solid var(--border-soft); background: rgba(255,255,255,.025); }
+.export-pick label { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text-secondary); cursor: pointer; }
+.export-pick input { accent-color: var(--accent); }
+.standing-card { padding: 14px; border-radius: 16px; border: 1px solid var(--border-soft); background: rgba(47,209,106,.06); margin-bottom: 14px; }
+.standing-card.is-limited { background: rgba(255,190,80,.07); border-color: rgba(255,190,80,.3); }
+.standing-card.is-at_risk { background: rgba(255,80,100,.08); border-color: rgba(255,80,100,.35); }
+.standing-head { display: flex; gap: 12px; align-items: flex-start; }
+.standing-ic { font-size: 26px; line-height: 1; }
+.standing-head b { color: var(--text-primary); font-size: 15px; }
+.standing-head p { margin: 4px 0 0; font-size: 13px; color: var(--text-secondary); line-height: 1.45; }
+.standing-list { list-style: none; margin: 12px 0 6px; padding: 0; display: grid; gap: 6px; }
+.standing-list li { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; font-size: 13px; color: var(--text-secondary); padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,.04); }
+.standing-list li b { color: var(--text-primary); }
+.standing-list time { margin-left: auto; font-size: 12px; color: var(--text-tertiary); }
+/* Hassas içerik filtresi: bulanık medya, dokununca açılır */
+.media-filtered .file-msg-card:not(.media-revealed), .media-filtered .chat-gif:not(.media-revealed) { position: relative; overflow: hidden; }
+.media-filtered .file-msg-card:not(.media-revealed) img, .media-filtered .file-msg-card:not(.media-revealed) video, .media-filtered .chat-gif:not(.media-revealed) { filter: blur(26px) saturate(.6); }
+.media-filtered .file-msg-card:not(.media-revealed)::after { content: "👁 Göstermek için dokun"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 13px; background: rgba(0,0,0,.25); cursor: pointer; text-shadow: 0 1px 4px rgba(0,0,0,.6); }

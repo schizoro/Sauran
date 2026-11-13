@@ -3092,6 +3092,7 @@ settingsBtn.addEventListener(
 
         loadBlockedUsers();
         loadPrivacySettings();
+        loadAccountStanding();
         loadSessions();
         updateBrowserNotifUI();
         loadNotificationPreferences();
@@ -4028,7 +4029,11 @@ document.getElementById('settings-export-data-btn').addEventListener('click', as
 
     try {
 
-        const response = await fetch('/api/account/export', { credentials: 'include' });
+        const boxes = [...document.querySelectorAll('#export-pick [data-exp]')];
+        const parts = boxes.filter((b) => b.checked).map((b) => b.dataset.exp);
+        if (boxes.length && !parts.length) { showToast(t('exp-none')); return; }
+        const all = parts.length === boxes.length;
+        const response = await fetch(`/api/account/export${all ? '' : `?parts=${encodeURIComponent(parts.join(','))}`}`, { credentials: 'include' });
         if (!response.ok) throw new Error('export failed');
 
         const blob = await response.blob();
@@ -4564,6 +4569,34 @@ async function loadIgnoredUsers() {
     }));
 }
 
+// ─── Hesap durumu (Ayarlar > Hesap) ───
+const STANDING_REASON = { harassment: 'Taciz', threat: 'Tehdit', spam: 'Spam', scam: 'Dolandırıcılık', inappropriate: 'Uygunsuz içerik', child_safety: 'Çocuk güvenliği', hate: 'Nefret söylemi', impersonation: 'Kimliğe bürünme', other: 'Diğer' };
+async function loadAccountStanding() {
+    const box = document.getElementById('standing-card');
+    if (!box) return;
+    let d = null;
+    try { d = await fetch('/api/me/standing', { credentials: 'include' }).then((r) => r.json()); } catch (_) {}
+    if (!d || !d.success) { box.innerHTML = `<div class="settings-blocked-empty">${escapeHtml(friendly('generic'))}</div>`; return; }
+    const head = {
+        good: ['✅', 'Hesabın iyi durumda', 'Son 90 günde topluluk kurallarını ihlal eden bir işlem yok. Böyle devam!'],
+        limited: ['⚠️', 'Hesabında kayıtlı ihlal var', 'Son 90 günde içeriklerinle ilgili işlem yapıldı. Topluluk kurallarına dikkat et.'],
+        at_risk: ['⛔', 'Hesabın risk altında', 'Son 90 günde birden çok ihlal var. Devam ederse hesabın kısıtlanabilir ya da askıya alınabilir.']
+    }[d.status] || ['✅', 'Hesabın iyi durumda', ''];
+    const fmt = (at) => { const x = serverDate(at); return isNaN(x) ? '' : x.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' }); };
+    const rows = [
+        ...d.violations.map((v) => `<li><b>${escapeHtml(STANDING_REASON[v.reason] || 'Kural ihlali')}</b> · ${escapeHtml(v.target_type === 'message' ? 'mesajın hakkında işlem yapıldı' : 'hesabın hakkında işlem yapıldı')}<time>${escapeHtml(fmt(v.at))}</time></li>`),
+        ...d.hub_bans.map((b) => `<li><b>Lobi yasağı</b> · ${escapeHtml(b.hub_name || '')}<time>${escapeHtml(fmt(b.at))}</time></li>`)
+    ];
+    const notes = [];
+    if (d.minor_protections) notes.push('18 yaş altı korumaları açık: tanımadığın kişilerden arkadaşlık ve mesaj isteği kapalı.');
+    if (d.age_unknown) notes.push('Yaş bilgin henüz kayıtlı değil.');
+    box.className = `standing-card is-${d.status}`;
+    box.innerHTML = `<div class="standing-head"><span class="standing-ic" aria-hidden="true">${head[0]}</span><div><b>${escapeHtml(head[1])}</b><p>${escapeHtml(head[2])}</p></div></div>
+        ${rows.length ? `<ul class="standing-list">${rows.join('')}</ul>` : ''}
+        ${notes.map((n) => `<p class="settings-voice-hint">${escapeHtml(n)}</p>`).join('')}
+        <p class="settings-voice-hint">Bir işlemin hatalı olduğunu düşünüyorsan destek@sauran.online adresine yazabilirsin. Seni kimin bildirdiği gösterilmez.</p>`;
+}
+
 async function loadBlockedUsers() {
 
     const container = document.getElementById('settings-blocked-list');
@@ -4662,7 +4695,34 @@ langConfirmBtn.addEventListener('click', () => {
 
 // ─── Görünüm tercihleri: tema, sohbet yazı boyutu, mesaj sıklığı, hareket azaltma ───
 // Hızlı açılış için bu cihazda önbellek (localStorage 'sauran_ui'); asıl kayıt hesapta (/api/me/ui-prefs), girişte eşitlenir.
-var UI_DEFAULTS = { theme: 'dark', chatFont: 15, density: 'cozy', reduceMotion: false, motionSync: false, streamer: false, streamerAuto: false, dataSaver: 'off' };
+var UI_DEFAULTS = { theme: 'dark', chatFont: 15, density: 'cozy', reduceMotion: false, motionSync: false, streamer: false, streamerAuto: false, dataSaver: 'off', mediaFilter: null };
+// Hassas içerik filtresi: seçilmediyse 18 yaş altında "arkadaş olmayanlardan", yetişkinde kapalı
+function mediaFilterMode() { return uiPrefs.mediaFilter || (currentUser && currentUser.is_minor ? 'nonfriends' : 'off'); }
+function friendIdSet() { return new Set((window.__friendsCache || []).map((f) => Number(f.id))); }
+function applyMediaFilterTo(wrap) {
+    if (!wrap || !currentUser) return;
+    const mode = mediaFilterMode();
+    const uid = Number(wrap.dataset.userId || wrap.dataset.authorId || 0);
+    const filtered = mode !== 'off' && uid && uid !== currentUser.id && (mode === 'all' || !friendIdSet().has(uid));
+    wrap.classList.toggle('media-filtered', Boolean(filtered));
+}
+// Bulanık medyaya ilk dokunuş yalnızca açar (büyütme/oynatma ikinci dokunuşta)
+document.addEventListener('click', (e) => {
+    const m = e.target.closest('.media-filtered .lightbox-img, .media-filtered .chat-gif, .media-filtered video, .media-filtered .file-msg-card, .media-filtered .chat-gif-held');
+    if (!m) return;
+    const card = m.closest('.file-msg-card') || m;
+    if (card.classList.contains('media-revealed')) return;
+    e.preventDefault(); e.stopPropagation();
+    card.classList.add('media-revealed');
+}, true);
+new MutationObserver((muts) => {
+    for (const mu of muts) for (const n of mu.addedNodes) {
+        if (n.nodeType !== 1) continue;
+        if (n.matches?.('.hub-msg, .dm-msg-row')) applyMediaFilterTo(n);
+        n.querySelectorAll?.('.hub-msg, .dm-msg-row').forEach(applyMediaFilterTo);
+    }
+}).observe(document.body, { childList: true, subtree: true });
+function refreshMediaFilter() { document.querySelectorAll('.hub-msg, .dm-msg-row').forEach(applyMediaFilterTo); }
 var streamerAutoActive = false; // ekran paylaşımıyla otomatik açıldı mı
 function streamerOn() { return Boolean(uiPrefs.streamer || streamerAutoActive); }
 function dataSaverOn() {
@@ -4741,6 +4801,7 @@ function syncAppearanceUi() {
     const st = document.getElementById('settings-streamer'); if (st) st.checked = Boolean(uiPrefs.streamer);
     const sa = document.getElementById('settings-streamer-auto'); if (sa) sa.checked = Boolean(uiPrefs.streamerAuto);
     document.querySelectorAll('#settings-datasaver [data-ds]').forEach((b) => b.classList.toggle('selected', b.dataset.ds === uiPrefs.dataSaver));
+    document.querySelectorAll('#settings-media-filter [data-mf]').forEach((b) => b.classList.toggle('selected', b.dataset.mf === mediaFilterMode()));
 }
 function applyTheme(theme) { setUiPref({ theme }); }
 applyUiPrefs();
@@ -4753,6 +4814,7 @@ document.getElementById('settings-motion-sync')?.addEventListener('change', (e) 
 document.getElementById('settings-streamer')?.addEventListener('change', (e) => { setUiPref({ streamer: e.target.checked }); if (e.target.checked) showToast(t('sm-on-toast')); });
 document.getElementById('settings-streamer-auto')?.addEventListener('change', (e) => setUiPref({ streamerAuto: e.target.checked }));
 document.querySelectorAll('#settings-datasaver [data-ds]').forEach((b) => b.addEventListener('click', () => setUiPref({ dataSaver: b.dataset.ds })));
+document.querySelectorAll('#settings-media-filter [data-mf]').forEach((b) => b.addEventListener('click', () => { setUiPref({ mediaFilter: b.dataset.mf }); refreshMediaFilter(); }));
 syncAppearanceUi();
 
 
@@ -4963,6 +5025,23 @@ const I18N = {
     'dmreq-decline': { tr: 'Reddet', en: 'Decline' },
     'dmreq-block': { tr: 'Engelle', en: 'Block' },
     'dmreq-count': { tr: '{n} mesaj', en: '{n} messages' },
+    'mf-title': { tr: 'Hassas içerik filtresi', en: 'Sensitive media filter' },
+    'mf-off': { tr: 'Kapalı', en: 'Off' },
+    'mf-off-d': { tr: 'Görseller ve videolar doğrudan görünür', en: 'Images and videos show directly' },
+    'mf-nf': { tr: 'Arkadaş olmayanlardan', en: 'From non-friends' },
+    'mf-nf-d': { tr: 'Arkadaşın olmayanların görsel, GIF ve videoları bulanık gelir; dokununca açılır', en: "Images, GIFs and videos from people who aren't your friends are blurred; tap to show" },
+    'mf-all': { tr: 'Herkesten', en: 'From everyone' },
+    'mf-all-d': { tr: 'Kendi gönderdiklerin dışında tüm görseller bulanık gelir', en: 'All media except your own is blurred' },
+    'mf-reveal': { tr: 'Göstermek için dokun', en: 'Tap to show' },
+    'exp-title': { tr: 'İndirmek istediğin veriler', en: 'Data to include' },
+    'exp-account': { tr: 'Hesap ve ayarlar', en: 'Account and settings' },
+    'exp-messages': { tr: 'Gönderdiğin mesajlar', en: 'Messages you sent' },
+    'exp-hubs': { tr: 'Lobiler', en: 'Lobbies' },
+    'exp-social': { tr: 'Arkadaşlar, engellenenler, tepkiler', en: 'Friends, blocks, reactions' },
+    'exp-purchases': { tr: 'Satın alımlar ve kozmetikler', en: 'Purchases and cosmetics' },
+    'exp-activity': { tr: 'Öneriler, değerlendirmeler, bildirimlerin', en: 'Feedback, reviews, reports' },
+    'exp-none': { tr: 'En az bir kategori seç.', en: 'Pick at least one category.' },
+    'st-title': { tr: 'Hesap durumu', en: 'Account standing' },
     'privacy-fr-title': { tr: 'Arkadaşlık istekleri', en: 'Friend requests' },
     'privacy-fr-desc': { tr: 'Sana kimlerin arkadaşlık isteği gönderebileceğini seç.', en: 'Choose who can send you friend requests.' },
     'privacy-fr-everyone': { tr: 'Herkes', en: 'Everyone' },
@@ -10936,6 +11015,7 @@ function appendDmMessage(msg, opts) {
 
     const isMine = msg.user_id === currentUser.id;
     row.className = `dm-msg-row ${isMine ? 'msg-mine' : ''}`;
+    if (msg.user_id != null) row.dataset.userId = String(msg.user_id);
 
     row.innerHTML = avatarButtonHtml(msg.sender_deleted ? null : msg.user_id, msg.avatar_data, msg.sender_deleted ? t('deleted-account-label') : msg.username, msg.sender_deleted ? null : msg.avatar_frame, msg.sender_deleted ? null : msg.profile_color);
 

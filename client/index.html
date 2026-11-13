@@ -2423,6 +2423,14 @@
                     </div>
 
                     <div class="hub-settings-divider"></div>
+                    <span class="profile-field-label" data-i18n="mf-title">Hassas içerik filtresi</span>
+                    <div class="privacy-options" id="settings-media-filter">
+                        <button class="privacy-option" data-mf="off" type="button"><span class="privacy-option-title" data-i18n="mf-off">Kapalı</span><span class="privacy-option-desc" data-i18n="mf-off-d">Görseller ve videolar doğrudan görünür</span></button>
+                        <button class="privacy-option" data-mf="nonfriends" type="button"><span class="privacy-option-title" data-i18n="mf-nf">Arkadaş olmayanlardan</span><span class="privacy-option-desc" data-i18n="mf-nf-d">Arkadaşın olmayanların görsel, GIF ve videoları bulanık gelir; dokununca açılır</span></button>
+                        <button class="privacy-option" data-mf="all" type="button"><span class="privacy-option-title" data-i18n="mf-all">Herkesten</span><span class="privacy-option-desc" data-i18n="mf-all-d">Kendi gönderdiklerin dışında tüm görseller bulanık gelir</span></button>
+                    </div>
+
+                    <div class="hub-settings-divider"></div>
                     <span class="profile-field-label" data-i18n="privacy-avatar-title">Profil fotoğrafım</span>
                     <div class="privacy-seg" id="privacy-avatar-seg" role="radiogroup">
                         <button type="button" class="privacy-seg-btn" data-vis="public" data-i18n="privacy-avatar-public">Herkes görsün</button>
@@ -2450,11 +2458,23 @@
                     <a href="topluluk-kurallari.html" target="_blank" rel="noopener" class="hub-settings-action-btn" style="text-decoration:none; display:block; box-sizing:border-box;">📄 <span data-i18n="settings-community">Topluluk Kuralları</span></a>
                     <a href="cocuk-guvenligi.html" target="_blank" rel="noopener" class="hub-settings-action-btn" style="text-decoration:none; display:block; box-sizing:border-box;">🛡️ <span data-i18n="settings-child-safety">Çocuk Güvenliği</span></a>
                     <a href="destek.html" target="_blank" rel="noopener" class="hub-settings-action-btn" style="text-decoration:none; display:block; box-sizing:border-box;">💬 <span data-i18n="settings-support">Destek &amp; İletişim</span></a>
+                    <div class="export-pick" id="export-pick">
+                        <span class="voice-sub-title" data-i18n="exp-title">İndirmek istediğin veriler</span>
+                        <label><input type="checkbox" data-exp="account" checked> <span data-i18n="exp-account">Hesap ve ayarlar</span></label>
+                        <label><input type="checkbox" data-exp="messages" checked> <span data-i18n="exp-messages">Gönderdiğin mesajlar</span></label>
+                        <label><input type="checkbox" data-exp="hubs" checked> <span data-i18n="exp-hubs">Lobiler</span></label>
+                        <label><input type="checkbox" data-exp="social" checked> <span data-i18n="exp-social">Arkadaşlar, engellenenler, tepkiler</span></label>
+                        <label><input type="checkbox" data-exp="purchases" checked> <span data-i18n="exp-purchases">Satın alımlar ve kozmetikler</span></label>
+                        <label><input type="checkbox" data-exp="activity" checked> <span data-i18n="exp-activity">Öneriler, değerlendirmeler, bildirimlerin</span></label>
+                    </div>
                     <button id="settings-export-data-btn" class="hub-settings-action-btn" type="button">📦 <span data-i18n="settings-export-data">Verilerimi İndir</span></button>
 
                 </div>
 
                 <div class="settings-panel" data-settings-panel="account" style="display:none;">
+
+                    <span class="profile-field-label" data-i18n="st-title">Hesap durumu</span>
+                    <div class="standing-card" id="standing-card"><div class="settings-blocked-empty">…</div></div>
 
                     <button id="settings-logout-btn" class="hub-settings-action-btn" type="button">🚪 <span data-i18n="logout-btn">Çıkış Yap</span></button>
 
