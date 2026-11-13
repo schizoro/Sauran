@@ -85,7 +85,7 @@
     function animateRise(layer, rise) {
         if (layer._riseFor === rise) return;
         layer._riseFor = rise;
-        const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const reduce = document.documentElement.classList.contains('reduce-motion'); // uygulama ayarı (Ayarlar > Genel > Hareket)
         layer.querySelectorAll('.fxc-ember, .fxc-ash').forEach((el) => {
             if (el._riseAnim) el._riseAnim.cancel();
             if (reduce || typeof el.animate !== 'function') return;

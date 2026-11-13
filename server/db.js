@@ -6807,6 +6807,29 @@ function acceptPolicy(userId) {
   return { success: true, version: POLICY_VERSION };
 }
 
+// ── Görünüm tercihleri (tema, sohbet yazı boyutu, mesaj sıklığı, hareket azaltma): hesaba kaydedilir, tüm cihazlarda aynı.
+if (!privacyColumns.includes('ui_prefs')) db.exec(`ALTER TABLE users ADD COLUMN ui_prefs TEXT`);
+const UI_THEMES = ['dark', 'purple', 'oled', 'auto'];
+function sanitizeUiPrefs(input) {
+  const p = {};
+  if (input && UI_THEMES.includes(input.theme)) p.theme = input.theme;
+  if (input && Number.isInteger(input.chatFont) && input.chatFont >= 12 && input.chatFont <= 20) p.chatFont = input.chatFont;
+  if (input && ['cozy', 'compact'].includes(input.density)) p.density = input.density;
+  if (input && typeof input.reduceMotion === 'boolean') p.reduceMotion = input.reduceMotion;
+  if (input && typeof input.motionSync === 'boolean') p.motionSync = input.motionSync;
+  return p;
+}
+function getUiPrefs(userId) {
+  const r = db.prepare(`SELECT ui_prefs FROM users WHERE id = ?`).get(userId);
+  if (!r || !r.ui_prefs) return null;
+  try { return sanitizeUiPrefs(JSON.parse(r.ui_prefs)); } catch (_) { return null; }
+}
+function setUiPrefs(userId, patch) {
+  const next = { ...(getUiPrefs(userId) || {}), ...sanitizeUiPrefs(patch) };
+  db.prepare(`UPDATE users SET ui_prefs = ? WHERE id = ?`).run(JSON.stringify(next), userId);
+  return next;
+}
+
 function needsAgeDeclaration(userId) {
   const u = db.prepare(`SELECT age_declared FROM users WHERE id = ?`).get(userId);
   return Boolean(u) && u.age_declared === 0;
@@ -10175,6 +10198,8 @@ module.exports = {
   listDmRequests,
   respondDmRequest,
   needsAgeDeclaration,
+  getUiPrefs,
+  setUiPrefs,
   needsPolicyAcceptance,
   policyEnforced,
   policyEnforceAt,

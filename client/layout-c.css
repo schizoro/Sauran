@@ -433,7 +433,7 @@ body.lc.lc-show-friends.lc-desk .topbar { display: none !important; }
 .lcf-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .lcf-act.lcf-text.ok { background: linear-gradient(135deg, #2f7bff, #5cc8ff); color: #04121e; }
 .lcf-act.lcf-text.no:hover { color: var(--danger); }
-@media (prefers-reduced-motion: reduce) { .lcf-fold { transition: none; } }
+html.reduce-motion .lcf-fold { transition: none; }
 .lcf-tools { display: flex; align-items: center; gap: 8px; }
 .lcf-tools .lcf-search { flex: 1; min-width: 0; }
 .lcf-add-m { display: none; }
@@ -499,7 +499,7 @@ body.lc.lc-desk #lc-user { display: none; }
 body.lc.lc-desk.lc-menu-from-rail > #topbar-menu-dropdown { left: var(--lc-menu-x, calc(var(--lc-rail) + var(--lc-col) + 16px)) !important; bottom: calc(84px + env(safe-area-inset-bottom)) !important; }
 .lc-flash { animation: lc-flash 1s var(--ease); }
 @keyframes lc-flash { 0% { box-shadow: 0 0 0 2px rgba(92, 200, 255, 0.7); border-radius: 12px; } 100% { box-shadow: 0 0 0 2px rgba(92, 200, 255, 0); border-radius: 12px; } }
-@media (prefers-reduced-motion: reduce) { .lc-flash { animation: none; } }
+html.reduce-motion .lc-flash { animation: none; }
 
 /* ═══════════════ "DİĞER" MENÜSÜ (yeni görünüm) ═══════════════
    layout-c.js içeriği gruplar: simge kutusu + ad + kısa açıklama. Gizli düğmelerin satır içi display:none'u korunur (!important yok). */
@@ -694,7 +694,7 @@ body.lc .discover-empty { padding: 28px 16px !important; border-radius: 16px; ba
   body.lc .discover-title { font-size: 19px !important; }
   body.lc .discover-grid { grid-template-columns: 1fr !important; }
 }
-@media (prefers-reduced-motion: reduce) { body.lc .discover-card { transition: none; } body.lc .discover-card:hover { transform: none; } }
+html.reduce-motion body.lc .discover-card { transition: none; } html.reduce-motion body.lc .discover-card:hover { transform: none; }
 
 /* ═══════════════ AYARLAR EKRANI (yeni görünüm) ═══════════════ */
 /* Hata düzeltmesi: "Masaüstü / tarayıcı bildirimleri" düğmesi satırı dolduracak şekilde geriliyordu */
@@ -956,7 +956,7 @@ body[data-my-status="invisible"] #lc-dock #lc-user-id .lc-user-av, body[data-my-
 .lc-members-hint::before { content: ""; position: absolute; top: -6px; right: 14px; width: 10px; height: 10px; background: #1a1430; border-left: 1px solid rgba(179, 102, 245, 0.5); border-top: 1px solid rgba(179, 102, 245, 0.5); transform: rotate(45deg); }
 .lc-members-hint button { align-self: flex-start; padding: 0; border: 0; background: none; color: #b9a6d8; font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
 @keyframes lcHintIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .lc-members-hint { animation: none; } }
+html.reduce-motion .lc-members-hint { animation: none; }
 
 /* Kanal bildirim ayarı */
 .lc-chan-notify-state { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; margin-left: auto; color: var(--text-tertiary, var(--text-secondary)); }

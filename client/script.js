@@ -821,7 +821,7 @@ function clearAuthError() {
 
 // Başlığı harf harf, dalga gibi sırayla beliren <span>'lara böler.
 // prefers-reduced-motion'da düz metin olarak kalır.
-const authTitlePrefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const authTitlePrefersReducedMotion = document.documentElement.classList.contains('reduce-motion');
 
 function setAuthTitle(text) {
 
@@ -1149,7 +1149,7 @@ showLoginBtn.addEventListener(
     if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const prefersReducedMotion = document.documentElement.classList.contains('reduce-motion');
     if (prefersReducedMotion) return;
 
     let particles = [];
@@ -1980,6 +1980,7 @@ function setCurrentUser(user) {
 
     refreshIgnoredUsers();
     setTimeout(refreshDmRequestsBadge, 600);
+    if (user) adoptServerUiPrefs(user.ui_prefs);
     if (user && user.needs_policy) setTimeout(openPolicyUpdate, 400);
     else if (user && user.needs_age) setTimeout(openAgeDeclaration, 400);
 
@@ -4573,10 +4574,7 @@ themeButtons.forEach((btn) => {
 
     btn.addEventListener('click', () => {
 
-        const theme = btn.dataset.theme;
-        localStorage.setItem('sauran_theme', theme);
-        applyTheme(theme);
-        themeButtons.forEach(b => b.classList.toggle('selected', b === btn));
+        setUiPref({ theme: btn.dataset.theme });
 
     });
 
@@ -4612,14 +4610,72 @@ langConfirmBtn.addEventListener('click', () => {
 });
 
 
-function applyTheme(theme) {
-
-    document.body.classList.toggle('theme-purple', theme === 'purple');
-
+// ─── Görünüm tercihleri: tema, sohbet yazı boyutu, mesaj sıklığı, hareket azaltma ───
+// Hızlı açılış için bu cihazda önbellek (localStorage 'sauran_ui'); asıl kayıt hesapta (/api/me/ui-prefs), girişte eşitlenir.
+var UI_DEFAULTS = { theme: 'dark', chatFont: 15, density: 'cozy', reduceMotion: false, motionSync: false };
+var uiPrefs = (() => {
+    let p = {};
+    try { p = JSON.parse(localStorage.getItem('sauran_ui') || '{}') || {}; } catch (_) {}
+    const legacy = localStorage.getItem('sauran_theme');
+    if (!p.theme && legacy) p.theme = legacy;
+    return { ...UI_DEFAULTS, ...p };
+})();
+var systemDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+var systemReduce = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+function effectiveTheme() {
+    // 'auto': açık tema gelene kadar cihaz açık moddaysa da koyu kullanılır
+    if (uiPrefs.theme === 'auto') return 'dark';
+    return uiPrefs.theme;
 }
-
-
-applyTheme(localStorage.getItem('sauran_theme') || 'dark');
+function applyUiPrefs() {
+    const theme = effectiveTheme();
+    document.body.classList.toggle('theme-purple', theme === 'purple');
+    document.body.classList.toggle('theme-oled', theme === 'oled');
+    const root = document.documentElement;
+    root.style.setProperty('--chat-fs', `${uiPrefs.chatFont}px`);
+    root.classList.toggle('chat-fs-custom', uiPrefs.chatFont !== UI_DEFAULTS.chatFont);
+    root.classList.toggle('density-compact', uiPrefs.density === 'compact');
+    root.classList.toggle('reduce-motion', Boolean(uiPrefs.reduceMotion || (uiPrefs.motionSync && systemReduce && systemReduce.matches)));
+    try { localStorage.setItem('sauran_ui', JSON.stringify(uiPrefs)); localStorage.setItem('sauran_theme', uiPrefs.theme); } catch (_) {}
+}
+var uiSaveTimer = null;
+function setUiPref(patch) {
+    Object.assign(uiPrefs, patch);
+    applyUiPrefs();
+    syncAppearanceUi();
+    clearTimeout(uiSaveTimer);
+    uiSaveTimer = setTimeout(() => {
+        if (!currentUser) return;
+        fetch('/api/me/ui-prefs', { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(uiPrefs) }).catch(() => {});
+    }, 600);
+}
+// Girişte hesaptaki tercihler uygulanır; hesapta hiç yoksa bu cihazdakiler hesaba yazılır (ilk eşitleme).
+function adoptServerUiPrefs(server) {
+    if (server && Object.keys(server).length) {
+        uiPrefs = { ...UI_DEFAULTS, ...server };
+        applyUiPrefs();
+        syncAppearanceUi();
+    } else {
+        fetch('/api/me/ui-prefs', { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(uiPrefs) }).catch(() => {});
+    }
+}
+function syncAppearanceUi() {
+    themeButtons.forEach((b) => b.classList.toggle('selected', b.dataset.theme === uiPrefs.theme));
+    document.querySelectorAll('[data-density]').forEach((b) => b.classList.toggle('selected', b.dataset.density === uiPrefs.density));
+    const f = document.getElementById('settings-chat-font'); if (f) f.value = String(uiPrefs.chatFont);
+    const fo = document.getElementById('settings-chat-font-out'); if (fo) fo.textContent = `${uiPrefs.chatFont} px`;
+    const pv = document.getElementById('settings-chat-font-preview'); if (pv) pv.style.fontSize = `${uiPrefs.chatFont}px`;
+    const rm = document.getElementById('settings-reduce-motion'); if (rm) rm.checked = Boolean(uiPrefs.reduceMotion);
+    const ms = document.getElementById('settings-motion-sync'); if (ms) ms.checked = Boolean(uiPrefs.motionSync);
+}
+function applyTheme(theme) { setUiPref({ theme }); }
+applyUiPrefs();
+systemReduce?.addEventListener?.('change', applyUiPrefs);
+document.querySelectorAll('[data-density]').forEach((b) => b.addEventListener('click', () => setUiPref({ density: b.dataset.density })));
+document.getElementById('settings-chat-font')?.addEventListener('input', (e) => setUiPref({ chatFont: Number(e.target.value) }));
+document.getElementById('settings-reduce-motion')?.addEventListener('change', (e) => setUiPref({ reduceMotion: e.target.checked }));
+document.getElementById('settings-motion-sync')?.addEventListener('change', (e) => setUiPref({ motionSync: e.target.checked }));
+syncAppearanceUi();
 
 
 // =====================================================
@@ -4749,6 +4805,22 @@ const I18N = {
     'theme-dark': { tr: 'Kapalı Tema', en: 'Dark Theme' },
     'theme-dark-desc': { tr: 'Siyah, karanlık arayüz', en: 'Black, dark interface' },
     'theme-purple': { tr: 'Mor Tema', en: 'Purple Theme' },
+    'theme-oled': { tr: 'Tam Siyah', en: 'Pure Black' },
+    'theme-oled-desc': { tr: 'OLED ekranlarda pil dostu, tam siyah zemin', en: 'Battery-friendly pure black for OLED screens' },
+    'theme-auto': { tr: 'Sisteme uy', en: 'Match system' },
+    'theme-auto-desc': { tr: 'Cihazın koyu/açık ayarını izler (açık tema yakında; şimdilik koyu)', en: "Follows your device's dark/light setting (light theme coming soon; dark for now)" },
+    'ui-synced': { tr: 'Görünüm tercihlerin hesabına kaydedilir; tüm cihazlarında aynı olur.', en: 'Your appearance settings are saved to your account and follow you to every device.' },
+    'ui-chatfont': { tr: 'Sohbet yazı boyutu', en: 'Chat font size' },
+    'ui-density': { tr: 'Mesaj sıklığı', en: 'Message spacing' },
+    'ui-cozy': { tr: 'Rahat', en: 'Cozy' },
+    'ui-cozy-desc': { tr: 'Büyük profil fotoğrafları, ferah aralıklar', en: 'Larger avatars, roomy spacing' },
+    'ui-compact': { tr: 'Sıkışık', en: 'Compact' },
+    'ui-compact-desc': { tr: 'Küçük fotoğraflar, ekrana daha çok mesaj sığar', en: 'Small avatars, more messages on screen' },
+    'ui-motion': { tr: 'Hareket', en: 'Motion' },
+    'ui-reduce-motion': { tr: 'Animasyonları azalt', en: 'Reduce motion' },
+    'ui-reduce-motion-d': { tr: 'Efektler, çerçeve ve isim animasyonları durur; geçişler sadeleşir.', en: 'Stops effects, frame and name animations; simplifies transitions.' },
+    'ui-motion-sync': { tr: 'Cihazın ayarına uy', en: 'Sync with device' },
+    'ui-motion-sync-d': { tr: 'Cihazında "hareketi azalt" açıksa Sauran\'da da animasyonlar azalır.', en: 'If "reduce motion" is on in your device settings, Sauran reduces animations too.' },
     'theme-purple-desc': { tr: 'Derin mor, karanlık arayüz', en: 'Deep purple, dark interface' },
     'label-lang': { tr: 'Dil', en: 'Language' },
     'label-notifications': { tr: 'Bildirimler', en: 'Notifications' },

@@ -360,7 +360,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   
   .lobby-nav .rail-btn-sm { width: 44px; height: 44px; }
 }
-@media (prefers-reduced-motion: reduce) { .lobby-nav { transition: none; } }
+html.reduce-motion .lobby-nav { transition: none; }
 
 /* ── Sohbet: prototipteki gibi tek sütun, sola hizalı, kutusuz ───────── */
 #hub-messages, .hub-messages { max-width: 860px; margin-left: auto; margin-right: auto; width: 100%; }
@@ -963,7 +963,7 @@ html.auth-pending #login-screen { visibility: hidden; }
 .super-like-burst .slb-text{margin-top:6px;padding:8px 16px;border-radius:999px;font-weight:bold;font-size:14px;color:#fff3c4;background:rgba(20,22,28,.6);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,209,102,.5)}
 @keyframes slbPop{0%{transform:scale(.2) rotate(-40deg);opacity:0}60%{transform:scale(1.35) rotate(10deg);opacity:1}100%{transform:scale(1) rotate(0)}}
 @keyframes slbLife{0%{opacity:0;top:30%}12%{opacity:1;top:22%}80%{opacity:1}100%{opacity:0;top:18%}}
-@media (prefers-reduced-motion:reduce){.super-like-burst .slb-star{animation:none}}
+html.reduce-motion .super-like-burst .slb-star {animation:none}
 
 /* ── Etiketler: butonların altında kısa açıklama (düzeni bozmasın diye mutlak konum) ─── */
 [data-lbl] { position: relative; }
@@ -1028,7 +1028,7 @@ html.auth-pending #login-screen { visibility: hidden; }
 .sl-star i:nth-child(4) { margin-left: 8px; animation-delay: 1.5s; }
 .sl-star i:nth-child(5) { margin-left: -6px; animation-delay: 1.9s; width: 2px; height: 2px; }
 @keyframes slDust { 0% { transform: translateY(0) scale(.6); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(-20px) scale(1.1); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .sl-star i { animation: none; } }
+html.reduce-motion .sl-star i { animation: none; }
 
 @media (max-width: 900px) {
   /* Lobi: geri + ad üst çubukta; sayaç/üyeler başlığın hemen altında, biraz sağda */
@@ -1065,7 +1065,7 @@ html.auth-pending #login-screen { visibility: hidden; }
   animation: rankTwinkle 1.8s ease-in-out infinite alternate; }
 @keyframes rankGlow { from { box-shadow: 0 0 0 1.5px #fff0a0, 0 0 8px 1px rgba(255,200,40,.6); } to { box-shadow: 0 0 0 1.5px #fff0a0, 0 0 18px 4px rgba(255,200,40,.95); } }
 @keyframes rankTwinkle { from { opacity: .25; transform: scale(.98); } to { opacity: 1; transform: scale(1.02); } }
-@media (prefers-reduced-motion: reduce) { .rank-badge-1, .discover-card.rank-1::after { animation: none; } }
+html.reduce-motion .rank-badge-1, html.reduce-motion .discover-card.rank-1::after { animation: none; }
 @media (max-width: 900px) {
   body[data-view="discover"] .discover-grid-popular .discover-card { padding: 16px 8px 12px; gap: 8px; }
   body[data-view="discover"] .discover-grid-popular .discover-card-avatar { width: 52px; height: 52px; }
@@ -1180,10 +1180,7 @@ html.auth-pending #login-screen { visibility: hidden; }
 }
 @keyframes sfSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @keyframes sfGlowPulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) {
-  .frame-ocean::after, .frame-neon::after, .frame-galaxy::after,
-  .sf-overlay::before, .sf-highlight { animation: none; }
-}
+html.reduce-motion .frame-ocean::after, html.reduce-motion .frame-neon::after, html.reduce-motion .frame-galaxy::after, html.reduce-motion .sf-overlay::before, html.reduce-motion .sf-highlight { animation: none; }
 
 /* ── Sauran Plus çerçevesi: satın alınmaz/hediye edilmez, aktif abonelikte otomatik açılır. Neon/Ocean/Galaxy
    gibi "sade" bir parlama değil — dönen degrade halka + mesaj balonundaki ("Yumuşak" tema) ile AYNI yükselen
@@ -1249,10 +1246,7 @@ html.auth-pending #login-screen { visibility: hidden; }
   0%, 100% { opacity: 0; transform: scale(.4) rotate(0deg); }
   50% { opacity: 1; transform: scale(1) rotate(90deg); }
 }
-@media (prefers-reduced-motion: reduce) {
-  .pf-ring, .pf-glow, .pf-spark { animation: none; }
-  .pf-dust { animation: none; opacity: 0; }
-}
+html.reduce-motion .pf-ring, html.reduce-motion .pf-glow, html.reduce-motion .pf-spark { animation: none; } html.reduce-motion .pf-dust { animation: none; opacity: 0; }
 
 /* ── Market ürün kartları (gift.html'e benzer sade sayfa stiline eklenir) */
 
@@ -1305,7 +1299,7 @@ html.auth-pending #login-screen { visibility: hidden; }
   0%, 100% { box-shadow: 0 0 0 1px rgba(150, 170, 255, .5), 0 0 6px rgba(109, 91, 208, .45); }
   50% { box-shadow: 0 0 0 1px rgba(180, 195, 255, .8), 0 0 12px rgba(79, 124, 255, .8); }
 }
-@media (prefers-reduced-motion: reduce) { .plus-badge { animation: none; } }
+html.reduce-motion .plus-badge { animation: none; }
 .plus-badge-sm { font-size: 9px; padding: 1px 5px 1px 4px; margin-left: 3px; }
 
 /* ── Sauran Plus: "Oyuncu İsim Kartı" — mor parlak hap, içinden yükselen ışıltı tozu ──── */
@@ -1337,7 +1331,7 @@ html.auth-pending #login-screen { visibility: hidden; }
   80% { opacity: .45; }
   100% { transform: translateY(-13px) scale(.35); opacity: 0; }
 }
-@media (prefers-reduced-motion: reduce) { .plus-name-card { animation: none; } .pnc-dust { animation: none; opacity: 0; } }
+html.reduce-motion .plus-name-card { animation: none; } html.reduce-motion .pnc-dust { animation: none; opacity: 0; }
 
 /* ── Sauran Plus "Oyuncu İsim Kartı": rozetten AYRI — kullanıcı adının KENDİSİ mor parlak bir kart
    üzerinde görünür. Mesaj/üye/arkadaş listesi/sesli oda/profil, kullanıcı adı basılan HER yerde kullanılır.
@@ -1365,7 +1359,7 @@ html.auth-pending #login-screen { visibility: hidden; }
   75% { opacity: .7; }
   100% { transform: translateY(-1em) scale(.3); opacity: 0; }
 }
-@media (prefers-reduced-motion: reduce) { .plus-name-plate { animation: none; } .pnp-dust { animation: none; opacity: 0; } }
+html.reduce-motion .plus-name-plate { animation: none; } html.reduce-motion .pnp-dust { animation: none; opacity: 0; }
 
 /* ── Sauran Plus "Profil Efekti": profil penceresindeki BÜYÜK avatarın çevresinde animasyon.
    İki seçenek: Sakura (alttan yükselip avatarın üstünden süzülen çiçek yaprakları) ve Sahne Işıkları
@@ -1497,7 +1491,7 @@ html.auth-pending #login-screen { visibility: hidden; }
   55%  { transform: translateX(-5%) rotate(-4deg) scaleX(.9); }
   80%  { transform: translateX(3%) rotate(3deg) scaleX(1.04); }
 }
-@media (prefers-reduced-motion: reduce) { .pfx-petal, .pfx-stagelight { animation: none; } }
+html.reduce-motion .pfx-petal, html.reduce-motion .pfx-stagelight { animation: none; }
 
 /* ── Sauran Plus "Lobi Teması": Lobi sahibi seçer, tüm üyeler görür (sahibin Plus'ı bitince sunucu 'default' döner) ── */
 .hub-detail-view[data-hub-theme="aurora"] {
@@ -1566,9 +1560,7 @@ html.auth-pending #login-screen { visibility: hidden; }
   from { background-position: 14% 100%, 42% 100%, 68% 100%, 86% 100%; }
   to   { background-position: 14% -46px, 42% -58px, 68% -40px, 86% -52px; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .hub-msg-bubble.chat-theme-soft::before, .dm-msg.chat-theme-soft::before { animation: none; opacity: .35; }
-}
+html.reduce-motion .hub-msg-bubble.chat-theme-soft::before, html.reduce-motion .dm-msg.chat-theme-soft::before { animation: none; opacity: .35; }
 
 /* "Kontrast" temada — "Yumuşak"tan FARKLI bir efekt: sol kenar çizgisi boyunca akan mavi/mor bir ışık
    taraması, sürekli sağa doğru süzülüp kutu dışına taşmadan tekrarlanır (overflow: hidden). */
@@ -1593,10 +1585,7 @@ html.auth-pending #login-screen { visibility: hidden; }
   0%, 100% { box-shadow: 0 0 4px 0.5px rgba(109, 91, 208, .6); }
   50% { box-shadow: 0 0 9px 2px rgba(150, 130, 255, .95); }
 }
-@media (prefers-reduced-motion: reduce) {
-  .hub-msg-bubble.chat-theme-contrast::before, .dm-msg.chat-theme-contrast::before,
-  .hub-msg-bubble.chat-theme-contrast::after, .dm-msg.chat-theme-contrast::after { animation: none; }
-}
+html.reduce-motion .hub-msg-bubble.chat-theme-contrast::before, html.reduce-motion .dm-msg.chat-theme-contrast::before, html.reduce-motion .hub-msg-bubble.chat-theme-contrast::after, html.reduce-motion .dm-msg.chat-theme-contrast::after { animation: none; }
 
 /* ── Sohbet Teması seçici (profil, yalnızca Plus için aktif) ─────────── */
 .profile-field-block { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border-soft); }
@@ -1626,7 +1615,7 @@ html.auth-pending #login-screen { visibility: hidden; }
   background-size: 220% 100%;
   animation: contrastShimmer 1.8s ease-in-out infinite;
 }
-@media (prefers-reduced-motion: reduce) { .chat-theme-swatch-soft::before, .chat-theme-swatch-contrast::before { animation: none; } }
+html.reduce-motion .chat-theme-swatch-soft::before, html.reduce-motion .chat-theme-swatch-contrast::before { animation: none; }
 .profile-color-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .profile-color-row input[type="color"] { width: 40px; height: 32px; padding: 2px; border-radius: 8px; border: 1px solid var(--border-soft-strong); background: var(--glass-1); cursor: pointer; }
 
@@ -1734,7 +1723,7 @@ html.auth-pending #login-screen { visibility: hidden; }
 @keyframes stkString { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
 @keyframes stkLeaf { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(6deg); } }
 @keyframes stkRainbow { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.04); opacity: .85; } }
-@media (prefers-reduced-motion: reduce) { .stk-svg *, .stk-svg { animation: none !important; } }
+html.reduce-motion .stk-svg *, html.reduce-motion .stk-svg { animation: none !important; }
 .stk-ex-a { animation: stkExA 6s ease-in-out infinite; }
 .stk-ex-b { animation: stkExB 6s ease-in-out infinite; opacity: 0; }
 .stk-steam { animation: stkSteam 2.4s ease-in-out infinite; }
@@ -1770,7 +1759,7 @@ html.auth-pending #login-screen { visibility: hidden; }
 .name-fx-glow { color: #eaf6ff; animation: nfxGlow 2.4s ease-in-out infinite; }
 @keyframes nfxSlide { from { background-position: 0% 0; } to { background-position: -200% 0; } }
 @keyframes nfxGlow { 0%, 100% { text-shadow: 0 0 3px rgba(92, 200, 255, .45); } 50% { text-shadow: 0 0 8px rgba(92, 200, 255, .95), 0 0 14px rgba(185, 139, 255, .6); } }
-@media (prefers-reduced-motion: reduce) { .name-fx { animation: none !important; } }
+html.reduce-motion .name-fx { animation: none !important; }
 
 /* ── Sauran Plus "Lobi Arka Planı": Lobi sahibinin yüklediği görsel, okunabilirlik için koyulaştırılarak sohbet alanına yerleşir ── */
 .hub-detail-view.has-hub-bg {
@@ -1857,7 +1846,7 @@ body.hubset-open { overflow: hidden; }
   animation: hubset-in 0.18s var(--ease);
 }
 @keyframes hubset-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .hubset-screen { animation: none; } }
+html.reduce-motion .hubset-screen { animation: none; }
 .hubset-shell { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }
 
 .hubset-topbar {
@@ -2032,7 +2021,7 @@ body.hubset-open { overflow: hidden; }
 /* Gösterge görünmezken (opacity 0) noktalar boşuna kare üretmesin: lobi/DM açık olduğu sürece 6 nokta sürekli dönüyordu. */
 .typing-indicator:not(.active) .typing-dots i { animation-play-state: paused; }
 @keyframes typing-bounce { 0%, 60%, 100% { opacity: 0.35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
-@media (prefers-reduced-motion: reduce) { .typing-dots i { animation: none; opacity: 0.8; } }
+html.reduce-motion .typing-dots i { animation: none; opacity: 0.8; }
 
 /* ── Mesaj arama paneli ── */
 .msg-search-panel {
@@ -2348,11 +2337,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   animation: contrastEdgeGlowGpu 3.4s ease-in-out infinite;
 }
 @keyframes contrastEdgeGlowGpu { 0%, 100% { opacity: .65; } 50% { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) {
-  .hub-msg-bubble.chat-theme-soft::before, .dm-msg.chat-theme-soft::before,
-  .hub-msg-bubble.chat-theme-contrast::before, .dm-msg.chat-theme-contrast::before,
-  .hub-msg-bubble.chat-theme-contrast::after, .dm-msg.chat-theme-contrast::after { animation: none; }
-}
+html.reduce-motion .hub-msg-bubble.chat-theme-soft::before, html.reduce-motion .dm-msg.chat-theme-soft::before, html.reduce-motion .hub-msg-bubble.chat-theme-contrast::before, html.reduce-motion .dm-msg.chat-theme-contrast::before, html.reduce-motion .hub-msg-bubble.chat-theme-contrast::after, html.reduce-motion .dm-msg.chat-theme-contrast::after { animation: none; }
 /* Ekranda görünmeyen mesajların tüm efektleri (balon, çerçeve, isim efekti) duraklatılır */
 .msg-offscreen, .msg-offscreen *, .msg-offscreen::before, .msg-offscreen::after,
 .msg-offscreen *::before, .msg-offscreen *::after { animation-play-state: paused; }
@@ -2563,7 +2548,7 @@ body.in-group[data-view="hub-detail"] .topbar-lobby-badge { display: none !impor
   background: linear-gradient(to top, rgba(120, 190, 255, .45), rgba(160, 130, 255, .18) 45%, transparent 90%); animation: pfxSmokeSwayA var(--t) ease-in-out var(--d) infinite; }
 .hub-fx-lights > i:nth-child(1) { left: 12% !important; } .hub-fx-lights > i:nth-child(2) { left: 36% !important; }
 .hub-fx-lights > i:nth-child(3) { left: 62% !important; } .hub-fx-lights > i:nth-child(4) { left: 86% !important; }
-@media (prefers-reduced-motion: reduce) { .hub-fx > i { animation: none; opacity: .15; } }
+html.reduce-motion .hub-fx > i { animation: none; opacity: .15; }
 body.hubset-open .hub-fx > i { animation-play-state: paused; }
 
 /* ══ Lobi bannerı (Seviye 3, GIF olabilir): lobi bilgi penceresi + Keşfet kartı/detayı (sohbetin üstünde DEĞİL) ═════════ */
@@ -2622,7 +2607,7 @@ body.hubset-open .hub-fx > i { animation-play-state: paused; }
 @keyframes mcBorder { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
 @keyframes mcShine { 0%, 55% { transform: translateX(0); opacity: 0; } 62% { opacity: 1; } 100% { transform: translateX(560%); opacity: 0; } }
 @keyframes mcSpark { 0%, 100% { opacity: 0; transform: translateY(0) scale(.6); } 40% { opacity: 1; transform: translateY(-5px) scale(1); } 70% { opacity: 0; transform: translateY(-10px) scale(.5); } }
-@media (prefers-reduced-motion: reduce) { .member-prem::before, .mc-shine, .mc-spark { animation: none; } .mc-spark { opacity: .5; } }
+html.reduce-motion .member-prem::before, html.reduce-motion .mc-shine, html.reduce-motion .mc-spark { animation: none; } html.reduce-motion .mc-spark { opacity: .5; }
 
 /* ══ Premium üye kartı stilleri (cs-*): renkler değişken, parçacıklar emoji ya da nokta ═════════════════════════ */
 .member-prem::before { background-image: linear-gradient(110deg, var(--b1, #ffd166), var(--b2, #c084fc), var(--b3, #4fe3ff), var(--b1, #ffd166)); }
@@ -2646,7 +2631,7 @@ body.hubset-open .hub-fx > i { animation-play-state: paused; }
 .cs-frost  { --b1: #bdf3ff; --b2: #5ec8ff; --b3: #ffffff; --tint: #6fd3ff; --sp: '❄️'; }
 .cs-dragon { --b1: #2fd27a; --b2: #ffd166; --b3: #0e7a45; --tint: #1fbf6d; --sp: '🐉'; }
 @keyframes mcFlicker { 0%, 88%, 92%, 100% { filter: none; } 90% { filter: brightness(2.2); } 96% { filter: brightness(1.6); } }
-@media (prefers-reduced-motion: reduce) { .cs-thunder::before { animation: none; } }
+html.reduce-motion .cs-thunder::before { animation: none; }
 
 /* Özelleştirme Merkezi: stil önizlemeleri */
 .cz-card-group { margin: 12px 0 6px; font-size: 12px; font-weight: 650; color: var(--text-secondary); }
@@ -2914,7 +2899,7 @@ body.st-open { overflow: hidden; }
   background: radial-gradient(circle, #fff 0%, rgba(255, 220, 238, .75) 42%, transparent 72%); filter: blur(1.2px);
 }
 @keyframes srGlowPulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .sr-overlay::before, .sr-highlight { animation: none; } }
+html.reduce-motion .sr-overlay::before, html.reduce-motion .sr-highlight { animation: none; }
 
 /* ══ Masaüstü / tablet: sol ray da telefondaki yeni gezinmeyle aynı (#mnav dikey cam ray) ═════════════════════
    Gruplar · Keşfet · Ana Menü · Arkadaşlar (liste + arama) · Mesajlar · (altta) Profil. Eski .app-rail gizlenir; ızgaradaki ray sütunu aynen kalır. */
@@ -2957,7 +2942,7 @@ body.drawer-friendlist .friends-directory { display: flex; flex-direction: colum
 }
 @keyframes notifSlideIn { from { transform: translateX(100%); } to { transform: none; } }
 @media (max-width: 480px) { #notifications-modal .modal-box { width: 92vw; } }
-@media (prefers-reduced-motion: reduce) { #notifications-modal .modal-box { animation: none; } }
+html.reduce-motion #notifications-modal .modal-box { animation: none; }
 
 /* ══ Bildirimler: şık yan pencere (prototip tarzı: yumuşak kartlar, simge rozetleri, hap düğmeler) ═════════════ */
 #notifications-modal .modal-box { background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.01)), #0d1220 !important; }
@@ -3112,7 +3097,7 @@ body.drawer-friendlist .friends-directory { display: flex; flex-direction: colum
 .pfxc-sweet::before { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 46px rgba(255, 140, 200, .5), inset 0 0 0 1.5px rgba(255, 190, 220, .55); }
 .pfxc-sweet .fxc-sw { bottom: -6%; font-style: normal; line-height: 1; text-shadow: 0 0 8px rgba(255, 140, 200, .7); opacity: 0; animation: fxSweet var(--t) ease-in var(--d) infinite; }
 @keyframes fxSweet { 0% { transform: translate(0, 0) rotate(-10deg); opacity: 0; } 10% { opacity: .95; } 55% { transform: translate(var(--x), -280px) rotate(10deg); } 100% { transform: translate(calc(var(--x) * -1), -560px) rotate(-8deg); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .pfxc *, .pfxc::before { animation: none !important; } .pfxc .fxc-ember, .pfxc .fxc-ash, .pfxc .fxc-sw { opacity: .6; } }
+html.reduce-motion .pfxc *, html.reduce-motion .pfxc::before { animation: none !important; } html.reduce-motion .pfxc .fxc-ember, html.reduce-motion .pfxc .fxc-ash, html.reduce-motion .pfxc .fxc-sw { opacity: .6; }
 
 /* İsim plakası: üye listesi satırının ve profil adının arkasında zemin (listelerde sabit; önizleme/profilde .plate-anim ışıltı) */
 .has-plate { position: relative; overflow: hidden; background-color: #101018; background-repeat: no-repeat; border-radius: 14px; }
@@ -3162,9 +3147,7 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
 
 /* Hareketi azalt tercihi açıksa: tek tek kapatılmamış sürekli (sonsuz) animasyonlar da bir tur oynayıp durur.
    !important gerekli: daha özgül "animation:" kısaltmaları tur sayısını yeniden "infinite" yapar. */
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-iteration-count: 1 !important; }
-}
+html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after { animation-iteration-count: 1 !important; }
 
 /* Bağlantı durumu şeridi (koptu / yeniden bağlandı) */
 .conn-banner {
@@ -3399,7 +3382,7 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
 .attach-tray-prog b { position: relative; font-size: 11px; font-weight: 800; color: #fff; }
 .attach-tray-item.is-sending img { filter: brightness(.75); }
 @keyframes trayPrep { from { left: 0; } to { left: 65%; } }
-@media (prefers-reduced-motion: reduce) { .attach-tray-prog.prep i { animation: none; } }
+html.reduce-motion .attach-tray-prog.prep i { animation: none; }
 
 /* ── Özel durum yazısı ── */
 .cstatus-open { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: rgba(179, 102, 245, 0.10); color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
@@ -3472,7 +3455,7 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
 .sk-bar { height: 12px; border-radius: 6px; max-width: 100%; }
 .sk-bar.sk-thin { height: 9px; opacity: .8; }
 @keyframes skShimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
-@media (prefers-reduced-motion: reduce) { .sk-av, .sk-bar { animation: none; } }
+html.reduce-motion .sk-av, html.reduce-motion .sk-bar { animation: none; }
 
 /* Pencere kutusu klavye odağı aldığında (modal-a11y.js) çerçeve çizilmez; içerideki öğelerin odak çerçevesi korunur. */
 [role="dialog"] > [tabindex="-1"]:focus, [role="dialog"][tabindex="-1"]:focus { outline: none; }
@@ -3530,7 +3513,7 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
   box-shadow: 0 0 0 4px var(--bg-app, #0a0d11), 0 0 0 6px #2fd16a, 0 0 10px rgba(47, 209, 106, .5);
 }
 .hub-member-row.is-speaking .msg-avatar-btn { box-shadow: 0 0 0 2px var(--bg-app, #0a0d11), 0 0 0 4px #2fd16a, 0 0 10px rgba(47, 209, 106, .5); }
-@media (prefers-reduced-motion: reduce) { .call-hub-room-avatar, .hub-voice-member-avatar, .hub-member-row .msg-avatar-btn { transition: none; } }
+html.reduce-motion .call-hub-room-avatar, html.reduce-motion .hub-voice-member-avatar, html.reduce-motion .hub-member-row .msg-avatar-btn { transition: none; }
 
 /* Plus üyeler: konuşma halkası mordan altına geçen, dönen, parlak bir halka (özel konuşma göstergesi). Halka avatarın üstünde ayrı bir
    katmandır (::before); çerçeveli avatarlarda çerçevenin dışından çizilir. Hareket azaltma tercihinde döndürülmez. */
@@ -3557,11 +3540,7 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
 .hub-voice-room-member.plus-voice.is-speaking .hub-voice-member-avatar::before { inset: -4px; --ring: 2.5px; }
 .hub-voice-room-member.plus-voice.is-speaking .hub-voice-member-avatar[class*=" frame-"]::before { inset: -6px; }
 .hub-member-row.plus-voice.is-speaking .hub-member-avatar-wrap::before { inset: -4px; --ring: 2.5px; }
-@media (prefers-reduced-motion: reduce) {
-  .call-hub-room-person.plus-voice.is-speaking .call-hub-room-avatar::before,
-  .hub-voice-room-member.plus-voice.is-speaking .hub-voice-member-avatar::before,
-  .hub-member-row.plus-voice.is-speaking .hub-member-avatar-wrap::before { animation: none; }
-}
+html.reduce-motion .call-hub-room-person.plus-voice.is-speaking .call-hub-room-avatar::before, html.reduce-motion .hub-voice-room-member.plus-voice.is-speaking .hub-voice-member-avatar::before, html.reduce-motion .hub-member-row.plus-voice.is-speaking .hub-member-avatar-wrap::before { animation: none; }
 
 /* ── Yayın başlatırken "Arkadaşlarıma haber ver" + oda listesinde CANLI rozeti ── */
 .share-notify { margin-top: 12px; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.035); }
@@ -3702,3 +3681,37 @@ body #dm-modal .dmreq-hide, body.lc #dm-modal .dm-call-btn.dmreq-hide { display:
 .voice-meter-mark { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: #fff; border-radius: 2px; box-shadow: 0 0 0 1px rgba(0,0,0,.4); }
 .voice-meter-mark[hidden] { display: none; }
 .voice-meter-fill.below-gate { filter: grayscale(1) brightness(.7); }
+
+/* ── Görünüm paketi ── */
+/* Tam siyah (OLED) tema: zemin ve yüzeyler siyaha çekilir; değişken kullanmayan yaygın yüzeyler de karartılır */
+body.theme-oled {
+  --bg-app: #000000;
+  --bg-surface: #07080a;
+  --bg-surface-2: #0c0e11;
+  --bg-surface-3: #121519;
+  --border-soft: rgba(255, 255, 255, 0.08);
+  --border-soft-strong: rgba(255, 255, 255, 0.13);
+  --shadow-surface: none;
+  background: #000;
+}
+body.theme-oled .topbar, body.theme-oled .chat-area, body.theme-oled .hub-detail-side, body.theme-oled .hub-voice-rooms-side,
+body.theme-oled .friends-sidebar, body.theme-oled .lobby-nav, body.theme-oled .lc-msgs, body.theme-oled .mobile-nav,
+body.theme-oled #hub-feed, body.theme-oled .dm-modal-box, body.theme-oled .rail { background-color: #000 !important; }
+body.theme-oled .modal-box, body.theme-oled .composer-input-box { background-color: #0b0c0f !important; }
+/* Sohbet yazı boyutu (yalnızca mesaj metni; arayüz aynı kalır) */
+html.chat-fs-custom .hub-msg-text, html.chat-fs-custom .hub-msg .content, html.chat-fs-custom .dm-msg-content { font-size: var(--chat-fs) !important; line-height: 1.45; }
+/* Sıkışık mesaj sıklığı */
+html.density-compact .hub-msg, html.density-compact .hub-msg.msg-mine { padding-top: 2px !important; padding-bottom: 2px !important; gap: 10px !important; }
+html.density-compact .hub-msg .msg-avatar-btn { width: 24px !important; height: 24px !important; min-width: 24px; font-size: 11px !important; }
+html.density-compact .dm-msg-row, html.density-compact .dm-msg { padding-top: 1px !important; padding-bottom: 1px !important; }
+html.density-compact .dm-msg-row .msg-avatar-btn { width: 24px !important; height: 24px !important; min-width: 24px; font-size: 11px !important; }
+/* Animasyonları azalt: tüm canlandırmalar ve geçişler durur (uygulama ayarı) */
+html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
+/* Yazı boyutu satırı */
+.ui-font-row { display: flex; align-items: center; gap: 10px; margin: 6px 0 8px; }
+.ui-font-row input { flex: 1; accent-color: var(--accent); }
+.ui-font-a { color: var(--text-secondary); font-weight: 800; }
+.ui-font-a.small { font-size: 12px; } .ui-font-a.big { font-size: 20px; }
+.ui-font-row output { min-width: 44px; text-align: right; font-size: 12.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.ui-font-preview { margin: 0 0 14px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.04); color: var(--text-primary); line-height: 1.45; }
+.ui-font-preview b { color: #9ad8ff; margin-right: 6px; }

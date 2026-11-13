@@ -9,6 +9,9 @@
     <!-- Önceden oturum açılmış cihazda sayfa yenilenince giriş ekranı bir an görünmesin: oturum kontrolü bitene kadar gizlenir (yalnızca yerel ipucu; gerçek kontrol sunucuda). -->
     <script>try { if (localStorage.getItem('sauran_session_hint') === '1') { document.documentElement.classList.add('auth-pending'); setTimeout(function () { document.documentElement.classList.remove('auth-pending'); }, 12000); } } catch (e) { /* depolama yok */ }</script>
 
+    <!-- Görünüm tercihleri (hareket azaltma, mesaj sıklığı, sohbet yazı boyutu) ilk çizimden önce uygulanır; tema ve tam uygulama script.js'te. -->
+    <script>try { var u = JSON.parse(localStorage.getItem('sauran_ui') || '{}') || {}; var h = document.documentElement; if (u.reduceMotion || (u.motionSync && window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) h.classList.add('reduce-motion'); if (u.density === 'compact') h.classList.add('density-compact'); if (u.chatFont && u.chatFont !== 15) { h.classList.add('chat-fs-custom'); h.style.setProperty('--chat-fs', u.chatFont + 'px'); } } catch (e) { /* depolama yok */ }</script>
+
     <!-- Kritik dosya bekçisi: sunucu güncellenirken (deploy) ya da ağ kesildiğinde bir stil/betik dosyası yüklenemezse yarım
          biçimlenmiş arayüz gösterilmez. Onun yerine "Bağlanıyor…" ekranı çıkar ve sayfa artan aralıklarla kendiliğinden yeniden
          yüklenir (en çok 6 deneme; sonra "Yeniden dene"). Başka hiçbir dosyaya bağlı değildir. -->
@@ -2122,7 +2125,41 @@
                             <span class="privacy-option-title" data-i18n="theme-purple">Mor Tema</span>
                             <span class="privacy-option-desc" data-i18n="theme-purple-desc">Derin mor, karanlık arayüz</span>
                         </button>
+                        <button class="privacy-option" data-theme="oled" type="button">
+                            <span class="privacy-option-title" data-i18n="theme-oled">Tam Siyah</span>
+                            <span class="privacy-option-desc" data-i18n="theme-oled-desc">OLED ekranlarda pil dostu, tam siyah zemin</span>
+                        </button>
+                        <button class="privacy-option" data-theme="auto" type="button">
+                            <span class="privacy-option-title" data-i18n="theme-auto">Sisteme uy</span>
+                            <span class="privacy-option-desc" data-i18n="theme-auto-desc">Cihazın koyu/açık ayarını izler (açık tema yakında; şimdilik koyu)</span>
+                        </button>
                     </div>
+                    <p class="settings-voice-hint" data-i18n="ui-synced">Görünüm tercihlerin hesabına kaydedilir; tüm cihazlarında aynı olur.</p>
+
+                    <span class="profile-field-label" data-i18n="ui-chatfont">Sohbet yazı boyutu</span>
+                    <div class="ui-font-row">
+                        <span class="ui-font-a small" aria-hidden="true">A</span>
+                        <input type="range" id="settings-chat-font" min="12" max="20" step="1" aria-label="Sohbet yazı boyutu">
+                        <span class="ui-font-a big" aria-hidden="true">A</span>
+                        <output id="settings-chat-font-out">15 px</output>
+                    </div>
+                    <div class="ui-font-preview" id="settings-chat-font-preview"><b>deniz</b> Merhaba! Yazı boyutu böyle görünecek. 👋</div>
+
+                    <span class="profile-field-label" data-i18n="ui-density">Mesaj sıklığı</span>
+                    <div class="privacy-options">
+                        <button class="privacy-option" data-density="cozy" type="button">
+                            <span class="privacy-option-title" data-i18n="ui-cozy">Rahat</span>
+                            <span class="privacy-option-desc" data-i18n="ui-cozy-desc">Büyük profil fotoğrafları, ferah aralıklar</span>
+                        </button>
+                        <button class="privacy-option" data-density="compact" type="button">
+                            <span class="privacy-option-title" data-i18n="ui-compact">Sıkışık</span>
+                            <span class="privacy-option-desc" data-i18n="ui-compact-desc">Küçük fotoğraflar, ekrana daha çok mesaj sığar</span>
+                        </button>
+                    </div>
+
+                    <span class="profile-field-label" data-i18n="ui-motion">Hareket</span>
+                    <label class="notif-pref-row"><input type="checkbox" id="settings-reduce-motion"><span><span data-i18n="ui-reduce-motion">Animasyonları azalt</span><span class="settings-voice-hint" data-i18n="ui-reduce-motion-d">Efektler, çerçeve ve isim animasyonları durur; geçişler sadeleşir.</span></span></label>
+                    <label class="notif-pref-row"><input type="checkbox" id="settings-motion-sync"><span><span data-i18n="ui-motion-sync">Cihazın ayarına uy</span><span class="settings-voice-hint" data-i18n="ui-motion-sync-d">Cihazında "hareketi azalt" açıksa Sauran'da da animasyonlar azalır.</span></span></label>
 
                     <div class="sidedock-setting">
                         <span class="profile-field-label">Lobi yan panelleri (üyeler, sesli odalar)</span>
