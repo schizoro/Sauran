@@ -107,6 +107,8 @@ const {
   respondDmRequest,
   needsAgeDeclaration,
   needsPolicyAcceptance,
+  policyEnforced,
+  policyEnforceAt,
   acceptPolicy,
   declareAge,
   setAccountMinorByAdmin,
@@ -695,6 +697,30 @@ if (require('./backup').isInsidePublicDir(process.env.DATA_DIR || path.join(__di
 // Kişisel veri taşıyan API yanıtları (dışa aktarım dahil) tarayıcı/proxy önbelleğine alınmaz.
 app.use('/api', (req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 
+// Güncellenen Kullanım Şartları'nı kabul etmemiş hesap (geçiş süresi bittikten sonra): yalnızca oturum bilgisi, kabul,
+// veri indirme, hesap silme ve çıkış çalışır; diğer istekler 428 'policy_required' alır. Oturumsuz istekler etkilenmez.
+const POLICY_OPEN_ROUTES = new Set(['GET /api/me', 'POST /api/policy/accept', 'GET /api/account/export', 'DELETE /api/account', 'POST /api/logout']);
+const policyCache = new Map(); // userId -> { needs, at } (30 sn)
+function userNeedsPolicyNow(userId) {
+  const c = policyCache.get(userId);
+  if (c && Date.now() - c.at < 30000) return c.needs;
+  const needs = needsPolicyAcceptance(userId);
+  policyCache.set(userId, { needs, at: Date.now() });
+  if (policyCache.size > 20000) policyCache.clear();
+  return needs;
+}
+app.use('/api', (req, res, next) => {
+  try {
+    if (!policyEnforced()) return next();
+    if (POLICY_OPEN_ROUTES.has(`${req.method} ${req.baseUrl}${req.path}`.replace(/\/$/, ''))) return next();
+    const user = getUserFromRequest(req);
+    if (user && userNeedsPolicyNow(user.id)) {
+      return res.status(428).json({ success: false, code: 'policy_required', error: 'Devam etmek için güncellenen Kullanım Şartları\'nı kabul etmelisin.' });
+    }
+  } catch (_) { /* denetim hatası isteği engellemez */ }
+  next();
+});
+
 // Statik dosyalar: tarayıcı saklar ama her açılışta "değişti mi?" diye sorar (ETag). Değişmediyse 304 döner, gövde inmez
 // (eskiden no-store yüzünden her açılışta ~420 KB JS/CSS yeniden iniyordu). Deploy sonrası yeni sürüm yine hemen gelir.
 // Sürüm numarası dosya adında olan kütüphaneler (vendor/*-x.y.z.js) asla değişmez: 1 yıl, yeniden sorulmadan.
@@ -1112,7 +1138,7 @@ app.get('/api/me', (req, res) => {
 
     const plusActive = hasActivePlus(user.id);
     const themeOk = hasFeature(user.id, 'chat_theme'), bubbleOk = hasFeature(user.id, 'bubble_style');
-    return res.json({ success: true, user: { ...user, name_plate: effectiveNamePlate(user.id), avatar_frame: getEquippedCosmetics(user.id).avatar_frame, plus_active: plusActive, chat_theme: themeOk ? (user.chat_theme || 'classic') : 'classic', profile_color: user.profile_color || null, bubble_style: bubbleOk ? (user.bubble_style || 'default') : 'default', profile_effect: hasFeature(user.id, 'profile_effect') ? (user.profile_effect || 'none') : 'none', profile_theme: hasFeature(user.id, 'profile_theme') ? (user.profile_theme || 'default') : 'default', name_effect: hasFeature(user.id, 'name_effect') ? (user.name_effect || 'none') : 'none', atmosphere: effectiveAtmosphere(user.id), profile_sound: effectiveProfileSound(user.id), card_style: effectiveCardStyle(user.id), profile_sound_on: user.profile_sound_on !== 0, features: listFeatures(user.id), premium_active: hasActivePremium(user.id), needs_age: needsAgeDeclaration(user.id), needs_policy: needsPolicyAcceptance(user.id) } });
+    return res.json({ success: true, user: { ...user, name_plate: effectiveNamePlate(user.id), avatar_frame: getEquippedCosmetics(user.id).avatar_frame, plus_active: plusActive, chat_theme: themeOk ? (user.chat_theme || 'classic') : 'classic', profile_color: user.profile_color || null, bubble_style: bubbleOk ? (user.bubble_style || 'default') : 'default', profile_effect: hasFeature(user.id, 'profile_effect') ? (user.profile_effect || 'none') : 'none', profile_theme: hasFeature(user.id, 'profile_theme') ? (user.profile_theme || 'default') : 'default', name_effect: hasFeature(user.id, 'name_effect') ? (user.name_effect || 'none') : 'none', atmosphere: effectiveAtmosphere(user.id), profile_sound: effectiveProfileSound(user.id), card_style: effectiveCardStyle(user.id), profile_sound_on: user.profile_sound_on !== 0, features: listFeatures(user.id), premium_active: hasActivePremium(user.id), needs_age: needsAgeDeclaration(user.id), needs_policy: needsPolicyAcceptance(user.id), policy_deadline: policyEnforceAt() } });
 
   } catch (error) {
     console.error('Session kontrol hatası:', error);
@@ -2319,7 +2345,7 @@ function terminateSuspendedUserSockets(userId, userReason) {
 app.post('/api/policy/accept', privacyLimiter, (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
-  try { return res.json(acceptPolicy(user.id)); }
+  try { const r = acceptPolicy(user.id); policyCache.delete(user.id); return res.json(r); }
   catch (error) { console.error('Politika kabul hatası:', error); res.status(500).json({ success: false, error: 'Kaydedilemedi.' }); }
 });
 
@@ -5796,6 +5822,14 @@ io.use((socket, next) => {
 
     socket.userId = user.id;
     socket.data.tokenHash = hashSessionToken(token); // soket, doğrulandığı oturuma bağlıdır (oturum iptal edilirse kapanır)
+    // Güncellenen şartlar kabul edilmeden (geçiş süresi sonrası) soket olayları işlenmez; bağlantı açık kalır.
+    socket.use((packet, nextPacket) => {
+      try {
+        if (policyEnforced() && userNeedsPolicyNow(user.id)) return nextPacket(new Error('policy_required'));
+      } catch (_) { /* denetim hatası olayı engellemez */ }
+      nextPacket();
+    });
+    socket.on('error', (err) => { if (err && err.message !== 'policy_required') console.error('Soket hatası:', err.message); });
     socket.username = user.username;
     socket.email = user.email;
 

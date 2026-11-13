@@ -6770,6 +6770,30 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 `);
+// Geçiş süresi: sürüm ilk kez görüldükten sonra POLICY_GRACE_DAYS gün boyunca kullanıcı kabul ekranında "Sonra" diyebilir
+// ve sunucu engellemez. Süre dolunca "Sonra" kalkar ve sunucu da kabul edilmemiş istekleri reddeder.
+// Başlangıç anı kalıcı olarak saklanır (yeniden başlatma süreyi uzatmaz).
+const POLICY_GRACE_DAYS = 30;
+db.exec(`CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`);
+{
+  const key = `policy_enforce_at:${POLICY_VERSION}`;
+  if (!db.prepare(`SELECT 1 FROM app_meta WHERE key = ?`).get(key)) {
+    const at = new Date(Date.now() + POLICY_GRACE_DAYS * 24 * 3600 * 1000).toISOString();
+    db.prepare(`INSERT INTO app_meta (key, value) VALUES (?, ?)`).run(key, at);
+  }
+}
+let policyEnforceAtCache = { v: null, at: 0 };
+function policyEnforceAt() {
+  if (Date.now() - policyEnforceAtCache.at < 60000) return policyEnforceAtCache.v; // her istekte sorgu olmasın
+  const r = db.prepare(`SELECT value FROM app_meta WHERE key = ?`).get(`policy_enforce_at:${POLICY_VERSION}`);
+  policyEnforceAtCache = { v: r ? r.value : null, at: Date.now() };
+  return policyEnforceAtCache.v;
+}
+function policyEnforced(now = new Date()) {
+  const at = policyEnforceAt();
+  return Boolean(at) && now.toISOString() >= at;
+}
+
 function needsPolicyAcceptance(userId) {
   const u = db.prepare(`SELECT policy_version FROM users WHERE id = ?`).get(userId);
   return Boolean(u) && u.policy_version !== POLICY_VERSION;
@@ -10152,6 +10176,8 @@ module.exports = {
   respondDmRequest,
   needsAgeDeclaration,
   needsPolicyAcceptance,
+  policyEnforced,
+  policyEnforceAt,
   acceptPolicy,
   declareAge,
   setAccountMinorByAdmin,

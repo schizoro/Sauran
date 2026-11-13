@@ -21,6 +21,10 @@ test.before(async () => {
     const sikayet = makeUser(dbm, 'sikayetli');
     const pol = legacy('politikasiz'); // politika güncellemesini henüz kabul etmemiş eski hesap
     dbm.db.prepare(`UPDATE users SET policy_version = NULL WHERE id = ?`).run(pol.id);
+    const pol2 = makeUser(dbm, 'politikasiz2'); // sunucu engeli testi
+    dbm.db.prepare(`UPDATE users SET policy_version = NULL WHERE id = ?`).run(pol2.id);
+    // geçiş süresi bitmiş say: sunucu engeli etkin
+    dbm.db.prepare(`UPDATE app_meta SET value = '2000-01-01T00:00:00.000Z' WHERE key LIKE 'policy_enforce_at:%'`).run();
     return { eski: eski.id, genc: genc.id, kucuk: kucuk.id, yeni: yeni.id, adm: adm.id, kur: kur.id, sikayet: sikayet.id };
   });
   S = srv.seeded;
@@ -100,7 +104,8 @@ test('Politika güncellemesi: kabul edilmeden yaş beyanı yapılamaz; kabul sü
   let me = (await c.get('/api/me')).body.user;
   assert.equal(me.needs_policy, true);
   assert.equal(me.needs_age, true);
-  assert.equal((await c.post('/api/profile/age', { birth_date: birthForAge(30) })).status, 409, 'önce politika');
+  // Bu dosyada sunucu engeli etkin: önce 428 (engel), engel kapalıyken de 409 (declareAge kontrolü) döner.
+  assert.ok([409, 428].includes((await c.post('/api/profile/age', { birth_date: birthForAge(30) })).status), 'önce politika');
   assert.equal((await c.post('/api/policy/accept')).status, 200);
   me = (await c.get('/api/me')).body.user;
   assert.equal(me.needs_policy, false);
@@ -108,4 +113,15 @@ test('Politika güncellemesi: kabul edilmeden yaş beyanı yapılamaz; kabul sü
   const yeni = await login('yenihesap');
   assert.equal((await yeni.get('/api/me')).body.user.needs_policy, false, 'yeni kayıt güncel sürümü kabul etmiş sayılır');
   assert.equal((await client(srv.base).post('/api/policy/accept')).status, 401);
+});
+
+test('Geçiş süresinden sonra sunucu engeli: kabul edilmeden yalnızca izinli uç noktalar çalışır', async () => {
+  const c = await login('politikasiz2');
+  assert.equal((await c.get('/api/me')).status, 200, 'oturum bilgisi açık');
+  const blocked = await c.get('/api/friends');
+  assert.equal(blocked.status, 428);
+  assert.equal(blocked.body.code, 'policy_required');
+  assert.equal((await c.get('/api/account/export')).status, 200, 'veri indirme açık');
+  assert.equal((await c.post('/api/policy/accept')).status, 200);
+  assert.equal((await c.get('/api/friends')).status, 200, 'kabulden sonra açılır');
 });

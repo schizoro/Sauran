@@ -4087,10 +4087,29 @@ document.getElementById('settings-delete-account-btn').addEventListener('click',
 });
 
 
+// Sunucu "policy_required" (428) dönerse (ör. uzun süredir açık kalmış oturum) kabul ekranı açılır.
+(function watchPolicyRequired() {
+    const orig = window.fetch.bind(window);
+    window.fetch = async (...args) => {
+        const res = await orig(...args);
+        if (res.status === 428) {
+            res.clone().json().then((d) => { if (d && d.code === 'policy_required') openPolicyUpdate(); }).catch(() => {});
+        }
+        return res;
+    };
+})();
+
 // ─── Güncellenen politikalar: kabul edilmeden uygulama kullanılamaz (kapatılamaz) ───
 // Kabul → (gerekiyorsa) doğum tarihi sorusu. Kabul etmeme → verilerini indir / hesabını sil / çıkış yap; fikrini değiştirebilir.
 function openPolicyUpdate() {
     if (document.getElementById('policy-update-modal')) return;
+    // Geçiş süresi bitmediyse "Sonra" düğmesi: bu oturumda kapanır, bir sonraki açılışta yeniden sorulur.
+    const deadline = currentUser && currentUser.policy_deadline ? new Date(currentUser.policy_deadline) : null;
+    const daysLeft = deadline && !isNaN(deadline) ? Math.ceil((deadline - Date.now()) / 86400000) : 0;
+    const laterHtml = daysLeft > 0
+        ? `<button type="button" id="policy-later" class="policy-decline-btn">Sonra</button>
+           <p class="age-declare-small policy-later-note">${daysLeft} gün içinde kabul etmen gerekiyor; bu süreden sonra "Sonra" seçeneği kalkar.</p>`
+        : '';
     const ov = document.createElement('div');
     ov.id = 'policy-update-modal';
     ov.className = 'modal-overlay age-declare-overlay';
@@ -4101,7 +4120,7 @@ function openPolicyUpdate() {
     const main = `
         <div class="age-declare-ic" aria-hidden="true">📜</div>
         <h2 id="policy-update-title">Politikalarımızı güncelledik</h2>
-        <p>Devam etmeden önce güncellenen <a href="kullanim-sartlari.html" target="_blank" rel="noopener">Kullanım Şartları</a>'nı kabul etmen gerekiyor. Verilerinin nasıl işlendiğini <a href="gizlilik-politikasi.html" target="_blank" rel="noopener">Gizlilik Politikası</a>'nda, çocuk korumalarını <a href="cocuk-guvenligi.html" target="_blank" rel="noopener">Çocuk Güvenliği</a> sayfasında okuyabilirsin.</p>
+        <p>Güncellenen <a href="kullanim-sartlari.html" target="_blank" rel="noopener">Kullanım Şartları</a>'nı kabul etmeni istiyoruz. Verilerinin nasıl işlendiğini <a href="gizlilik-politikasi.html" target="_blank" rel="noopener">Gizlilik Politikası</a>'nda, çocuk korumalarını <a href="cocuk-guvenligi.html" target="_blank" rel="noopener">Çocuk Güvenliği</a> sayfasında okuyabilirsin.</p>
         <ul class="policy-update-list">
             <li><b>Yaş bilgisi:</b> doğum tarihi olmayan eski hesaplardan bir kez doğum tarihi istiyoruz; tam tarihi saklamıyoruz.</li>
             <li><b>18 yaş altı korumaları:</b> tanımadığın kişilerden arkadaşlık ve mesaj isteği kapalı; bildirim üzerine yönetim bir hesabı 18 yaş altı olarak işaretleyebilir.</li>
@@ -4111,6 +4130,7 @@ function openPolicyUpdate() {
         <div class="hub-create-error" id="policy-err" role="alert"></div>
         <p class="age-declare-small">“Kabul ediyorum”a basarak Kullanım Şartları'nı kabul ettiğini ve Gizlilik Politikası'nı okuduğunu onaylamış olursun.</p>
         <button type="button" id="policy-accept" class="about-btn about-btn-primary">Kabul ediyorum</button>
+        ${laterHtml}
         <button type="button" id="policy-decline" class="policy-decline-btn">Kabul etmiyorum</button>`;
     const declined = `
         <div class="age-declare-ic" aria-hidden="true">⏸️</div>
@@ -4145,6 +4165,7 @@ function openPolicyUpdate() {
             } catch (e) { err(e.message || t('generic-error')); ev.target.disabled = false; }
         });
         box.querySelector('#policy-decline').addEventListener('click', showDeclined);
+        box.querySelector('#policy-later')?.addEventListener('click', () => ov.remove());
         setTimeout(() => box.querySelector('#policy-accept')?.focus(), 50);
     };
     const showDeclined = () => {
