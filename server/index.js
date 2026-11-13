@@ -101,6 +101,10 @@ const {
   listFriendIds,
   isBlocked,
   getPrivacySettings,
+  dmState,
+  dmFullAccess,
+  listDmRequests,
+  respondDmRequest,
   needsAgeDeclaration,
   declareAge,
   setAccountMinorByAdmin,
@@ -2500,13 +2504,37 @@ app.get('/api/privacy', (req, res) => {
   catch (error) { console.error('Gizlilik ayarları hatası:', error); res.status(500).json({ success: false, error: 'Ayarlar alınamadı.' }); }
 });
 
-app.patch('/api/privacy/friend-requests', privacyLimiter, (req, res) => {
+app.patch(['/api/privacy/friend-requests', '/api/privacy'], privacyLimiter, (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
   try {
     const result = updateFriendRequestPrivacy(user.id, req.body || {});
     return res.status(result.success ? 200 : 400).json(result);
   } catch (error) { console.error('Gizlilik güncelleme hatası:', error); res.status(500).json({ success: false, error: 'Güncellenemedi.' }); }
+});
+
+// ── Mesaj istekleri
+app.get('/api/dm/requests', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try { return res.json({ success: true, requests: listDmRequests(user.id) }); }
+  catch (error) { console.error('Mesaj istekleri hatası:', error); res.status(500).json({ success: false, error: 'İstekler alınamadı.' }); }
+});
+
+app.post('/api/dm/requests/:userId/:action', privacyLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  const senderId = /^[0-9]{1,15}$/.test(req.params.userId) ? Number(req.params.userId) : null;
+  const action = req.params.action;
+  if (!senderId || !['accept', 'decline'].includes(action)) return res.status(400).json({ success: false, error: 'Geçersiz istek.' });
+  try {
+    const result = respondDmRequest(user.id, senderId, action === 'accept');
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    // Kabul edilince gönderen tarafın açık sohbeti normal moda geçer (reddedilince haber verilmez).
+    if (result.status === 'accepted') io.to(`user:${senderId}`).emit('dm_request_accepted', { user_id: user.id });
+    io.to(`user:${user.id}`).emit('dm_requests_changed');
+    return res.json(result);
+  } catch (error) { console.error('Mesaj isteği yanıt hatası:', error); res.status(500).json({ success: false, error: 'Yanıtlanamadı.' }); }
 });
 
 // ── Yok sayma
@@ -4601,6 +4629,7 @@ function emitDmMessage(message) {
 
   if (!message.to_user_id || message.to_user_id === message.user_id) return;
   if (isIgnored(message.to_user_id, message.user_id)) return;
+  if (message.is_request) return; // mesaj isteği: kabul edilene kadar bildirim yok
 
   dispatchWebPush(message.to_user_id, 'dm_message', {
     title: message.username,
@@ -5669,16 +5698,18 @@ app.get('/api/dm/:userId/messages', (req, res) => {
 
   const otherId = Number(req.params.userId);
 
-  if (!areFriends(user.id, otherId)) {
-    return res.status(403).json({ success: false, error: 'Sadece arkadaşlarınla mesajlaşabilirsin.' });
+  const dmStateNow = dmState(user.id, otherId);
+  if (!['friend', 'accepted', 'request_in', 'request_out', 'can_request'].includes(dmStateNow)) {
+    return res.status(403).json({ success: false, error: 'Bu kişiyle mesajlaşamazsın.' });
   }
+  res.locals.dmState = dmStateNow;
 
   try {
     const num = (v) => (/^[0-9]{1,15}$/.test(String(v || '')) ? Number(v) : null);
-    if (num(req.query.around)) return res.json({ success: true, ...getDmMessagesAround(user.id, otherId, num(req.query.around)) });
-    if (num(req.query.after)) return res.json({ success: true, ...getDmMessagesAfter(user.id, otherId, num(req.query.after)) });
+    if (num(req.query.around)) return res.json({ success: true, dm_state: res.locals.dmState, ...getDmMessagesAround(user.id, otherId, num(req.query.around)) });
+    if (num(req.query.after)) return res.json({ success: true, dm_state: res.locals.dmState, ...getDmMessagesAfter(user.id, otherId, num(req.query.after)) });
     const unread = !num(req.query.before) ? firstUnreadInfo(user.id, { dmOtherId: otherId }) : null;
-    return res.json({ success: true, ...getDmMessagesPage(user.id, otherId, { before: num(req.query.before), limit: req.query.limit }), ...(unread || {}) });
+    return res.json({ success: true, dm_state: res.locals.dmState, ...getDmMessagesPage(user.id, otherId, { before: num(req.query.before), limit: req.query.limit }), ...(unread || {}) });
   } catch (error) {
     console.error('DM mesaj hatası:', error);
     res.status(500).json({ success: false, error: 'Mesajlar alınamadı.' });
@@ -5838,7 +5869,7 @@ io.on('connection', (socket) => {
       }
 
       emitDmMessage(clientId ? { ...result.message, client_id: clientId } : result.message);
-      setImmediate(() => attachLinkPreview(result.message));
+      if (!result.is_request) setImmediate(() => attachLinkPreview(result.message));
 
     } catch (error) {
       console.error('DM kaydedilirken hata:', error);
@@ -6225,7 +6256,7 @@ io.on('connection', (socket) => {
       if (!socket.rooms.has(`hub:${id}`)) return;
       socket.to(`hub:${id}`).emit('typing', { ...payload, scope: 'hub', id, channel_id: Number(data?.channel_id) || null });
     } else if (scope === 'dm') {
-      if (id === socket.userId || !areFriends(socket.userId, id)) return;
+      if (id === socket.userId || !dmFullAccess(socket.userId, id)) return;
       io.to(`user:${id}`).emit('typing', { ...payload, scope: 'dm', id: socket.userId });
     }
   };

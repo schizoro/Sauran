@@ -1979,6 +1979,7 @@ function setCurrentUser(user) {
         user;
 
     refreshIgnoredUsers();
+    setTimeout(refreshDmRequestsBadge, 600);
     if (user && user.needs_age) setTimeout(openAgeDeclaration, 400);
 
     finishAuthPending(true);
@@ -4163,6 +4164,8 @@ async function loadPrivacySettings() {
     document.querySelectorAll('#privacy-fr-group input[data-fr]').forEach((box) => { box.checked = Boolean(data.friend_requests[box.dataset.fr]); });
     syncFriendRequestBoxes();
     renderAvatarVisibility(data.avatar_visibility);
+    const lobbyDms = document.getElementById('privacy-lobby-dms');
+    if (lobbyDms) lobbyDms.checked = data.lobby_dms !== false;
     loadIgnoredUsers();
 }
 function syncFriendRequestBoxes() {
@@ -4179,6 +4182,114 @@ document.querySelectorAll('#privacy-fr-group input[data-fr]').forEach((box) => b
         if (!r.success) { box.checked = !box.checked; syncFriendRequestBoxes(); showToast(r.error || t('generic-error')); }
     } catch (_) { box.checked = !box.checked; syncFriendRequestBoxes(); }
 }));
+document.getElementById('privacy-lobby-dms')?.addEventListener('change', async (e) => {
+    const box = e.target;
+    try {
+        const r = await fetch('/api/privacy', { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lobby_dms: box.checked }) }).then((x) => x.json());
+        if (!r.success) { box.checked = !box.checked; showToast(r.error || t('generic-error')); }
+    } catch (_) { box.checked = !box.checked; }
+});
+
+// ─── Mesaj istekleri: arkadaş olmayan, aynı lobideki kişiden gelen özel mesajlar ───
+var dmRequestCount = 0;
+async function refreshDmRequestsBadge() {
+    try {
+        const d = await fetch('/api/dm/requests', { credentials: 'include' }).then((r) => r.json());
+        dmRequestCount = d && d.success ? d.requests.length : 0;
+    } catch (_) { /* sayaç aynı kalır */ }
+    ensureDmRequestEntryPoints();
+    return dmRequestCount;
+}
+// Giriş noktaları: Mesajlar sayfasının ve Arkadaşlar panelinin üstünde "Mesaj istekleri (N)" (yalnızca istek varken)
+function ensureDmRequestEntryPoints() {
+    const make = (id, parent, before) => {
+        if (!parent) return null;
+        let b = document.getElementById(id);
+        if (!b) {
+            b = document.createElement('button');
+            b.type = 'button'; b.id = id; b.className = 'fd-pending dmreq-entry';
+            b.addEventListener('click', () => openDmRequests());
+            parent.insertBefore(b, before || null);
+        }
+        b.hidden = dmRequestCount === 0;
+        b.innerHTML = `<span>✉️ ${escapeHtml(t('dmreq-title'))}</span><b>${dmRequestCount}</b>`;
+        return b;
+    };
+    const msgs = document.getElementById('lc-msgs');
+    make('dmreq-entry-msgs', msgs, document.getElementById('lc-msgs-list'));
+    const dir = document.getElementById('friends-directory');
+    make('dmreq-entry-friends', dir, document.getElementById('fd-list'));
+}
+async function openDmRequests() {
+    document.getElementById('dmreq-modal')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'dmreq-modal';
+    ov.className = 'modal-overlay';
+    ov.style.display = 'flex';
+    ov.innerHTML = `<div class="modal-box dmreq-box" role="dialog" aria-modal="true" aria-labelledby="dmreq-h">
+        <div class="modal-header"><span id="dmreq-h">✉️ ${escapeHtml(t('dmreq-title'))}</span><button type="button" class="dmreq-close" aria-label="Kapat">✕</button></div>
+        <div class="dmreq-list" id="dmreq-list"><div class="settings-blocked-empty">…</div></div></div>`;
+    document.body.appendChild(ov);
+    const close = () => ov.remove();
+    ov.querySelector('.dmreq-close').addEventListener('click', close);
+    ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+    let list = [];
+    try { const d = await fetch('/api/dm/requests', { credentials: 'include' }).then((r) => r.json()); list = d.success ? d.requests : []; } catch (_) {}
+    dmRequestCount = list.length; ensureDmRequestEntryPoints();
+    const box = ov.querySelector('#dmreq-list');
+    if (!list.length) { box.innerHTML = `<div class="settings-blocked-empty">${escapeHtml(t('dmreq-empty'))}</div>`; return; }
+    box.innerHTML = list.map((r) => {
+        const av = r.avatar_data ? `<img src="${escapeAttr(r.avatar_data)}" alt="">` : escapeHtml(r.username.charAt(0).toUpperCase());
+        return `<button type="button" class="dmreq-row" data-uid="${Number(r.user_id)}" data-uname="${escapeAttr(r.username)}">
+            <span class="settings-blocked-avatar" style="--user-color:${getUserColor(r.username)};">${av}</span>
+            <span class="dmreq-txt"><b>${escapeHtml(r.username)}</b><small>${escapeHtml(r.preview || '')}</small></span>
+            <span class="dmreq-n">${escapeHtml(t('dmreq-count').replace('{n}', r.count))}</span></button>`;
+    }).join('');
+    box.querySelectorAll('.dmreq-row').forEach((row) => row.addEventListener('click', () => { close(); openDm(Number(row.dataset.uid), row.dataset.uname); }));
+}
+window.openDmRequests = openDmRequests;
+
+// Açık sohbetin istek durumu: gelen istekte kabul/ret çubuğu (yazma kapalı); giden istekte bilgi + yalnızca yazı.
+function applyDmRequestState(state, userId, username) {
+    const form = dmForm;
+    document.getElementById('dmreq-bar')?.remove();
+    const restricted = state === 'request_in' || state === 'request_out' || state === 'can_request';
+    // Sıkı Düzen CSS'i bu düğmelere display:!important verir; satır içi stil yetmez, sınıfla gizlenir.
+    ['dm-attach-btn', 'dm-voice-btn', 'dm-search-btn'].forEach((id) => document.getElementById(id)?.classList.toggle('dmreq-hide', restricted));
+    // Sesli arama yalnızca arkadaşlar arasında (kabul edilmiş mesaj isteği aramayı açmaz).
+    document.getElementById('dm-call-btn')?.classList.toggle('dmreq-hide', Boolean(state) && state !== 'friend');
+    if (!restricted) { if (!dmReadOnly) form.style.display = ''; return; }
+    const bar = document.createElement('div');
+    bar.id = 'dmreq-bar';
+    bar.className = 'dmreq-bar' + (state === 'request_in' ? ' is-in' : '');
+    if (state === 'request_in') {
+        form.style.display = 'none';
+        bar.innerHTML = `<p>${escapeHtml(t('dmreq-in').replace('{user}', username || ''))}</p>
+            <div class="dmreq-actions"><button type="button" class="dmreq-accept">${escapeHtml(t('dmreq-accept'))}</button>
+            <button type="button" class="dmreq-decline">${escapeHtml(t('dmreq-decline'))}</button>
+            <button type="button" class="dmreq-block">🚫 ${escapeHtml(t('dmreq-block'))}</button></div>`;
+        const act = async (action) => {
+            bar.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+            const r = await fetch(`/api/dm/requests/${userId}/${action}`, { method: 'POST', credentials: 'include' }).then((x) => x.json()).catch(() => null);
+            if (!r?.success) { showToast(r?.error || t('generic-error')); bar.querySelectorAll('button').forEach((b) => { b.disabled = false; }); return; }
+            refreshDmRequestsBadge();
+            if (action === 'accept') openDm(userId, username); else { dmModal.style.display = 'none'; activeDmUserId = null; }
+        };
+        bar.querySelector('.dmreq-accept').addEventListener('click', () => act('accept'));
+        bar.querySelector('.dmreq-decline').addEventListener('click', () => act('decline'));
+        bar.querySelector('.dmreq-block').addEventListener('click', async () => {
+            if (!confirm(`${username} kullanıcısını engellemek istediğine emin misin?`)) return;
+            await fetch(`/api/users/${userId}/block`, { method: 'POST', credentials: 'include' });
+            refreshDmRequestsBadge();
+            dmModal.style.display = 'none'; activeDmUserId = null;
+        });
+    } else {
+        if (!dmReadOnly) form.style.display = '';
+        bar.innerHTML = `<p>${escapeHtml(t('dmreq-out').replace('{user}', username || ''))}</p>`;
+    }
+    form.parentNode.insertBefore(bar, form);
+}
+
 function renderAvatarVisibility(vis) {
     document.querySelectorAll('#privacy-avatar-seg [data-vis]').forEach((b) => { const on = b.dataset.vis === vis; b.classList.toggle('selected', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); });
     const note = document.getElementById('privacy-avatar-note');
@@ -4475,6 +4586,17 @@ const I18N = {
     'notif-pref-hub-message': { tr: 'Yeni Lobi mesaj bildirimleri', en: 'New lobby message notifications' },
     'notif-pref-friend-request': { tr: 'Arkadaşlık istekleri', en: 'Friend requests' },
     'notif-pref-friend-accepted': { tr: 'Arkadaşlık isteği kabul edildi', en: 'Friend request accepted' },
+    'privacy-dm-title': { tr: 'Özel mesajlar', en: 'Direct messages' },
+    'privacy-dm-lobby': { tr: 'Aynı lobideki kişiler mesaj isteği gönderebilsin', en: 'Let people in my lobbies send message requests' },
+    'privacy-dm-lobby-hint': { tr: 'Arkadaşın olmayan biri yazarsa "Mesaj istekleri"ne düşer; sen kabul edene kadar bildirim gelmez ve yalnızca yazı gönderebilir.', en: 'Messages from non-friends go to "Message requests"; no notifications and text only until you accept.' },
+    'dmreq-title': { tr: 'Mesaj istekleri', en: 'Message requests' },
+    'dmreq-empty': { tr: 'Bekleyen mesaj isteği yok.', en: 'No pending message requests.' },
+    'dmreq-in': { tr: '{user} arkadaşın değil ve sana mesaj isteği gönderdi. Kabul edersen normal sohbet açılır; reddedersen sana tekrar yazamaz (bunu bilmez).', en: '{user} is not your friend and sent you a message request. Accept to chat normally; decline and they can no longer write to you (they are not told).' },
+    'dmreq-out': { tr: 'Bu bir mesaj isteği. {user} kabul edene kadar en fazla 3 yazılı mesaj gönderebilirsin; fotoğraf, dosya ve ses gönderilemez.', en: 'This is a message request. Until {user} accepts you can send up to 3 text messages; no photos, files or voice.' },
+    'dmreq-accept': { tr: 'Kabul et', en: 'Accept' },
+    'dmreq-decline': { tr: 'Reddet', en: 'Decline' },
+    'dmreq-block': { tr: 'Engelle', en: 'Block' },
+    'dmreq-count': { tr: '{n} mesaj', en: '{n} messages' },
     'privacy-fr-title': { tr: 'Arkadaşlık istekleri', en: 'Friend requests' },
     'privacy-fr-desc': { tr: 'Sana kimlerin arkadaşlık isteği gönderebileceğini seç.', en: 'Choose who can send you friend requests.' },
     'privacy-fr-everyone': { tr: 'Herkes', en: 'Everyone' },
@@ -6205,6 +6327,9 @@ function connectToChat() {
     // DM mesajı
     // -------------------------------------------------
 
+    socket.on('dm_request_accepted', (d) => { if (Number(d?.user_id) === activeDmUserId) openDm(activeDmUserId, activeDmUsername); });
+    socket.on('dm_requests_changed', () => refreshDmRequestsBadge());
+
     socket.on(
         'dm_message',
         (msg) => {
@@ -6213,6 +6338,11 @@ function connectToChat() {
                 msg.user_id === currentUser.id ?
                     msg.to_user_id :
                     msg.user_id;
+
+            if (msg.is_request && msg.user_id !== currentUser.id && otherId !== activeDmUserId) {
+                refreshDmRequestsBadge(); // istek kutusuna düşer: ses, okunmamış sayacı ve bildirim yok
+                return;
+            }
 
             if (otherId === activeDmUserId) {
 
@@ -6233,7 +6363,7 @@ function connectToChat() {
 
             }
 
-            if (msg.user_id !== currentUser.id && msg.kind !== 'dm_call') maybeNotifyIncomingDm(msg);
+            if (msg.user_id !== currentUser.id && msg.kind !== 'dm_call' && !msg.is_request) maybeNotifyIncomingDm(msg);
 
         }
     );
@@ -10004,6 +10134,10 @@ function renderOtherProfileActions(profile) {
         html += `<button class="profile-action-btn profile-action-disabled" id="report-user-btn">🚩 <span data-i18n="report-user">Bildir</span></button>`;
     }
 
+    if (profile.friendship_status !== 'friends' && profile.friendship_status !== 'self' && !profile.blocked_by_me && !otherProfileHideMessageAction
+        && ['can_request', 'request_out', 'request_in', 'accepted'].includes(profile.dm_state)) {
+        html = `<button class="profile-action-btn profile-action-secondary" id="dm-open-btn">💬 Mesaj Gönder</button>` + html;
+    }
     otherProfileActions.innerHTML = html;
     // İkincil eylemler (Engelle / Yok say / Bildir) tek sırada, küçük düğmeler olarak
     const minor = ['block-btn', 'unblock-btn', 'ignore-btn', 'unignore-btn', 'report-user-btn'].map((id) => document.getElementById(id)).filter(Boolean);
@@ -10122,6 +10256,7 @@ function setDmReadOnlyMode(on, expiresAt) {
     dmReadOnly = on;
     dmForm.style.display = on ? 'none' : '';
     dmCallBtn.style.display = on ? 'none' : '';
+    dmCallBtn.classList.toggle('dmreq-hide', Boolean(on)); // Sıkı Düzen'de display:!important satır içi stili ezer
     document.getElementById('dm-search-btn').style.display = on ? 'none' : '';
     document.getElementById('dm-reply-preview').style.display = 'none';
 
@@ -10270,6 +10405,7 @@ async function openDm(userId, username) {
         const data = await response.json();
 
         if (window.__openDmSeq === dmSeq) skeletonOff(dmFeed);
+        if (activeDmUserId === userId) applyDmRequestState(data.success ? data.dm_state : null, userId, username);
         if (data.success && activeDmUserId === userId) {
             dmFeed._stickBottom = true;
             data.messages.forEach((m) => appendDmMessage(m));

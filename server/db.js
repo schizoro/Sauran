@@ -2432,7 +2432,7 @@ function verifyAndCreateUser(email, code) {
     db.prepare(`DELETE FROM pending_verifications WHERE id = ?`).run(pending.id);
     ensureClassicFrame(result.lastInsertRowid);
     // 18 yaş altı: "Herkes"ten arkadaşlık isteği varsayılan KAPALI (kullanıcı isterse açabilir).
-    if (minor) db.prepare(`UPDATE users SET fr_from_everyone = 0 WHERE id = ?`).run(result.lastInsertRowid);
+    if (minor) db.prepare(`UPDATE users SET fr_from_everyone = 0, dm_from_hub = 0 WHERE id = ?`).run(result.lastInsertRowid);
 
     return {
       success: true,
@@ -5235,7 +5235,7 @@ function searchHubMessages(hubId, viewerId, query, before) {
 }
 
 function searchDmMessages(userId, otherId, query, before) {
-  if (!areFriends(userId, otherId)) return { success: false, status: 403, error: 'Sadece arkadaşlarınla mesajlaşabilirsin.' };
+  if (!dmFullAccess(userId, otherId)) return { success: false, status: 403, error: 'Sadece arkadaşlarınla mesajlaşabilirsin.' };
   return searchScopeMessages({ viewerId: userId, room: dmRoom(userId, otherId), query, before });
 }
 
@@ -5851,7 +5851,7 @@ function createHubSticker(hubId, userId, username, stickerId) {
 }
 
 function saveDmSticker(fromId, fromUsername, toId, stickerId) {
-  if (!areFriends(fromId, toId)) {
+  if (!dmFullAccess(fromId, toId)) {
     return { success: false, error: 'Sadece arkadaşlarınla mesajlaşabilirsin.' };
   }
 
@@ -6355,7 +6355,14 @@ function getUnreadCounts(userId) {
     SELECT CASE WHEN user_low = ? THEN user_high ELSE user_low END AS other
     FROM friendships WHERE status = 'accepted' AND (user_low = ? OR user_high = ?)
   `).all(userId, userId, userId);
-  for (const { other } of friends) {
+  const acceptedOthers = db.prepare(`
+    SELECT CASE WHEN sender_id = ? THEN recipient_id ELSE sender_id END AS other
+    FROM dm_requests WHERE status = 'accepted' AND (sender_id = ? OR recipient_id = ?)
+  `).all(userId, userId, userId).filter((r) => dmFullAccess(userId, r.other));
+  const seen = new Set();
+  for (const { other } of [...friends, ...acceptedOthers]) {
+    if (seen.has(other)) continue;
+    seen.add(other);
     const count = unreadDmCount(userId, other);
     if (count) dms[other] = count;
   }
@@ -6380,7 +6387,7 @@ function markScopeRead(userId, scope, scopeId, messageId) {
   if (scope === 'hub') {
     if (!isHubMember(scopeId, userId)) return { success: false, status: 403, error: 'Bu Lobi\'a üye değilsin.' };
   } else if (scope === 'dm') {
-    if (!areFriends(userId, scopeId)) return { success: false, status: 403, error: 'Sadece arkadaşlarınla mesajlaşabilirsin.' };
+    if (!dmFullAccess(userId, scopeId)) return { success: false, status: 403, error: 'Sadece arkadaşlarınla mesajlaşabilirsin.' };
   } else {
     return { success: false, status: 400, error: 'Geçersiz tür.' };
   }
@@ -6754,10 +6761,11 @@ function needsAgeDeclaration(userId) {
 // 18 yaş altı olduğu öğrenilen hesaba kayıttaki koruyucu varsayılanlar uygulanır.
 function applyMinorProtections(userId, minorUntil) {
   db.prepare(`
-    UPDATE users SET minor_until = ?, fr_from_everyone = 0,
+    UPDATE users SET minor_until = ?, fr_from_everyone = 0, dm_from_hub = 0,
       avatar_visibility = CASE WHEN avatar_visibility = 'public' THEN 'friends' ELSE avatar_visibility END
     WHERE id = ?
   `).run(minorUntil, userId);
+  db.prepare(`UPDATE dm_requests SET status = 'declined', updated_at = CURRENT_TIMESTAMP WHERE (sender_id = ? OR recipient_id = ?) AND status IN ('pending', 'accepted')`).run(userId, userId);
 }
 
 // Eski hesap doğum tarihini bir kez beyan eder. Tam tarih saklanmaz (yalnızca 18. yaş günü).
@@ -6813,22 +6821,130 @@ function setAccountMinorByAdmin({ actorId, actorRole, targetId, age, internalRea
   return { success: true, minor_until: minorUntil };
 }
 
+// =====================================================
+// MESAJ İSTEKLERİ (arkadaş olmayan, aynı lobideki kişiden özel mesaj)
+// =====================================================
+// dm_from_hub (users): aynı lobideki kişiler mesaj isteği gönderebilir mi (varsayılan açık; 18 yaş altı kapalı).
+// dm_requests(sender, recipient, status): 'pending' → alıcı kabul edene kadar istek kutusunda, bildirimsiz;
+// 'accepted' → normal sohbet (iki yönde); 'declined' → gönderen yeni mesaj atamaz (karşı tarafa söylenmez).
+// İstek beklerken gönderen en fazla DM_REQUEST_MAX yazılı mesaj atabilir; fotoğraf, dosya, ses, çıkartma yok.
+const DM_REQUEST_MAX = 3;
+const DM_REQUEST_DAILY = 10;
+if (!privacyColumns.includes('dm_from_hub')) {
+  db.exec(`ALTER TABLE users ADD COLUMN dm_from_hub INTEGER NOT NULL DEFAULT 1`);
+  db.prepare(`UPDATE users SET dm_from_hub = 0 WHERE minor_until IS NOT NULL AND minor_until > date('now')`).run();
+}
+db.exec(`
+  CREATE TABLE IF NOT EXISTS dm_requests (
+    sender_id INTEGER NOT NULL,
+    recipient_id INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (sender_id, recipient_id),
+    FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_dm_requests_recipient ON dm_requests(recipient_id, status);
+`);
+
+db.exec(`CREATE INDEX IF NOT EXISTS idx_hub_members_user ON hub_members(user_id, hub_id)`);
+
+function getDmRequestRow(senderId, recipientId) {
+  return db.prepare(`SELECT status, created_at FROM dm_requests WHERE sender_id = ? AND recipient_id = ?`).get(senderId, recipientId);
+}
+
+function shareAnyHub(a, b) {
+  return Boolean(db.prepare(`SELECT 1 FROM hub_members x JOIN hub_members y ON x.hub_id = y.hub_id WHERE x.user_id = ? AND y.user_id = ? LIMIT 1`).get(a, b));
+}
+
+// a'nın b ile özel mesaj durumu:
+// 'friend' | 'accepted' (istek kabul edilmiş) | 'request_in' (b'nin isteği a'nın onayını bekliyor)
+// | 'request_out' (a'nın isteği bekliyor) | 'can_request' (a, b'ye istek gönderebilir) | null (mesajlaşamaz)
+// Arkadaş olmayanlar arası özel mesajın KALICI kuralları (her çağrıda yeniden denetlenir, eski kayıtlar da uyar):
+// · 18 yaş altı biri varsa (gönderen ya da alıcı) arkadaş olmayan özel mesaj YOK — istek de, kabul edilmiş sohbet de.
+// · Ortak lobi kalmazsa istek ve kabul edilmiş sohbet kapanır (geçmiş silinmez; arkadaş olurlarsa yine açılır).
+// · Ret 30 gün geçerlidir; sonra yeniden istek gönderilebilir.
+const DM_DECLINE_DAYS = 30;
+function dmUserFlags(id) {
+  const u = db.prepare(`SELECT dm_from_hub, minor_until, age_declared FROM users WHERE id = ?`).get(id);
+  // Yaşı bilinmeyen (doğum tarihi sorusunu henüz cevaplamamış eski) hesap, cevaplayana kadar 18 yaş altı gibi korunur.
+  return u ? { dmFromHub: u.dm_from_hub !== 0, minor: isMinorUntil(u.minor_until) || u.age_declared === 0 } : null;
+}
+function dmState(a, b) {
+  if (!a || !b || a === b) return null;
+  if (areFriends(a, b)) return 'friend';
+  if (isBlocked(a, b) || isBlocked(b, a)) return null;
+  const fa = dmUserFlags(a), fb = dmUserFlags(b);
+  if (!fa || !fb || fa.minor || fb.minor) return null;
+  if (!shareAnyHub(a, b)) return null;
+  const out = getDmRequestRow(a, b), inn = getDmRequestRow(b, a);
+  if (out?.status === 'accepted' || inn?.status === 'accepted') return 'accepted';
+  if (inn?.status === 'pending' && fa.dmFromHub) return 'request_in';
+  if (out?.status === 'pending' && fb.dmFromHub && !isIgnored(b, a)) return 'request_out';
+  if (out?.status === 'declined') {
+    const fresh = db.prepare(`SELECT 1 FROM dm_requests WHERE sender_id = ? AND recipient_id = ? AND updated_at > datetime('now', ?)`).get(a, b, `-${DM_DECLINE_DAYS} days`);
+    if (fresh) return null;
+  }
+  if (!fb.dmFromHub || isIgnored(b, a)) return null;
+  return 'can_request';
+}
+
+// Tam özel mesaj erişimi (fotoğraf/dosya/ses/çıkartma, yazıyor, okundu, arama): arkadaş ya da kabul edilmiş istek.
+function dmFullAccess(a, b) {
+  const s = dmState(a, b);
+  return s === 'friend' || s === 'accepted';
+}
+
+function listDmRequests(userId) {
+  const rows = db.prepare(`
+    SELECT r.sender_id, r.created_at, u.username, u.avatar_data, u.avatar_visibility, u.profile_color
+    FROM dm_requests r JOIN users u ON u.id = r.sender_id
+    WHERE r.recipient_id = ? AND r.status = 'pending'
+      AND NOT EXISTS (SELECT 1 FROM ignored_users i WHERE i.user_id = ? AND i.ignored_id = r.sender_id)
+      AND NOT EXISTS (SELECT 1 FROM blocked_users b WHERE (b.user_id = ? AND b.blocked_user_id = r.sender_id) OR (b.user_id = r.sender_id AND b.blocked_user_id = ?))
+    ORDER BY r.updated_at DESC
+  `).all(userId, userId, userId, userId);
+  const last = db.prepare(`SELECT id, content, created_at FROM messages WHERE room = ? AND user_id = ? AND kind = 'dm' ORDER BY id DESC LIMIT 1`);
+  const count = db.prepare(`SELECT COUNT(*) AS c FROM messages WHERE room = ? AND user_id = ? AND kind = 'dm'`);
+  return rows.filter((r) => !areFriends(userId, r.sender_id)).map((r) => {
+    const room = dmRoom(userId, r.sender_id);
+    const m = last.get(room, r.sender_id);
+    const text = m ? String(m.content || '').replace(/\s+/g, ' ').trim() : '';
+    const masked = maskAvatarFor(userId, r.sender_id, { id: r.sender_id, username: r.username, avatar_data: r.avatar_data, profile_color: r.profile_color }, r.avatar_visibility);
+    return { ...masked, user_id: r.sender_id, preview: text.length > 90 ? text.slice(0, 90) + '…' : text, count: count.get(room, r.sender_id).c, at: m ? m.created_at : r.created_at };
+  });
+}
+
+function respondDmRequest(recipientId, senderId, accept) {
+  const row = getDmRequestRow(senderId, recipientId);
+  if (!row || row.status !== 'pending') return { success: false, status: 404, error: 'Bekleyen bir mesaj isteği yok.' };
+  db.prepare(`UPDATE dm_requests SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE sender_id = ? AND recipient_id = ?`)
+    .run(accept ? 'accepted' : 'declined', senderId, recipientId);
+  return { success: true, status: accept ? 'accepted' : 'declined' };
+}
+
 function getPrivacySettings(userId) {
-  const u = db.prepare(`SELECT avatar_visibility, fr_from_everyone, fr_from_fof, fr_from_hub FROM users WHERE id = ?`).get(userId);
+  const u = db.prepare(`SELECT avatar_visibility, fr_from_everyone, fr_from_fof, fr_from_hub, dm_from_hub FROM users WHERE id = ?`).get(userId);
   if (!u) return null;
   return {
     avatar_visibility: u.avatar_visibility || 'public',
-    friend_requests: { everyone: u.fr_from_everyone !== 0, friends_of_friends: u.fr_from_fof !== 0, lobby_members: u.fr_from_hub !== 0 }
+    friend_requests: { everyone: u.fr_from_everyone !== 0, friends_of_friends: u.fr_from_fof !== 0, lobby_members: u.fr_from_hub !== 0 },
+    lobby_dms: u.dm_from_hub !== 0
   };
 }
 
 function updateFriendRequestPrivacy(userId, patch) {
-  const map = { everyone: 'fr_from_everyone', friends_of_friends: 'fr_from_fof', lobby_members: 'fr_from_hub' };
+  const map = { everyone: 'fr_from_everyone', friends_of_friends: 'fr_from_fof', lobby_members: 'fr_from_hub', lobby_dms: 'dm_from_hub' };
   const sets = []; const vals = [];
   for (const [key, col] of Object.entries(map)) {
     if (patch && typeof patch[key] === 'boolean') { sets.push(`${col} = ?`); vals.push(patch[key] ? 1 : 0); }
   }
   if (!sets.length) return { success: false, error: 'Değişiklik yok.' };
+  if (patch.lobby_dms === true) {
+    const me = db.prepare(`SELECT minor_until FROM users WHERE id = ?`).get(userId);
+    if (me && isMinorUntil(me.minor_until)) return { success: false, error: '18 yaşından küçük hesaplarda arkadaş olmayanlardan mesaj kapalıdır.' };
+  }
   db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...vals, userId);
   return { success: true, ...getPrivacySettings(userId) };
 }
@@ -6928,7 +7044,17 @@ function listFriends(userId) {
 const DM_PREVIEW_LABEL = { dm_voice: 'Sesli mesaj', dm_image: 'Fotoğraf', dm_video: 'Video', dm_file: 'Dosya', dm_sticker: 'Çıkartma', dm_call: 'Arama' };
 function listDmConversations(userId) {
   const last = db.prepare(`SELECT id, user_id, kind, content, created_at FROM messages WHERE room = ? AND kind != 'deleted' ORDER BY id DESC LIMIT 1`);
-  return listFriends(userId).map((f) => {
+  const friends = listFriends(userId);
+  const friendIds = new Set(friends.map((f) => f.id));
+  // Kabul edilmiş mesaj istekleri (arkadaş değil): temel bilgilerle listeye eklenir.
+  const accepted = db.prepare(`
+    SELECT u.id, u.username, u.status, u.avatar_data, u.avatar_visibility, u.profile_color
+    FROM dm_requests r JOIN users u ON u.id = CASE WHEN r.sender_id = ? THEN r.recipient_id ELSE r.sender_id END
+    WHERE r.status = 'accepted' AND (r.sender_id = ? OR r.recipient_id = ?)
+  `).all(userId, userId, userId)
+    .filter((u) => !friendIds.has(u.id) && !isBlocked(userId, u.id) && !isBlocked(u.id, userId))
+    .map((u) => { const { avatar_visibility, ...rest } = u; return { ...maskAvatarFor(userId, u.id, rest, avatar_visibility), not_friend: true }; });
+  return [...friends, ...accepted].map((f) => {
     const m = last.get(dmRoom(userId, f.id));
     if (!m) return null;
     const text = m.kind === 'dm' ? String(m.content || '').replace(/\s+/g, ' ').trim() : '';
@@ -7208,6 +7334,7 @@ function getUserPublicProfile(viewerId, targetId) {
     profile_sound_url: visible && effectiveProfileSound(targetId) === 'custom' && profileSoundVisibleTo(viewerId, targetId, user.avatar_visibility, user.minor_until) ? profileSoundUrl(targetId) : null,
     friendship_status: isSelf ? 'self' : friendship,
     blocked_by_me: blockedByMe,
+    dm_state: viewerId && !isSelf ? dmState(viewerId, targetId) : null,
     ignored_by_me: viewerId && !isSelf ? isIgnored(viewerId, targetId) : false,
     can_friend_request: viewerId && !isSelf && friendship === 'none' ? friendRequestAllowed(viewerId, targetId) : null
   };
@@ -7626,8 +7753,20 @@ function dmRoom(a, b) {
 }
 
 function saveDmMessage(fromId, fromUsername, toId, content, replyToMessageId = null) {
-  if (!areFriends(fromId, toId)) {
-    return { success: false, error: 'Sadece arkadaşlarınla mesajlaşabilirsin.' };
+  const state = dmState(fromId, toId);
+  if (!state) return { success: false, error: 'Bu kişiye şu an mesaj gönderemezsin.' };
+  if (state === 'request_in') return { success: false, error: 'Önce mesaj isteğini kabul et.' };
+  const isRequest = state === 'can_request' || state === 'request_out';
+  if (state === 'can_request') {
+    // Kalabalık lobide herkese istek atılmasın: gönderen başına 24 saatte en fazla DM_REQUEST_DAILY yeni kişi.
+    const opened = db.prepare(`SELECT COUNT(*) AS c FROM dm_requests WHERE sender_id = ? AND created_at > datetime('now', '-1 day') AND status != 'accepted'`).get(fromId).c;
+    if (opened >= DM_REQUEST_DAILY) return { success: false, error: 'Bugün çok fazla kişiye mesaj isteği gönderdin. Yarın tekrar deneyebilirsin.' };
+  }
+  if (isRequest) {
+    const row = getDmRequestRow(fromId, toId);
+    const since = row?.created_at || '1970-01-01';
+    const sent = db.prepare(`SELECT COUNT(*) AS c FROM messages WHERE room = ? AND user_id = ? AND created_at >= ?`).get(dmRoom(fromId, toId), fromId, since).c;
+    if (row && sent >= DM_REQUEST_MAX) return { success: false, error: `Mesaj isteğin kabul edilene kadar en fazla ${DM_REQUEST_MAX} mesaj gönderebilirsin.` };
   }
 
   // Askıdaki hesaba YENİ mesaj gönderilemez (mevcut DM geçmişi olduğu gibi durur).
@@ -7646,19 +7785,27 @@ function saveDmMessage(fromId, fromUsername, toId, content, replyToMessageId = n
     if (parent) validReplyId = parent.id;
   }
 
+  if (isRequest) {
+    db.prepare(`
+      INSERT INTO dm_requests (sender_id, recipient_id, status) VALUES (?, ?, 'pending')
+      ON CONFLICT(sender_id, recipient_id) DO UPDATE SET
+        status = 'pending', updated_at = CURRENT_TIMESTAMP,
+        created_at = CASE WHEN dm_requests.status = 'declined' THEN CURRENT_TIMESTAMP ELSE dm_requests.created_at END
+    `).run(fromId, toId);
+  }
+
   const info = db.prepare(`
     INSERT INTO messages (user_id, username, content, room, to_user_id, kind, reply_to_message_id)
     VALUES (?, ?, ?, ?, ?, 'dm', ?)
   `).run(fromId, fromUsername, content, dmRoom(fromId, toId), toId, validReplyId);
 
-  return {
-    success: true,
-    message: getMessageById(info.lastInsertRowid)
-  };
+  const message = getMessageById(info.lastInsertRowid);
+  if (isRequest && message) message.is_request = true;
+  return { success: true, message, is_request: isRequest };
 }
 
 function saveDmVoiceMessage(fromId, fromUsername, toId, audioData, duration) {
-  if (!areFriends(fromId, toId)) {
+  if (!dmFullAccess(fromId, toId)) {
     return { success: false, error: 'Sadece arkadaşlarınla mesajlaşabilirsin.' };
   }
 
@@ -7689,7 +7836,7 @@ function saveDmVoiceMessage(fromId, fromUsername, toId, audioData, duration) {
 }
 
 function createDmFileMessage(fromId, fromUsername, toId, file) {
-  if (!areFriends(fromId, toId)) {
+  if (!dmFullAccess(fromId, toId)) {
     return { success: false, error: 'Sadece arkadaşlarınla mesajlaşabilirsin.' };
   }
 
@@ -7804,7 +7951,9 @@ function getMessageAccessInfo(messageId, actorId) {
     return { msg, hasAccess: isHubMember(msg.hub_id, actorId) };
   }
   if (msg.to_user_id) {
-    return { msg, hasAccess: msg.user_id === actorId || msg.to_user_id === actorId };
+    const party = msg.user_id === actorId || msg.to_user_id === actorId;
+    const other = msg.user_id === actorId ? msg.to_user_id : msg.user_id;
+    return { msg, hasAccess: party && dmFullAccess(actorId, other) };
   }
   return { msg, hasAccess: false };
 }
@@ -9966,6 +10115,10 @@ module.exports = {
   listFriendIdsInHub,
   listFriendIds,
   getPrivacySettings,
+  dmState,
+  dmFullAccess,
+  listDmRequests,
+  respondDmRequest,
   needsAgeDeclaration,
   declareAge,
   setAccountMinorByAdmin,
