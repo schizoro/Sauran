@@ -106,6 +106,8 @@ const {
   listDmRequests,
   respondDmRequest,
   needsAgeDeclaration,
+  needsPolicyAcceptance,
+  acceptPolicy,
   declareAge,
   setAccountMinorByAdmin,
   updateFriendRequestPrivacy,
@@ -1110,7 +1112,7 @@ app.get('/api/me', (req, res) => {
 
     const plusActive = hasActivePlus(user.id);
     const themeOk = hasFeature(user.id, 'chat_theme'), bubbleOk = hasFeature(user.id, 'bubble_style');
-    return res.json({ success: true, user: { ...user, name_plate: effectiveNamePlate(user.id), avatar_frame: getEquippedCosmetics(user.id).avatar_frame, plus_active: plusActive, chat_theme: themeOk ? (user.chat_theme || 'classic') : 'classic', profile_color: user.profile_color || null, bubble_style: bubbleOk ? (user.bubble_style || 'default') : 'default', profile_effect: hasFeature(user.id, 'profile_effect') ? (user.profile_effect || 'none') : 'none', profile_theme: hasFeature(user.id, 'profile_theme') ? (user.profile_theme || 'default') : 'default', name_effect: hasFeature(user.id, 'name_effect') ? (user.name_effect || 'none') : 'none', atmosphere: effectiveAtmosphere(user.id), profile_sound: effectiveProfileSound(user.id), card_style: effectiveCardStyle(user.id), profile_sound_on: user.profile_sound_on !== 0, features: listFeatures(user.id), premium_active: hasActivePremium(user.id), needs_age: needsAgeDeclaration(user.id) } });
+    return res.json({ success: true, user: { ...user, name_plate: effectiveNamePlate(user.id), avatar_frame: getEquippedCosmetics(user.id).avatar_frame, plus_active: plusActive, chat_theme: themeOk ? (user.chat_theme || 'classic') : 'classic', profile_color: user.profile_color || null, bubble_style: bubbleOk ? (user.bubble_style || 'default') : 'default', profile_effect: hasFeature(user.id, 'profile_effect') ? (user.profile_effect || 'none') : 'none', profile_theme: hasFeature(user.id, 'profile_theme') ? (user.profile_theme || 'default') : 'default', name_effect: hasFeature(user.id, 'name_effect') ? (user.name_effect || 'none') : 'none', atmosphere: effectiveAtmosphere(user.id), profile_sound: effectiveProfileSound(user.id), card_style: effectiveCardStyle(user.id), profile_sound_on: user.profile_sound_on !== 0, features: listFeatures(user.id), premium_active: hasActivePremium(user.id), needs_age: needsAgeDeclaration(user.id), needs_policy: needsPolicyAcceptance(user.id) } });
 
   } catch (error) {
     console.error('Session kontrol hatası:', error);
@@ -2312,6 +2314,14 @@ function terminateSuspendedUserSockets(userId, userReason) {
     console.error('Askıdaki kullanıcının socket bağlantıları kapatılamadı:', error);
   }
 }
+
+// Güncellenen Kullanım Şartları / Gizlilik Politikası'nın kabulü (sürüm + zaman kaydedilir).
+app.post('/api/policy/accept', privacyLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try { return res.json(acceptPolicy(user.id)); }
+  catch (error) { console.error('Politika kabul hatası:', error); res.status(500).json({ success: false, error: 'Kaydedilemedi.' }); }
+});
 
 // Eski hesabın bir kerelik doğum tarihi beyanı (tam tarih saklanmaz).
 app.post('/api/profile/age', privacyLimiter, (req, res) => {

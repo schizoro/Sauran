@@ -2431,6 +2431,8 @@ function verifyAndCreateUser(email, code) {
 
     db.prepare(`DELETE FROM pending_verifications WHERE id = ?`).run(pending.id);
     ensureClassicFrame(result.lastInsertRowid);
+    db.prepare(`UPDATE users SET policy_version = ? WHERE id = ?`).run(POLICY_VERSION, result.lastInsertRowid);
+    db.prepare(`INSERT INTO policy_acceptances (user_id, version) VALUES (?, ?)`).run(result.lastInsertRowid, POLICY_VERSION);
     // 18 yaş altı: "Herkes"ten arkadaşlık isteği varsayılan KAPALI (kullanıcı isterse açabilir).
     if (minor) db.prepare(`UPDATE users SET fr_from_everyone = 0, dm_from_hub = 0 WHERE id = ?`).run(result.lastInsertRowid);
 
@@ -6753,6 +6755,34 @@ if (!privacyColumns.includes('age_declared')) {
   db.prepare(`UPDATE users SET age_declared = 0 WHERE created_at < ? AND minor_until IS NULL`).run(AGE_FIELD_CUTOFF);
 }
 
+// ── Politika sürümü: Kullanım Şartları / Gizlilik Politikası güncellenince herkes bir kez yeniden kabul eder.
+// Kabul etmeyen uygulamayı kullanamaz (istemcide engel ekranı); verilerini indirebilir, hesabını silebilir ya da çıkış yapabilir.
+const POLICY_VERSION = '2026-11-13';
+if (!privacyColumns.includes('policy_version')) {
+  db.exec(`ALTER TABLE users ADD COLUMN policy_version TEXT`);
+}
+db.exec(`
+  CREATE TABLE IF NOT EXISTS policy_acceptances (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    version TEXT NOT NULL,
+    accepted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+`);
+function needsPolicyAcceptance(userId) {
+  const u = db.prepare(`SELECT policy_version FROM users WHERE id = ?`).get(userId);
+  return Boolean(u) && u.policy_version !== POLICY_VERSION;
+}
+function acceptPolicy(userId) {
+  // Kayıttaki ilk kabul zamanı (terms_accepted_at) korunur; her sürüm kabulü ayrı satır olarak tutulur.
+  db.transaction(() => {
+    db.prepare(`UPDATE users SET policy_version = ? WHERE id = ?`).run(POLICY_VERSION, userId);
+    db.prepare(`INSERT INTO policy_acceptances (user_id, version) VALUES (?, ?)`).run(userId, POLICY_VERSION);
+  })();
+  return { success: true, version: POLICY_VERSION };
+}
+
 function needsAgeDeclaration(userId) {
   const u = db.prepare(`SELECT age_declared FROM users WHERE id = ?`).get(userId);
   return Boolean(u) && u.age_declared === 0;
@@ -6771,6 +6801,7 @@ function applyMinorProtections(userId, minorUntil) {
 // Eski hesap doğum tarihini bir kez beyan eder. Tam tarih saklanmaz (yalnızca 18. yaş günü).
 // 13 yaş altı: hesap askıya alınır (Kullanım Şartları); kullanıcı arayüzde önce uyarılır.
 function declareAge(userId, birthDate) {
+  if (needsPolicyAcceptance(userId)) return { success: false, status: 409, error: 'Önce güncellenen politikaları kabul etmelisin.' };
   if (!needsAgeDeclaration(userId)) return { success: false, status: 409, error: 'Yaş bilgin zaten kayıtlı.' };
   const age = calculateAge(String(birthDate || '').trim());
   if (age === null || age < 0 || age > 120) return { success: false, status: 400, error: 'Geçerli bir doğum tarihi girin.' };
@@ -10120,6 +10151,8 @@ module.exports = {
   listDmRequests,
   respondDmRequest,
   needsAgeDeclaration,
+  needsPolicyAcceptance,
+  acceptPolicy,
   declareAge,
   setAccountMinorByAdmin,
   updateFriendRequestPrivacy,

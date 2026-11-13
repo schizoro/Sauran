@@ -1980,7 +1980,8 @@ function setCurrentUser(user) {
 
     refreshIgnoredUsers();
     setTimeout(refreshDmRequestsBadge, 600);
-    if (user && user.needs_age) setTimeout(openAgeDeclaration, 400);
+    if (user && user.needs_policy) setTimeout(openPolicyUpdate, 400);
+    else if (user && user.needs_age) setTimeout(openAgeDeclaration, 400);
 
     finishAuthPending(true);
 
@@ -4085,6 +4086,86 @@ document.getElementById('settings-delete-account-btn').addEventListener('click',
 
 });
 
+
+// ─── Güncellenen politikalar: kabul edilmeden uygulama kullanılamaz (kapatılamaz) ───
+// Kabul → (gerekiyorsa) doğum tarihi sorusu. Kabul etmeme → verilerini indir / hesabını sil / çıkış yap; fikrini değiştirebilir.
+function openPolicyUpdate() {
+    if (document.getElementById('policy-update-modal')) return;
+    const ov = document.createElement('div');
+    ov.id = 'policy-update-modal';
+    ov.className = 'modal-overlay age-declare-overlay';
+    ov.style.display = 'flex';
+    ov.setAttribute('role', 'dialog');
+    ov.setAttribute('aria-modal', 'true');
+    ov.setAttribute('aria-labelledby', 'policy-update-title');
+    const main = `
+        <div class="age-declare-ic" aria-hidden="true">📜</div>
+        <h2 id="policy-update-title">Politikalarımızı güncelledik</h2>
+        <p>Devam etmeden önce güncellenen <a href="kullanim-sartlari.html" target="_blank" rel="noopener">Kullanım Şartları</a>'nı kabul etmen gerekiyor. Verilerinin nasıl işlendiğini <a href="gizlilik-politikasi.html" target="_blank" rel="noopener">Gizlilik Politikası</a>'nda, çocuk korumalarını <a href="cocuk-guvenligi.html" target="_blank" rel="noopener">Çocuk Güvenliği</a> sayfasında okuyabilirsin.</p>
+        <ul class="policy-update-list">
+            <li><b>Yaş bilgisi:</b> doğum tarihi olmayan eski hesaplardan bir kez doğum tarihi istiyoruz; tam tarihi saklamıyoruz.</li>
+            <li><b>18 yaş altı korumaları:</b> tanımadığın kişilerden arkadaşlık ve mesaj isteği kapalı; bildirim üzerine yönetim bir hesabı 18 yaş altı olarak işaretleyebilir.</li>
+            <li><b>Mesaj istekleri:</b> aynı lobideki kişiler sana mesaj isteği gönderebilir; kabul edene kadar bildirim gelmez. Ayarlardan kapatabilirsin.</li>
+            <li><b>Yeni gizlilik ayarları:</b> arkadaşlık isteğini kimin gönderebileceği, Yok say, profil fotoğrafı görünürlüğü.</li>
+        </ul>
+        <div class="hub-create-error" id="policy-err" role="alert"></div>
+        <p class="age-declare-small">“Kabul ediyorum”a basarak Kullanım Şartları'nı kabul ettiğini ve Gizlilik Politikası'nı okuduğunu onaylamış olursun.</p>
+        <button type="button" id="policy-accept" class="about-btn about-btn-primary">Kabul ediyorum</button>
+        <button type="button" id="policy-decline" class="policy-decline-btn">Kabul etmiyorum</button>`;
+    const declined = `
+        <div class="age-declare-ic" aria-hidden="true">⏸️</div>
+        <h2 id="policy-update-title">Kabul etmeden devam edilemiyor</h2>
+        <p>Güncellenen şartları kabul etmeden Sauran'ı kullanamazsın. Hesabın silinmez; istediğin zaman geri dönüp kabul edebilirsin.</p>
+        <div class="policy-choice">
+            <button type="button" id="policy-back" class="about-btn about-btn-primary">Geri dön ve kabul et</button>
+            <button type="button" id="policy-export" class="policy-decline-btn">⬇ Verilerimi indir</button>
+            <button type="button" id="policy-logout" class="policy-decline-btn">Çıkış yap</button>
+            <details class="policy-delete"><summary>Hesabımı kalıcı olarak sil</summary>
+                <p class="age-declare-small">Bu işlem geri alınamaz. Onaylamak için şifreni gir.</p>
+                <input type="password" id="policy-del-pass" autocomplete="current-password" placeholder="Şifren">
+                <button type="button" id="policy-delete" class="policy-delete-btn">Hesabımı sil</button>
+            </details>
+        </div>
+        <div class="hub-create-error" id="policy-err" role="alert"></div>`;
+    const box = document.createElement('div');
+    box.className = 'modal-box age-declare-box';
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+    const err = (m) => { const e = box.querySelector('#policy-err'); if (e) e.textContent = m || ''; };
+    const showMain = () => {
+        box.innerHTML = main;
+        box.querySelector('#policy-accept').addEventListener('click', async (ev) => {
+            ev.target.disabled = true; err('');
+            try {
+                const r = await fetch('/api/policy/accept', { method: 'POST', credentials: 'include' }).then((x) => x.json());
+                if (!r.success) throw new Error(r.error);
+                ov.remove();
+                if (currentUser) currentUser.needs_policy = false;
+                if (currentUser && currentUser.needs_age) setTimeout(openAgeDeclaration, 200);
+            } catch (e) { err(e.message || t('generic-error')); ev.target.disabled = false; }
+        });
+        box.querySelector('#policy-decline').addEventListener('click', showDeclined);
+        setTimeout(() => box.querySelector('#policy-accept')?.focus(), 50);
+    };
+    const showDeclined = () => {
+        box.innerHTML = declined;
+        box.querySelector('#policy-back').addEventListener('click', showMain);
+        box.querySelector('#policy-logout').addEventListener('click', () => logout());
+        box.querySelector('#policy-export').addEventListener('click', () => document.getElementById('settings-export-data-btn')?.click());
+        box.querySelector('#policy-delete').addEventListener('click', async (ev) => {
+            const password = box.querySelector('#policy-del-pass').value;
+            if (!password) { err('Şifreni gir.'); return; }
+            if (!confirm('Hesabın ve tüm verilerin kalıcı olarak silinecek. Emin misin?')) return;
+            ev.target.disabled = true;
+            try {
+                const r = await fetch('/api/account', { method: 'DELETE', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) }).then((x) => x.json());
+                if (!r.success) throw new Error(r.error || 'Hesap silinemedi.');
+                location.reload();
+            } catch (e) { err(e.message); ev.target.disabled = false; }
+        });
+    };
+    showMain();
+}
 
 // ─── Eski hesaplar: bir kerelik doğum tarihi sorusu (kapatılamaz; tam tarih saklanmaz) ───
 function openAgeDeclaration() {

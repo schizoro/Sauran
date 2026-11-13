@@ -3631,3 +3631,17 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
 .dmreq-actions .dmreq-block:hover, .dmreq-actions .dmreq-decline:hover { background: rgba(255,90,110,.14); color: #ff8d9b; }
 body #dm-modal .dmreq-hide, body.lc #dm-modal .dm-call-btn.dmreq-hide { display: none !important; }
 #lc-msgs .dmreq-entry { width: auto; margin: 0 16px 10px; }
+
+/* ── Güncellenen politikalar ekranı ── */
+.age-declare-box a { color: #7fd3ff; }
+.policy-update-list { margin: 4px 0 12px; padding-left: 18px; display: grid; gap: 6px; color: #c3cad6; font-size: 13px; line-height: 1.45; }
+.policy-update-list b { color: #eef2f8; }
+#policy-update-modal #policy-accept, #policy-update-modal #policy-back { width: 100%; margin-top: 4px; }
+.policy-decline-btn { width: 100%; margin-top: 8px; padding: 10px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.12); background: transparent; color: var(--text-secondary); font-weight: 700; cursor: pointer; }
+.policy-choice { display: grid; gap: 0; }
+.policy-delete { margin-top: 12px; color: #ff8d9b; font-size: 13px; }
+.policy-delete summary { cursor: pointer; }
+.policy-delete input { width: 100%; margin: 6px 0; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.05); color: #eef2f8; font: inherit; }
+.policy-delete-btn { width: 100%; padding: 10px; border-radius: 999px; border: 0; background: rgba(255,70,90,.18); color: #ff8d9b; font-weight: 800; cursor: pointer; }
+#policy-update-modal .age-declare-box { max-height: calc(100dvh - 32px); overflow: auto; }
+.age-declare-box .about-btn-primary { padding: 11px 14px; font-size: 14px; font-weight: 800; border-radius: 999px; }

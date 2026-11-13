@@ -19,6 +19,8 @@ test.before(async () => {
     const adm = makeUser(dbm, 'ageadmin', { role: 'admin' });
     const kur = makeUser(dbm, 'agekurucu', { role: 'founder' });
     const sikayet = makeUser(dbm, 'sikayetli');
+    const pol = legacy('politikasiz'); // politika güncellemesini henüz kabul etmemiş eski hesap
+    dbm.db.prepare(`UPDATE users SET policy_version = NULL WHERE id = ?`).run(pol.id);
     return { eski: eski.id, genc: genc.id, kucuk: kucuk.id, yeni: yeni.id, adm: adm.id, kur: kur.id, sikayet: sikayet.id };
   });
   S = srv.seeded;
@@ -91,4 +93,19 @@ test('Yönetici: tahmini yaşla 18 yaş altı işaretler, gerekçe zorunlu, kald
 
   const normal = await login('yenihesap');
   assert.equal((await normal.patch(`/api/admin/users/${S.sikayet}/minor`, { age: 15, internal_reason: 'x' })).status, 403);
+});
+
+test('Politika güncellemesi: kabul edilmeden yaş beyanı yapılamaz; kabul sürümü kaydeder, sonra yaş sorulur', async () => {
+  const c = await login('politikasiz');
+  let me = (await c.get('/api/me')).body.user;
+  assert.equal(me.needs_policy, true);
+  assert.equal(me.needs_age, true);
+  assert.equal((await c.post('/api/profile/age', { birth_date: birthForAge(30) })).status, 409, 'önce politika');
+  assert.equal((await c.post('/api/policy/accept')).status, 200);
+  me = (await c.get('/api/me')).body.user;
+  assert.equal(me.needs_policy, false);
+  assert.equal((await c.post('/api/profile/age', { birth_date: birthForAge(30) })).status, 200);
+  const yeni = await login('yenihesap');
+  assert.equal((await yeni.get('/api/me')).body.user.needs_policy, false, 'yeni kayıt güncel sürümü kabul etmiş sayılır');
+  assert.equal((await client(srv.base).post('/api/policy/accept')).status, 401);
 });
