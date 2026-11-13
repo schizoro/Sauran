@@ -3670,3 +3670,22 @@ body #dm-modal .dmreq-hide, body.lc #dm-modal .dm-call-btn.dmreq-hide { display:
 .problem-report-box { width: min(440px, calc(100vw - 24px)); padding: 20px; border-radius: 18px; }
 .problem-report-box h3 { margin: 0 0 6px; color: #eef2f8; }
 .problem-report-box textarea { width: 100%; margin: 8px 0 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.05); color: #eef2f8; font: inherit; resize: vertical; }
+
+/* ── Ses paketi ── */
+.voice-sub-title { display: block; margin: 4px 0 8px; font-size: 13px; font-weight: 800; color: var(--text-secondary); }
+.voice-seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
+.voice-seg-btn { display: grid; gap: 4px; align-content: start; text-align: left; padding: 10px 11px; border-radius: 14px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04); color: var(--text-secondary); cursor: pointer; }
+.voice-seg-btn b { color: #e8eef7; font-size: 13.5px; }
+.voice-seg-btn small { font-size: 11.5px; line-height: 1.35; color: var(--text-tertiary); }
+.voice-seg-btn.selected { border-color: rgba(92,200,255,.6); background: rgba(92,200,255,.1); }
+.voice-seg-btn:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 520px) { .voice-seg { grid-template-columns: 1fr; } }
+.voice-mic-block { margin: 12px 0 4px; padding: 12px; border-radius: 14px; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.03); }
+.voice-mic-select { width: 100%; padding: 9px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,.14); background: #101624; color: #e8eef7; font: inherit; }
+.voice-mic-test { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.voice-test-btn { flex: none; padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(92,200,255,.45); background: rgba(92,200,255,.1); color: #bfe9ff; font-weight: 800; cursor: pointer; }
+.voice-test-btn.on { background: rgba(255,90,110,.14); border-color: rgba(255,90,110,.45); color: #ff9aa8; }
+.voice-meter { flex: 1; height: 10px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; }
+.voice-meter-fill { height: 100%; width: 100%; transform-origin: left center; transform: scaleX(0); background: linear-gradient(90deg, #2fd16a, #b8e05a 70%, #ffb14a); transition: transform .05s linear; }
+.voice-loopback { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: var(--text-secondary); }
+.voice-loopback[hidden] { display: none; }

@@ -2230,14 +2230,34 @@
 
                     <span class="profile-field-label" data-i18n="settings-tab-voice">Ses</span>
 
+                    <span class="voice-sub-title" data-i18n="vp-nc-title">Gürültü azaltma</span>
+                    <div class="voice-seg" id="settings-nc-seg" role="radiogroup" aria-label="Gürültü azaltma">
+                        <button type="button" class="voice-seg-btn" data-nc="advanced"><b data-i18n="vp-nc-adv">Gelişmiş</b><small data-i18n="vp-nc-adv-d">Yapay zekâyla klavye, fan, köpek sesi gibi gürültüleri siler. Daha çok işlemci kullanır.</small></button>
+                        <button type="button" class="voice-seg-btn" data-nc="standard"><b data-i18n="vp-nc-std">Standart</b><small data-i18n="vp-nc-std-d">Tarayıcının hafif gürültü bastırması. Çoğu durum için önerilen.</small></button>
+                        <button type="button" class="voice-seg-btn" data-nc="off"><b data-i18n="vp-nc-off">Kapalı</b><small data-i18n="vp-nc-off-d">Ses olduğu gibi gider. Müzik ve enstrüman için.</small></button>
+                    </div>
+                    <p id="settings-nc-note" class="settings-voice-hint" style="display:none;" data-i18n="nc-unsupported">Bu cihazda gelişmiş gürültü azaltma desteklenmiyor.</p>
+                    <input type="checkbox" id="settings-nc-toggle" hidden aria-hidden="true" tabindex="-1">
+
                     <label class="notif-pref-row">
-                        <input type="checkbox" id="settings-nc-toggle">
-                        <span>
-                            <span data-i18n="nc-label">Gürültü engelleme (yalnızca konuşma)</span>
-                            <span class="settings-voice-hint" data-i18n="nc-desc">Klavye, fan ve arka plan gürültüsünü bastırır. Sesli oda ve özel aramada da açıp kapatabilirsin.</span>
-                        </span>
+                        <input type="checkbox" id="settings-echo-toggle">
+                        <span><span data-i18n="vp-echo">Yankı engelleme</span><span class="settings-voice-hint" data-i18n="vp-echo-d">Hoparlörden çıkan sesin mikrofona geri girip karşı tarafa yankı olarak gitmesini önler. Kulaklık kullanmıyorsan açık kalsın.</span></span>
                     </label>
-                    <p id="settings-nc-note" class="settings-voice-hint" style="display:none;" data-i18n="nc-unsupported">Bu cihazda gürültü engelleme desteklenmiyor.</p>
+                    <label class="notif-pref-row">
+                        <input type="checkbox" id="settings-agc-toggle">
+                        <span><span data-i18n="vp-agc">Otomatik kazanç kontrolü</span><span class="settings-voice-hint" data-i18n="vp-agc-d">Mikrofon ses seviyesini temiz ve tutarlı tutacak şekilde otomatik ayarlar. Profesyonel mikrofonda kapatabilirsin.</span></span>
+                    </label>
+
+                    <div class="voice-mic-block">
+                        <label class="voice-sub-title" for="settings-mic-select" data-i18n="vp-mic">Mikrofon</label>
+                        <select id="settings-mic-select" class="voice-mic-select"><option value="">Varsayılan</option></select>
+                        <div class="voice-mic-test">
+                            <button type="button" id="settings-mic-test" class="voice-test-btn" data-i18n="vp-test">Mikrofonu test et</button>
+                            <div class="voice-meter" aria-hidden="true"><div class="voice-meter-fill" id="settings-mic-meter"></div></div>
+                        </div>
+                        <label class="voice-loopback" id="settings-mic-loop-row" hidden><input type="checkbox" id="settings-mic-loop"> <span data-i18n="vp-loop">Kendimi duy (kulaklık tak, yoksa cızırtı olur)</span></label>
+                        <p class="settings-voice-hint" id="settings-mic-test-hint" data-i18n="vp-test-d">Konuş; çubuk hareket ediyorsa mikrofonun çalışıyor. Seçtiğin yankı ve kazanç ayarları testte de uygulanır; gelişmiş gürültü azaltma yalnızca görüşmede devrede.</p>
+                    </div>
 
                     <label class="notif-pref-row">
                         <input type="checkbox" id="settings-ptt-toggle">

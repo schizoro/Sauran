@@ -5123,8 +5123,25 @@ const I18N = {
     'voice-room-removed': { tr: 'Sesli odadan çıkarıldın.', en: 'You were removed from the voice room.' },
     'session-check-unreachable': { tr: 'Sunucuya şu an ulaşılamıyor; oturumun kapanmış olmayabilir. Biraz sonra sayfayı yenile.', en: 'The server is unreachable right now; your session may still be valid. Refresh in a moment.' },
     'settings-tab-voice': { tr: 'Ses', en: 'Voice' },
+    'vp-nc-title': { tr: 'Gürültü azaltma', en: 'Noise suppression' },
+    'vp-nc-adv': { tr: 'Gelişmiş', en: 'Advanced' },
+    'vp-nc-adv-d': { tr: 'Yapay zekâyla klavye, fan, köpek sesi gibi gürültüleri siler. Daha çok işlemci kullanır.', en: 'AI removes keyboard, fan, dog barks and more. Uses more CPU.' },
+    'vp-nc-std': { tr: 'Standart', en: 'Standard' },
+    'vp-nc-std-d': { tr: 'Tarayıcının hafif gürültü bastırması. Çoğu durum için önerilen.', en: "The browser's light noise suppression. Recommended for most." },
+    'vp-nc-off': { tr: 'Kapalı', en: 'Off' },
+    'vp-nc-off-d': { tr: 'Ses olduğu gibi gider. Müzik ve enstrüman için.', en: 'Your audio goes as-is. For music and instruments.' },
+    'vp-echo': { tr: 'Yankı engelleme', en: 'Echo cancellation' },
+    'vp-echo-d': { tr: 'Hoparlörden çıkan sesin mikrofona geri girip karşı tarafa yankı olarak gitmesini önler. Kulaklık kullanmıyorsan açık kalsın.', en: "Stops sound from your speakers leaking back into your mic. Keep it on unless you use headphones." },
+    'vp-agc': { tr: 'Otomatik kazanç kontrolü', en: 'Automatic gain control' },
+    'vp-agc-d': { tr: 'Mikrofon ses seviyesini temiz ve tutarlı tutacak şekilde otomatik ayarlar. Profesyonel mikrofonda kapatabilirsin.', en: 'Automatically keeps your mic level clean and consistent. You can turn it off with a pro mic.' },
+    'vp-mic': { tr: 'Mikrofon', en: 'Microphone' },
+    'vp-test': { tr: 'Mikrofonu test et', en: 'Test microphone' },
+    'vp-test-stop': { tr: 'Testi durdur', en: 'Stop test' },
+    'vp-loop': { tr: 'Kendimi duy (kulaklık tak, yoksa cızırtı olur)', en: 'Hear myself (use headphones to avoid feedback)' },
+    'vp-test-d': { tr: 'Konuş; çubuk hareket ediyorsa mikrofonun çalışıyor. Seçtiğin yankı ve kazanç ayarları testte de uygulanır; gelişmiş gürültü azaltma yalnızca görüşmede devrede.', en: 'Speak; if the bar moves, your mic works. Echo and gain settings apply to the test too; advanced noise suppression works only in calls.' },
+    'vp-test-denied': { tr: 'Mikrofon izni verilmedi. Tarayıcının adres çubuğundaki kilit simgesinden izin verebilirsin.', en: "Microphone permission was denied. You can allow it from the lock icon in your browser's address bar." },
     'nc-desc': { tr: 'Klavye, fan ve arka plan gürültüsünü bastırır. Sesli oda ve özel aramada da açıp kapatabilirsin.', en: 'Suppresses keyboard, fan and background noise. You can also toggle it in voice rooms and private calls.' },
-    'nc-unsupported': { tr: 'Bu cihazda gürültü engelleme desteklenmiyor.', en: 'Noise suppression is not supported on this device.' },
+    'nc-unsupported': { tr: 'Bu cihazda gelişmiş gürültü azaltma desteklenmiyor; Standart kullanılıyor.', en: 'Advanced noise suppression is not supported on this device; using Standard.' },
     'nc-state-on': { tr: 'Gürültü engelleme: açık', en: 'Noise suppression: on' },
     'nc-state-off': { tr: 'Gürültü engelleme: kapalı', en: 'Noise suppression: off' },
     'call-log-answered': { tr: 'Sesli arama', en: 'Voice call' },
@@ -18056,11 +18073,11 @@ async function reacquireLocalMic() {
     let stream = null;
     const wanted = audioSession.selectedInputId;
     try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: wanted ? { deviceId: { exact: wanted } } : true });
+        stream = await navigator.mediaDevices.getUserMedia({ audio: voiceCustomized() ? voiceAudioConstraints(wanted) : (wanted ? { deviceId: { exact: wanted } } : true) });
     } catch (error) {
         if (wanted && (error?.name === 'OverconstrainedError' || error?.name === 'NotFoundError')) {
             audioSession.selectedInputId = null; // seçilen cihaz gitti → varsayılan mikrofona düş
-            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream = await navigator.mediaDevices.getUserMedia({ audio: voiceCustomized() ? voiceAudioConstraints(null) : true });
         } else {
             throw error;
         }
@@ -18261,32 +18278,96 @@ const NC_STORAGE_KEY = 'sauran_noise_cancel';
 // Varsayılan KAPALI (Daily'nin kendi arayüzündeki gibi): işlemci zayıf cihazlarda Krisp sesi pürüzlü/robotik yapabiliyor ve
 // herkeste açıkken hem gönderilen hem duyulan ses işlenmiş oluyordu. Yalnızca kullanıcı açtıysa ('on') uygulanır.
 const noiseCancel = { supported: null, enabled: false, failedShown: false };
-try { noiseCancel.enabled = localStorage.getItem(NC_STORAGE_KEY) === 'on'; } catch (_) { /* depolama yok → kapalı */ }
 
-async function applyNoiseCancellation() {
-    if (!callFrame || noiseCancel.supported === false || typeof callFrame.updateInputSettings !== 'function') return;
+// ─── SES İŞLEME TERCİHLERİ (Ayarlar > Ses) ─────────────────────────────────
+// nc: 'advanced' (Daily/Krisp işlemcisi) | 'standard' (tarayıcının noiseSuppression'ı) | 'off'
+// echo: yankı engelleme · agc: otomatik kazanç. Yalnızca bu cihazda saklanır. Varsayılan: standart + yankı + kazanç açık.
+// Gelişmiş modda tarayıcının bastırması KAPALI tutulur: ikisi üst üste binince ses robotik/pürüzlü olabiliyor.
+const VOICE_PROC_KEY = 'sauran_voice_proc';
+const voiceProc = { nc: 'standard', echo: true, agc: true, applied: false, lastBasic: 'standard' };
+try {
+    const saved = JSON.parse(localStorage.getItem(VOICE_PROC_KEY) || 'null');
+    if (saved && typeof saved === 'object') {
+        if (['advanced', 'standard', 'off'].includes(saved.nc)) voiceProc.nc = saved.nc;
+        if (typeof saved.echo === 'boolean') voiceProc.echo = saved.echo;
+        if (typeof saved.agc === 'boolean') voiceProc.agc = saved.agc;
+    } else if (localStorage.getItem(NC_STORAGE_KEY) === 'on') {
+        voiceProc.nc = 'advanced'; // eski "gürültü engelleme açık" tercihi taşınır
+    }
+} catch (_) { /* depolama yok → varsayılanlar */ }
+noiseCancel.enabled = voiceProc.nc === 'advanced';
+function saveVoiceProc() { try { localStorage.setItem(VOICE_PROC_KEY, JSON.stringify({ nc: voiceProc.nc, echo: voiceProc.echo, agc: voiceProc.agc })); } catch (_) { /* yoksay */ } }
+
+// getUserMedia / Daily kısıtları: seçili mikrofon + yankı/kazanç/bastırma (Daily kısıtları birleştirmez, hepsi birlikte verilir).
+function voiceAudioConstraints(deviceId) {
+    const c = {
+        echoCancellation: voiceProc.echo,
+        autoGainControl: voiceProc.agc,
+        noiseSuppression: voiceProc.nc === 'standard'
+    };
+    if (deviceId) c.deviceId = { exact: deviceId };
+    return c;
+}
+
+function voiceCustomized() { return voiceProc.nc !== 'standard' || !voiceProc.echo || !voiceProc.agc; }
+// Çağrılar sıraya alınır ve birleştirilir: aynı anda gelen istekler (katılma, cihaz değişimi, ayar) karışık sırayla bitmesin;
+// her zaman EN SON tercih uygulanır.
+var vpQueue = Promise.resolve();
+var vpPending = false;
+function applyNoiseCancellation() {
+    if (vpPending) return vpQueue;
+    vpPending = true;
+    vpQueue = vpQueue.then(() => { vpPending = false; return applyVoiceProcessingNow(); }).catch(() => { vpPending = false; });
+    return vpQueue;
+}
+async function applyVoiceProcessingNow() {
+    if (!callFrame || typeof callFrame.updateInputSettings !== 'function') return;
+    const wantAdvanced = voiceProc.nc === 'advanced' && noiseCancel.supported !== false;
+    // Gelişmiş bu cihazda çalışmadıysa (yalnızca bu oturum için) standart bastırma kullanılır; kullanıcının seçimi değişmez.
+    const effective = { ...voiceProc, nc: voiceProc.nc === 'advanced' && noiseCancel.supported === false ? 'standard' : voiceProc.nc };
+    const device = audioSession.selectedInputId || (audioSession.inputs.some((d) => d.id === audioSession.preferredInputId) ? audioSession.preferredInputId : null);
+    const saved = { nc: voiceProc.nc }; Object.assign(voiceProc, { nc: effective.nc });
+    const constraints = voiceAudioConstraints(device);
+    Object.assign(voiceProc, saved);
+    // Varsayılanlarda (standart + yankı + kazanç) Daily'nin kendi tarayıcıya özel ayarlarına dokunulmaz; yalnızca işlemci.
+    const customized = voiceCustomized() && !(effective.nc === 'standard' && voiceProc.echo && voiceProc.agc);
     try {
-        await callFrame.updateInputSettings({ audio: { processor: { type: noiseCancel.enabled ? 'noise-cancellation' : 'none' } } });
-        noiseCancel.supported = true;
+        if (!customized && !wantAdvanced && voiceProc.applied !== true) {
+            await callFrame.updateInputSettings({ audio: { processor: { type: 'none' } } });
+        } else if (callCustomMicTrack && callCustomMicTrack.readyState === 'live') {
+            // Kendi aldığımız iz (kurtarma yolu): kısıtlar izin üzerine uygulanır, işlemci Daily'den
+            try { await callCustomMicTrack.applyConstraints(constraints); } catch (_) { /* tarayıcı desteklemezse iz olduğu gibi kalır */ }
+            await callFrame.updateInputSettings({ audio: { processor: { type: wantAdvanced ? 'noise-cancellation' : 'none' } } });
+        } else {
+            voiceProc.applied = true; // (hata olsa bile) bu görüşmede kısıtlar artık hep açıkça verilir
+            await callFrame.updateInputSettings({ audio: { processor: { type: wantAdvanced ? 'noise-cancellation' : 'none' }, settings: constraints } });
+        }
+        if (wantAdvanced) noiseCancel.supported = true;
     } catch (error) {
-        console.warn('Gürültü engelleme uygulanamadı:', error?.message || error);
-        noiseCancelFailed();
-        return;
+        console.warn('Ses işleme uygulanamadı:', error?.message || error);
+        if (wantAdvanced) { noiseCancelFailed(); return; }
     }
     updateAudioControls();
 }
 
 function noiseCancelFailed() {
     noiseCancel.supported = false;
-    if (noiseCancel.enabled && !noiseCancel.failedShown) { noiseCancel.failedShown = true; showToast(t('nc-failed')); }
+    if (voiceProc.nc === 'advanced' && !noiseCancel.failedShown) { noiseCancel.failedShown = true; showToast(t('nc-failed')); }
+    // Gelişmiş çalışmıyorsa bu oturumda standart bastırmayla devam edilir (seçim KAYDEDİLMEZ; geçici bir hata kalıcı düşürmesin)
+    if (voiceProc.nc === 'advanced') { syncNoiseCancelUi(); applyNoiseCancellation(); }
     updateAudioControls();
 }
 
-function setNoiseCancel(enabled) {
-    noiseCancel.enabled = enabled;
-    try { localStorage.setItem(NC_STORAGE_KEY, enabled ? 'on' : 'off'); } catch (_) { /* yoksay */ }
+// Görüşmedeki "gürültü engelleme" düğmesi: Gelişmiş ↔ Standart (kapalıysa Gelişmiş'e geçer)
+function setNoiseCancel(enabled) { setVoiceProc({ nc: enabled ? 'advanced' : (voiceProc.lastBasic || 'standard') }); }
+function setVoiceProc(patch) {
+    if (patch.nc && patch.nc !== 'advanced') voiceProc.lastBasic = patch.nc;
+    Object.assign(voiceProc, patch);
+    noiseCancel.enabled = voiceProc.nc === 'advanced';
+    saveVoiceProc();
     syncNoiseCancelUi();
     applyNoiseCancellation();
+    if (micTest.stream) restartMicTest();
 }
 
 // Ayarlar sekmesi + çağrı düğmesi tek durumdan beslenir (noiseCancel).
@@ -18296,6 +18377,15 @@ function syncNoiseCancelUi() {
         toggle.checked = noiseCancel.enabled;
         toggle.disabled = noiseCancel.supported === false;
     }
+    document.querySelectorAll('#settings-nc-seg [data-nc]').forEach((b) => {
+        const on = b.dataset.nc === voiceProc.nc;
+        b.classList.toggle('selected', on);
+        b.setAttribute('aria-checked', on ? 'true' : 'false');
+        b.setAttribute('role', 'radio');
+        if (b.dataset.nc === 'advanced') b.disabled = noiseCancel.supported === false;
+    });
+    const echo = document.getElementById('settings-echo-toggle'); if (echo) echo.checked = voiceProc.echo;
+    const agc = document.getElementById('settings-agc-toggle'); if (agc) agc.checked = voiceProc.agc;
     const note = document.getElementById('settings-nc-note');
     if (note) note.style.display = noiseCancel.supported === false ? 'block' : 'none';
 
@@ -18313,7 +18403,106 @@ function syncNoiseCancelUi() {
 
 const NC_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 12h2M7 8v8M11 5v14M15 8v8M19 10v4"/></svg>';
 
+// ─── Mikrofon testi: seçili mikrofon + aynı kısıtlarla seviye göstergesi; isteğe bağlı "kendimi duy" ───
+var micTest = { stream: null, ctx: null, raf: 0, loopEl: null, owned: true };
+var micTestSeq = 0;
+var micTestWatch = null;
+function stopMicTest() {
+    micTestSeq++;
+    cancelAnimationFrame(micTest.raf);
+    clearInterval(micTestWatch); micTestWatch = null;
+    if (micTest.stream && micTest.owned) micTest.stream.getTracks().forEach((tr) => { try { tr.stop(); } catch (_) {} });
+    if (micTest.ctx) { try { micTest.ctx.close(); } catch (_) {} }
+    if (micTest.loopEl) { micTest.loopEl.srcObject = null; micTest.loopEl.remove(); }
+    micTest = { stream: null, ctx: null, raf: 0, loopEl: null, owned: true };
+    const btn = document.getElementById('settings-mic-test'); if (btn) { btn.textContent = t('vp-test'); btn.classList.remove('on'); }
+    const fill = document.getElementById('settings-mic-meter'); if (fill) fill.style.transform = 'scaleX(0)';
+    const row = document.getElementById('settings-mic-loop-row'); if (row) row.hidden = true;
+    const loop = document.getElementById('settings-mic-loop'); if (loop) loop.checked = false;
+}
+async function startMicTest() {
+    stopMicTest();
+    const mySeq = ++micTestSeq;
+    // AudioContext dokunuş anında (await'ten önce) açılır; iOS'ta sonradan açılan bağlam sessiz kalır.
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new Ctx();
+    try { ctx.resume(); } catch (_) {}
+    const sel = document.getElementById('settings-mic-select');
+    const deviceId = (sel && sel.value) || audioSession.preferredInputId || null;
+    let stream = null, owned = true;
+    // Görüşme sürüyorsa ikinci bir mikrofon açılmaz (iOS ilkini susturabilir): görüşmenin kendi izi ölçülür.
+    const callTrack = callFrame && callFrame.participants?.()?.local?.tracks?.audio?.persistentTrack;
+    if (callTrack && callTrack.readyState === 'live') { stream = new MediaStream([callTrack]); owned = false; }
+    else {
+        try { stream = await navigator.mediaDevices.getUserMedia({ audio: voiceAudioConstraints(deviceId) }); }
+        catch (e) {
+            let err = e;
+            if (deviceId && (e?.name === 'OverconstrainedError' || e?.name === 'NotFoundError')) {
+                try { stream = await navigator.mediaDevices.getUserMedia({ audio: voiceAudioConstraints(null) }); } catch (e2) { err = e2; }
+            }
+            if (!stream) { try { ctx.close(); } catch (_) {} if (mySeq === micTestSeq) showToast(err?.name === 'NotAllowedError' ? t('vp-test-denied') : friendly('generic')); return; }
+        }
+    }
+    // Bu arada test durdurulduysa ya da yeniden başlatıldıysa bu akış hemen kapatılır (mikrofon açık kalmasın).
+    if (mySeq !== micTestSeq) { if (owned) stream.getTracks().forEach((tr) => { try { tr.stop(); } catch (_) {} }); try { ctx.close(); } catch (_) {} return; }
+    const src = ctx.createMediaStreamSource(stream);
+    const an = ctx.createAnalyser(); an.fftSize = 1024; src.connect(an);
+    const buf = new Float32Array(an.fftSize);
+    micTest = { stream, ctx, raf: 0, loopEl: null, owned };
+    const fill = document.getElementById('settings-mic-meter');
+    const btn = document.getElementById('settings-mic-test'); if (btn) { btn.textContent = t('vp-test-stop'); btn.classList.add('on'); }
+    const row = document.getElementById('settings-mic-loop-row'); if (row) row.hidden = !owned; // görüşmedeyken "kendimi duy" yok
+    let smooth = 0;
+    const tick = () => {
+        an.getFloatTimeDomainData(buf);
+        let sum = 0; for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+        const db = 20 * Math.log10(Math.sqrt(sum / buf.length) + 1e-8);      // ~ -60 (sessiz) … 0 (çok yüksek)
+        const level = Math.min(1, Math.max(0, (db + 60) / 50));
+        smooth = level > smooth ? level : smooth * 0.9 + level * 0.1;      // yükselişte hızlı, düşüşte yumuşak
+        if (fill) fill.style.transform = `scaleX(${smooth.toFixed(3)})`;
+        micTest.raf = requestAnimationFrame(tick);
+    };
+    tick();
+    // Ayarlar kapanınca test de kapanır (mikrofon açık kalmasın)
+    clearInterval(micTestWatch);
+    micTestWatch = setInterval(() => {
+        const modal = document.getElementById('settings-modal');
+        if (!micTest.stream || !modal || modal.style.display === 'none' || !document.getElementById('settings-mic-test')?.offsetParent) stopMicTest();
+    }, 800);
+}
+function restartMicTest() { const loop = document.getElementById('settings-mic-loop')?.checked; startMicTest().then(() => { if (loop) { const l = document.getElementById('settings-mic-loop'); if (l) { l.checked = true; l.dispatchEvent(new Event('change')); } } }); }
+async function fillMicSelect() {
+    const sel = document.getElementById('settings-mic-select');
+    if (!sel || !navigator.mediaDevices?.enumerateDevices) return;
+    let devices = [];
+    try { devices = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput' && d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications'); } catch (_) {}
+    const cur = audioSession.preferredInputId || '';
+    sel.innerHTML = `<option value="">${escapeHtml(t('audio-default'))}</option>` + devices.map((d, i) => `<option value="${escapeAttr(d.deviceId)}">${escapeHtml(d.label || `${t('vp-mic')} ${i + 1}`)}</option>`).join('');
+    sel.value = devices.some((d) => d.deviceId === cur) ? cur : '';
+}
+
 (function wireNoiseCancelControls() {
+    document.querySelectorAll('#settings-nc-seg [data-nc]').forEach((b) => b.addEventListener('click', () => setVoiceProc({ nc: b.dataset.nc })));
+    document.getElementById('settings-echo-toggle')?.addEventListener('change', (e) => setVoiceProc({ echo: e.target.checked }));
+    document.getElementById('settings-agc-toggle')?.addEventListener('change', (e) => setVoiceProc({ agc: e.target.checked }));
+    document.getElementById('settings-mic-test')?.addEventListener('click', () => { if (micTest.stream) stopMicTest(); else startMicTest().then(fillMicSelect); });
+    document.getElementById('settings-mic-loop')?.addEventListener('change', (e) => {
+        if (!micTest.stream) return;
+        if (e.target.checked) {
+            const el = document.createElement('audio'); el.autoplay = true; el.srcObject = micTest.stream;
+            try { if (audioSession.selectedOutputId && el.setSinkId) el.setSinkId(audioSession.selectedOutputId).catch(() => {}); } catch (_) {}
+            document.body.appendChild(el); micTest.loopEl = el; el.play().catch(() => {});
+        } else if (micTest.loopEl) { micTest.loopEl.srcObject = null; micTest.loopEl.remove(); micTest.loopEl = null; }
+    });
+    document.getElementById('settings-mic-select')?.addEventListener('change', async (e) => {
+        const id = e.target.value || null;
+        audioSession.preferredInputId = id;
+        savePreferredInput(id);
+        if (callFrame) await switchInputDevice(id || 'default');
+        if (micTest.stream) restartMicTest();
+    });
+    document.querySelector('[data-settings-tab="voice"]')?.addEventListener('click', () => { fillMicSelect(); syncNoiseCancelUi(); });
+    navigator.mediaDevices?.addEventListener?.('devicechange', () => { if (document.getElementById('settings-mic-select')?.offsetParent) fillMicSelect(); });
     const toggle = document.getElementById('settings-nc-toggle');
     if (toggle) toggle.addEventListener('change', () => setNoiseCancel(toggle.checked));
     const btn = document.getElementById('call-nc-btn');
@@ -18702,6 +18891,7 @@ function renderCallNetQuality(event) {
 }
 
 function leaveCall() {
+    voiceProc.applied = false; // sonraki görüşme Daily'nin varsayılan kısıtlarıyla başlar
 
     renderCallNetQuality(null);
     voiceJoinInFlight = false; // süren bir oda katılımı varsa iptal edilmiş sayılır
