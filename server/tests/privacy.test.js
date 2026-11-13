@@ -13,13 +13,14 @@ test.before(async () => {
     const lob = makeUser(dbm, 'lobi');    // ali ile aynı lobide
     const yab = makeUser(dbm, 'yabanci'); // hiçbir bağı yok
     const gur = makeUser(dbm, 'gurultu'); // ali'nin yok saydığı
+    const kid = makeUser(dbm, 'cocuk', { birth: '2013-05-05' }); // 18 yaş altı
     dbm.sendFriendRequest(ece.id, ali.id); dbm.respondFriendRequest(ali.id, ece.id, true);
     dbm.sendFriendRequest(fof.id, ece.id); dbm.respondFriendRequest(ece.id, fof.id, true);
     const h = dbm.createHub(ali.id, { name: 'Gizlilik Lobisi', type: 'hub' });
     const hubId = h.id || (h.hub && h.hub.id);
     const inv = dbm.createHubInvite(hubId, ali.id, {});
     dbm.joinHubByCode(inv.code || (inv.invite && inv.invite.code), lob.id);
-    return { ali: ali.id, fof: fof.id, lob: lob.id, yab: yab.id, gur: gur.id };
+    return { ali: ali.id, fof: fof.id, lob: lob.id, yab: yab.id, gur: gur.id, kid: kid.id };
   });
   S = srv.seeded;
 });
@@ -110,4 +111,12 @@ test('Engelleyince yok sayma kaydı temizlenir', async () => {
   await ali.post(`/api/users/${S.yab}/block`);
   await ali.del(`/api/users/${S.yab}/block`);
   assert.ok(!(await ali.get('/api/users/ignored')).body.ignored.some((u) => u.username === 'yabanci'));
+});
+
+test("18 yaş altı: Herkes'ten istek varsayılan kapalı; yabancı istek gönderemez, kullanıcı açabilir", async () => {
+  const kid = await login('cocuk');
+  assert.equal((await kid.get('/api/privacy')).body.friend_requests.everyone, false);
+  const yab = await login('yabanci');
+  assert.equal((await yab.post('/api/friends/request', { to_user_id: S.kid })).status, 400);
+  assert.equal((await kid.patch('/api/privacy/friend-requests', { everyone: true })).status, 200, 'isterse açabilir (yalnızca varsayılan)');
 });

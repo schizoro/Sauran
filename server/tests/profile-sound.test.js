@@ -18,7 +18,7 @@ test.before(async () => {
     dbm.sendFriendRequest(dinleyen.id, plus.id); dbm.respondFriendRequest(plus.id, dinleyen.id, true);
     const genc = makeUser(dbm, 'sesgenc', { birth: '2013-05-05' });
     dbm.db.prepare(`INSERT INTO entitlements (user_id, product, expires_at) VALUES (?, 'plus', NULL)`).run(genc.id);
-    dbm.sendFriendRequest(dinleyen.id, genc.id); dbm.respondFriendRequest(genc.id, dinleyen.id, true);
+    dbm.sendFriendRequest(genc.id, dinleyen.id); dbm.respondFriendRequest(dinleyen.id, genc.id, true); // 18 yaş altına yabancı istek gönderemez (varsayılan); isteği genç gönderir
     return { plus: plus.id, free: free.id, dinleyen: dinleyen.id, adm: adm.id, genc: genc.id };
   });
   S = srv.seeded;
