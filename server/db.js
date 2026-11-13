@@ -6734,6 +6734,85 @@ db.exec(`
   );
 `);
 
+// =====================================================
+// YAŞ BEYANI (eski hesaplar) + YÖNETİCİNİN 18 YAŞ ALTI İŞARETİ
+// =====================================================
+// age_declared: 1 = kayıtta doğum tarihi verildi (ya da sonradan beyan edildi / yönetici belirledi), 0 = bilinmiyor.
+// Doğum tarihi alanı 2026-09-17'de eklendi; yayına geçiş gecikmiş olabileceği için 2026-09-25 öncesi açılan ve
+// 18 yaş altı olarak bilinmeyen hesaplara bir kez doğum tarihi sorulur (fazladan sormak, hiç sormamaktan güvenlidir).
+const AGE_FIELD_CUTOFF = '2026-09-25';
+if (!privacyColumns.includes('age_declared')) {
+  db.exec(`ALTER TABLE users ADD COLUMN age_declared INTEGER NOT NULL DEFAULT 1`);
+  db.prepare(`UPDATE users SET age_declared = 0 WHERE created_at < ? AND minor_until IS NULL`).run(AGE_FIELD_CUTOFF);
+}
+
+function needsAgeDeclaration(userId) {
+  const u = db.prepare(`SELECT age_declared FROM users WHERE id = ?`).get(userId);
+  return Boolean(u) && u.age_declared === 0;
+}
+
+// 18 yaş altı olduğu öğrenilen hesaba kayıttaki koruyucu varsayılanlar uygulanır.
+function applyMinorProtections(userId, minorUntil) {
+  db.prepare(`
+    UPDATE users SET minor_until = ?, fr_from_everyone = 0,
+      avatar_visibility = CASE WHEN avatar_visibility = 'public' THEN 'friends' ELSE avatar_visibility END
+    WHERE id = ?
+  `).run(minorUntil, userId);
+}
+
+// Eski hesap doğum tarihini bir kez beyan eder. Tam tarih saklanmaz (yalnızca 18. yaş günü).
+// 13 yaş altı: hesap askıya alınır (Kullanım Şartları); kullanıcı arayüzde önce uyarılır.
+function declareAge(userId, birthDate) {
+  if (!needsAgeDeclaration(userId)) return { success: false, status: 409, error: 'Yaş bilgin zaten kayıtlı.' };
+  const age = calculateAge(String(birthDate || '').trim());
+  if (age === null || age < 0 || age > 120) return { success: false, status: 400, error: 'Geçerli bir doğum tarihi girin.' };
+  if (age < MIN_SIGNUP_AGE) {
+    db.transaction(() => {
+      // Askı yanlışlıkla/itirazla kaldırılırsa da hesap 18 yaş altı korumalarıyla kalır.
+      applyMinorProtections(userId, computeMinorUntil(String(birthDate).trim()));
+      db.prepare(`
+        UPDATE users SET age_declared = 1, account_status = 'suspended', suspended_at = CURRENT_TIMESTAMP, suspended_by = ?,
+          suspension_user_reason = ?
+        WHERE id = ? AND age_declared = 0
+      `).run(userId, `Sauran'ı kullanmak için en az ${MIN_SIGNUP_AGE} yaşında olmalısın.`, userId);
+      writeAuditLog({ actorUserId: userId, action: 'account_suspended', targetUserId: userId, reason: 'Yaş beyanı: 13 yaş altı', oldValue: 'active', newValue: 'suspended' });
+      db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(userId); // tüm cihazlarda oturum kapanır
+    })();
+    return { success: true, suspended: true };
+  }
+  db.transaction(() => {
+    if (age < MINOR_AGE_THRESHOLD) applyMinorProtections(userId, computeMinorUntil(String(birthDate).trim()));
+    db.prepare(`UPDATE users SET age_declared = 1 WHERE id = ? AND age_declared = 0`).run(userId);
+  })();
+  return { success: true, minor: age < MINOR_AGE_THRESHOLD };
+}
+
+// Yönetici: şikâyet üzerine hesabı 18 yaş altı olarak işaretler (tahmini yaş 13–17) ya da işareti kaldırır (age = null).
+function setAccountMinorByAdmin({ actorId, actorRole, targetId, age, internalReason }) {
+  const target = db.prepare(`SELECT id, minor_until, platform_role FROM users WHERE id = ?`).get(targetId);
+  if (!target) return { success: false, status: 404, error: 'Kullanıcı bulunamadı.' };
+  if (target.platform_role === 'founder') return { success: false, status: 400, error: 'Kurucu hesabı işaretlenemez.' };
+  if (age === null && actorRole !== 'founder') return { success: false, status: 403, error: '18 yaş altı işaretini yalnızca kurucu kaldırabilir.' };
+  const reason = String(internalReason || '').trim();
+  if (!reason) return { success: false, status: 400, error: 'İç gerekçe zorunlu.' };
+  if (age !== null && !(Number.isInteger(age) && age >= MIN_SIGNUP_AGE && age < MINOR_AGE_THRESHOLD)) {
+    return { success: false, status: 400, error: 'Tahmini yaş 13 ile 17 arasında olmalı.' };
+  }
+  let minorUntil = null;
+  if (age !== null) {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() + (MINOR_AGE_THRESHOLD - age));
+    minorUntil = todayLocal(d);
+  }
+  db.transaction(() => {
+    if (minorUntil) applyMinorProtections(targetId, minorUntil);
+    else db.prepare(`UPDATE users SET minor_until = NULL WHERE id = ?`).run(targetId);
+    db.prepare(`UPDATE users SET age_declared = 1 WHERE id = ?`).run(targetId);
+    writeAuditLog({ actorUserId: actorId, action: minorUntil ? 'account_minor_set' : 'account_minor_cleared', targetUserId: targetId, reason, oldValue: target.minor_until ? 'minor' : 'adult', newValue: minorUntil ? 'minor' : 'adult' });
+  })();
+  return { success: true, minor_until: minorUntil };
+}
+
 function getPrivacySettings(userId) {
   const u = db.prepare(`SELECT avatar_visibility, fr_from_everyone, fr_from_fof, fr_from_hub FROM users WHERE id = ?`).get(userId);
   if (!u) return null;
@@ -8384,7 +8463,7 @@ function getAdminUserDetail(userId) {
   const user = db.prepare(`
     SELECT id, username, email, created_at, platform_role, about_me, avatar_data, avatar_visibility,
            account_status, suspended_at, suspension_user_reason,
-           role_acceptance_pending, role_acceptance_version
+           role_acceptance_pending, role_acceptance_version, minor_until, age_declared
     FROM users WHERE id = ?
   `).get(userId);
 
@@ -8418,6 +8497,9 @@ function getAdminUserDetail(userId) {
       role_acceptance_version: isOfficialRole(user.platform_role) && user.role_acceptance_pending ? user.role_acceptance_version : null,
       account_status: user.account_status,
       suspended_at: user.suspended_at,
+      is_minor: isMinorUntil(user.minor_until),
+      minor_until: user.minor_until || null,
+      age_declared: user.age_declared !== 0,
       // Kullanıcıya gösterilen metin (iç gerekçe burada YOK; yalnızca audit log'da).
       user_reason: user.suspension_user_reason
     },
@@ -8528,7 +8610,7 @@ function withAuditMaintenance(fn) {
   })();
 }
 
-const AUDIT_ACTIONS = ['platform_role_changed', 'platform_role_accepted', 'platform_role_declined', 'account_suspended', 'account_unsuspended'];
+const AUDIT_ACTIONS = ['platform_role_changed', 'platform_role_accepted', 'platform_role_declined', 'account_suspended', 'account_unsuspended', 'account_minor_set', 'account_minor_cleared'];
 const AUDIT_REASON_MAX = 200;
 const AUDIT_VALUE_MAX = 40;
 const AUDIT_MAX_LIMIT = 50;
@@ -9884,6 +9966,9 @@ module.exports = {
   listFriendIdsInHub,
   listFriendIds,
   getPrivacySettings,
+  needsAgeDeclaration,
+  declareAge,
+  setAccountMinorByAdmin,
   updateFriendRequestPrivacy,
   friendRequestAllowed,
   ignoreUser,

@@ -3600,3 +3600,13 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
 .other-profile-actions > .profile-action-row > .profile-action-primary { grid-column: auto !important; }
 .other-profile-actions .profile-action-minor { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; }
 .other-profile-actions .profile-action-minor .profile-action-btn { padding-left: 6px !important; padding-right: 6px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Eski hesaplara bir kerelik doğum tarihi sorusu ── */
+.age-declare-overlay { z-index: 10050; background: rgba(5,8,14,.82); backdrop-filter: blur(6px); }
+.age-declare-box { width: min(420px, calc(100vw - 32px)); padding: 26px 22px 22px; border-radius: 22px; text-align: left; }
+.age-declare-box h2 { margin: 6px 0 8px; font-size: 20px; color: #f1f5fb; }
+.age-declare-box p { margin: 0 0 10px; color: #c3cad6; font-size: 14px; line-height: 1.5; }
+.age-declare-box .age-declare-small { font-size: 12.5px; color: var(--text-tertiary); }
+.age-declare-ic { font-size: 34px; }
+.age-declare-box input[type="date"] { width: 100%; margin: 4px 0 6px; padding: 11px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.05); color: #eef2f8; font: inherit; color-scheme: dark; }
+.age-declare-box #age-declare-save { width: 100%; margin-top: 8px; }

@@ -297,7 +297,8 @@ Sauran Geliştirici Ekibi</textarea>
                 cspEmpty: 'Hiç ihlal yok. Kural zorunlu olsaydı bu süre içinde hiçbir şey engellenmeyecekti.',
                 cspSummaryN: (n, k) => `${n} ihlal · ${k} farklı satır`,
                 cspNote: 'İçerik güvenlik kuralı (CSP) şu an yalnızca raporlama modunda: hiçbir şey engellenmiyor. Bu liste, kural zorunlu olsaydı tarayıcıların neyi engelleyeceğini gösterir. Kişisel bilgi tutulmaz (adreslerin yalnızca site kısmı ve sayfa yolu). Liste sunucu yeniden başlayınca (deploy) sıfırlanır.',
-                act_platform_role_changed: 'Rol değişikliği', act_platform_role_accepted: 'Görev kabulü', act_platform_role_declined: 'Görev reddi', act_account_suspended: 'Hesap askıya alındı', act_account_unsuspended: 'Askı kaldırıldı'
+                act_platform_role_changed: 'Rol değişikliği', act_platform_role_accepted: 'Görev kabulü', act_platform_role_declined: 'Görev reddi', act_account_suspended: 'Hesap askıya alındı', act_account_unsuspended: 'Askı kaldırıldı', act_account_minor_set: '18 yaş altı işaretlendi', act_account_minor_cleared: '18 yaş altı işareti kaldırıldı',
+                minorTitle: 'Yaş durumu', minorYes: '18 yaş altı', minorNo: 'Yetişkin (beyana göre)', minorUnknown: 'Bilinmiyor (eski hesap, henüz sorulmadı)', minorUntil: 'Yetişkin sayılacağı tarih:', minorAgePh: 'Tahmini yaş', minorSet: '18 yaş altı olarak işaretle', minorClear: 'İşareti kaldır', minorReasonPh: 'İç gerekçe (zorunlu, ör. şikâyet no ve özet)', minorDone: 'Kaydedildi.', minorHint: 'İşaretlenince hesapta 18 yaş altı korumaları açılır: yabancıdan arkadaşlık isteği kapanır, profil fotoğrafı herkese açıksa arkadaşlara çekilir, durum ve biyografi yabancılara gizlenir.'
             },
             en: {
                 title: '🛡️ SAURAN ADMIN PANEL', back: '← App', moderation: 'Moderation Panel',
@@ -335,7 +336,8 @@ Sauran Geliştirici Ekibi</textarea>
                 cspEmpty: 'No violations. Had the policy been enforced, nothing would have been blocked in this period.',
                 cspSummaryN: (n, k) => `${n} violations · ${k} distinct rows`,
                 cspNote: 'The content security policy (CSP) is in report-only mode: nothing is blocked. This list shows what browsers would block if it were enforced. No personal data is kept (only the site part of addresses and the page path). The list resets when the server restarts (deploy).',
-                act_platform_role_changed: 'Role changed', act_platform_role_accepted: 'Duty accepted', act_platform_role_declined: 'Duty declined', act_account_suspended: 'Account suspended', act_account_unsuspended: 'Suspension lifted'
+                act_platform_role_changed: 'Role changed', act_platform_role_accepted: 'Duty accepted', act_platform_role_declined: 'Duty declined', act_account_suspended: 'Account suspended', act_account_unsuspended: 'Suspension lifted', act_account_minor_set: 'Marked under 18', act_account_minor_cleared: 'Under-18 mark removed',
+                minorTitle: 'Age status', minorYes: 'Under 18', minorNo: 'Adult (self-declared)', minorUnknown: 'Unknown (old account, not asked yet)', minorUntil: 'Counts as adult from:', minorAgePh: 'Estimated age', minorSet: 'Mark as under 18', minorClear: 'Remove mark', minorReasonPh: 'Internal reason (required, e.g. report id and summary)', minorDone: 'Saved.', minorHint: 'Marking turns on under-18 protections: no friend requests from strangers, a public profile picture becomes friends-only, status and bio are hidden from strangers.'
             }
         };
 
@@ -404,6 +406,47 @@ Sauran Geliştirici Ekibi</textarea>
                 <p class="adm-muted" style="font-size:11px;margin:0 0 4px;">${esc(t('internalHint'))}</p>
                 <p class="adm-muted" style="font-size:11px;margin:0 0 4px;">${esc(t('userReasonWarn'))}</p>
                 <div id="sc-msg" style="font-size:12px;min-height:16px;" role="status"></div>`;
+        }
+
+        // 18 yaş altı işareti (şikâyet üzerine): tahmini yaş 13–17 + zorunlu iç gerekçe; audit kaydına yazılır.
+        function minorControlsHtml(a) {
+            const area = 'background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);color:#c5c6c7;border-radius:10px;padding:9px 12px;font-size:13px;font-family:inherit;outline:none;';
+            if (a.platform_role === 'founder') return '';
+            const status = a.is_minor ? `${esc(t('minorYes'))} · ${esc(t('minorUntil'))} ${esc(a.minor_until || '')}` : (a.age_declared === false ? esc(t('minorUnknown')) : esc(t('minorNo')));
+            return `
+                <div class="adm-section-title">${esc(t('minorTitle'))}</div>
+                <p class="adm-muted" style="font-size:12px;margin:0 0 8px;">${status}</p>
+                <div class="adm-toolbar" style="flex-direction:column;gap:8px;margin-bottom:6px;">
+                    ${a.is_minor ? '' : `<select id="mn-age" style="${area}"><option value="">${esc(t('minorAgePh'))}</option>${[13, 14, 15, 16, 17].map((n) => `<option value="${n}">${n}</option>`).join('')}</select>`}
+                    <textarea id="mn-reason" maxlength="200" rows="2" placeholder="${esc(t('minorReasonPh'))}" style="${area}resize:vertical;"></textarea>
+                    ${a.is_minor && !isFounder ? '' : `<button id="mn-apply" type="button" class="adm-apply-btn">${esc(t(a.is_minor ? 'minorClear' : 'minorSet'))}</button>`}
+                </div>
+                <p class="adm-muted" style="font-size:11px;margin:0 0 4px;">${esc(t('minorHint'))}</p>
+                <div id="mn-msg" style="font-size:12px;min-height:16px;" role="status"></div>`;
+        }
+
+        function wireMinorControls(a) {
+            const btn = $('mn-apply');
+            if (!btn) return;
+            btn.addEventListener('click', async () => {
+                const msg = $('mn-msg');
+                const reason = $('mn-reason').value.trim();
+                const age = a.is_minor ? null : Number($('mn-age').value || 0);
+                if (!a.is_minor && !age) { msg.style.color = '#ff6b7d'; msg.textContent = t('minorAgePh'); return; }
+                if (!reason) { msg.style.color = '#ff6b7d'; msg.textContent = t('internalReasonRequired'); return; }
+                btn.disabled = true;
+                try {
+                    await send('PATCH', `/api/admin/users/${encodeURIComponent(a.id)}/minor`, { age, internal_reason: reason });
+                    await openDetail(a.id);
+                    $('mn-msg').style.color = '#57f287';
+                    $('mn-msg').textContent = t('minorDone');
+                    if (audit.loaded) loadAudit().catch(() => {});
+                } catch (e) {
+                    msg.style.color = '#ff6b7d';
+                    msg.textContent = e.message;
+                    btn.disabled = false;
+                }
+            });
         }
 
         function wireSuspendControls(a) {
@@ -575,6 +618,7 @@ Sauran Geliştirici Ekibi</textarea>
                     ${row(t('accStatus'), statusBadge(a))}
                     ${roleControlsHtml(a)}
                     ${suspendControlsHtml(a)}
+                    ${minorControlsHtml(a)}
                     <div class="adm-section-title">${t('profile')}</div>
                     ${row(t('avatarVisibility'), esc(p.avatar_visibility || '—'))}
                     <div class="adm-row" style="display:block;"><span>${t('about')}</span>
@@ -595,12 +639,13 @@ Sauran Geliştirici Ekibi</textarea>
                     <p class="adm-muted" style="font-size:11px;margin-top:18px;">${esc(t('readOnly'))}</p>`;
                 wireRoleControls(a);
                 wireSuspendControls(a);
+                wireMinorControls(a);
             } catch (e) {
                 $('adm-detail').innerHTML = `<div class="adm-state">${esc(e.denied ? t('denied') : t('error'))}</div>`;
             }
         }
 
-        const AUDIT_ACTIONS = ['platform_role_changed', 'platform_role_accepted', 'platform_role_declined', 'account_suspended', 'account_unsuspended'];
+        const AUDIT_ACTIONS = ['platform_role_changed', 'platform_role_accepted', 'platform_role_declined', 'account_suspended', 'account_unsuspended', 'account_minor_set', 'account_minor_cleared'];
         const audit = { page: 1, limit: 20, total: 0, loaded: false };
 
         function who(id, username) {

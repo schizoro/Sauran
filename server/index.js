@@ -101,6 +101,9 @@ const {
   listFriendIds,
   isBlocked,
   getPrivacySettings,
+  needsAgeDeclaration,
+  declareAge,
+  setAccountMinorByAdmin,
   updateFriendRequestPrivacy,
   ignoreUser,
   unignoreUser,
@@ -1103,7 +1106,7 @@ app.get('/api/me', (req, res) => {
 
     const plusActive = hasActivePlus(user.id);
     const themeOk = hasFeature(user.id, 'chat_theme'), bubbleOk = hasFeature(user.id, 'bubble_style');
-    return res.json({ success: true, user: { ...user, name_plate: effectiveNamePlate(user.id), avatar_frame: getEquippedCosmetics(user.id).avatar_frame, plus_active: plusActive, chat_theme: themeOk ? (user.chat_theme || 'classic') : 'classic', profile_color: user.profile_color || null, bubble_style: bubbleOk ? (user.bubble_style || 'default') : 'default', profile_effect: hasFeature(user.id, 'profile_effect') ? (user.profile_effect || 'none') : 'none', profile_theme: hasFeature(user.id, 'profile_theme') ? (user.profile_theme || 'default') : 'default', name_effect: hasFeature(user.id, 'name_effect') ? (user.name_effect || 'none') : 'none', atmosphere: effectiveAtmosphere(user.id), profile_sound: effectiveProfileSound(user.id), card_style: effectiveCardStyle(user.id), profile_sound_on: user.profile_sound_on !== 0, features: listFeatures(user.id), premium_active: hasActivePremium(user.id) } });
+    return res.json({ success: true, user: { ...user, name_plate: effectiveNamePlate(user.id), avatar_frame: getEquippedCosmetics(user.id).avatar_frame, plus_active: plusActive, chat_theme: themeOk ? (user.chat_theme || 'classic') : 'classic', profile_color: user.profile_color || null, bubble_style: bubbleOk ? (user.bubble_style || 'default') : 'default', profile_effect: hasFeature(user.id, 'profile_effect') ? (user.profile_effect || 'none') : 'none', profile_theme: hasFeature(user.id, 'profile_theme') ? (user.profile_theme || 'default') : 'default', name_effect: hasFeature(user.id, 'name_effect') ? (user.name_effect || 'none') : 'none', atmosphere: effectiveAtmosphere(user.id), profile_sound: effectiveProfileSound(user.id), card_style: effectiveCardStyle(user.id), profile_sound_on: user.profile_sound_on !== 0, features: listFeatures(user.id), premium_active: hasActivePremium(user.id), needs_age: needsAgeDeclaration(user.id) } });
 
   } catch (error) {
     console.error('Session kontrol hatası:', error);
@@ -2305,6 +2308,40 @@ function terminateSuspendedUserSockets(userId, userReason) {
     console.error('Askıdaki kullanıcının socket bağlantıları kapatılamadı:', error);
   }
 }
+
+// Eski hesabın bir kerelik doğum tarihi beyanı (tam tarih saklanmaz).
+app.post('/api/profile/age', privacyLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const result = declareAge(user.id, req.body?.birth_date);
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    if (result.suspended) terminateSuspendedUserSockets(user.id, `Sauran'ı kullanmak için en az 13 yaşında olmalısın.`);
+    return res.json(result);
+  } catch (error) {
+    console.error('Yaş beyanı hatası:', error);
+    res.status(500).json({ success: false, error: 'Kaydedilemedi.' });
+  }
+});
+
+// Yönetici: hesabı 18 yaş altı olarak işaretle (tahmini yaş) / işareti kaldır. Gerekçe audit kaydına yazılır.
+app.patch('/api/admin/users/:id/minor', adminWriteLimiter, (req, res) => {
+  const actor = requirePlatformRole(req, res, 'admin');
+  if (!actor) return;
+  if (!/^[0-9]{1,15}$/.test(req.params.id)) return res.status(400).json({ success: false, error: 'Geçersiz kullanıcı ID.' });
+  try {
+    if (!req.body || !Object.prototype.hasOwnProperty.call(req.body, 'age') || req.body.age === undefined) {
+      return res.status(400).json({ success: false, error: 'Tahmini yaş (ya da kaldırmak için null) gönderilmeli.' });
+    }
+    const age = req.body.age === null ? null : (typeof req.body.age === 'number' ? req.body.age : NaN);
+    const result = setAccountMinorByAdmin({ actorId: actor.id, actorRole: actor.platform_role, targetId: Number(req.params.id), age, internalReason: req.body?.internal_reason });
+    if (!result.success) return res.status(result.status || 400).json({ success: false, error: result.error });
+    return res.json(result);
+  } catch (error) {
+    console.error('18 yaş altı işaretleme hatası:', error);
+    res.status(500).json({ success: false, error: 'Kaydedilemedi.' });
+  }
+});
 
 app.patch('/api/admin/users/:id/suspend', adminWriteLimiter, (req, res) => {
   const actor = requirePlatformRole(req, res, 'founder');

@@ -1979,6 +1979,7 @@ function setCurrentUser(user) {
         user;
 
     refreshIgnoredUsers();
+    if (user && user.needs_age) setTimeout(openAgeDeclaration, 400);
 
     finishAuthPending(true);
 
@@ -4083,6 +4084,52 @@ document.getElementById('settings-delete-account-btn').addEventListener('click',
 
 });
 
+
+// ─── Eski hesaplar: bir kerelik doğum tarihi sorusu (kapatılamaz; tam tarih saklanmaz) ───
+function openAgeDeclaration() {
+    if (document.getElementById('age-declare-modal')) return;
+    const ov = document.createElement('div');
+    ov.id = 'age-declare-modal';
+    ov.className = 'modal-overlay age-declare-overlay';
+    ov.style.display = 'flex';
+    ov.setAttribute('role', 'dialog');
+    ov.setAttribute('aria-modal', 'true');
+    ov.setAttribute('aria-labelledby', 'age-declare-title');
+    ov.innerHTML = `<div class="modal-box age-declare-box">
+        <div class="age-declare-ic" aria-hidden="true">🎂</div>
+        <h2 id="age-declare-title">Doğum tarihin</h2>
+        <p>Sauran'ı herkes için güvenli tutmak adına hesabının yaş bilgisine ihtiyacımız var. Bu soru <b>bir kez</b> sorulur ve sonradan değiştirilemez.</p>
+        <p class="age-declare-small">Tam tarihini saklamıyoruz; yalnızca 18 yaşından küçük olup olmadığını kaydediyoruz. 18 yaşından küçük hesaplarda ek gizlilik korumaları açılır.</p>
+        <label for="age-declare-input" class="auth-field-label">Doğum Tarihin</label>
+        <input type="date" id="age-declare-input" autocomplete="bday" max="${(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })()}">
+        <div id="age-declare-err" class="hub-create-error" role="alert"></div>
+        <button type="button" id="age-declare-save" class="about-btn about-btn-primary">Kaydet</button>
+    </div>`;
+    document.body.appendChild(ov);
+    const input = ov.querySelector('#age-declare-input'), err = ov.querySelector('#age-declare-err'), btn = ov.querySelector('#age-declare-save');
+    setTimeout(() => input.focus(), 50);
+    btn.addEventListener('click', async () => {
+        err.textContent = '';
+        const v = input.value;
+        if (!v) { err.textContent = 'Doğum tarihini seç.'; return; }
+        const b = new Date(v + 'T00:00:00'), n = new Date();
+        let age = n.getFullYear() - b.getFullYear();
+        if (n.getMonth() < b.getMonth() || (n.getMonth() === b.getMonth() && n.getDate() < b.getDate())) age -= 1;
+        if (age < 0 || age > 120) { err.textContent = 'Geçerli bir doğum tarihi girin.'; return; }
+        if (age < 13 && !confirm('Bu tarihe göre 13 yaşından küçüksün. Sauran 13 yaş altına açık değildir ve hesabın askıya alınacak. Tarihi doğru girdiğinden emin misin?')) return;
+        btn.disabled = true;
+        try {
+            const r = await fetch('/api/profile/age', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ birth_date: v }) });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok || !data.success) { err.textContent = data.error || t('generic-error'); btn.disabled = false; return; }
+            if (data.suspended) { location.reload(); return; }
+            ov.remove();
+            if (currentUser) currentUser.needs_age = false;
+            showToast(data.minor ? 'Kaydedildi. Hesabında 18 yaş altı korumaları açıldı.' : 'Kaydedildi. Teşekkürler!');
+        } catch (_) { err.textContent = t('generic-error'); btn.disabled = false; }
+    });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); });
+}
 
 // ─── Gizlilik: arkadaşlık isteği kaynakları, profil fotoğrafı görünürlüğü, yok saydıklarım ───
 var ignoredUserIds = new Set();
