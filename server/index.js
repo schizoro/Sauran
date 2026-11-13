@@ -100,6 +100,12 @@ const {
   listFriendIdsInHub,
   listFriendIds,
   isBlocked,
+  getPrivacySettings,
+  updateFriendRequestPrivacy,
+  ignoreUser,
+  unignoreUser,
+  isIgnored,
+  listIgnoredUsers,
   listDmConversations,
   firstUnreadInfo,
   listIncomingRequests,
@@ -546,6 +552,7 @@ const joinLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 20, keyFn: byIp, 
 const lookupLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 60, keyFn: byIp, message: 'Çok fazla arama yapıldı. Biraz sonra tekrar dene.' });
 const profileViewLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, keyFn: byIp, message: 'Çok fazla profil isteği. Biraz sonra tekrar dene.' });
 const passwordResetLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyFn: byIp, message: 'Çok fazla istek. Biraz sonra tekrar dene.' });
+const privacyLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 60, keyFn: byIp, message: 'Çok fazla işlem yaptın. Biraz sonra tekrar dene.' });
 const friendRequestLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyFn: byIp, message: 'Çok fazla arkadaşlık isteği gönderildi. Biraz sonra tekrar dene.' });
 const discoverLimiter = rateLimit({ windowMs: 60 * 1000, max: 90, keyFn: byIp, message: 'Çok fazla istek gönderdin. Biraz sonra tekrar dene.' });
 const discoverJoinLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 20, keyFn: byIp, message: 'Çok fazla katılma denemesi. Biraz sonra tekrar dene.' });
@@ -2446,6 +2453,47 @@ app.delete('/api/users/:id/block', (req, res) => {
     console.error('Engel kaldırma API hatası:', error);
     res.status(500).json({ success: false, error: 'Engel kaldırılamadı.' });
   }
+});
+
+// ── Gizlilik ayarları (arkadaşlık isteği kaynakları + profil fotoğrafı görünürlüğü)
+app.get('/api/privacy', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try { return res.json({ success: true, ...getPrivacySettings(user.id) }); }
+  catch (error) { console.error('Gizlilik ayarları hatası:', error); res.status(500).json({ success: false, error: 'Ayarlar alınamadı.' }); }
+});
+
+app.patch('/api/privacy/friend-requests', privacyLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const result = updateFriendRequestPrivacy(user.id, req.body || {});
+    return res.status(result.success ? 200 : 400).json(result);
+  } catch (error) { console.error('Gizlilik güncelleme hatası:', error); res.status(500).json({ success: false, error: 'Güncellenemedi.' }); }
+});
+
+// ── Yok sayma
+app.post('/api/users/:id/ignore', privacyLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const result = ignoreUser(user.id, Number(req.params.id));
+    return res.status(result.success ? 200 : 400).json(result);
+  } catch (error) { console.error('Yok sayma hatası:', error); res.status(500).json({ success: false, error: 'Yok sayılamadı.' }); }
+});
+
+app.delete('/api/users/:id/ignore', privacyLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try { return res.json(unignoreUser(user.id, Number(req.params.id))); }
+  catch (error) { console.error('Yok saymayı kaldırma hatası:', error); res.status(500).json({ success: false, error: 'Kaldırılamadı.' }); }
+});
+
+app.get('/api/users/ignored', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try { return res.json({ success: true, ignored: listIgnoredUsers(user.id) }); }
+  catch (error) { console.error('Yok sayılanlar listesi hatası:', error); res.status(500).json({ success: false, error: 'Liste alınamadı.' }); }
 });
 
 app.get('/api/users/blocked', (req, res) => {
@@ -4515,6 +4563,7 @@ function emitDmMessage(message) {
   io.to(`user:${message.user_id}`).to(`user:${message.to_user_id}`).emit('dm_message', message);
 
   if (!message.to_user_id || message.to_user_id === message.user_id) return;
+  if (isIgnored(message.to_user_id, message.user_id)) return;
 
   dispatchWebPush(message.to_user_id, 'dm_message', {
     title: message.username,
@@ -4555,6 +4604,7 @@ function dispatchHubMessagePush(hubId, message) {
   const mentioned = new Set((message.mentions?.users || []).map((u) => u.id));
   for (const memberId of info.member_ids) {
     if (memberId === message.user_id) continue;
+    if (isIgnored(memberId, message.user_id)) continue; // yok sayılan kişinin mesajı bildirim üretmez
     if (mentioned.has(memberId) || message.mentions?.everyone) continue; // bahsedilene ayrıca "seni bahsetti" bildirimi gider
     if (message.channel_id && getChannelNotifyMode(memberId, message.channel_id) !== 'all') continue; // kanal: yalnızca bahsedilince / hiç
 
@@ -4583,6 +4633,7 @@ function notifyHubMentions(hubId, message) {
 
     const send = (userId, everyone) => {
       if (userId === message.user_id) return;
+      if (isIgnored(userId, message.user_id)) return; // yok sayılandan bahsetme bildirimi gelmez
       // Kanalın bildirimini "hiç" yapan bahsetme de almaz; "yalnızca bahsedilince" alır.
       if (message.channel_id && getChannelNotifyMode(userId, message.channel_id) === 'none') return;
       io.to(`user:${userId}`).emit('hub_mention', { ...payload, everyone });
@@ -4595,6 +4646,7 @@ function notifyHubMentions(hubId, message) {
     };
 
     direct.forEach((userId) => {
+      if (userId === message.user_id || isIgnored(userId, message.user_id)) return;
       send(userId, false);
       createNotification(userId, 'hub_mention', payload);
     });
@@ -5466,13 +5518,16 @@ app.post('/api/friends/request', friendRequestLimiter, (req, res) => {
       return res.status(400).json(result);
     }
 
-    const targetSockets = activeUsers.get(Number(req.body?.to_user_id));
-    if (targetSockets) {
-      targetSockets.forEach(sid => io.to(sid).emit('friend_request_received', { from_username: user.username }));
+    if (!result.silent) {
+      const targetSockets = activeUsers.get(Number(req.body?.to_user_id));
+      if (targetSockets) {
+        targetSockets.forEach(sid => io.to(sid).emit('friend_request_received', { from_username: user.username }));
+      }
+      pushNotification(Number(req.body?.to_user_id), 'friend_request', { from_username: user.username });
     }
-    pushNotification(Number(req.body?.to_user_id), 'friend_request', { from_username: user.username });
 
-    return res.json(result);
+    const { silent, ...publicResult } = result; // yok sayıldığını gönderen bilmez
+    return res.json(publicResult);
 
   } catch (error) {
     console.error('Arkadaşlık isteği hatası:', error);
@@ -6175,9 +6230,9 @@ io.on('connection', (socket) => {
       const inHub = new Set(listFriendIdsInHub(socket.userId, entry.hubId));
       // "Tüm arkadaşlarım": lobide olmayan arkadaşa lobi/oda bilgisi GİTMEZ, yalnızca "X yayın başlattı".
       const others = scopeAll
-        ? listFriendIds(socket.userId).filter((id) => !inHub.has(id) && !isBlocked(id, socket.userId) && !isBlocked(socket.userId, id))
+        ? listFriendIds(socket.userId).filter((id) => !inHub.has(id) && !isBlocked(id, socket.userId) && !isBlocked(socket.userId, id) && !isIgnored(id, socket.userId))
         : [];
-      const recipients = [...inHub].filter((fid) => !inRoom?.has(fid));
+      const recipients = [...inHub].filter((fid) => !inRoom?.has(fid) && !isIgnored(fid, socket.userId));
       if (!recipients.length && !others.length) return;
       // Bekleme süresi yalnızca gerçekten bildirim gidince başlar (görünmezken ya da kimse yokken harcanmaz).
       streamNotifyAt.set(socket.userId, now);

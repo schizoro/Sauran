@@ -2312,6 +2312,29 @@
 
                 <div class="settings-panel" data-settings-panel="privacy" style="display:none;">
 
+                    <span class="profile-field-label" data-i18n="privacy-fr-title">Arkadaşlık istekleri</span>
+                    <p class="settings-voice-hint privacy-intro" data-i18n="privacy-fr-desc">Sana kimlerin arkadaşlık isteği gönderebileceğini seç.</p>
+                    <div class="privacy-group" id="privacy-fr-group">
+                        <label class="notif-pref-row"><input type="checkbox" data-fr="everyone"><span data-i18n="privacy-fr-everyone">Herkes</span></label>
+                        <label class="notif-pref-row"><input type="checkbox" data-fr="friends_of_friends"><span data-i18n="privacy-fr-fof">Arkadaşlarının arkadaşları</span></label>
+                        <label class="notif-pref-row"><input type="checkbox" data-fr="lobby_members"><span data-i18n="privacy-fr-lobby">Aynı lobide olduğun kişiler</span></label>
+                    </div>
+
+                    <div class="hub-settings-divider"></div>
+                    <span class="profile-field-label" data-i18n="privacy-avatar-title">Profil fotoğrafım</span>
+                    <div class="privacy-seg" id="privacy-avatar-seg" role="radiogroup">
+                        <button type="button" class="privacy-seg-btn" data-vis="public" data-i18n="privacy-avatar-public">Herkes görsün</button>
+                        <button type="button" class="privacy-seg-btn" data-vis="friends" data-i18n="privacy-avatar-friends">Yalnızca arkadaşlar</button>
+                        <button type="button" class="privacy-seg-btn" data-vis="private" data-i18n="privacy-avatar-private">Kimse</button>
+                    </div>
+                    <p id="privacy-avatar-note" class="settings-voice-hint"></p>
+
+                    <div class="hub-settings-divider"></div>
+                    <span class="profile-field-label" data-i18n="privacy-ignored-title">Yok saydıkların</span>
+                    <p class="settings-voice-hint privacy-intro" data-i18n="privacy-ignored-desc">Engellemekten daha hafiftir; karşı taraf bilmez. Mesajları lobide katlanır, ondan bildirim gelmez.</p>
+                    <div id="settings-ignored-list" class="settings-blocked-list"></div>
+
+                    <div class="hub-settings-divider"></div>
                     <span class="profile-field-label" data-i18n="label-blocked-users">Engellenenler</span>
                     <div id="settings-blocked-list" class="settings-blocked-list"></div>
 

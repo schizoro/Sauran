@@ -2431,6 +2431,8 @@ function verifyAndCreateUser(email, code) {
 
     db.prepare(`DELETE FROM pending_verifications WHERE id = ?`).run(pending.id);
     ensureClassicFrame(result.lastInsertRowid);
+    // 18 yaş altı: "Herkes"ten arkadaşlık isteği varsayılan KAPALI (kullanıcı isterse açabilir).
+    if (minor) db.prepare(`UPDATE users SET fr_from_everyone = 0 WHERE id = ?`).run(result.lastInsertRowid);
 
     return {
       success: true,
@@ -6612,6 +6614,10 @@ function sendFriendRequest(fromId, toId) {
     return { success: false, error: 'Bu kullanıcıya istek gönderilemiyor.' };
   }
 
+  if (!friendRequestAllowed(fromId, toId)) {
+    return { success: false, code: 'privacy', error: 'Bu kullanıcı şu an senden arkadaşlık isteği kabul etmiyor.' };
+  }
+
   const [low, high] = pairKey(fromId, toId);
 
   const existing = db.prepare(`SELECT * FROM friendships WHERE user_low = ? AND user_high = ?`).get(low, high);
@@ -6628,9 +6634,10 @@ function sendFriendRequest(fromId, toId) {
   `).run(low, high, fromId);
 
   const fromUser = db.prepare(`SELECT username FROM users WHERE id = ?`).get(fromId);
-  createNotification(toId, 'friend_request', { from_user_id: fromId, from_username: fromUser?.username || '' });
+  const silent = isIgnored(toId, fromId);
+  if (!silent) createNotification(toId, 'friend_request', { from_user_id: fromId, from_username: fromUser?.username || '' });
 
-  return { success: true };
+  return { success: true, silent };
 }
 
 function respondFriendRequest(userId, otherUserId, accept) {
@@ -6701,8 +6708,100 @@ function areFriends(a, b) {
   return Boolean(row && row.status === 'accepted');
 }
 
-// Yayın bildirimi alıcıları: kişinin, aynı Lobiye de üye olan arkadaşları (yayını gerçekten izleyebilecek olanlar).
-// İki yönde de engel varsa listeye girmez. Lobi dışındaki arkadaşa hangi lobide olunduğu sızdırılmaz.
+// =====================================================
+// GİZLİLİK: ARKADAŞLIK İSTEĞİ KAYNAKLARI + YOK SAYMA
+// =====================================================
+// fr_from_everyone / fr_from_fof / fr_from_hub: kimler arkadaşlık isteği gönderebilir (Discord'daki üç anahtar).
+// "Herkes" açıksa diğerleri önemsizdir. Hepsi kapalıysa kimse istek gönderemez.
+// Yok sayma (ignored_users): engellemeden hafif — karşı taraf bilmez; onun mesajları lobide katlanır,
+// ondan gelen bahsetme / istek / DM / yayın bildirimleri sessizce düşer.
+const privacyColumns = db.prepare(`PRAGMA table_info(users)`).all().map((c) => c.name);
+for (const column of ['fr_from_everyone', 'fr_from_fof', 'fr_from_hub']) {
+  if (!privacyColumns.includes(column)) db.exec(`ALTER TABLE users ADD COLUMN ${column} INTEGER NOT NULL DEFAULT 1`);
+}
+// Sütun ilk kez eklenirken mevcut 18 yaş altı hesaplara da aynı varsayılan uygulanır (bir kez).
+if (!privacyColumns.includes('fr_from_everyone')) {
+  db.prepare(`UPDATE users SET fr_from_everyone = 0 WHERE minor_until IS NOT NULL AND minor_until > date('now')`).run();
+}
+db.exec(`
+  CREATE TABLE IF NOT EXISTS ignored_users (
+    user_id INTEGER NOT NULL,
+    ignored_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, ignored_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (ignored_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+`);
+
+function getPrivacySettings(userId) {
+  const u = db.prepare(`SELECT avatar_visibility, fr_from_everyone, fr_from_fof, fr_from_hub FROM users WHERE id = ?`).get(userId);
+  if (!u) return null;
+  return {
+    avatar_visibility: u.avatar_visibility || 'public',
+    friend_requests: { everyone: u.fr_from_everyone !== 0, friends_of_friends: u.fr_from_fof !== 0, lobby_members: u.fr_from_hub !== 0 }
+  };
+}
+
+function updateFriendRequestPrivacy(userId, patch) {
+  const map = { everyone: 'fr_from_everyone', friends_of_friends: 'fr_from_fof', lobby_members: 'fr_from_hub' };
+  const sets = []; const vals = [];
+  for (const [key, col] of Object.entries(map)) {
+    if (patch && typeof patch[key] === 'boolean') { sets.push(`${col} = ?`); vals.push(patch[key] ? 1 : 0); }
+  }
+  if (!sets.length) return { success: false, error: 'Değişiklik yok.' };
+  db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...vals, userId);
+  return { success: true, ...getPrivacySettings(userId) };
+}
+
+// fromId, toId'ye istek gönderebilir mi? (engel kontrolü sendFriendRequest'te ayrıca yapılır)
+function friendRequestAllowed(fromId, toId) {
+  const u = db.prepare(`SELECT fr_from_everyone, fr_from_fof, fr_from_hub FROM users WHERE id = ?`).get(toId);
+  if (!u || u.fr_from_everyone !== 0) return true;
+  if (u.fr_from_fof !== 0) {
+    const mutual = db.prepare(`
+      SELECT 1 FROM friendships a JOIN friendships b
+        ON (CASE WHEN a.user_low = ? THEN a.user_high ELSE a.user_low END) = (CASE WHEN b.user_low = ? THEN b.user_high ELSE b.user_low END)
+      WHERE a.status = 'accepted' AND (a.user_low = ? OR a.user_high = ?)
+        AND b.status = 'accepted' AND (b.user_low = ? OR b.user_high = ?)
+      LIMIT 1
+    `).get(fromId, toId, fromId, fromId, toId, toId);
+    if (mutual) return true;
+  }
+  if (u.fr_from_hub !== 0) {
+    const shared = db.prepare(`SELECT 1 FROM hub_members a JOIN hub_members b ON a.hub_id = b.hub_id WHERE a.user_id = ? AND b.user_id = ? LIMIT 1`).get(fromId, toId);
+    if (shared) return true;
+  }
+  return false;
+}
+
+function ignoreUser(userId, targetId) {
+  if (!Number.isInteger(targetId) || targetId <= 0) return { success: false, error: 'Geçersiz kullanıcı.' };
+  if (userId === targetId) return { success: false, error: 'Kendini yok sayamazsın.' };
+  if (!db.prepare(`SELECT 1 FROM users WHERE id = ?`).get(targetId)) return { success: false, error: 'Kullanıcı bulunamadı.' };
+  db.prepare(`INSERT OR IGNORE INTO ignored_users (user_id, ignored_id) VALUES (?, ?)`).run(userId, targetId);
+  return { success: true };
+}
+
+function unignoreUser(userId, targetId) {
+  db.prepare(`DELETE FROM ignored_users WHERE user_id = ? AND ignored_id = ?`).run(userId, targetId);
+  return { success: true };
+}
+
+function isIgnored(userId, targetId) {
+  if (!userId || !targetId) return false;
+  return Boolean(db.prepare(`SELECT 1 FROM ignored_users WHERE user_id = ? AND ignored_id = ?`).get(userId, targetId));
+}
+
+function listIgnoredUsers(userId) {
+  return db.prepare(`
+    SELECT users.id, users.username, users.avatar_data, users.avatar_visibility
+    FROM ignored_users INNER JOIN users ON users.id = ignored_users.ignored_id
+    WHERE ignored_users.user_id = ?
+    ORDER BY users.username COLLATE NOCASE
+  `).all(userId).map((b) => { const { avatar_visibility, ...rest } = b; return maskAvatarFor(userId, b.id, rest, avatar_visibility); });
+}
+
 function listFriendIds(userId) {
   return db.prepare(`
     SELECT CASE WHEN user_low = ? THEN user_high ELSE user_low END AS id
@@ -6710,6 +6809,8 @@ function listFriendIds(userId) {
   `).all(userId, userId, userId).map((r) => r.id);
 }
 
+// Yayın bildirimi alıcıları: kişinin, aynı Lobiye de üye olan arkadaşları (yayını gerçekten izleyebilecek olanlar).
+// İki yönde de engel varsa listeye girmez. Lobi dışındaki arkadaşa hangi lobide olunduğu sızdırılmaz.
 function listFriendIdsInHub(userId, hubId) {
   return db.prepare(`
     SELECT CASE WHEN f.user_low = ? THEN f.user_high ELSE f.user_low END AS id
@@ -6769,7 +6870,8 @@ function listIncomingRequests(userId) {
     WHERE friendships.status = 'pending'
       AND friendships.requested_by != ?
       AND (friendships.user_low = ? OR friendships.user_high = ?)
-  `).all(userId, userId, userId);
+      AND NOT EXISTS (SELECT 1 FROM ignored_users i WHERE i.user_id = ? AND i.ignored_id = friendships.requested_by)
+  `).all(userId, userId, userId, userId);
 }
 
 function getTopFriends(userId, limit = 5, { includeAll = false } = {}) {
@@ -7026,7 +7128,9 @@ function getUserPublicProfile(viewerId, targetId) {
     profile_sound: visible ? effectiveProfileSound(targetId) : '',
     profile_sound_url: visible && effectiveProfileSound(targetId) === 'custom' && profileSoundVisibleTo(viewerId, targetId, user.avatar_visibility, user.minor_until) ? profileSoundUrl(targetId) : null,
     friendship_status: isSelf ? 'self' : friendship,
-    blocked_by_me: blockedByMe
+    blocked_by_me: blockedByMe,
+    ignored_by_me: viewerId && !isSelf ? isIgnored(viewerId, targetId) : false,
+    can_friend_request: viewerId && !isSelf && friendship === 'none' ? friendRequestAllowed(viewerId, targetId) : null
   };
 }
 
@@ -7043,6 +7147,7 @@ function blockUser(userId, targetId) {
   `).run(userId, targetId);
 
   removeFriend(userId, targetId);
+  db.prepare(`DELETE FROM ignored_users WHERE user_id = ? AND ignored_id = ?`).run(userId, targetId);
 
   return { success: true };
 }
@@ -9778,6 +9883,13 @@ module.exports = {
   listFriends,
   listFriendIdsInHub,
   listFriendIds,
+  getPrivacySettings,
+  updateFriendRequestPrivacy,
+  friendRequestAllowed,
+  ignoreUser,
+  unignoreUser,
+  isIgnored,
+  listIgnoredUsers,
   listDmConversations,
   listIncomingRequests,
   getUserPublicProfile,

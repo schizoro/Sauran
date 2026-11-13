@@ -1978,6 +1978,8 @@ function setCurrentUser(user) {
     currentUser =
         user;
 
+    refreshIgnoredUsers();
+
     finishAuthPending(true);
 
     applyAdminLinkVisibility(user);
@@ -3085,6 +3087,7 @@ settingsBtn.addEventListener(
         settingsPasswordError.textContent = '';
 
         loadBlockedUsers();
+        loadPrivacySettings();
         loadSessions();
         updateBrowserNotifUI();
         loadNotificationPreferences();
@@ -4081,6 +4084,86 @@ document.getElementById('settings-delete-account-btn').addEventListener('click',
 });
 
 
+// ─── Gizlilik: arkadaşlık isteği kaynakları, profil fotoğrafı görünürlüğü, yok saydıklarım ───
+var ignoredUserIds = new Set();
+async function refreshIgnoredUsers() {
+    try {
+        const data = await fetch('/api/users/ignored', { credentials: 'include' }).then((r) => r.json());
+        if (!data.success) return [];
+        ignoredUserIds = new Set(data.ignored.map((u) => Number(u.id)));
+        applyIgnoredToFeed();
+        return data.ignored;
+    } catch (_) { return []; }
+}
+function applyIgnoredToFeed() {
+    document.querySelectorAll('.hub-msg[data-user-id]').forEach((wrap) => {
+        const on = ignoredUserIds.has(Number(wrap.dataset.userId));
+        wrap.classList.toggle('msg-ignored', on);
+        if (on) wrap.dataset.ignoredLabel = t('ignored-msg'); else wrap.classList.remove('ignore-revealed');
+    });
+}
+document.addEventListener('click', (event) => {
+    const wrap = event.target.closest('.hub-msg.msg-ignored:not(.ignore-revealed)');
+    if (!wrap) return;
+    event.preventDefault(); event.stopPropagation();
+    wrap.classList.add('ignore-revealed');
+}, true);
+
+async function loadPrivacySettings() {
+    let data = null;
+    try { data = await fetch('/api/privacy', { credentials: 'include' }).then((r) => r.json()); } catch (_) {}
+    if (!data || !data.success) return;
+    document.querySelectorAll('#privacy-fr-group input[data-fr]').forEach((box) => { box.checked = Boolean(data.friend_requests[box.dataset.fr]); });
+    syncFriendRequestBoxes();
+    renderAvatarVisibility(data.avatar_visibility);
+    loadIgnoredUsers();
+}
+function syncFriendRequestBoxes() {
+    // "Herkes" açıkken diğerleri zaten kapsanır: soluk gösterilir (yine de seçili kalır).
+    const all = document.querySelector('#privacy-fr-group input[data-fr="everyone"]');
+    document.querySelectorAll('#privacy-fr-group input[data-fr]:not([data-fr="everyone"])').forEach((box) => {
+        box.closest('label').classList.toggle('privacy-covered', Boolean(all?.checked));
+    });
+}
+document.querySelectorAll('#privacy-fr-group input[data-fr]').forEach((box) => box.addEventListener('change', async () => {
+    syncFriendRequestBoxes();
+    try {
+        const r = await fetch('/api/privacy/friend-requests', { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [box.dataset.fr]: box.checked }) }).then((x) => x.json());
+        if (!r.success) { box.checked = !box.checked; syncFriendRequestBoxes(); showToast(r.error || t('generic-error')); }
+    } catch (_) { box.checked = !box.checked; syncFriendRequestBoxes(); }
+}));
+function renderAvatarVisibility(vis) {
+    document.querySelectorAll('#privacy-avatar-seg [data-vis]').forEach((b) => { const on = b.dataset.vis === vis; b.classList.toggle('selected', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); });
+    const note = document.getElementById('privacy-avatar-note');
+    if (note) note.textContent = t(`privacy-avatar-note-${vis}`);
+}
+document.querySelectorAll('#privacy-avatar-seg [data-vis]').forEach((btn) => btn.addEventListener('click', async () => {
+    const prev = document.querySelector('#privacy-avatar-seg .selected')?.dataset.vis || 'public';
+    renderAvatarVisibility(btn.dataset.vis);
+    try {
+        const r = await fetch('/api/profile/privacy', { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ avatar_visibility: btn.dataset.vis }) }).then((x) => x.json());
+        if (!r.success) { renderAvatarVisibility(prev); showToast(r.error || t('generic-error')); }
+    } catch (_) { renderAvatarVisibility(prev); }
+}));
+async function loadIgnoredUsers() {
+    const container = document.getElementById('settings-ignored-list');
+    if (!container) return;
+    const list = await refreshIgnoredUsers();
+    if (!list.length) { container.innerHTML = `<div class="settings-blocked-empty">${t('ignored-empty')}</div>`; return; }
+    container.innerHTML = list.map((u) => {
+        const avatarInner = u.avatar_data ? `<img src="${escapeAttr(u.avatar_data)}" alt="">` : escapeHtml(u.username.charAt(0).toUpperCase());
+        return `<div class="settings-blocked-row" data-user-id="${Number(u.id)}">
+            <span class="settings-blocked-avatar" style="--user-color:${getUserColor(u.username)};">${avatarInner}</span>
+            <span class="settings-blocked-name">${escapeHtml(u.username)}</span>
+            <button class="settings-unblock-btn" data-unignore="${Number(u.id)}" type="button">${t('unignore')}</button>
+        </div>`;
+    }).join('');
+    container.querySelectorAll('[data-unignore]').forEach((btn) => btn.addEventListener('click', async () => {
+        await fetch(`/api/users/${btn.dataset.unignore}/ignore`, { method: 'DELETE', credentials: 'include' });
+        loadIgnoredUsers();
+    }));
+}
+
 async function loadBlockedUsers() {
 
     const container = document.getElementById('settings-blocked-list');
@@ -4345,6 +4428,26 @@ const I18N = {
     'notif-pref-hub-message': { tr: 'Yeni Lobi mesaj bildirimleri', en: 'New lobby message notifications' },
     'notif-pref-friend-request': { tr: 'Arkadaşlık istekleri', en: 'Friend requests' },
     'notif-pref-friend-accepted': { tr: 'Arkadaşlık isteği kabul edildi', en: 'Friend request accepted' },
+    'privacy-fr-title': { tr: 'Arkadaşlık istekleri', en: 'Friend requests' },
+    'privacy-fr-desc': { tr: 'Sana kimlerin arkadaşlık isteği gönderebileceğini seç.', en: 'Choose who can send you friend requests.' },
+    'privacy-fr-everyone': { tr: 'Herkes', en: 'Everyone' },
+    'privacy-fr-fof': { tr: 'Arkadaşlarının arkadaşları', en: 'Friends of friends' },
+    'privacy-fr-lobby': { tr: 'Aynı lobide olduğun kişiler', en: 'People in your lobbies' },
+    'privacy-avatar-title': { tr: 'Profil fotoğrafım', en: 'My profile picture' },
+    'privacy-avatar-public': { tr: 'Herkes görsün', en: 'Everyone' },
+    'privacy-avatar-friends': { tr: 'Yalnızca arkadaşlar', en: 'Friends only' },
+    'privacy-avatar-private': { tr: 'Kimse', en: 'No one' },
+    'privacy-avatar-note-public': { tr: 'Profil fotoğrafın, çerçeven ve profil sesin herkese görünür.', en: 'Your picture, frame and profile sound are visible to everyone.' },
+    'privacy-avatar-note-friends': { tr: 'Arkadaşın olmayanlar baş harfini görür.', en: 'People who are not your friends see your initial.' },
+    'privacy-avatar-note-private': { tr: 'Kimse fotoğrafını görmez; herkes baş harfini görür.', en: 'Nobody sees your picture; everyone sees your initial.' },
+    'privacy-ignored-title': { tr: 'Yok saydıkların', en: 'Ignored' },
+    'privacy-ignored-desc': { tr: 'Engellemekten daha hafiftir; karşı taraf bilmez. Mesajları lobide katlanır, ondan bildirim gelmez.', en: 'Lighter than blocking; they are not told. Their lobby messages are collapsed and they cannot notify you.' },
+    'ignored-empty': { tr: 'Yok saydığın kimse yok.', en: 'You are not ignoring anyone.' },
+    'unignore': { tr: 'Yok saymayı kaldır', en: 'Stop ignoring' },
+    'ignore-user': { tr: 'Yok say', en: 'Ignore' },
+    'ignored-msg': { tr: 'Yok saydığın birinin mesajı · göstermek için dokun', en: 'Message from someone you ignore · tap to show' },
+    'fr-closed': { tr: 'Arkadaşlık istekleri kapalı', en: 'Not accepting friend requests' },
+    'privacy-saved': { tr: 'Kaydedildi', en: 'Saved' },
     'notif-pref-friend-stream': { tr: 'Arkadaşın yayın başlattığında', en: 'When a friend goes live' },
     'notif-pref-friend-stream-hint': { tr: 'Aynı Lobide olduğun bir arkadaşın ekranını paylaşmaya başlayınca haber verir.', en: 'Notifies you when a friend in one of your lobbies starts sharing their screen.' },
     'stream-started-toast': { tr: 'yayın başlattı', en: 'went live' },
@@ -9833,18 +9936,31 @@ function renderOtherProfileActions(profile) {
 
     } else {
 
-        html = `
+        html = profile.can_friend_request === false
+            ? `
+            <button class="profile-action-btn profile-action-disabled" disabled>${escapeHtml(t('fr-closed'))}</button>
+            <button class="profile-action-btn profile-action-disabled" id="block-btn">🚫 Engelle</button>
+        `
+            : `
             <button class="profile-action-btn profile-action-primary" id="add-friend-btn">👤＋ Arkadaş Ekle</button>
             <button class="profile-action-btn profile-action-disabled" id="block-btn">🚫 Engelle</button>
         `;
 
     }
 
+    if (profile.friendship_status !== 'self' && !profile.blocked_by_me) {
+        html += profile.ignored_by_me
+            ? `<button class="profile-action-btn profile-action-disabled" id="unignore-btn">${escapeHtml(t('unignore'))}</button>`
+            : `<button class="profile-action-btn profile-action-disabled" id="ignore-btn">🙈 ${escapeHtml(t('ignore-user'))}</button>`;
+    }
     if (profile.friendship_status !== 'self') {
         html += `<button class="profile-action-btn profile-action-disabled" id="report-user-btn">🚩 <span data-i18n="report-user">Bildir</span></button>`;
     }
 
     otherProfileActions.innerHTML = html;
+    // İkincil eylemler (Engelle / Yok say / Bildir) tek sırada, küçük düğmeler olarak
+    const minor = ['block-btn', 'unblock-btn', 'ignore-btn', 'unignore-btn', 'report-user-btn'].map((id) => document.getElementById(id)).filter(Boolean);
+    if (minor.length > 1) { const row = document.createElement('div'); row.className = 'profile-action-minor'; minor.forEach((b) => row.appendChild(b)); otherProfileActions.appendChild(row); }
 
     document.getElementById('report-user-btn')?.addEventListener('click', () => {
         openReportModal('user', profile.id, profile.username);
@@ -9901,7 +10017,18 @@ function renderOtherProfileActions(profile) {
 
         const data = await response.json();
         if (data.success) openOtherProfile(profile.id);
+        else showToast(data.error || t('generic-error'));
 
+    });
+
+    document.getElementById('ignore-btn')?.addEventListener('click', async () => {
+        const r = await fetch(`/api/users/${profile.id}/ignore`, { method: 'POST', credentials: 'include' }).then((x) => x.json()).catch(() => null);
+        if (r?.success) { await refreshIgnoredUsers(); openOtherProfile(profile.id); }
+    });
+
+    document.getElementById('unignore-btn')?.addEventListener('click', async () => {
+        const r = await fetch(`/api/users/${profile.id}/ignore`, { method: 'DELETE', credentials: 'include' }).then((x) => x.json()).catch(() => null);
+        if (r?.success) { await refreshIgnoredUsers(); openOtherProfile(profile.id); }
     });
 
     document.getElementById('block-btn')?.addEventListener('click', async () => {
@@ -18953,6 +19080,10 @@ function renderMentionText(content, mentions, emojiMap) {
 
 function renderHubMessageIntoWrap(wrap, msg) {
     wrap.dataset.authorId = msg.user_id != null ? String(msg.user_id) : '';
+    if (msg.user_id != null && ignoredUserIds.has(Number(msg.user_id))) {
+        wrap.classList.add('msg-ignored');
+        wrap.dataset.ignoredLabel = t('ignored-msg');
+    }
     if (msg.kind === 'system') {
         wrap.classList.add('is-system');
         wrap.innerHTML = `<div class="hub-msg-system">${groupSystemText(msg)}</div>`;

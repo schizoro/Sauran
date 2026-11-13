@@ -3585,3 +3585,18 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
 #notifications-modal .notification-card .nc-del:hover, #notifications-modal .notification-card .nc-del:focus-visible { background: rgba(255,90,110,.16); color: #ff8d9b; opacity: 1; }
 @media (hover: hover) and (pointer: fine) { #notifications-modal .notification-card .nc-del { opacity: 0; } #notifications-modal .notification-card:hover .nc-del, #notifications-modal .notification-card:focus-within .nc-del { opacity: .9; } }
 #notifications-modal .notification-card.nc-jump .nc-body::after { content: "Mesaja git ›"; display: block; margin-top: 6px; font-size: 11.5px; font-weight: 700; color: #5cc8ff; }
+
+/* ── Gizlilik sekmesi ── */
+.privacy-intro { margin: -2px 0 8px; }
+.privacy-group .privacy-covered { opacity: .55; }
+.privacy-seg { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.privacy-seg-btn { flex: 1 1 0; min-width: 96px; padding: 9px 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04); color: var(--text-secondary); font-weight: 700; font-size: 13px; cursor: pointer; }
+.privacy-seg-btn.selected { border-color: rgba(92,200,255,.6); background: rgba(92,200,255,.12); color: #e8f6ff; }
+/* Yok sayılan kişinin lobi mesajı: katlanır, dokununca açılır */
+.hub-msg.msg-ignored:not(.ignore-revealed) > * { display: none !important; }
+.hub-msg.msg-ignored:not(.ignore-revealed)::before { content: attr(data-ignored-label); display: block; padding: 6px 12px; margin: 2px 0; border-radius: 10px; font-size: 12.5px; color: var(--text-tertiary); background: rgba(255,255,255,.035); cursor: pointer; font-style: italic; }
+
+/* Profil penceresi: Kabul/Reddet yan yana; ikincil eylemler tek sırada */
+.other-profile-actions > .profile-action-row > .profile-action-primary { grid-column: auto !important; }
+.other-profile-actions .profile-action-minor { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; }
+.other-profile-actions .profile-action-minor .profile-action-btn { padding-left: 6px !important; padding-right: 6px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
