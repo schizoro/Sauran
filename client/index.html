@@ -402,6 +402,7 @@
                 <button id="hub-join-open-btn" class="topbar-menu-item" title="Davet koduyla katıl" type="button">🔑 <span data-i18n="menu-join-code">Davet Koduyla Katıl</span></button>
 
                 <button id="feedback-open-btn" class="topbar-menu-item" title="Öneri & Görüş" type="button">💡 <span data-i18n="menu-feedback">Öneri & Görüş</span></button>
+                <button id="whatsnew-open-btn" class="topbar-menu-item" title="Yenilikler" type="button">🎉 <span>Yenilikler</span></button>
 
                 <a id="admin-panel-link" class="topbar-menu-item" href="admin.html" style="display:none; text-decoration:none;">🛡️ <span data-i18n="menu-admin">Yönetim</span></a>
                 <a id="gift-tool-link" class="topbar-menu-item" href="gift.html" style="display:none; text-decoration:none;">🎁 <span>Hediye Aracı</span></a>
@@ -2104,6 +2105,11 @@
                 <button id="settings-close-btn">✕</button>
             </div>
 
+            <div class="settings-search" role="search">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input type="search" id="settings-search-input" placeholder="Ayarlarda ara… (ör. mikrofon, tema, yayın)" autocomplete="off" spellcheck="false" aria-label="Ayarlarda ara" aria-controls="settings-search-results">
+            </div>
+
             <div class="settings-layout">
 
             <div class="settings-tabs" id="settings-tabs">
@@ -2213,6 +2219,12 @@
                     </div>
 
                     <button id="lang-confirm-btn" class="about-btn about-btn-primary poll-submit-btn" type="button" style="display:none;">Dili Onayla</button>
+
+                    <div class="hub-settings-divider"></div>
+                    <span class="profile-field-label">Yardım</span>
+                    <p class="settings-voice-hint">Uygulamayı tanımak ya da son güncellemede nelerin değiştiğini görmek için.</p>
+                    <button id="tour-start-btn" class="hub-settings-action-btn" type="button">🧭 Tanıtım turunu başlat</button>
+                    <button id="whatsnew-settings-btn" class="hub-settings-action-btn" type="button">🎉 Yenilikleri göster</button>
 
                 </div>
 
@@ -2418,6 +2430,8 @@
                     <button id="settings-logout-all-btn" class="hub-settings-action-btn" type="button"><span data-i18n="logout-all">Diğer tüm cihazlardan çıkış yap</span></button>
 
                 </div>
+
+                <div class="settings-panel settings-search-panel" id="settings-search-results" style="display:none;"></div>
 
                 <div class="settings-panel" data-settings-panel="privacy" style="display:none;">
 
@@ -2876,6 +2890,7 @@
     <script src="layout-c-home.js"></script>
     <script src="attach-tray.js"></script>
     <script src="modal-a11y.js"></script>
+    <script src="onboarding.js"></script>
     <script>
         // Tanıtım sayfasındaki "Kayıt Ol" bağlantısı (/app#kayit) doğrudan kayıt formunu açar.
         if (location.hash === '#kayit') { const b = document.getElementById('show-register-btn'); if (b) b.click(); }

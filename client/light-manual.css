@@ -41,3 +41,15 @@ html.theme-light ::-webkit-scrollbar-thumb:hover { background: #9aa4b2; }
 html.theme-light .hub-msg-text, html.theme-light .dm-msg-content { color: var(--text-primary); }
 /* Kod ve alıntılar */
 html.theme-light .msg-code { background: rgba(15, 23, 42, 0.07); color: #b4235b; }
+
+/* Yenilikler: degrade başlık ve vurgu düğmesi açık temada da beyaz yazılı kalır */
+html.theme-light .whatsnew-hero, html.theme-light .whatsnew-hero h2, html.theme-light .whatsnew-hero p, html.theme-light .whatsnew-hero small, html.theme-light .whatsnew-x { color: #fff !important; }
+html.theme-light .whatsnew-hero-art span { color: rgba(255,255,255,0.5) !important; }
+html.theme-light .whatsnew-ok { color: #fff !important; }
+
+html.theme-light .tour-next { color: #fff !important; }
+html.theme-light .tour-spot { box-shadow: 0 0 0 2px var(--accent), 0 0 0 6px var(--accent-soft), 0 0 0 9999px rgba(15, 23, 42, 0.55) !important; }
+html.theme-light .tour-root.centered .tour-block { background: rgba(15, 23, 42, 0.55) !important; }
+
+html.theme-light .ob-cl-list li.ok .ob-cl-check { color: #fff !important; }
+html.theme-light .ob-cl-go:hover { color: #fff !important; }

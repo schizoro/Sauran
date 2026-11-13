@@ -134,7 +134,8 @@
     const MENU_GROUPS = [
         { title: tr('lc-menu-community', 'Topluluk'), items: [
             ['hub-join-open-btn', 'key', 'cyan', tr('lc-menu-join-sub', 'Bir lobinin davet kodunu gir')],
-            ['feedback-open-btn', 'bulb', 'amber', tr('lc-menu-feedback-sub', 'Fikrini Sauran ekibine ilet')]] },
+            ['feedback-open-btn', 'bulb', 'amber', tr('lc-menu-feedback-sub', 'Fikrini Sauran ekibine ilet')],
+            ['whatsnew-open-btn', 'spark', 'pink', tr('lc-menu-whatsnew-sub', 'Son güncellemede neler var')]] },
         { title: tr('lc-menu-store', 'Mağaza ve görünüm'), items: [
             ['market-open-btn', 'bag', 'violet', tr('lc-menu-market-sub', 'Çerçeve, efekt ve daha fazlası')],
             ['inventory-open-btn', 'box', 'orange', tr('lc-menu-inventory-sub', 'Sahip olduğun ürünler')],

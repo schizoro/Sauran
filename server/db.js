@@ -6861,6 +6861,7 @@ function acceptPolicy(userId) {
 
 // ── Görünüm tercihleri (tema, sohbet yazı boyutu, mesaj sıklığı, hareket azaltma): hesaba kaydedilir, tüm cihazlarda aynı.
 if (!privacyColumns.includes('ui_prefs')) db.exec(`ALTER TABLE users ADD COLUMN ui_prefs TEXT`);
+if (!privacyColumns.includes('onboarding')) db.exec(`ALTER TABLE users ADD COLUMN onboarding TEXT`);
 const UI_THEMES = ['dark', 'purple', 'oled', 'light', 'auto'];
 function sanitizeUiPrefs(input) {
   const p = {};
@@ -6884,6 +6885,48 @@ function setUiPrefs(userId, patch) {
   const next = { ...(getUiPrefs(userId) || {}), ...sanitizeUiPrefs(patch) };
   db.prepare(`UPDATE users SET ui_prefs = ? WHERE id = ?`).run(JSON.stringify(next), userId);
   return next;
+}
+
+// Tanıtım durumu (hesaba bağlı; farklı cihazda tekrar gösterilmez):
+//  tour: 'done' | 'skipped'   — hoş geldin turu
+//  wn:   son görülen "Yenilikler" sürüm kimliği
+//  seen: ilk kez açılan (YENİ rozeti kalkan) özellik kimlikleri
+//  cl:   'dismissed'          — başlangıç listesi kapatıldı
+const ONBOARDING_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
+const ONBOARDING_MAX_SEEN = 300;
+function readOnboarding(userId) {
+  const r = db.prepare(`SELECT onboarding, created_at FROM users WHERE id = ?`).get(userId);
+  if (!r) return null;
+  let o = {};
+  try { o = r.onboarding ? JSON.parse(r.onboarding) : {}; } catch (_) { o = {}; }
+  const out = { seen: [] };
+  if (['done', 'skipped'].includes(o.tour)) out.tour = o.tour;
+  if (typeof o.wn === 'string' && ONBOARDING_ID.test(o.wn)) out.wn = o.wn;
+  if (Array.isArray(o.seen)) out.seen = o.seen.filter((x) => typeof x === 'string' && ONBOARDING_ID.test(x)).slice(-ONBOARDING_MAX_SEEN);
+  if (o.cl === 'dismissed') out.cl = 'dismissed';
+  out.account_created_at = r.created_at || null;
+  return out;
+}
+function getOnboarding(userId) { return readOnboarding(userId); }
+// patch: { tour?, wn?, seen?: [id...] (eklenir), cl? }. Geçersiz alanlar yok sayılır.
+function setOnboarding(userId, patch) {
+  const cur = readOnboarding(userId);
+  if (!cur) return null;
+  const p = patch || {};
+  const next = { seen: cur.seen.slice() };
+  if (cur.tour) next.tour = cur.tour;
+  if (cur.wn) next.wn = cur.wn;
+  if (cur.cl) next.cl = cur.cl;
+  if (['done', 'skipped'].includes(p.tour)) next.tour = p.tour;
+  if (p.tour === null) delete next.tour; // "Turu yeniden başlat"
+  if (typeof p.wn === 'string' && ONBOARDING_ID.test(p.wn)) next.wn = p.wn;
+  if (p.cl === 'dismissed') next.cl = 'dismissed';
+  if (Array.isArray(p.seen)) {
+    for (const id of p.seen.slice(0, 50)) if (typeof id === 'string' && ONBOARDING_ID.test(id) && !next.seen.includes(id)) next.seen.push(id);
+    next.seen = next.seen.slice(-ONBOARDING_MAX_SEEN);
+  }
+  db.prepare(`UPDATE users SET onboarding = ? WHERE id = ?`).run(JSON.stringify(next), userId);
+  return readOnboarding(userId);
 }
 
 function needsAgeDeclaration(userId) {
@@ -10292,6 +10335,8 @@ module.exports = {
   respondDmRequest,
   needsAgeDeclaration,
   getUiPrefs,
+  getOnboarding,
+  setOnboarding,
   setUiPrefs,
   needsPolicyAcceptance,
   policyEnforced,

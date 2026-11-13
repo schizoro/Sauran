@@ -113,6 +113,8 @@ const {
   hubMentionsOff,
   getUiPrefs,
   setUiPrefs,
+  getOnboarding,
+  setOnboarding,
   needsPolicyAcceptance,
   policyEnforced,
   policyEnforceAt,
@@ -1219,7 +1221,7 @@ app.get('/api/me', (req, res) => {
 
     const plusActive = hasActivePlus(user.id);
     const themeOk = hasFeature(user.id, 'chat_theme'), bubbleOk = hasFeature(user.id, 'bubble_style');
-    return res.json({ success: true, user: { ...user, name_plate: effectiveNamePlate(user.id), avatar_frame: getEquippedCosmetics(user.id).avatar_frame, plus_active: plusActive, chat_theme: themeOk ? (user.chat_theme || 'classic') : 'classic', profile_color: user.profile_color || null, bubble_style: bubbleOk ? (user.bubble_style || 'default') : 'default', profile_effect: hasFeature(user.id, 'profile_effect') ? (user.profile_effect || 'none') : 'none', profile_theme: hasFeature(user.id, 'profile_theme') ? (user.profile_theme || 'default') : 'default', name_effect: hasFeature(user.id, 'name_effect') ? (user.name_effect || 'none') : 'none', atmosphere: effectiveAtmosphere(user.id), profile_sound: effectiveProfileSound(user.id), card_style: effectiveCardStyle(user.id), profile_sound_on: user.profile_sound_on !== 0, features: listFeatures(user.id), premium_active: hasActivePremium(user.id), needs_age: needsAgeDeclaration(user.id), needs_policy: needsPolicyAcceptance(user.id), policy_deadline: policyEnforceAt(), ui_prefs: getUiPrefs(user.id), is_minor: isMinorUntil(user.minor_until) } });
+    return res.json({ success: true, user: { ...user, name_plate: effectiveNamePlate(user.id), avatar_frame: getEquippedCosmetics(user.id).avatar_frame, plus_active: plusActive, chat_theme: themeOk ? (user.chat_theme || 'classic') : 'classic', profile_color: user.profile_color || null, bubble_style: bubbleOk ? (user.bubble_style || 'default') : 'default', profile_effect: hasFeature(user.id, 'profile_effect') ? (user.profile_effect || 'none') : 'none', profile_theme: hasFeature(user.id, 'profile_theme') ? (user.profile_theme || 'default') : 'default', name_effect: hasFeature(user.id, 'name_effect') ? (user.name_effect || 'none') : 'none', atmosphere: effectiveAtmosphere(user.id), profile_sound: effectiveProfileSound(user.id), card_style: effectiveCardStyle(user.id), profile_sound_on: user.profile_sound_on !== 0, features: listFeatures(user.id), premium_active: hasActivePremium(user.id), needs_age: needsAgeDeclaration(user.id), needs_policy: needsPolicyAcceptance(user.id), policy_deadline: policyEnforceAt(), ui_prefs: getUiPrefs(user.id), onboarding: getOnboarding(user.id), is_minor: isMinorUntil(user.minor_until) } });
 
   } catch (error) {
     console.error('Session kontrol hatası:', error);
@@ -1372,7 +1374,7 @@ app.get('/api/account/export', (req, res) => {
     }
     // İstenen kategoriler (Ayarlar > Gizlilik ve Yasal > Verilerimi İndir). Bilinmeyen kategori yok sayılır; hiçbiri yoksa hepsi.
     const EXPORT_GROUPS = {
-      account: ['profile', 'account', 'sessions', 'notification_preferences', 'notification_devices', 'privacy', 'ui_prefs', 'policy_acceptances', 'passkeys'],
+      account: ['profile', 'account', 'sessions', 'notification_preferences', 'notification_devices', 'privacy', 'ui_prefs', 'onboarding', 'policy_acceptances', 'passkeys'],
       messages: ['messages'],
       hubs: ['hub_memberships', 'owned_hubs', 'hub_likes', 'hub_join_requests'],
       social: ['friendships', 'blocked_users', 'ignored_users', 'dm_requests', 'reactions', 'poll_votes'],
@@ -1381,6 +1383,7 @@ app.get('/api/account/export', (req, res) => {
     };
     full.privacy = getPrivacySettings(user.id);
     full.ui_prefs = getUiPrefs(user.id);
+    { const ob = getOnboarding(user.id); if (ob) { delete ob.account_created_at; full.onboarding = ob; } }
     full.ignored_users = db.prepare(`SELECT u.username, i.created_at FROM ignored_users i JOIN users u ON u.id = i.ignored_id WHERE i.user_id = ? ORDER BY i.created_at`).all(user.id);
     full.dm_requests = db.prepare(`SELECT CASE WHEN r.sender_id = ? THEN 'gönderdiğin' ELSE 'aldığın' END AS direction, u.username AS other, r.status, r.created_at, r.updated_at FROM dm_requests r JOIN users u ON u.id = CASE WHEN r.sender_id = ? THEN r.recipient_id ELSE r.sender_id END WHERE r.sender_id = ? OR r.recipient_id = ?`).all(user.id, user.id, user.id, user.id);
     full.passkeys = db.prepare(`SELECT name, device_type, backed_up AS synced, created_at, last_used_at FROM passkeys WHERE user_id = ? ORDER BY created_at`).all(user.id); // açık anahtar dışarı verilmez
@@ -2449,6 +2452,13 @@ app.get('/api/me/standing', (req, res) => {
   if (!user) return;
   try { return res.json({ success: true, ...getAccountStanding(user.id) }); }
   catch (error) { console.error('Hesap durumu hatası:', error); res.status(500).json({ success: false, error: 'Hesap durumu alınamadı.' }); }
+});
+
+app.patch('/api/me/onboarding', privacyLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try { return res.json({ success: true, onboarding: setOnboarding(user.id, req.body || {}) }); }
+  catch (error) { console.error('Tanıtım durumu hatası:', error); res.status(500).json({ success: false, error: 'Kaydedilemedi.' }); }
 });
 
 app.patch('/api/me/ui-prefs', privacyLimiter, (req, res) => {

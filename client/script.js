@@ -3283,6 +3283,8 @@ settingsBtn.addEventListener(
         loadSessions();
         updateBrowserNotifUI();
         loadNotificationPreferences();
+        clearSettingsSearch();
+        window.SauranOnboarding?.onSettingsOpen();
         switchSettingsTab('general');
 
     }
@@ -3302,12 +3304,186 @@ function switchSettingsTab(tabName) {
     document.querySelectorAll('.settings-panel').forEach((panel) => {
         panel.style.display = panel.dataset.settingsPanel === tabName ? 'flex' : 'none';
     });
+    window.SauranOnboarding?.onSettingsTab(tabName);
 
 }
 
 document.querySelectorAll('.settings-tab-btn').forEach((btn) => {
-    btn.addEventListener('click', () => switchSettingsTab(btn.dataset.settingsTab));
+    btn.addEventListener('click', () => { clearSettingsSearch(); switchSettingsTab(btn.dataset.settingsTab); });
 });
+
+
+// =====================================================
+// AYARLARDA ARAMA ("Nerede ne var?")
+// Dizin, ayarlar penceresindeki başlık/satır metinlerinden HER ARAMADA yeniden çıkarılır: yeni bir ayar eklenince
+// ayrıca kayıt gerekmez. Eş anlamlılar (SETTINGS_SEARCH_SYNONYMS) kullanıcının aklına gelen kelimeyi ayara bağlar.
+// Uygulamanın ayar dışı özellikleri FEATURE_CATALOG'dan gelir (bkz. tanıtım sistemi).
+// =====================================================
+const SETTINGS_TITLE_SEL = '.profile-field-label, .privacy-option-title, .notif-pref-group-title, .voice-sub-title, .notif-pref-row > span, .hub-settings-action-btn';
+const SETTINGS_HINT_SEL = '.settings-voice-hint, .privacy-option-desc';
+// anahtar kelimeler → ayar başlığında geçen ifade (küçük harf, aksansız karşılaştırılır)
+const SETTINGS_SEARCH_SYNONYMS = [
+    [['mic', 'mikrofon', 'ses girisi', 'giris aygiti', 'kulaklik mikrofonu'], 'mikrofon'],
+    [['parazit', 'fan', 'klavye sesi', 'arka plan', 'cizirti', 'gurultu'], 'gurultu'],
+    [['eko', 'yanki'], 'yanki'],
+    [['otomatik ses', 'ses seviyesi', 'kazanc'], 'kazanc'],
+    [['karanlik', 'gece', 'koyu', 'aydinlik', 'beyaz', 'renk', 'oled', 'siyah'], 'tema'],
+    [['yazi boyutu', 'font', 'buyut', 'kucult'], 'yazi boyutu'],
+    [['yayin', 'ekran paylas', 'stream', 'canli'], 'yayin'],
+    [['sifre', 'parola', 'giris'], 'sifre'],
+    [['passkey', 'parmak izi', 'yuz tanima', 'windows hello', 'sifresiz'], 'gecis anahtar'],
+    [['2fa', 'dogrulama kodu', 'authenticator', 'iki adim'], 'iki adimli'],
+    [['cihaz', 'oturum', 'cikis yap', 'baska cihaz'], 'oturum'],
+    [['dm', 'ozel mesaj', 'mesaj istegi', 'yabanci'], 'ozel mesaj'],
+    [['engelle', 'blok', 'block'], 'engellenen'],
+    [['sessiz', 'rahatsiz etme', 'gece modu', 'bildirim saati'], 'sessiz saat'],
+    [['bildirim', 'uyari', 'push'], 'bildirim'],
+    [['veri', 'indir', 'yedek', 'kvkk', 'gdpr'], 'verilerimi'],
+    [['hesap sil', 'hesabi kapat', 'hesabimi sil'], 'hesabi sil'],
+    [['animasyon', 'hareket', 'efekt'], 'hareket'],
+    [['internet', 'mobil veri', 'kota'], 'veri tasarrufu'],
+    [['nsfw', 'hassas', 'mustehcen', 'filtre'], 'hassas'],
+    [['dil', 'language', 'ingilizce'], 'dil'],
+    [['profil foto', 'avatar'], 'profil fotograf'],
+    [['arkadaslik istegi', 'kim ekleyebilir'], 'arkadaslik istek']
+];
+const ssFold = (s) => String(s || '').toLocaleLowerCase('tr').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ı/g, 'i').replace(/\s+/g, ' ').trim();
+const SETTINGS_TAB_ICONS = { general: '⚙️', notifications: '🔔', voice: '🎙️', security: '🛡️', privacy: '🔒', legal: '📄', account: '👤' };
+
+function settingsTabLabel(tab) {
+    const b = document.querySelector(`.settings-tab-btn[data-settings-tab="${tab}"]`);
+    return b ? b.textContent.trim() : tab;
+}
+function isRendered(el) {
+    // Panel gizli olsa da (başka sekme) satırın kendisi ya da bir üstü (panel hariç) gizlenmişse dizine alınmaz.
+    for (let n = el; n && !n.classList?.contains('settings-panel'); n = n.parentElement) {
+        if (n.hidden || getComputedStyle(n).display === 'none') return false;
+    }
+    return true;
+}
+function buildSettingsIndex() {
+    const items = [];
+    document.querySelectorAll('#settings-modal .settings-panel[data-settings-panel]').forEach((panel) => {
+        const tab = panel.dataset.settingsPanel;
+        let lastTitle = null;
+        panel.querySelectorAll(`${SETTINGS_TITLE_SEL}, ${SETTINGS_HINT_SEL}`).forEach((el) => {
+            if (!isRendered(el)) return;
+            // Satır başlığı + açıklama aynı kapsayıcıdaysa yalnızca başlık kısmı alınır (açıklama ayrıca eklenir)
+            // Başlık + açıklama aynı kapsayıcıdaysa (satır, düğmedeki <small>) ayrılır: başlık kısa kalır, açıklama aranır.
+            let text, extra = '';
+            if (el.matches(SETTINGS_TITLE_SEL)) {
+                const c = el.cloneNode(true);
+                c.querySelectorAll('.ob-new-pill').forEach((n) => n.remove());
+                c.querySelectorAll(`small, ${SETTINGS_HINT_SEL}`).forEach((n) => { extra += ' ' + n.textContent; n.remove(); });
+                text = c.textContent;
+            } else text = el.textContent;
+            text = text.replace(/\s+/g, ' ').replace(/^[^\p{L}\p{N}]+/u, '').trim();
+            if (!text) return;
+            if (el.matches(SETTINGS_TITLE_SEL)) {
+                if (el.querySelector(SETTINGS_HINT_SEL)) extra = ''; // iç açıklama aşağıda ayrıca eklenecek
+                lastTitle = { tab, el, title: text.slice(0, 80), key: ssFold(text), desc: extra };
+                items.push(lastTitle);
+            } else if (lastTitle && (lastTitle.el.contains(el) || el === lastTitle.el.nextElementSibling || el === lastTitle.el.nextElementSibling?.nextElementSibling)) {
+                lastTitle.desc += ' ' + text;
+            }
+        });
+    });
+    items.forEach((it) => { it.descKey = ssFold(it.desc); });
+    return items;
+}
+function searchSettings(q) {
+    const fq = ssFold(q);
+    if (fq.length < 2) return [];
+    const targets = new Set([fq]);
+    for (const [words, target] of SETTINGS_SEARCH_SYNONYMS) {
+        const fqWords = ` ${fq} `;
+        if (words.some((w) => w.startsWith(fq) || fqWords.includes(` ${w} `))) targets.add(target);
+    }
+    const scored = [];
+    for (const it of buildSettingsIndex()) {
+        let score = 0;
+        for (const t of targets) {
+            if (it.key === t) score = Math.max(score, 100);
+            else if (it.key.startsWith(t)) score = Math.max(score, 80);
+            else if (it.key.includes(t)) score = Math.max(score, 60);
+            else if (t === fq && it.descKey.includes(t)) score = Math.max(score, 30); // açıklamada yalnızca yazılan kelime aranır (eş anlamlı değil)
+        }
+        if (score) scored.push({ it, score });
+    }
+    // Ayar dışı özellikler (lobi, profil vb.) katalogdan
+    for (const f of (typeof FEATURE_CATALOG !== 'undefined' ? FEATURE_CATALOG : [])) {
+        if (!f.open) continue;
+        const key = ssFold(`${f.title} ${(f.keywords || []).join(' ')}`);
+        const dkey = ssFold(f.desc);
+        let score = 0;
+        for (const t of targets) { if (key.includes(t)) score = Math.max(score, 70); else if (t === fq && dkey.includes(t)) score = Math.max(score, 25); }
+        if (score) scored.push({ it: { feature: f, title: f.title, desc: f.desc }, score });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    const seen = new Set();
+    return scored.filter(({ it }) => { const k = it.feature ? 'f:' + it.feature.id : it.tab + '|' + it.title; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 12).map((x) => x.it);
+}
+function flashSettingsTarget(el) {
+    if (!el) return;
+    // Satırın kendisi yerine anlamlı kapsayıcısı parlatılır (başlıksa kendisi + sonraki öğe yeterli görünür)
+    const target = el.closest('.notif-pref-row, .privacy-option, .session-card') || el;
+    target.scrollIntoView({ block: 'center', behavior: document.documentElement.classList.contains('reduce-motion') ? 'auto' : 'smooth' });
+    target.classList.remove('settings-flash');
+    void target.offsetWidth;
+    target.classList.add('settings-flash');
+    setTimeout(() => target.classList.remove('settings-flash'), 2200);
+}
+function renderSettingsSearch() {
+    const input = document.getElementById('settings-search-input');
+    const box = document.getElementById('settings-search-results');
+    const q = input.value;
+    if (ssFold(q).length < 1) { clearSettingsSearch(false); return; }
+    document.querySelectorAll('#settings-modal .settings-panel[data-settings-panel]').forEach((p) => { p.style.display = 'none'; });
+    document.querySelectorAll('.settings-tab-btn').forEach((b) => b.classList.remove('active'));
+    box.style.display = 'flex';
+    const results = searchSettings(q);
+    if (!results.length) {
+        box.innerHTML = `<div class="ss-empty"><b>“${escapeHtml(q.trim())}” için bir şey bulamadık.</b><span>Başka bir kelime dene: ör. “ses”, “bildirim”, “tema”, “gizlilik”.</span></div>`;
+        return;
+    }
+    box.innerHTML = `<div class="ss-head">${results.length} sonuç</div>` + results.map((r, i) => {
+        const where = r.feature ? escapeHtml(r.feature.where || 'Uygulama') : `${SETTINGS_TAB_ICONS[r.tab] || ''} ${escapeHtml(settingsTabLabel(r.tab))}`;
+        const desc = (r.desc || '').trim();
+        return `<button type="button" class="ss-item" data-ss="${i}">
+            <span class="ss-where">${where}</span>
+            <span class="ss-title">${escapeHtml(r.title)}</span>
+            ${desc ? `<span class="ss-desc">${escapeHtml(desc.slice(0, 110))}${desc.length > 110 ? '…' : ''}</span>` : ''}
+        </button>`;
+    }).join('');
+    box.querySelectorAll('[data-ss]').forEach((btn) => btn.addEventListener('click', () => {
+        const r = results[Number(btn.dataset.ss)];
+        clearSettingsSearch();
+        if (r.feature) { settingsModal.style.display = 'none'; r.feature.open(); return; }
+        switchSettingsTab(r.tab);
+        requestAnimationFrame(() => flashSettingsTarget(r.el));
+    }));
+}
+function clearSettingsSearch(resetInput = true) {
+    const input = document.getElementById('settings-search-input');
+    const box = document.getElementById('settings-search-results');
+    if (!box) return;
+    if (resetInput && input) input.value = '';
+    if (box.style.display !== 'none') {
+        box.style.display = 'none';
+        box.innerHTML = '';
+        if (!document.querySelector('.settings-tab-btn.active')) switchSettingsTab('general');
+    }
+}
+(() => {
+    const input = document.getElementById('settings-search-input');
+    if (!input) return;
+    let t = null;
+    input.addEventListener('input', () => { clearTimeout(t); t = setTimeout(renderSettingsSearch, 80); });
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && input.value) { e.stopPropagation(); clearSettingsSearch(); }
+        if (e.key === 'Enter') document.querySelector('#settings-search-results .ss-item')?.click();
+    });
+})();
 
 
 // =====================================================
@@ -7392,6 +7568,7 @@ function connectToChat() {
 
     maybeShowDevNotice();
     maybeShowRoleNotices();
+    window.SauranOnboarding?.start(currentUser);
 
 }
 
@@ -8021,6 +8198,7 @@ async function checkSessionStillValid() {
 
 async function logout() {
 
+    window.SauranOnboarding?.reset();
     await removePushSubscriptionOnLogout();
 
     try {
@@ -9588,6 +9766,7 @@ function showCzSection(section) {
 }
 
 function openCustomizeCenter(section = 'look') {
+    window.SauranOnboarding?.task('customize'); // başlangıç listesi
     if (typeof window.refreshPreviewLocks === 'function') window.refreshPreviewLocks();
     closeTopbarDropdown();
     const pm = document.getElementById('profile-modal');
@@ -14796,6 +14975,7 @@ async function joinVoiceRoom(room) {
 
         callFrameContainer.style.display = 'none';
         document.getElementById('call-hub-room-view').style.display = 'flex';
+        window.SauranOnboarding?.task('voice'); // başlangıç listesi: sesli odaya girildi
         updateIosVoiceHint();
 
         // Sunucu onaylayana kadar geçici görünüm: mevcut liste + ben.
