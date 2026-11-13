@@ -10,7 +10,7 @@
     <script>try { if (localStorage.getItem('sauran_session_hint') === '1') { document.documentElement.classList.add('auth-pending'); setTimeout(function () { document.documentElement.classList.remove('auth-pending'); }, 12000); } } catch (e) { /* depolama yok */ }</script>
 
     <!-- Görünüm tercihleri (hareket azaltma, mesaj sıklığı, sohbet yazı boyutu) ilk çizimden önce uygulanır; tema ve tam uygulama script.js'te. -->
-    <script>try { var u = JSON.parse(localStorage.getItem('sauran_ui') || '{}') || {}; var h = document.documentElement; if (u.reduceMotion || (u.motionSync && window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) h.classList.add('reduce-motion'); if (u.density === 'compact') h.classList.add('density-compact'); if (u.chatFont && u.chatFont !== 15) { h.classList.add('chat-fs-custom'); h.style.setProperty('--chat-fs', u.chatFont + 'px'); } } catch (e) { /* depolama yok */ }</script>
+    <script>try { var u = JSON.parse(localStorage.getItem('sauran_ui') || '{}') || {}; var h = document.documentElement; if (u.reduceMotion || (u.motionSync && window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) h.classList.add('reduce-motion'); if (u.density === 'compact') h.classList.add('density-compact'); if (u.chatFont && u.chatFont !== 15) { h.classList.add('chat-fs-custom'); h.style.setProperty('--chat-fs', u.chatFont + 'px'); } if (u.theme === 'light' || (u.theme === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches)) { h.classList.add('theme-light'); document.write('<link rel="stylesheet" href="light.css" id="light-css"><link rel="stylesheet" href="light-manual.css" id="light-manual-css">'); } } catch (e) { /* depolama yok */ }</script>
 
     <!-- Kritik dosya bekçisi: sunucu güncellenirken (deploy) ya da ağ kesildiğinde bir stil/betik dosyası yüklenemezse yarım
          biçimlenmiş arayüz gösterilmez. Onun yerine "Bağlanıyor…" ekranı çıkar ve sayfa artan aralıklarla kendiliğinden yeniden
@@ -2125,13 +2125,17 @@
                             <span class="privacy-option-title" data-i18n="theme-purple">Mor Tema</span>
                             <span class="privacy-option-desc" data-i18n="theme-purple-desc">Derin mor, karanlık arayüz</span>
                         </button>
+                        <button class="privacy-option" data-theme="light" type="button">
+                            <span class="privacy-option-title" data-i18n="theme-light">Açık Tema</span>
+                            <span class="privacy-option-desc" data-i18n="theme-light-desc">Aydınlık, beyaz zeminli arayüz</span>
+                        </button>
                         <button class="privacy-option" data-theme="oled" type="button">
                             <span class="privacy-option-title" data-i18n="theme-oled">Tam Siyah</span>
                             <span class="privacy-option-desc" data-i18n="theme-oled-desc">OLED ekranlarda pil dostu, tam siyah zemin</span>
                         </button>
                         <button class="privacy-option" data-theme="auto" type="button">
                             <span class="privacy-option-title" data-i18n="theme-auto">Sisteme uy</span>
-                            <span class="privacy-option-desc" data-i18n="theme-auto-desc">Cihazın koyu/açık ayarını izler (açık tema yakında; şimdilik koyu)</span>
+                            <span class="privacy-option-desc" data-i18n="theme-auto-desc">Cihazın koyu/açık ayarını izler</span>
                         </button>
                     </div>
                     <p class="settings-voice-hint" data-i18n="ui-synced">Görünüm tercihlerin hesabına kaydedilir; tüm cihazlarında aynı olur.</p>

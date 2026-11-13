@@ -1,0 +1,43 @@
+/* Açık tema — elle ayarlar. light.css (otomatik üretilen) bundan ÖNCE yüklenir; buradaki kurallar onu ince ayarlar.
+   Renk değişkenleri burada: koyu temanın :root değişkenlerinin açık karşılıkları. */
+html.theme-light, html.theme-light body {
+  color-scheme: light;
+  --bg-app: #f3f5f8;
+  --bg-surface: #ffffff;
+  --bg-surface-2: #f2f4f7;
+  --bg-surface-3: #e8ecf1;
+  --text-primary: #0f172a;
+  --text-secondary: #3b4555;
+  --text-tertiary: #677284;
+  --accent: #0a7fc8;
+  --accent-soft: rgba(10, 127, 200, 0.12);
+  --accent-line: rgba(10, 127, 200, 0.4);
+  --success: #12955f;
+  --warning: #b9770e;
+  --danger: #d6334a;
+  --glass-1: rgba(15, 23, 42, 0.03);
+  --glass-2: rgba(255, 255, 255, 0.82);
+  --glass-bg: var(--glass-1);
+  --border-soft: rgba(15, 23, 42, 0.1);
+  --border-soft-strong: rgba(15, 23, 42, 0.17);
+  --hi: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --shadow-surface: 0 1px 3px rgba(15, 23, 42, 0.08);
+  --shadow-focus: 0 24px 60px -18px rgba(15, 23, 42, 0.28);
+  --lc-bg-rail: #e9edf2;
+  --lc-bg-col: #f6f7f9;
+  --lc-bg-main: #ffffff;
+  --lc-line: rgba(15, 23, 42, 0.09);
+  --lc-hover: rgba(15, 23, 42, 0.05);
+  --lc-active: rgba(15, 23, 42, 0.08);
+}
+html.theme-light body { background-color: var(--bg-app); color: var(--text-secondary); }
+/* Vurgu rengindeki dolgu düğmeleri: açık zeminde beyaz yazı okunur */
+html.theme-light .about-btn-primary, html.theme-light .notification-accept, html.theme-light #pr-send, html.theme-light .app-crash-reload,
+html.theme-light .dmreq-accept { color: #fff !important; }
+/* Kaydırma çubuğu */
+html.theme-light ::-webkit-scrollbar-thumb { background: #c7ced8; }
+html.theme-light ::-webkit-scrollbar-thumb:hover { background: #9aa4b2; }
+/* Mesaj metni ve başlıklar */
+html.theme-light .hub-msg-text, html.theme-light .dm-msg-content { color: var(--text-primary); }
+/* Kod ve alıntılar */
+html.theme-light .msg-code { background: rgba(15, 23, 42, 0.07); color: #b4235b; }

@@ -6809,7 +6809,7 @@ function acceptPolicy(userId) {
 
 // ── Görünüm tercihleri (tema, sohbet yazı boyutu, mesaj sıklığı, hareket azaltma): hesaba kaydedilir, tüm cihazlarda aynı.
 if (!privacyColumns.includes('ui_prefs')) db.exec(`ALTER TABLE users ADD COLUMN ui_prefs TEXT`);
-const UI_THEMES = ['dark', 'purple', 'oled', 'auto'];
+const UI_THEMES = ['dark', 'purple', 'oled', 'light', 'auto'];
 function sanitizeUiPrefs(input) {
   const p = {};
   if (input && UI_THEMES.includes(input.theme)) p.theme = input.theme;

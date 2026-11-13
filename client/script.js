@@ -4623,15 +4623,26 @@ var uiPrefs = (() => {
 var systemDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 var systemReduce = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
 function effectiveTheme() {
-    // 'auto': açık tema gelene kadar cihaz açık moddaysa da koyu kullanılır
-    if (uiPrefs.theme === 'auto') return 'dark';
+    if (uiPrefs.theme === 'auto') return systemDark && !systemDark.matches ? 'light' : 'dark';
     return uiPrefs.theme;
+}
+// Açık tema stilleri yalnızca gerektiğinde yüklenir (koyu kullananlar indirmez).
+function ensureLightCss() {
+    if (document.getElementById('light-css')) return;
+    ['light.css', 'light-manual.css'].forEach((href, i) => {
+        const l = document.createElement('link');
+        l.rel = 'stylesheet'; l.href = href; if (i === 0) l.id = 'light-css'; else l.id = 'light-manual-css';
+        document.head.appendChild(l);
+    });
 }
 function applyUiPrefs() {
     const theme = effectiveTheme();
     document.body.classList.toggle('theme-purple', theme === 'purple');
     document.body.classList.toggle('theme-oled', theme === 'oled');
     const root = document.documentElement;
+    if (theme === 'light') ensureLightCss();
+    root.classList.toggle('theme-light', theme === 'light');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'light' ? '#f3f5f8' : (theme === 'oled' ? '#000000' : '#0a0d11'));
     root.style.setProperty('--chat-fs', `${uiPrefs.chatFont}px`);
     root.classList.toggle('chat-fs-custom', uiPrefs.chatFont !== UI_DEFAULTS.chatFont);
     root.classList.toggle('density-compact', uiPrefs.density === 'compact');
@@ -4671,6 +4682,7 @@ function syncAppearanceUi() {
 function applyTheme(theme) { setUiPref({ theme }); }
 applyUiPrefs();
 systemReduce?.addEventListener?.('change', applyUiPrefs);
+systemDark?.addEventListener?.('change', () => { if (uiPrefs.theme === 'auto') applyUiPrefs(); });
 document.querySelectorAll('[data-density]').forEach((b) => b.addEventListener('click', () => setUiPref({ density: b.dataset.density })));
 document.getElementById('settings-chat-font')?.addEventListener('input', (e) => setUiPref({ chatFont: Number(e.target.value) }));
 document.getElementById('settings-reduce-motion')?.addEventListener('change', (e) => setUiPref({ reduceMotion: e.target.checked }));
@@ -4808,7 +4820,9 @@ const I18N = {
     'theme-oled': { tr: 'Tam Siyah', en: 'Pure Black' },
     'theme-oled-desc': { tr: 'OLED ekranlarda pil dostu, tam siyah zemin', en: 'Battery-friendly pure black for OLED screens' },
     'theme-auto': { tr: 'Sisteme uy', en: 'Match system' },
-    'theme-auto-desc': { tr: 'Cihazın koyu/açık ayarını izler (açık tema yakında; şimdilik koyu)', en: "Follows your device's dark/light setting (light theme coming soon; dark for now)" },
+    'theme-auto-desc': { tr: 'Cihazın koyu/açık ayarını izler', en: "Follows your device's dark/light setting" },
+    'theme-light': { tr: 'Açık Tema', en: 'Light' },
+    'theme-light-desc': { tr: 'Aydınlık, beyaz zeminli arayüz', en: 'Bright interface with a white background' },
     'ui-synced': { tr: 'Görünüm tercihlerin hesabına kaydedilir; tüm cihazlarında aynı olur.', en: 'Your appearance settings are saved to your account and follow you to every device.' },
     'ui-chatfont': { tr: 'Sohbet yazı boyutu', en: 'Chat font size' },
     'ui-density': { tr: 'Mesaj sıklığı', en: 'Message spacing' },
