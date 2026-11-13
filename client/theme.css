@@ -3509,3 +3509,56 @@ body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.w
 .psound-times { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .psound-hint { margin: 0; font-size: 12px; color: var(--text-secondary); }
 .cz-sound-custom .cz-sound-pick { white-space: nowrap; }
+
+/* Sesli oda: konuşan (sesi algılanan) kişinin profil fotoğrafının çevresinde YEŞİL halka — arama ekranı kartları (kendi kartın dahil),
+   oda üye listesi ve üye panelindeki "Seste" satırları. Durum updateVoiceSpeakingUi'den (.is-speaking; Daily ses seviyesi, 250 ms) gelir.
+   Çerçeveli avatarlarda halka çerçevenin dışından çizilir. */
+.call-hub-room-avatar, .hub-voice-member-avatar, .hub-member-row .msg-avatar-btn { transition: box-shadow .12s ease-out; }
+.call-hub-room-person:has(.voice-icon-btn.speaking) .call-hub-room-avatar,
+.call-hub-room-person.plus-voice:has(.voice-icon-btn.speaking) .call-hub-room-avatar { box-shadow: none; }
+.call-hub-room-person.is-speaking .call-hub-room-avatar,
+.call-hub-room-person.plus-voice.is-speaking .call-hub-room-avatar {
+  box-shadow: 0 0 0 3px var(--bg-app, #0a0d11), 0 0 0 6px #2fd16a, 0 0 22px rgba(47, 209, 106, .45);
+}
+.call-hub-room-person.is-speaking .call-hub-room-avatar[class*=" frame-"] {
+  box-shadow: 0 0 0 10px var(--bg-app, #0a0d11), 0 0 0 13px #2fd16a, 0 0 26px rgba(47, 209, 106, .45);
+}
+.hub-voice-room-member.is-speaking .hub-voice-member-avatar {
+  box-shadow: 0 0 0 2px var(--bg-app, #0a0d11), 0 0 0 4px #2fd16a, 0 0 10px rgba(47, 209, 106, .5);
+}
+.hub-voice-room-member.is-speaking .hub-voice-member-avatar[class*=" frame-"] {
+  box-shadow: 0 0 0 4px var(--bg-app, #0a0d11), 0 0 0 6px #2fd16a, 0 0 10px rgba(47, 209, 106, .5);
+}
+.hub-member-row.is-speaking .msg-avatar-btn { box-shadow: 0 0 0 2px var(--bg-app, #0a0d11), 0 0 0 4px #2fd16a, 0 0 10px rgba(47, 209, 106, .5); }
+@media (prefers-reduced-motion: reduce) { .call-hub-room-avatar, .hub-voice-member-avatar, .hub-member-row .msg-avatar-btn { transition: none; } }
+
+/* Plus üyeler: konuşma halkası mordan altına geçen, dönen, parlak bir halka (özel konuşma göstergesi). Halka avatarın üstünde ayrı bir
+   katmandır (::before); çerçeveli avatarlarda çerçevenin dışından çizilir. Hareket azaltma tercihinde döndürülmez. */
+@keyframes plusRingSpin { to { transform: rotate(360deg); } }
+.call-hub-room-person.plus-voice.is-speaking .call-hub-room-avatar,
+.call-hub-room-person.plus-voice.is-speaking .call-hub-room-avatar[class*=" frame-"] {
+  box-shadow: 0 0 26px rgba(139, 108, 240, .5), 0 0 40px rgba(255, 213, 74, .28);
+}
+.hub-voice-room-member.plus-voice.is-speaking .hub-voice-member-avatar,
+.hub-voice-room-member.plus-voice.is-speaking .hub-voice-member-avatar[class*=" frame-"],
+.hub-member-row.plus-voice.is-speaking .msg-avatar-btn { box-shadow: 0 0 10px rgba(255, 213, 74, .45); }
+.call-hub-room-person.plus-voice.is-speaking .call-hub-room-avatar::before,
+.hub-voice-room-member.plus-voice.is-speaking .hub-voice-member-avatar::before,
+.hub-member-row.plus-voice.is-speaking .hub-member-avatar-wrap::before {
+  content: ""; position: absolute; inset: -8px; border-radius: 50%; pointer-events: none; z-index: 3;
+  --ring: 4px;
+  background: conic-gradient(from 0deg, #8b6cf0, #c58cff, #ffd54a, #fff6c2, #ffd54a, #c58cff, #8b6cf0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring)), #000 calc(100% - var(--ring) + .5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring)), #000 calc(100% - var(--ring) + .5px));
+  filter: drop-shadow(0 0 5px rgba(255, 213, 74, .75)) drop-shadow(0 0 9px rgba(139, 108, 240, .6));
+  animation: plusRingSpin 2.6s linear infinite;
+}
+.call-hub-room-person.plus-voice.is-speaking .call-hub-room-avatar[class*=" frame-"]::before { inset: -15px; }
+.hub-voice-room-member.plus-voice.is-speaking .hub-voice-member-avatar::before { inset: -4px; --ring: 2.5px; }
+.hub-voice-room-member.plus-voice.is-speaking .hub-voice-member-avatar[class*=" frame-"]::before { inset: -6px; }
+.hub-member-row.plus-voice.is-speaking .hub-member-avatar-wrap::before { inset: -4px; --ring: 2.5px; }
+@media (prefers-reduced-motion: reduce) {
+  .call-hub-room-person.plus-voice.is-speaking .call-hub-room-avatar::before,
+  .hub-voice-room-member.plus-voice.is-speaking .hub-voice-member-avatar::before,
+  .hub-member-row.plus-voice.is-speaking .hub-member-avatar-wrap::before { animation: none; }
+}

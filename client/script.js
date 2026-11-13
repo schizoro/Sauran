@@ -8556,6 +8556,7 @@ function showCzSection(section) {
 }
 
 function openCustomizeCenter(section = 'look') {
+    if (typeof window.refreshPreviewLocks === 'function') window.refreshPreviewLocks();
     closeTopbarDropdown();
     const pm = document.getElementById('profile-modal');
     if (pm) pm.style.display = 'none';
@@ -12560,6 +12561,10 @@ function updateVoiceSpeakingUi() {
     document.querySelectorAll('[data-voice-user]').forEach((el) => {
         el.classList.toggle('speaking', voiceSpeakingIds.has(Number(el.dataset.voiceUser)));
     });
+    // Konuşanın profil fotoğrafında yeşil halka: arama ekranı kartları, oda üye listesi ve üye panelindeki "Seste" satırları
+    document.querySelectorAll('[data-speak-user], .hub-member-row.st-voice[data-user-id]').forEach((el) => {
+        el.classList.toggle('is-speaking', voiceSpeakingIds.has(Number(el.dataset.speakUser || el.dataset.userId)));
+    });
 }
 
 function updateVoiceSessionSummary() {
@@ -13303,7 +13308,7 @@ function voiceRoomMembersHtml(room) {
     const items = participants.length === 0
         ? `<div class="hub-voice-room-members-empty">${t('voice-room-nobody-here')}</div>`
         : participants.map((p) => `
-            <div class="hub-voice-room-member${p.user_id === currentUser?.id ? ' is-self' : ''}">
+            <div class="hub-voice-room-member${p.user_id === currentUser?.id ? ' is-self' : ''}${isVoicePlus(p.user_id) ? ' plus-voice' : ''}${voiceSpeakingIds.has(p.user_id) ? ' is-speaking' : ''}" data-speak-user="${Number(p.user_id)}">
                 <span class="hub-voice-member-avatar${voiceFrameParts(p.user_id).cls}" style="--user-color:${resolveUserColor(p.user_id, p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}${voiceFrameParts(p.user_id).overlay}</span>
                 <span class="hub-voice-member-name">${usernameCardHtml(p.username, isVoicePlus(p.user_id), nameFxOf(p.user_id))}${voiceSelfTagHtml(p.user_id)}</span>
                 ${voiceStatusIconsHtml(p, true)}
@@ -13697,7 +13702,7 @@ function renderHubRoomGrid(participants) {
     const grid = document.getElementById('call-hub-room-grid');
 
     grid.innerHTML = (participants || []).map((p) => `
-        <div class="call-hub-room-person${p.user_id === currentUser?.id ? ' is-self' : ''}${isVoicePlus(p.user_id) ? ' plus-voice' : ''}${p.user_id !== currentUser?.id && (userVolumeOf(p.user_id).muted || userVolumeOf(p.user_id).volume < 100) ? ' has-user-vol' : ''}" data-user-id="${Number(p.user_id)}" data-username="${escapeAttr(p.username || '')}"${p.user_id !== currentUser?.id ? ` title="${escapeAttr(t('user-vol-hint'))}"` : ''}>
+        <div class="call-hub-room-person${voiceSpeakingIds.has(p.user_id) ? ' is-speaking' : ''}${p.user_id === currentUser?.id ? ' is-self' : ''}${isVoicePlus(p.user_id) ? ' plus-voice' : ''}${p.user_id !== currentUser?.id && (userVolumeOf(p.user_id).muted || userVolumeOf(p.user_id).volume < 100) ? ' has-user-vol' : ''}" data-user-id="${Number(p.user_id)}" data-speak-user="${Number(p.user_id)}" data-username="${escapeAttr(p.username || '')}"${p.user_id !== currentUser?.id ? ` title="${escapeAttr(t('user-vol-hint'))}"` : ''}>
             <span class="call-hub-room-avatar${voiceFrameParts(p.user_id).cls}" style="--user-color:${resolveUserColor(p.user_id, p.username)};">${voiceAvatarInnerHtml(p.user_id, p.username)}${voiceFrameParts(p.user_id).overlay}</span>
             <span class="call-hub-room-name">${usernameCardHtml(p.username, isVoicePlus(p.user_id), nameFxOf(p.user_id))}</span>
             ${p.user_id === currentUser?.id ? `<span class="voice-self-tag">${t('voice-room-you')}</span>` : ''}
@@ -18054,7 +18059,7 @@ function renderHubMembers() {
         const premFx = m.premium_card ? '<span class="mc-fx" aria-hidden="true"><i class="mc-shine"></i><i class="mc-spark mc-spark-a"></i><i class="mc-spark mc-spark-b"></i><i class="mc-spark mc-spark-c"></i></span>' : '';
         return `
             ${divider}
-            <div class="hub-member-row hub-member-card${state ? ' st-' + state : ''}${m.name_plate && m.name_plate !== 'none' ? ' has-plate plate-' + escapeAttr(m.name_plate) : ''}${m.premium_card ? ' member-prem cs-' + (m.card_style || 'classic') + (CARD_EMOJI_STYLES.has(m.card_style) ? ' cs-emoji' : '') : ''}" style="--mc:${escapeAttr(cardColor)}" data-user-id="${m.user_id}" data-tier="${m.permission_tier}">
+            <div class="hub-member-row hub-member-card${state ? ' st-' + state : ''}${m.plus_active ? ' plus-voice' : ''}${m.name_plate && m.name_plate !== 'none' ? ' has-plate plate-' + escapeAttr(m.name_plate) : ''}${m.premium_card ? ' member-prem cs-' + (m.card_style || 'classic') + (CARD_EMOJI_STYLES.has(m.card_style) ? ' cs-emoji' : '') : ''}" style="--mc:${escapeAttr(cardColor)}" data-user-id="${m.user_id}" data-tier="${m.permission_tier}">
                 ${premFx}
                 <span class="hub-member-avatar-wrap">
                     ${avatar}

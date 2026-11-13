@@ -24,13 +24,19 @@ const optLabel = (btn) => { const c = btn.cloneNode(true); c.querySelectorAll('.
         const locked = typeof userHasFeature === 'function' && !userHasFeature(cfg.feature) && value !== cfg.def;
         btn.classList.toggle('pv-locked', locked);
     }
+    // Kilit işareti kullanıcının GÜNCEL haklarına göre: seçici her yeniden çizildiğinde (sınıf/disabled değişimi) ve Özelleştirme
+    // Merkezi her açıldığında yeniden hesaplanır. (Eskiden yalnızca açılışta — kullanıcı bilgisi gelmeden — hesaplanıyordu; Plus/Premium
+    // sahibinde düğme etkin olduğu hâlde kilit simgesi ve karartma takılı kalıyordu.)
+    const sweeps = [];
     PICKERS.forEach((cfg) => {
         const picker = $(cfg.id);
         if (!picker) return;
         const sweep = () => picker.querySelectorAll('.chat-theme-option').forEach((b) => unlock(b, cfg));
-        new MutationObserver(sweep).observe(picker, { attributes: true, subtree: true, attributeFilter: ['disabled'] });
+        sweeps.push(sweep);
+        new MutationObserver(sweep).observe(picker, { attributes: true, subtree: true, childList: true, attributeFilter: ['disabled', 'class'] });
         sweep();
     });
+    window.refreshPreviewLocks = () => sweeps.forEach((f) => f());
 
     function state() {
         const u = (typeof currentUser !== 'undefined' && currentUser) || {};
