@@ -7458,6 +7458,11 @@ function confirmPasswordReset(email, code, newPassword) {
   // Şifre unutulup sıfırlandığında (başka biri erişmiş olabilir ihtimaline karşı)
   // tüm cihazlardaki oturumlar kapatılır — kullanıcı yeniden giriş yapmalı.
   db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(user.id);
+  // Aynı nedenle geçiş anahtarları da silinir: çalınmış bir oturumla eklenmiş anahtar sıfırlamadan sonra işe yaramasın.
+  // (Tablo server/passkeys.js içinde kurulur; yalnızca db.js yüklenen araçlarda henüz olmayabilir.)
+  if (db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'passkeys'`).get()) {
+    db.prepare(`DELETE FROM passkeys WHERE user_id = ?`).run(user.id);
+  }
 
   return { success: true };
 }

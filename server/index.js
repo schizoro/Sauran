@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { purgeOldBackups } = require('./backup');
 const linkpreview = require('./linkpreview');
-const { sendEmailChangeCodeEmail, sendEmailChangedNoticeEmail, sendInactivityWarningEmail, sendAccountExistsEmail, sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail } = require('./mailer');
+const { sendPasskeyAddedEmail, sendEmailChangeCodeEmail, sendEmailChangedNoticeEmail, sendInactivityWarningEmail, sendAccountExistsEmail, sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail } = require('./mailer');
 const push = require('./push');
 const fcm = require('./fcm');
 const apns = require('./apns');
@@ -1017,6 +1017,27 @@ app.post('/api/verify', ...verifyLimiters, (req, res) => {
 // GİRİŞ
 // =====================================================
 
+// Geçiş anahtarı (passkey) uçları — ayrıntı: server/passkeys.js
+const passkeyLoginLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 40, keyFn: byIp, message: 'Çok fazla deneme. Biraz sonra tekrar dene.' });
+const passkeyManageLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 20, keyFn: byIp, message: 'Çok fazla deneme. Biraz sonra tekrar dene.' });
+require('./passkeys').createPasskeyApi({
+  app, db, requireAuth, createSession, setSessionCookie,
+  manageLimiter: passkeyManageLimiter, loginLimiter: passkeyLoginLimiter,
+  verifyAccountPassword, isTwoFactorEnabled, verifyTwoFactorCode,
+  // Yeni anahtar eklenince hesabın e-postasına haber verilir (çalınmış oturumla eklendiyse kullanıcı fark etsin).
+  onPasskeyAdded: (userId, deviceName) => {
+    const row = db.prepare(`SELECT email FROM users WHERE id = ?`).get(userId);
+    if (row && row.email) {
+      sendPasskeyAddedEmail(row.email, deviceName)
+        .catch((error) => console.error('Geçiş anahtarı bildirimi gönderilemedi:', error && error.code ? error.code : 'hata'));
+    }
+  },
+  suspensionPayload: (userId) => {
+    const row = db.prepare(`SELECT suspension_user_reason FROM users WHERE id = ?`).get(userId);
+    return { suspension: { user_reason: (row && row.suspension_user_reason) || null, support_email: SUPPORT_EMAIL } };
+  }
+});
+
 app.post('/api/login', ...loginLimiter, (req, res) => {
   try {
     const { username, password } = req.body;
@@ -1351,7 +1372,7 @@ app.get('/api/account/export', (req, res) => {
     }
     // İstenen kategoriler (Ayarlar > Gizlilik ve Yasal > Verilerimi İndir). Bilinmeyen kategori yok sayılır; hiçbiri yoksa hepsi.
     const EXPORT_GROUPS = {
-      account: ['profile', 'account', 'sessions', 'notification_preferences', 'notification_devices', 'privacy', 'ui_prefs', 'policy_acceptances'],
+      account: ['profile', 'account', 'sessions', 'notification_preferences', 'notification_devices', 'privacy', 'ui_prefs', 'policy_acceptances', 'passkeys'],
       messages: ['messages'],
       hubs: ['hub_memberships', 'owned_hubs', 'hub_likes', 'hub_join_requests'],
       social: ['friendships', 'blocked_users', 'ignored_users', 'dm_requests', 'reactions', 'poll_votes'],
@@ -1362,6 +1383,7 @@ app.get('/api/account/export', (req, res) => {
     full.ui_prefs = getUiPrefs(user.id);
     full.ignored_users = db.prepare(`SELECT u.username, i.created_at FROM ignored_users i JOIN users u ON u.id = i.ignored_id WHERE i.user_id = ? ORDER BY i.created_at`).all(user.id);
     full.dm_requests = db.prepare(`SELECT CASE WHEN r.sender_id = ? THEN 'gönderdiğin' ELSE 'aldığın' END AS direction, u.username AS other, r.status, r.created_at, r.updated_at FROM dm_requests r JOIN users u ON u.id = CASE WHEN r.sender_id = ? THEN r.recipient_id ELSE r.sender_id END WHERE r.sender_id = ? OR r.recipient_id = ?`).all(user.id, user.id, user.id, user.id);
+    full.passkeys = db.prepare(`SELECT name, device_type, backed_up AS synced, created_at, last_used_at FROM passkeys WHERE user_id = ? ORDER BY created_at`).all(user.id); // açık anahtar dışarı verilmez
     full.policy_acceptances = db.prepare(`SELECT version, accepted_at FROM policy_acceptances WHERE user_id = ? ORDER BY id`).all(user.id);
     const wanted = String(req.query.parts || '').split(',').map((s) => s.trim()).filter((s) => EXPORT_GROUPS[s]);
     let data = full;

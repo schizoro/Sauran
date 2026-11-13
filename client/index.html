@@ -135,6 +135,11 @@
                     </span>
                 </button>
 
+                <button id="passkey-login-btn" type="button" class="passkey-login-btn" hidden>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M10.85 12.15 19 4"/><path d="m18 5 2 2"/><path d="m15 8 2 2"/></svg>
+                    <span>Geçiş anahtarıyla gir</span>
+                </button>
+
                 <div id="login-2fa-step" class="login-2fa-step" style="display:none;">
                     <p class="login-2fa-text" id="login-2fa-text">Doğrulayıcı uygulamandaki 6 haneli kodu gir.</p>
                     <div class="field-float">
@@ -2399,6 +2404,14 @@
                     <button id="twofa-disable-btn" class="hub-settings-action-btn hub-settings-danger" type="button" style="display:none;">İki adımlı doğrulamayı kapat</button>
 
                     <div class="hub-settings-divider"></div>
+
+                    <div id="passkey-settings" hidden>
+                        <span class="profile-field-label">Geçiş anahtarları</span>
+                        <p class="settings-voice-hint">Şifre yazmadan; parmak izi, yüz tanıma, PIN ya da telefonunla giriş yap. Geçiş anahtarı tek başına güvenli giriş sayılır, ayrıca doğrulama kodu istenmez. Şifren silinmez.</p>
+                        <div id="passkey-list" class="session-list"></div>
+                        <button id="passkey-add-btn" class="hub-settings-action-btn" type="button">➕ Geçiş anahtarı ekle</button>
+                        <div class="hub-settings-divider"></div>
+                    </div>
 
                     <span class="profile-field-label" data-i18n="label-sessions">Aktif Oturumlar</span>
                     <div id="settings-sessions-list" class="settings-blocked-list"></div>

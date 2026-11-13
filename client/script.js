@@ -1227,6 +1227,193 @@ loginBtn.addEventListener(
     login
 );
 
+// =====================================================
+// GEÇİŞ ANAHTARI (passkey / WebAuthn)
+// Sunucu seçenekleri JSON (base64url) olarak verir; tarayıcı API'si ArrayBuffer ister. Dönüşüm burada yapılır.
+// =====================================================
+const passkeySupported = Boolean(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create);
+const b64uToBuf = (s) => {
+    const b = atob(String(s).replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((String(s).length + 3) % 4));
+    const u = new Uint8Array(b.length);
+    for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);
+    return u.buffer;
+};
+const bufToB64u = (buf) => {
+    const u = new Uint8Array(buf);
+    let s = '';
+    for (let i = 0; i < u.length; i++) s += String.fromCharCode(u[i]);
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+function passkeyErrorText(err) {
+    const n = err && err.name;
+    if (n === 'NotAllowedError' || n === 'AbortError') return 'İşlem iptal edildi ya da süresi doldu.';
+    if (n === 'InvalidStateError') return 'Bu cihazdaki geçiş anahtarı zaten hesabına ekli.';
+    if (n === 'SecurityError') return 'Geçiş anahtarı bu adreste kullanılamıyor.';
+    return 'Geçiş anahtarı kullanılamadı.';
+}
+
+async function passkeyLogin() {
+    const btn = document.getElementById('passkey-login-btn');
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    try {
+        const r = await fetch('/api/passkeys/login/options', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const o = await r.json().catch(() => ({}));
+        if (!o.success) { showAuthError(o.error || 'Geçiş anahtarı başlatılamadı.'); return; }
+        const opt = o.options;
+        let cred;
+        try {
+            cred = await navigator.credentials.get({ publicKey: {
+                challenge: b64uToBuf(opt.challenge), rpId: opt.rpId, timeout: opt.timeout, userVerification: opt.userVerification, allowCredentials: []
+            } });
+        } catch (e) { showAuthError(passkeyErrorText(e)); return; }
+        if (!cred) return;
+        const resp = {
+            id: cred.id, rawId: bufToB64u(cred.rawId), type: cred.type,
+            authenticatorAttachment: cred.authenticatorAttachment || undefined,
+            clientExtensionResults: cred.getClientExtensionResults ? cred.getClientExtensionResults() : {},
+            response: {
+                clientDataJSON: bufToB64u(cred.response.clientDataJSON),
+                authenticatorData: bufToB64u(cred.response.authenticatorData),
+                signature: bufToB64u(cred.response.signature),
+                userHandle: cred.response.userHandle ? bufToB64u(cred.response.userHandle) : undefined
+            }
+        };
+        const v = await fetch('/api/passkeys/login/verify', {
+            method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ challenge_id: o.challenge_id, response: resp, remember: document.getElementById('login-remember-input')?.checked !== false })
+        });
+        const d = await v.json().catch(() => ({}));
+        if (!d.success) { showAuthError(d.error || 'Geçiş anahtarı doğrulanamadı.'); return; }
+        // Oturum çerezi kuruldu: sayfayı yenilemek, şifreli girişin yaptığı tüm başlangıç adımlarını aynen çalıştırır.
+        window.location.reload();
+    } catch (e) {
+        console.error('Geçiş anahtarı girişi:', e);
+        showAuthError('Sunucuya bağlanılamadı.');
+    } finally {
+        btn.disabled = false;
+    }
+}
+if (passkeySupported) {
+    const pkBtn = document.getElementById('passkey-login-btn');
+    if (pkBtn) { pkBtn.hidden = false; pkBtn.addEventListener('click', passkeyLogin); }
+}
+
+// Şifre (+ gerekirse 2FA kodu) soran küçük pencere. İptal → null.
+function askPasskeyReauth() {
+    return new Promise((resolve) => {
+        const needCode = Boolean(twofaEnabledCache);
+        const wrap = document.createElement('div');
+        wrap.className = 'modal-overlay passkey-reauth';
+        wrap.innerHTML = `
+            <div class="modal-card passkey-reauth-card" role="dialog" aria-modal="true" aria-labelledby="pkra-title">
+                <h3 id="pkra-title">Kimliğini doğrula</h3>
+                <p class="settings-voice-hint">Geçiş anahtarı eklemek için şifreni${needCode ? ' ve doğrulama kodunu' : ''} gir.</p>
+                <input type="password" id="pkra-pass" placeholder="Şifren" autocomplete="current-password">
+                ${needCode ? '<input type="text" id="pkra-code" placeholder="Doğrulama kodu" inputmode="numeric" autocomplete="one-time-code" maxlength="9">' : ''}
+                <div class="passkey-reauth-actions">
+                    <button type="button" data-pkra="cancel">Vazgeç</button>
+                    <button type="button" data-pkra="ok">Devam</button>
+                </div>
+            </div>`;
+        const done = (val) => { wrap.remove(); resolve(val); };
+        wrap.addEventListener('click', (e) => {
+            if (e.target === wrap || e.target.dataset.pkra === 'cancel') done(null);
+            if (e.target.dataset.pkra === 'ok') {
+                const password = wrap.querySelector('#pkra-pass').value;
+                if (!password) { wrap.querySelector('#pkra-pass').focus(); return; }
+                done({ password, code: needCode ? wrap.querySelector('#pkra-code').value.trim() : undefined });
+            }
+        });
+        wrap.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') done(null);
+            if (e.key === 'Enter') wrap.querySelector('[data-pkra="ok"]').click();
+        });
+        document.body.appendChild(wrap);
+        wrap.querySelector('#pkra-pass').focus();
+    });
+}
+
+async function loadPasskeys() {
+    const box = document.getElementById('passkey-settings');
+    const list = document.getElementById('passkey-list');
+    if (!box || !list || !passkeySupported) return;
+    box.hidden = false;
+    try {
+        const r = await fetch('/api/passkeys', { credentials: 'include' });
+        const d = await r.json();
+        if (!d.success) return;
+        const fmtDate = (x) => x ? serverDate(x).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+        list.innerHTML = d.passkeys.length ? d.passkeys.map((p) => `
+            <div class="session-card">
+                <span class="session-ico" aria-hidden="true">🔑</span>
+                <span class="session-txt">
+                    <b>${escapeHtml(p.name)}${p.synced ? ' <i class="session-badge">Eşitlenir</i>' : ''}</b>
+                    <small>Eklendi ${escapeHtml(fmtDate(p.created_at))}${p.last_used_at ? ' · Son kullanım ' + escapeHtml(fmtDate(p.last_used_at)) : ''}</small>
+                </span>
+                <button class="session-out-btn" data-del-passkey="${escapeHtml(p.id)}" type="button">Kaldır</button>
+            </div>`).join('') : '<div class="session-empty">Henüz geçiş anahtarın yok.</div>';
+        list.querySelectorAll('[data-del-passkey]').forEach((b) => b.addEventListener('click', async () => {
+            if (!confirm('Bu geçiş anahtarı kaldırılsın mı? O cihazla şifresiz giriş yapamazsın.')) return;
+            b.disabled = true;
+            const x = await fetch(`/api/passkeys/${encodeURIComponent(b.dataset.delPasskey)}`, { method: 'DELETE', credentials: 'include' }).catch(() => null);
+            showToast(x && x.ok ? 'Geçiş anahtarı kaldırıldı.' : 'Kaldırılamadı.');
+            loadPasskeys();
+        }));
+    } catch (e) { console.error('Geçiş anahtarları alınamadı:', e); }
+}
+
+document.getElementById('passkey-add-btn')?.addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget;
+    // Güvenlik: anahtar eklemeden önce şifre (ve iki adımlı doğrulama açıksa kod) istenir.
+    const creds = await askPasskeyReauth();
+    if (!creds) return;
+    btn.disabled = true;
+    try {
+        const r = await fetch('/api/passkeys/register/options', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(creds) });
+        const o = await r.json().catch(() => ({}));
+        if (!o.success) { showToast(o.error || 'Başlatılamadı.'); return; }
+        const opt = o.options;
+        let cred;
+        try {
+            cred = await navigator.credentials.create({ publicKey: {
+                challenge: b64uToBuf(opt.challenge),
+                rp: opt.rp,
+                user: { id: b64uToBuf(opt.user.id), name: opt.user.name, displayName: opt.user.displayName },
+                pubKeyCredParams: opt.pubKeyCredParams,
+                timeout: opt.timeout,
+                attestation: opt.attestation,
+                authenticatorSelection: opt.authenticatorSelection,
+                excludeCredentials: (opt.excludeCredentials || []).map((c) => ({ type: 'public-key', id: b64uToBuf(c.id), transports: c.transports })),
+                extensions: opt.extensions
+            } });
+        } catch (e) { showToast(passkeyErrorText(e)); return; }
+        if (!cred) return;
+        const resp = {
+            id: cred.id, rawId: bufToB64u(cred.rawId), type: cred.type,
+            authenticatorAttachment: cred.authenticatorAttachment || undefined,
+            clientExtensionResults: cred.getClientExtensionResults ? cred.getClientExtensionResults() : {},
+            response: {
+                clientDataJSON: bufToB64u(cred.response.clientDataJSON),
+                attestationObject: bufToB64u(cred.response.attestationObject),
+                transports: cred.response.getTransports ? cred.response.getTransports() : undefined
+            }
+        };
+        const v = await fetch('/api/passkeys/register/verify', {
+            method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ response: resp, name: deviceInfo(navigator.userAgent).name })
+        });
+        const d = await v.json().catch(() => ({}));
+        showToast(d.success ? 'Geçiş anahtarı eklendi. Artık bu cihazla şifresiz girebilirsin.' : (d.error || 'Eklenemedi.'));
+        loadPasskeys();
+    } catch (e) {
+        console.error('Geçiş anahtarı ekleme:', e);
+        showToast('Sunucuya bağlanılamadı.');
+    } finally {
+        btn.disabled = false;
+    }
+});
+
 
 loginPasswordInput.addEventListener(
     'keypress',
@@ -3971,6 +4158,7 @@ document.getElementById('twofa-codes-btn').addEventListener('click', () => openT
 
 async function loadSessions() {
     loadTwoFactorStatus();
+    loadPasskeys();
 
     const container = document.getElementById('settings-sessions-list');
 

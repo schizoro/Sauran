@@ -1125,6 +1125,8 @@ html.theme-light .jump-latest-btn { border: 0; background: var(--accent); color:
 }
 html.theme-light .login-2fa-text { color: var(--text-secondary); }
 html.theme-light .login-2fa-btn { background: var(--accent); color: #04202e; border: 0; }
+html.theme-light #passkey-login-btn { background: transparent; border: 1px solid rgba(15, 23, 42, 0.147); color: #1a232c; }
+html.theme-light #passkey-login-btn:hover { background: rgba(15, 23, 42, 0.053); border-color: rgba(15, 23, 42, 0.252); }
 html.theme-light .twofa-badge.on { color: var(--success); }
 html.theme-light .twofa-badge.off { color: var(--text-tertiary); }
 html.theme-light .twofa-meta { color: var(--text-tertiary); }
@@ -1772,6 +1774,12 @@ html.theme-light .standing-list li { color: var(--text-secondary); background: r
 html.theme-light .standing-list li b { color: var(--text-primary); }
 html.theme-light .standing-list time { color: var(--text-tertiary); }
 html.theme-light .media-filtered .file-msg-card:not(.media-revealed)::after { color: #1a1a1a; background: rgba(15, 23, 42, 0.062); text-shadow: 0 1px 4px rgba(15, 23, 42, 0.27); }
+html.theme-light .passkey-reauth-card { background: var(--bg-surface); border: 1px solid var(--border-soft); box-shadow: var(--shadow-focus); }
+html.theme-light .passkey-reauth-card h3 { color: var(--text-primary); }
+html.theme-light .passkey-reauth-card input { border: 1px solid var(--border-soft-strong); background: var(--bg-surface-2); color: var(--text-primary); outline: none; }
+html.theme-light .passkey-reauth-card input:focus { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-soft); }
+html.theme-light .passkey-reauth-actions [data-pkra="cancel"] { background: transparent; color: var(--text-secondary); border: 1px solid var(--border-soft-strong); }
+html.theme-light .passkey-reauth-actions [data-pkra="ok"] { background: var(--accent); color: #04202e; border: 0; }
 /* ── client/layout-c.css ── */
 html.theme-light body.lc.lc-desk.lc-auth .lc-rail { background: var(--lc-bg-rail); border-right: 1px solid var(--lc-line); }
 html.theme-light .lc-ico { border: 0; background: transparent; color: var(--text-secondary); }

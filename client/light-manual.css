@@ -33,7 +33,7 @@ html.theme-light, html.theme-light body {
 html.theme-light body { background-color: var(--bg-app); color: var(--text-secondary); }
 /* Vurgu rengindeki dolgu düğmeleri: açık zeminde beyaz yazı okunur */
 html.theme-light .about-btn-primary, html.theme-light .notification-accept, html.theme-light #pr-send, html.theme-light .app-crash-reload,
-html.theme-light .dmreq-accept { color: #fff !important; }
+html.theme-light .dmreq-accept, html.theme-light .passkey-reauth-actions [data-pkra="ok"] { color: #fff !important; }
 /* Kaydırma çubuğu */
 html.theme-light ::-webkit-scrollbar-thumb { background: #c7ced8; }
 html.theme-light ::-webkit-scrollbar-thumb:hover { background: #9aa4b2; }

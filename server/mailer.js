@@ -247,4 +247,19 @@ async function sendEmailChangedNoticeEmail(toEmail, maskedNewEmail) {
   });
 }
 
-module.exports = { sendEmailChangeCodeEmail, sendEmailChangedNoticeEmail, sendInactivityWarningEmail, sendAccountExistsEmail, sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail };
+async function sendPasskeyAddedEmail(toEmail, deviceName) {
+  await transporter.sendMail({
+    to: toEmail,
+    from: MAIL_FROM,
+    subject: 'Sauran — Hesabına yeni bir geçiş anahtarı eklendi',
+    html: `
+      <div style="font-family: 'Segoe UI', sans-serif; background: #0b0c10; color: #c5c6c7; padding: 40px; max-width: 480px; margin: auto; border-radius: 12px;">
+        <h2 style="color: #66fcf1; letter-spacing: 2px; text-transform: uppercase;">Sauran</h2>
+        <p style="margin-top: 20px;">Sauran hesabına <strong>${escapeHtml(deviceName || 'bir cihaz')}</strong> için yeni bir geçiş anahtarı eklendi. Bu cihazla artık şifresiz giriş yapılabilir.</p>
+        <p>Bunu sen yapmadıysan hemen şifreni sıfırla (sıfırlama tüm geçiş anahtarlarını da siler) ve <a href="mailto:destek@sauran.online" style="color:#66fcf1;">destek@sauran.online</a> adresine yaz.</p>
+      </div>
+    `
+  });
+}
+
+module.exports = { sendPasskeyAddedEmail, sendEmailChangeCodeEmail, sendEmailChangedNoticeEmail, sendInactivityWarningEmail, sendAccountExistsEmail, sendVerificationEmail, sendPasswordResetEmail, sendReportNotificationEmail, sendRoleNoticeEmail, sendRoleDecisionTeamEmail };
