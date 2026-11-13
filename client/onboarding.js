@@ -9,6 +9,7 @@
 
 // Sürümler: en yenisi en üstte. Yenilikler penceresi, kullanıcının görmediği en yeni sürümü gösterir.
 const RELEASES = [
+    { id: '2026-11-14', title: 'Yeni profil efektleri', date: '14 Kasım 2026' },
     { id: '2026-11-13', title: 'Kasım güncellemesi', date: '13 Kasım 2026' }
 ];
 
@@ -26,6 +27,11 @@ function openSettingsAt(tab, sel) {
 // id: küçük harf + tire (sunucu bu biçimi kabul eder). where: kullanıcıya gösterilen konum.
 // highlight: Yenilikler penceresinde büyük kart olarak öne çıkar (en fazla 6).
 const FEATURE_CATALOG = [
+    // ── Profil efektleri (2026-11-14) ──
+    { id: 'profile-scenes', since: '2026-11-14', highlight: true, icon: '🐱', title: 'Yeni profil efektleri',
+      desc: 'Kedi Partisi, Neon Devre, Ay Işığı Koileri, Astral Mercek ve Kiraz Bahçesi: profilin her açılışında kısa bir giriş, sonra sakin bir döngü.',
+      where: 'Özelleştirme › Profil efekti', keywords: ['profil efekti', 'kedi', 'neon', 'koi', 'astral', 'kiraz'],
+      open: () => (typeof openCustomizeCenter === 'function' ? openCustomizeCenter('look') : document.getElementById('plusfx-open-btn')?.click()) },
     // ── Kasım güncellemesi (2026-11-13) ──
     { id: 'settings-search', since: '2026-11-13', highlight: true, icon: '🔎', title: 'Ayarlarda arama',
       desc: 'Bir ayarın yerini hatırlamıyor musun? Ayarların en üstündeki kutuya yaz; seni doğrudan oraya götürelim.',

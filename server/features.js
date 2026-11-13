@@ -46,7 +46,7 @@ const FEATURE_GROUPS = [
 ];
 const FEATURE_META = {
   profile_theme:        { group: 'profile', icon: '🎨', desc: 'Profil penceresinin renk teması (Gece, Gün Batımı, Orman, Sakura, Okyanus).' },
-  profile_effect:       { group: 'profile', icon: '🌸', desc: 'Profil kartında animasyonlu efekt (Sakura, Sahne Işıkları, Alev, Mürekkep, Yıldırım, Tatlı).' },
+  profile_effect:       { group: 'profile', icon: '🌸', desc: 'Profil kartında animasyonlu efekt (Kedi Partisi, Neon Devre, Ay Işığı Koileri, Astral Mercek, Kiraz Bahçesi, Sakura, Sahne Işıkları, Alev, Mürekkep, Yıldırım, Tatlı).' },
   name_plate:           { group: 'profile', icon: '🏷️', desc: 'Üye listesinde ve profilinde adının arkasında animasyonlu zemin (Alev, Mürekkep, Yıldırım, Tatlı).' },
   name_effect:          { group: 'profile', icon: '🔤', desc: 'Kullanıcı adına animasyonlu efekt (Gradyan, Parıltı, Gökkuşağı, Işıltı).' },
   profile_sound:        { group: 'profile', icon: '🎧', desc: 'Profil açıldığında çalan sesi seçme.' },

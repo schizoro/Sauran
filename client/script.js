@@ -6739,7 +6739,7 @@ function renderProfileEffectPicker() {
         btn.classList.toggle('selected', effect === active);
         btn.title = locked ? 'Sauran Plus gerekli' : '';
     });
-    hint.textContent = isPlus ? '' : 'Sakura ve Sahne Işıkları efektleri Sauran Plus abonelerine açıktır.';
+    hint.textContent = isPlus ? '' : 'Profil efektleri Sauran Plus abonelerine açıktır.';
 }
 
 document.getElementById('profile-effect-picker')?.addEventListener('click', async (event) => {
@@ -9831,7 +9831,7 @@ const ATMO_LABELS = {
     bubble_style: { default: 'Klasik', round: 'Yuvarlak', glass: 'Cam', outline: 'Çerçeveli', shadow: 'Gölgeli' },
     chat_theme: { classic: 'Klasik', soft: 'Yumuşak', contrast: 'Kontrast' },
     name_effect: { none: '', gradient: 'Gradyan', glow: 'Parıltı', rainbow: 'Gökkuşağı', shimmer: 'Işıltı' },
-    profile_effect: { none: '', sakura: 'Sakura', stagelights: 'Sahne ışıkları', flame: 'Alev', ink: 'Mürekkep', storm: 'Yıldırım', sweet: 'Tatlı' }
+    profile_effect: { none: '', sakura: 'Sakura', stagelights: 'Sahne ışıkları', flame: 'Alev', ink: 'Mürekkep', storm: 'Yıldırım', sweet: 'Tatlı', catparty: 'Kedi Partisi', neon: 'Neon Devre', koi: 'Ay Işığı Koileri', astral: 'Astral Mercek', cherry: 'Kiraz Bahçesi' }
 };
 function atmoChips(a) {
     const b = a.bundle || {};
