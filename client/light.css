@@ -1863,6 +1863,11 @@ html.theme-light .ob-cl-go { border: 0; background: var(--accent-soft); color: v
 html.theme-light .ob-cl-go:hover { background: var(--accent); color: #04202e; }
 html.theme-light .ob-cl-hide { background: transparent; border: 0; color: var(--text-tertiary); }
 html.theme-light .ob-cl-hide:hover { color: var(--text-primary); }
+html.theme-light .modal-overlay { background: rgba(15, 23, 42, 0.195); }
+html.theme-light .modal-box, html.theme-light .profile-modal-box, html.theme-light .dm-modal-box, html.theme-light .liquid-modal-box, html.theme-light .login-box, html.theme-light .emoji-panel { background-color: var(--bg-surface) !important; }
+html.theme-light .modal-box, html.theme-light .profile-modal-box, html.theme-light .liquid-modal-box, html.theme-light .login-box { background-image: none; }
+html.theme-light .lobby-nav, html.theme-light .app-rail, html.theme-light .friends-sidebar, html.theme-light .hub-detail-side, html.theme-light .hub-voice-rooms-side { background-color: var(--bg-surface) !important; }
+html.theme-light .discover-card, html.theme-light .friends-favorites { background: var(--bg-surface-2); }
 /* ── client/layout-c.css ── */
 html.theme-light body.lc.lc-desk.lc-auth .lc-rail { background: var(--lc-bg-rail); border-right: 1px solid var(--lc-line); }
 html.theme-light .lc-ico { border: 0; background: transparent; color: var(--text-secondary); }
