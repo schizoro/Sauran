@@ -106,6 +106,10 @@ const {
   listDmRequests,
   respondDmRequest,
   needsAgeDeclaration,
+  inQuietHours,
+  updateQuietHours,
+  setHubNotifyLevel,
+  hubMentionsOff,
   getUiPrefs,
   setUiPrefs,
   needsPolicyAcceptance,
@@ -3727,6 +3731,22 @@ app.patch('/api/hubs/:id/channels/:channelId/notify', (req, res) => {
   }
 });
 
+app.patch('/api/hubs/:id/notify-level', (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try {
+    const result = setHubNotifyLevel(Number(req.params.id), user.id, String(req.body?.level || ''));
+    return res.status(result.success ? 200 : 400).json(result);
+  } catch (error) { console.error('Lobi bildirim seviyesi hatası:', error); res.status(500).json({ success: false, error: 'Kaydedilemedi.' }); }
+});
+
+app.patch('/api/notifications/quiet-hours', privacyLimiter, (req, res) => {
+  const user = requireAuth(req, res);
+  if (!user) return;
+  try { return res.json({ success: true, preferences: updateQuietHours(user.id, req.body || {}) }); }
+  catch (error) { console.error('Sessiz saat hatası:', error); res.status(500).json({ success: false, error: 'Kaydedilemedi.' }); }
+});
+
 app.patch('/api/hubs/:id/mute', (req, res) => {
   const user = requireAuth(req, res);
   if (!user) return;
@@ -4662,6 +4682,7 @@ async function dispatchWebPush(userId, type, payload, options = {}) {
 
   if (!options.system) {
     const prefs = getNotificationPreferences(userId);
+    if (inQuietHours(prefs)) return; // sessiz saatler: telefona/masaüstüne bildirim yok (kayıt panelde durur)
     const categoryColumn = NOTIFICATION_CATEGORY_MAP[type];
     if (categoryColumn && prefs[categoryColumn] === 0) return;
     if (prefs.desktop_enabled === 0) return;
@@ -4799,6 +4820,7 @@ function notifyHubMentions(hubId, message) {
     const send = (userId, everyone) => {
       if (userId === message.user_id) return;
       if (isIgnored(userId, message.user_id)) return; // yok sayılandan bahsetme bildirimi gelmez
+      if (hubMentionsOff(hubId, userId)) return; // lobi bildirimi "Hiç": bahsetmeler de gelmez
       // Kanalın bildirimini "hiç" yapan bahsetme de almaz; "yalnızca bahsedilince" alır.
       if (message.channel_id && getChannelNotifyMode(userId, message.channel_id) === 'none') return;
       io.to(`user:${userId}`).emit('hub_mention', { ...payload, everyone });
@@ -4811,7 +4833,7 @@ function notifyHubMentions(hubId, message) {
     };
 
     direct.forEach((userId) => {
-      if (userId === message.user_id || isIgnored(userId, message.user_id)) return;
+      if (userId === message.user_id || isIgnored(userId, message.user_id) || hubMentionsOff(hubId, userId)) return;
       send(userId, false);
       createNotification(userId, 'hub_mention', payload);
     });
@@ -4901,13 +4923,14 @@ function pushNotification(userId, type, data) {
 
   const targetSockets = activeUsers.get(userId);
   if (targetSockets) {
+    const quiet = inQuietHours(prefs);
     targetSockets.forEach(sid => io.to(sid).emit('notification_received', {
       type,
       data,
       channels: {
         inapp: prefs.inapp_enabled !== 0,
-        desktop: prefs.desktop_enabled !== 0,
-        sound: prefs.sound_enabled !== 0
+        desktop: prefs.desktop_enabled !== 0 && !quiet,
+        sound: prefs.sound_enabled !== 0 && !quiet
       }
     }));
   }

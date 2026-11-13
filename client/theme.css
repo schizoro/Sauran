@@ -3715,3 +3715,23 @@ html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after 
 .ui-font-row output { min-width: 44px; text-align: right; font-size: 12.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .ui-font-preview { margin: 0 0 14px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.04); color: var(--text-primary); line-height: 1.45; }
 .ui-font-preview b { color: #9ad8ff; margin-right: 6px; }
+
+/* ── İleriye dönük özellikler ── */
+.qh-times { display: flex; gap: 12px; flex-wrap: wrap; margin: 6px 0 4px; }
+.qh-times[hidden] { display: none; }
+.qh-times label { display: grid; gap: 4px; font-size: 12.5px; color: var(--text-secondary); }
+.qh-times input { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border-soft-strong); background: var(--bg-surface-2); color: var(--text-primary); font: inherit; color-scheme: dark; }
+html.theme-light .qh-times input { color-scheme: light; }
+.hub-notify-level { display: grid; gap: 8px; padding: 8px 10px; }
+.hub-notify-level-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.hub-notify-level-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.hub-notify-level-opts button { padding: 7px 6px; border-radius: 10px; border: 1px solid var(--border-soft-strong); background: transparent; color: var(--text-secondary); font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.hub-notify-level-opts button.selected { border-color: var(--accent-line); background: var(--accent-soft); color: var(--text-primary); }
+.hub-member-mute-row[hidden] { display: none !important; }
+/* Yayıncı modu: kişisel bilgiler bulanık/gizli */
+html.streamer-mode #settings-email-display, html.streamer-mode .invite-code-display, html.streamer-mode .invite-link, html.streamer-mode #hub-invite-code-display,
+html.streamer-mode .notification-preview, html.streamer-mode .toast .msg-preview { filter: blur(7px); user-select: none; pointer-events: none; }
+html.streamer-mode #settings-email-reveal { display: none; }
+html.streamer-mode::after { content: "🎥 Yayıncı modu"; position: fixed; left: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 1003; padding: 4px 10px; border-radius: 999px; background: #7c3aed; color: #fff; font: 700 11px/1.6 system-ui, sans-serif; pointer-events: none; opacity: .9; }
+/* Veri tasarrufu: bekletilen GIF */
+.chat-gif-held { display: inline-flex; align-items: center; gap: 6px; padding: 18px 22px; border-radius: 12px; border: 1px dashed var(--border-soft-strong); background: var(--bg-surface-2); color: var(--text-secondary); font-weight: 700; cursor: pointer; }

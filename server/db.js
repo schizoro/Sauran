@@ -840,6 +840,42 @@ for (const column of ['notify_voice_presence', 'voice_join_sound', 'notify_frien
   }
 }
 
+// Sessiz saatler (yerel saatle; dakika cinsinden başlangıç/bitiş, gece yarısını aşabilir) ve saat dilimi.
+{
+  const cols = db.prepare(`PRAGMA table_info(notification_preferences)`).all().map((c) => c.name);
+  if (!cols.includes('quiet_enabled')) db.exec(`ALTER TABLE notification_preferences ADD COLUMN quiet_enabled INTEGER NOT NULL DEFAULT 0`);
+  if (!cols.includes('quiet_start')) db.exec(`ALTER TABLE notification_preferences ADD COLUMN quiet_start INTEGER NOT NULL DEFAULT 1380`);
+  if (!cols.includes('quiet_end')) db.exec(`ALTER TABLE notification_preferences ADD COLUMN quiet_end INTEGER NOT NULL DEFAULT 480`);
+  if (!cols.includes('quiet_tz')) db.exec(`ALTER TABLE notification_preferences ADD COLUMN quiet_tz TEXT`);
+}
+function isValidTimeZone(tz) {
+  try { new Intl.DateTimeFormat('en', { timeZone: tz }); return true; } catch (_) { return false; }
+}
+// Şu an sessiz saatlerde mi? (kullanıcının saat diliminde)
+function inQuietHours(prefs, now = new Date()) {
+  if (!prefs || !prefs.quiet_enabled) return false;
+  let mins;
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: prefs.quiet_tz || 'Europe/Istanbul', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(now);
+    const h = Number(parts.find((p) => p.type === 'hour').value) % 24, m = Number(parts.find((p) => p.type === 'minute').value);
+    mins = h * 60 + m;
+  } catch (_) { return false; }
+  const s = prefs.quiet_start, e = prefs.quiet_end;
+  if (s === e) return false;
+  return s < e ? (mins >= s && mins < e) : (mins >= s || mins < e);
+}
+function updateQuietHours(userId, patch) {
+  getNotificationPreferences(userId);
+  const sets = [], vals = [];
+  if (typeof patch.quiet_enabled === 'boolean') { sets.push('quiet_enabled = ?'); vals.push(patch.quiet_enabled ? 1 : 0); }
+  for (const k of ['quiet_start', 'quiet_end']) {
+    if (Number.isInteger(patch[k]) && patch[k] >= 0 && patch[k] < 1440) { sets.push(`${k} = ?`); vals.push(patch[k]); }
+  }
+  if (typeof patch.quiet_tz === 'string' && patch.quiet_tz.length <= 64 && isValidTimeZone(patch.quiet_tz)) { sets.push('quiet_tz = ?'); vals.push(patch.quiet_tz); }
+  if (sets.length) db.prepare(`UPDATE notification_preferences SET ${sets.join(', ')} WHERE user_id = ?`).run(...vals, userId);
+  return getNotificationPreferences(userId);
+}
+
 const NOTIFICATION_PREF_COLUMNS = [
   'desktop_enabled', 'inapp_enabled', 'sound_enabled',
   'notify_dm_message', 'notify_hub_message',
@@ -4190,7 +4226,8 @@ function getHubDetail(hubId, userId) {
     is_owner: hub.created_by === userId,
     my_role_id: membership ? membership.role_id : null,
     my_permission_tier: membership ? membership.permission_tier : null,
-    my_muted: membership ? Boolean(membership.muted) : false
+    my_muted: membership ? Boolean(membership.muted) : false,
+    my_notify_level: membership ? (membership.muted ? (hubMentionsOff(hubId, userId) ? 'none' : 'mentions') : 'all') : 'all'
   };
 }
 
@@ -4236,9 +4273,24 @@ function leaveHub(hubId, userId) {
 
 // Kullanıcının kendi tercihi olarak bir Lobi'nin mesaj bildirimlerini
 // açıp/kapatması — sadece kendi hub_members satırını etkiler.
+{
+  const cols = db.prepare(`PRAGMA table_info(hub_members)`).all().map((c) => c.name);
+  if (!cols.includes('mention_off')) db.exec(`ALTER TABLE hub_members ADD COLUMN mention_off INTEGER NOT NULL DEFAULT 0`);
+}
+// 'all': her mesaj · 'mentions': yalnızca @bahsetme (eski "sustur") · 'none': hiç (bahsetmeler dahil)
+function setHubNotifyLevel(hubId, userId, level) {
+  if (!['all', 'mentions', 'none'].includes(level)) return { success: false, error: 'Geçersiz seçim.' };
+  if (!isHubMember(hubId, userId)) return { success: false, error: 'Bu Lobi\'nin üyesi değilsin.' };
+  db.prepare(`UPDATE hub_members SET muted = ?, mention_off = ? WHERE hub_id = ? AND user_id = ?`).run(level === 'all' ? 0 : 1, level === 'none' ? 1 : 0, hubId, userId);
+  return { success: true, level, muted: level !== 'all' };
+}
+function hubMentionsOff(hubId, userId) {
+  return Boolean(db.prepare(`SELECT 1 FROM hub_members WHERE hub_id = ? AND user_id = ? AND mention_off = 1`).get(hubId, userId));
+}
+
 function setHubMuted(hubId, userId, muted) {
   if (!isHubMember(hubId, userId)) return { success: false, error: 'Bu Lobi\'nin üyesi değilsin.' };
-  db.prepare(`UPDATE hub_members SET muted = ? WHERE hub_id = ? AND user_id = ?`).run(muted ? 1 : 0, hubId, userId);
+  db.prepare(`UPDATE hub_members SET muted = ?, mention_off = 0 WHERE hub_id = ? AND user_id = ?`).run(muted ? 1 : 0, hubId, userId);
   return { success: true, muted: Boolean(muted) };
 }
 
@@ -6817,6 +6869,9 @@ function sanitizeUiPrefs(input) {
   if (input && ['cozy', 'compact'].includes(input.density)) p.density = input.density;
   if (input && typeof input.reduceMotion === 'boolean') p.reduceMotion = input.reduceMotion;
   if (input && typeof input.motionSync === 'boolean') p.motionSync = input.motionSync;
+  if (input && typeof input.streamer === 'boolean') p.streamer = input.streamer;
+  if (input && typeof input.streamerAuto === 'boolean') p.streamerAuto = input.streamerAuto;
+  if (input && ['off', 'cellular', 'always'].includes(input.dataSaver)) p.dataSaver = input.dataSaver;
   return p;
 }
 function getUiPrefs(userId) {
@@ -10367,6 +10422,10 @@ module.exports = {
   createNotification,
   getNotificationPreferences,
   updateNotificationPreferences,
+  inQuietHours,
+  updateQuietHours,
+  setHubNotifyLevel,
+  hubMentionsOff,
   markNotificationRead,
   MAX_VOICE_ROOM_PARTICIPANTS,
   maxVoiceParticipantsForRoom,

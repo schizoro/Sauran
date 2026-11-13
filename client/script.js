@@ -147,13 +147,13 @@ function playSoundPattern(notes) {
 
 // Bildirim (arkadaşlık isteği, lobi daveti vb.) sesi.
 function playNotifSound() {
-    if (!notifSoundEnabled) return;
+    if (!notifSoundEnabled || (typeof streamerOn === 'function' && streamerOn())) return;
     playSoundPattern(currentSoundPack().notif);
 }
 
 // Gelen mesaj sesi.
 function playMessageSound() {
-    if (!notifSoundEnabled) return;
+    if (!notifSoundEnabled || (typeof streamerOn === 'function' && streamerOn())) return;
     playSoundPattern(currentSoundPack().msg);
 }
 
@@ -3134,6 +3134,7 @@ async function loadNotificationPreferences() {
         const data = await response.json();
         if (!data.success) return;
 
+        renderQuietHours(data.preferences);
         document.querySelectorAll('#notif-pref-groups input[data-pref]').forEach((input) => {
             const key = input.dataset.pref;
             input.checked = data.preferences[key] !== 0;
@@ -3592,6 +3593,7 @@ async function showSystemNotification(title, body, options = {}) {
 // bildirimi sunucudan gelen push gösterir (çift bildirim olmasın diye burada
 // gösterilmez). İzin yoksa hiçbir şey yapma — burada asla izin İSTEMİYORUZ.
 function maybeShowBrowserNotification(type, label) {
+    if (typeof streamerOn === 'function' && streamerOn()) return; // yayıncı modu: ekrana bildirim düşmesin
 
     if (getBrowserNotifState() !== 'granted' && !getNativeNotify()) return;
     if (!shouldShowSystemNotification()) return;
@@ -4087,6 +4089,54 @@ document.getElementById('settings-delete-account-btn').addEventListener('click',
 
 });
 
+
+// Veri tasarrufu: bekletilen GIF dokununca yüklenir
+document.addEventListener('click', (e) => {
+    const b = e.target.closest('.chat-gif-held');
+    if (!b) return;
+    const img = document.createElement('img');
+    img.className = 'chat-gif'; img.alt = 'GIF'; img.decoding = 'async'; img.referrerPolicy = 'no-referrer';
+    img.src = b.dataset.gifSrc;
+    b.replaceWith(img);
+});
+
+// ─── Lobi bildirim seviyesi (lobi menüsü): Tümü / @Bahsetmeler / Hiç ───
+function renderHubNotifyLevel() {
+    const level = currentHub ? (currentHub.my_notify_level || (currentHub.my_muted ? 'mentions' : 'all')) : 'all';
+    document.querySelectorAll('[data-hub-level]').forEach((b) => { const on = b.dataset.hubLevel === level; b.classList.toggle('selected', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); b.setAttribute('role', 'radio'); });
+}
+document.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-hub-level]');
+    if (!b || !currentHub) return;
+    e.stopPropagation();
+    const prev = currentHub.my_notify_level;
+    currentHub.my_notify_level = b.dataset.hubLevel; currentHub.my_muted = b.dataset.hubLevel !== 'all';
+    renderHubNotifyLevel();
+    try {
+        const r = await fetch(`/api/hubs/${currentHub.id}/notify-level`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ level: b.dataset.hubLevel }) }).then((x) => x.json());
+        if (!r.success) throw new Error(r.error);
+    } catch (err) { currentHub.my_notify_level = prev; currentHub.my_muted = prev !== 'all'; renderHubNotifyLevel(); showToast(err.message || friendly('generic')); }
+}, true);
+
+// ─── Sessiz saatler (Ayarlar > Bildirimler) ───
+function minsToTime(m) { return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; }
+function timeToMins(v) { const [h, m] = String(v || '').split(':').map(Number); return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null; }
+function renderQuietHours(prefs) {
+    const tg = document.getElementById('qh-toggle'); if (!tg || !prefs) return;
+    tg.checked = Boolean(prefs.quiet_enabled);
+    document.getElementById('qh-times').hidden = !prefs.quiet_enabled;
+    document.getElementById('qh-start').value = minsToTime(prefs.quiet_start ?? 1380);
+    document.getElementById('qh-end').value = minsToTime(prefs.quiet_end ?? 480);
+}
+async function saveQuietHours() {
+    const body = { quiet_enabled: document.getElementById('qh-toggle').checked, quiet_tz: Intl.DateTimeFormat().resolvedOptions().timeZone };
+    const s = timeToMins(document.getElementById('qh-start').value), e = timeToMins(document.getElementById('qh-end').value);
+    if (s !== null) body.quiet_start = s; if (e !== null) body.quiet_end = e;
+    document.getElementById('qh-times').hidden = !body.quiet_enabled;
+    try { const r = await fetch('/api/notifications/quiet-hours', { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((x) => x.json()); if (r.success) renderQuietHours(r.preferences); }
+    catch (_) { showToast(friendly('generic')); }
+}
+['qh-toggle', 'qh-start', 'qh-end'].forEach((id) => document.getElementById(id)?.addEventListener('change', saveQuietHours));
 
 // Sunucu "policy_required" (428) dönerse (ör. uzun süredir açık kalmış oturum) kabul ekranı açılır.
 (function watchPolicyRequired() {
@@ -4612,7 +4662,16 @@ langConfirmBtn.addEventListener('click', () => {
 
 // ─── Görünüm tercihleri: tema, sohbet yazı boyutu, mesaj sıklığı, hareket azaltma ───
 // Hızlı açılış için bu cihazda önbellek (localStorage 'sauran_ui'); asıl kayıt hesapta (/api/me/ui-prefs), girişte eşitlenir.
-var UI_DEFAULTS = { theme: 'dark', chatFont: 15, density: 'cozy', reduceMotion: false, motionSync: false };
+var UI_DEFAULTS = { theme: 'dark', chatFont: 15, density: 'cozy', reduceMotion: false, motionSync: false, streamer: false, streamerAuto: false, dataSaver: 'off' };
+var streamerAutoActive = false; // ekran paylaşımıyla otomatik açıldı mı
+function streamerOn() { return Boolean(uiPrefs.streamer || streamerAutoActive); }
+function dataSaverOn() {
+    if (uiPrefs.dataSaver === 'always') return true;
+    if (uiPrefs.dataSaver !== 'cellular') return false;
+    const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (!c) return false;
+    return Boolean(c.saveData) || c.type === 'cellular' || ['slow-2g', '2g', '3g'].includes(c.effectiveType);
+}
 var uiPrefs = (() => {
     let p = {};
     try { p = JSON.parse(localStorage.getItem('sauran_ui') || '{}') || {}; } catch (_) {}
@@ -4647,6 +4706,7 @@ function applyUiPrefs() {
     root.classList.toggle('chat-fs-custom', uiPrefs.chatFont !== UI_DEFAULTS.chatFont);
     root.classList.toggle('density-compact', uiPrefs.density === 'compact');
     root.classList.toggle('reduce-motion', Boolean(uiPrefs.reduceMotion || (uiPrefs.motionSync && systemReduce && systemReduce.matches)));
+    root.classList.toggle('streamer-mode', streamerOn());
     try { localStorage.setItem('sauran_ui', JSON.stringify(uiPrefs)); localStorage.setItem('sauran_theme', uiPrefs.theme); } catch (_) {}
 }
 var uiSaveTimer = null;
@@ -4678,6 +4738,9 @@ function syncAppearanceUi() {
     const pv = document.getElementById('settings-chat-font-preview'); if (pv) pv.style.fontSize = `${uiPrefs.chatFont}px`;
     const rm = document.getElementById('settings-reduce-motion'); if (rm) rm.checked = Boolean(uiPrefs.reduceMotion);
     const ms = document.getElementById('settings-motion-sync'); if (ms) ms.checked = Boolean(uiPrefs.motionSync);
+    const st = document.getElementById('settings-streamer'); if (st) st.checked = Boolean(uiPrefs.streamer);
+    const sa = document.getElementById('settings-streamer-auto'); if (sa) sa.checked = Boolean(uiPrefs.streamerAuto);
+    document.querySelectorAll('#settings-datasaver [data-ds]').forEach((b) => b.classList.toggle('selected', b.dataset.ds === uiPrefs.dataSaver));
 }
 function applyTheme(theme) { setUiPref({ theme }); }
 applyUiPrefs();
@@ -4687,6 +4750,9 @@ document.querySelectorAll('[data-density]').forEach((b) => b.addEventListener('c
 document.getElementById('settings-chat-font')?.addEventListener('input', (e) => setUiPref({ chatFont: Number(e.target.value) }));
 document.getElementById('settings-reduce-motion')?.addEventListener('change', (e) => setUiPref({ reduceMotion: e.target.checked }));
 document.getElementById('settings-motion-sync')?.addEventListener('change', (e) => setUiPref({ motionSync: e.target.checked }));
+document.getElementById('settings-streamer')?.addEventListener('change', (e) => { setUiPref({ streamer: e.target.checked }); if (e.target.checked) showToast(t('sm-on-toast')); });
+document.getElementById('settings-streamer-auto')?.addEventListener('change', (e) => setUiPref({ streamerAuto: e.target.checked }));
+document.querySelectorAll('#settings-datasaver [data-ds]').forEach((b) => b.addEventListener('click', () => setUiPref({ dataSaver: b.dataset.ds })));
 syncAppearanceUi();
 
 
@@ -4860,7 +4926,30 @@ const I18N = {
     'notif-pref-inapp': { tr: 'Uygulama içi bildirimler', en: 'In-app notifications' },
     'notif-pref-sound': { tr: 'Bildirim sesleri', en: 'Notification sounds' },
     'notif-pref-dm': { tr: 'Yeni özel mesajlar', en: 'New private messages' },
-    'notif-pref-hub-message': { tr: 'Yeni Lobi mesaj bildirimleri', en: 'New lobby message notifications' },
+    'notif-pref-hub-message': { tr: 'Tüm lobi mesajları için bildirim', en: 'Notify for all lobby messages' },
+    'notif-pref-hub-message-d': { tr: 'Kapalıyken lobilerden yalnızca seni @bahsedenler bildirim gönderir. Tek bir lobi için lobinin menüsünden ayrıca seçebilirsin.', en: 'When off, lobbies only notify you when someone @mentions you. You can also choose per lobby from its menu.' },
+    'qh-title': { tr: 'Sessiz saatler', en: 'Quiet hours' },
+    'qh-label': { tr: 'Bu saatlerde bildirim ve ses gelmesin', en: 'No notifications or sounds during these hours' },
+    'qh-desc': { tr: "Mesajlar yine gelir ve Bildirimler'de görünür; yalnızca telefon/masaüstü bildirimi ve ses susar.", en: 'Messages still arrive and appear in Notifications; only phone/desktop alerts and sounds are silenced.' },
+    'qh-from': { tr: 'Başlangıç', en: 'From' },
+    'qh-to': { tr: 'Bitiş', en: 'To' },
+    'hnl-all': { tr: 'Tümü', en: 'All' },
+    'hnl-mentions': { tr: '@Bahsetmeler', en: '@Mentions' },
+    'hnl-none': { tr: 'Hiç', en: 'Nothing' },
+    'sm-title': { tr: 'Yayıncı modu', en: 'Streamer mode' },
+    'sm-label': { tr: 'Yayıncı modunu aç', en: 'Enable streamer mode' },
+    'sm-desc': { tr: 'E-posta adresin, davet kodları ve bildirim önizlemeleri ekranda gizlenir; bildirim sesleri ve masaüstü bildirimleri susar. Ekranını paylaşırken ya da yayın yaparken kullan.', en: 'Hides your email, invite codes and notification previews; silences notification sounds and desktop alerts. Use while sharing your screen or streaming.' },
+    'sm-auto': { tr: 'Ekran paylaşırken otomatik aç', en: 'Turn on automatically while screen sharing' },
+    'sm-auto-d': { tr: 'Ekran paylaşımı başlayınca açılır, bitince kapanır.', en: 'Turns on when screen sharing starts and off when it ends.' },
+    'sm-on-toast': { tr: 'Yayıncı modu açık: kişisel bilgiler gizlendi.', en: 'Streamer mode on: personal info hidden.' },
+    'ds-title': { tr: 'Veri tasarrufu', en: 'Data saver' },
+    'ds-off': { tr: 'Kapalı', en: 'Off' },
+    'ds-off-d': { tr: "GIF'ler ve videolar normal yüklenir", en: 'GIFs and videos load normally' },
+    'ds-cell': { tr: 'Mobil veride', en: 'On mobile data' },
+    'ds-cell-d': { tr: "Wi-Fi yokken GIF'ler dokununca oynar, videolar önceden inmez", en: 'Without Wi-Fi, GIFs play on tap and videos are not preloaded' },
+    'ds-always': { tr: 'Her zaman', en: 'Always' },
+    'ds-always-d': { tr: "GIF'ler dokununca oynar, videolar önceden inmez", en: 'GIFs play on tap and videos are not preloaded' },
+    'ds-gif': { tr: 'GIF · oynatmak için dokun', en: 'GIF · tap to play' },
     'notif-pref-friend-request': { tr: 'Arkadaşlık istekleri', en: 'Friend requests' },
     'notif-pref-friend-accepted': { tr: 'Arkadaşlık isteği kabul edildi', en: 'Friend request accepted' },
     'privacy-dm-title': { tr: 'Özel mesajlar', en: 'Direct messages' },
@@ -12447,7 +12536,7 @@ function buildFileCardHtml(payload) {
     if (mime.startsWith('video/')) {
         return `
             <div class="file-msg-card video-msg-card">
-                <video src="${escapeAttr(src)}" controls preload="metadata"></video>
+                <video src="${escapeAttr(src)}" controls preload="${typeof dataSaverOn === 'function' && dataSaverOn() ? 'none' : 'metadata'}"></video>
             </div>
         `;
     }
@@ -17132,6 +17221,7 @@ function renderHubDetail() {
         const showMemberOptions = currentHub.is_member && !currentHub.is_owner;
         hubMemberOptionsWrap.style.display = showMemberOptions ? 'block' : 'none';
         if (showMemberOptions && hubMuteToggle) hubMuteToggle.checked = Boolean(currentHub.my_muted);
+        if (showMemberOptions) renderHubNotifyLevel();
     }
 
     renderHubMembers();
@@ -17828,8 +17918,14 @@ renderShareNotifyBox();
 function wireCallAudioUnlock() {
 
     // Kendi yayınımız (ekran paylaşımı) başladı/bitti: sunucu aynı Lobideki arkadaşlara bildirim gönderebilsin.
-    callFrame.on('local-screen-share-started', () => { if (callMode === 'hub-room' && socket?.connected) socket.emit('voice_room_share', { sharing: true, ...shareNotifyPrefs() }); });
-    callFrame.on('local-screen-share-stopped', () => { if (callMode === 'hub-room' && socket?.connected) socket.emit('voice_room_share', { sharing: false }); });
+    callFrame.on('local-screen-share-started', () => {
+        if (callMode === 'hub-room' && socket?.connected) socket.emit('voice_room_share', { sharing: true, ...shareNotifyPrefs() });
+        if (uiPrefs.streamerAuto && !uiPrefs.streamer) { streamerAutoActive = true; applyUiPrefs(); showToast(t('sm-on-toast')); }
+    });
+    callFrame.on('local-screen-share-stopped', () => {
+        if (callMode === 'hub-room' && socket?.connected) socket.emit('voice_room_share', { sharing: false });
+        if (streamerAutoActive) { streamerAutoActive = false; applyUiPrefs(); }
+    });
 
     callFrame.on('track-started', (event) => {
 
@@ -19974,6 +20070,7 @@ const GIF_URL_RE = /^https:\/\/media[0-9]*\.giphy\.com\/media\/[A-Za-z0-9_\-\/.]
 function gifMessageHtml(content) {
     const c = String(content || '').trim();
     if (c.length > 300 || !GIF_URL_RE.test(c)) return null;
+    if (typeof dataSaverOn === 'function' && dataSaverOn()) return `<button type="button" class="chat-gif-held" data-gif-src="${escapeAttr(c)}">▶ ${escapeHtml(t('ds-gif'))}</button>`;
     return `<img class="chat-gif" src="${escapeAttr(c)}" alt="GIF" loading="lazy" decoding="async" referrerpolicy="no-referrer">`;
 }
 

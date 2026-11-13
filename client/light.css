@@ -1753,6 +1753,13 @@ html.theme-light .ui-font-a { color: var(--text-secondary); }
 html.theme-light .ui-font-row output { color: var(--text-secondary); }
 html.theme-light .ui-font-preview { background: rgba(15, 23, 42, 0.042); color: var(--text-primary); }
 html.theme-light .ui-font-preview b { color: #0077c2; }
+html.theme-light .qh-times label { color: var(--text-secondary); }
+html.theme-light .qh-times input { border: 1px solid var(--border-soft-strong); background: var(--bg-surface-2); color: var(--text-primary); }
+html.theme-light .hub-notify-level-title { color: var(--text-primary); }
+html.theme-light .hub-notify-level-opts button { border: 1px solid var(--border-soft-strong); background: transparent; color: var(--text-secondary); }
+html.theme-light .hub-notify-level-opts button.selected { border-color: var(--accent-line); background: var(--accent-soft); color: var(--text-primary); }
+html.theme-light.streamer-mode::after { background: #7c3aed; color: #1a1a1a; }
+html.theme-light .chat-gif-held { border: 1px dashed var(--border-soft-strong); background: var(--bg-surface-2); color: var(--text-secondary); }
 /* ── client/layout-c.css ── */
 html.theme-light body.lc.lc-desk.lc-auth .lc-rail { background: var(--lc-bg-rail); border-right: 1px solid var(--lc-line); }
 html.theme-light .lc-ico { border: 0; background: transparent; color: var(--text-secondary); }

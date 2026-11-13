@@ -552,8 +552,15 @@
                         <div class="hub-member-options-wrap" id="hub-member-options-wrap" style="display:none;">
                             <button id="hub-member-options-btn" class="hub-icon-btn" type="button" title="Lobi Seçenekleri" aria-label="Lobi Seçenekleri">⋯</button>
                             <div id="hub-member-options-menu" class="msg-actions-menu liquid-glass" style="display:none;">
-                                <div class="hub-member-mute-row">
-                                    <span>🔔 <span data-i18n="hub-member-notifications">Lobi Bildirimleri</span></span>
+                                <div class="hub-notify-level" role="radiogroup" aria-label="Lobi bildirimleri">
+                                    <span class="hub-notify-level-title">🔔 <span data-i18n="hub-member-notifications">Lobi Bildirimleri</span></span>
+                                    <div class="hub-notify-level-opts">
+                                        <button type="button" data-hub-level="all" data-i18n="hnl-all">Tümü</button>
+                                        <button type="button" data-hub-level="mentions" data-i18n="hnl-mentions">@Bahsetmeler</button>
+                                        <button type="button" data-hub-level="none" data-i18n="hnl-none">Hiç</button>
+                                    </div>
+                                </div>
+                                <div class="hub-member-mute-row" hidden>
                                     <span class="notif-toggle liquid-glass">
                                         <input type="checkbox" id="hub-mute-toggle">
                                         <span class="notif-toggle-track"><span class="notif-toggle-thumb"></span></span>
@@ -2161,6 +2168,17 @@
                         </button>
                     </div>
 
+                    <span class="profile-field-label" data-i18n="sm-title">Yayıncı modu</span>
+                    <label class="notif-pref-row"><input type="checkbox" id="settings-streamer"><span><span data-i18n="sm-label">Yayıncı modunu aç</span><span class="settings-voice-hint" data-i18n="sm-desc">E-posta adresin, davet kodları ve bildirim önizlemeleri ekranda gizlenir; bildirim sesleri ve masaüstü bildirimleri susar. Ekranını paylaşırken ya da yayın yaparken kullan.</span></span></label>
+                    <label class="notif-pref-row"><input type="checkbox" id="settings-streamer-auto"><span><span data-i18n="sm-auto">Ekran paylaşırken otomatik aç</span><span class="settings-voice-hint" data-i18n="sm-auto-d">Ekran paylaşımı başlayınca açılır, bitince kapanır.</span></span></label>
+
+                    <span class="profile-field-label" data-i18n="ds-title">Veri tasarrufu</span>
+                    <div class="privacy-options" id="settings-datasaver">
+                        <button class="privacy-option" data-ds="off" type="button"><span class="privacy-option-title" data-i18n="ds-off">Kapalı</span><span class="privacy-option-desc" data-i18n="ds-off-d">GIF'ler ve videolar normal yüklenir</span></button>
+                        <button class="privacy-option" data-ds="cellular" type="button"><span class="privacy-option-title" data-i18n="ds-cell">Mobil veride</span><span class="privacy-option-desc" data-i18n="ds-cell-d">Wi-Fi yokken GIF'ler dokununca oynar, videolar önceden inmez</span></button>
+                        <button class="privacy-option" data-ds="always" type="button"><span class="privacy-option-title" data-i18n="ds-always">Her zaman</span><span class="privacy-option-desc" data-i18n="ds-always-d">GIF'ler dokununca oynar, videolar önceden inmez</span></button>
+                    </div>
+
                     <span class="profile-field-label" data-i18n="ui-motion">Hareket</span>
                     <label class="notif-pref-row"><input type="checkbox" id="settings-reduce-motion"><span><span data-i18n="ui-reduce-motion">Animasyonları azalt</span><span class="settings-voice-hint" data-i18n="ui-reduce-motion-d">Efektler, çerçeve ve isim animasyonları durur; geçişler sadeleşir.</span></span></label>
                     <label class="notif-pref-row"><input type="checkbox" id="settings-motion-sync"><span><span data-i18n="ui-motion-sync">Cihazın ayarına uy</span><span class="settings-voice-hint" data-i18n="ui-motion-sync-d">Cihazında "hareketi azalt" açıksa Sauran'da da animasyonlar azalır.</span></span></label>
@@ -2233,10 +2251,19 @@
                             </div>
                         </div>
 
+                        <div class="notif-pref-group" id="quiet-hours-group">
+                            <span class="notif-pref-group-title" data-i18n="qh-title">Sessiz saatler</span>
+                            <label class="notif-pref-row"><input type="checkbox" id="qh-toggle"><span><span data-i18n="qh-label">Bu saatlerde bildirim ve ses gelmesin</span><span class="settings-voice-hint" data-i18n="qh-desc">Mesajlar yine gelir ve Bildirimler'de görünür; yalnızca telefon/masaüstü bildirimi ve ses susar.</span></span></label>
+                            <div class="qh-times" id="qh-times" hidden>
+                                <label><span data-i18n="qh-from">Başlangıç</span><input type="time" id="qh-start" value="23:00"></label>
+                                <label><span data-i18n="qh-to">Bitiş</span><input type="time" id="qh-end" value="08:00"></label>
+                            </div>
+                        </div>
+
                         <div class="notif-pref-group">
                             <span class="notif-pref-group-title" data-i18n="notif-group-messages">Mesajlar</span>
                             <label class="notif-pref-row"><input type="checkbox" data-pref="notify_dm_message"><span data-i18n="notif-pref-dm">Yeni özel mesajlar</span></label>
-                            <label class="notif-pref-row"><input type="checkbox" data-pref="notify_hub_message"><span data-i18n="notif-pref-hub-message">Yeni Lobi mesaj bildirimleri</span></label>
+                            <label class="notif-pref-row"><input type="checkbox" data-pref="notify_hub_message"><span><span data-i18n="notif-pref-hub-message">Tüm lobi mesajları için bildirim</span><span class="settings-voice-hint" data-i18n="notif-pref-hub-message-d">Kapalıyken lobilerden yalnızca seni @bahsedenler bildirim gönderir. Tek bir lobi için lobinin menüsünden ayrıca seçebilirsin.</span></span></label>
                         </div>
 
                         <div class="notif-pref-group">
