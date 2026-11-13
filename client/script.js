@@ -4099,6 +4099,95 @@ document.getElementById('settings-delete-account-btn').addEventListener('click',
     };
 })();
 
+// ─── Beklenmeyen hata: samimi kart (dakikada bir) ya da art arda hatalarda tam sayfa ekran; "Sorunu bildir" ───
+var appErrorTimes = [];
+function errorCodeFor(text) {
+    let h = 0; const s = String(text || '');
+    for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+    return 'SR-' + (h >>> 0).toString(16).toUpperCase().slice(-4).padStart(4, '0');
+}
+var IGNORABLE_ERROR_NAMES = /^(AbortError|NotAllowedError|NotFoundError|NotReadableError|OverconstrainedError|QuotaExceededError|SecurityError|NotSupportedError|TimeoutError|NetworkError)$/;
+function isIgnorableError(msg, src, stack) {
+    const m = String(msg || '');
+    if (!m || m === 'Script error.' || m === '[object Object]') return true;
+    if (/ResizeObserver loop|The play\(\) request|Load failed|NetworkError|Failed to fetch|cancelled|Non-Error promise rejection|interrupted by a call to pause|The user aborted/i.test(m)) return true;
+    if (src && !String(src).startsWith(location.origin)) return true; // tarayıcı eklentisi / dış betik (Daily iframe dahil)
+    if (stack && /(chrome|moz|safari(-web)?)-extension:\/\//.test(String(stack))) return true;
+    return false;
+}
+function showAppCrash({ message, stack }) {
+    try { showAppCrashInner({ message, stack }); } catch (_) { /* hata ekranı asla kendisi hata vermez */ }
+}
+function showAppCrashInner({ message, stack }) {
+    const code = errorCodeFor(message);
+    appErrorTimes = appErrorTimes.filter((x) => Date.now() - x.at < 10000);
+    appErrorTimes.push({ at: Date.now(), code });
+    // Tam sayfa yalnızca AYNI hata 10 sn'de 3 kez olursa (döngüye girmiş bir hata); yine de "devam et" ile kapatılabilir.
+    const full = appErrorTimes.filter((x) => x.code === code).length >= 3;
+    if (!full && Date.now() - (window.__crashCardAt || 0) < 60000) return;
+    window.__crashCardAt = Date.now();
+    document.getElementById('app-crash')?.remove();
+    const el = document.createElement('div');
+    el.id = 'app-crash';
+    el.className = full ? 'app-crash is-full' : 'app-crash';
+    el.setAttribute('role', 'alert');
+    el.innerHTML = `<div class="app-crash-box">
+        <div class="app-crash-ic" aria-hidden="true">😵‍💫</div>
+        <p class="app-crash-txt"></p>
+        <div class="app-crash-actions">
+            <button type="button" class="app-crash-reload">${escapeHtml(friendlyLabel('reload'))}</button>
+            <button type="button" class="app-crash-report">${escapeHtml(friendlyLabel('report'))}</button>
+            ${full ? '<button type="button" class="app-crash-close app-crash-continue">Yine de devam et</button>' : '<button type="button" class="app-crash-close" aria-label="Kapat">✕</button>'}
+        </div>
+        <small class="app-crash-code">${escapeHtml(friendlyLabel('code'))}: ${escapeHtml(code)}</small>
+    </div>`;
+    el.querySelector('.app-crash-txt').textContent = friendly('crash');
+    el.querySelector('.app-crash-reload').addEventListener('click', () => reloadForNewBuild({ manual: true }));
+    el.querySelector('.app-crash-close')?.addEventListener('click', () => el.remove());
+    el.querySelector('.app-crash-report').addEventListener('click', () => openProblemReport({ code, message, stack }));
+    document.body.appendChild(el);
+}
+function scrubReportText(v) { return String(v || '').replace(/(https?:\/\/[^\s?#]+)[?#][^\s)]*/g, '$1'); }
+function openProblemReport({ code, message, stack }) {
+    document.getElementById('problem-report')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'problem-report';
+    ov.className = 'modal-overlay';
+    ov.style.display = 'flex';
+    ov.innerHTML = `<div class="modal-box problem-report-box" role="dialog" aria-modal="true" aria-labelledby="pr-h">
+        <h3 id="pr-h">Sorunu bildir</h3>
+        <p class="age-declare-small">Hata kodu (${escapeHtml(code)}), kısa hata metni ve teknik iz, açık olan ekran ve tarayıcı bilgisi gönderilir. Mesajlarının metnini bilerek göndermiyoruz.</p>
+        <textarea id="pr-note" maxlength="500" rows="3" placeholder="Ne yapıyordun? (isteğe bağlı)"></textarea>
+        <div class="app-crash-actions"><button type="button" id="pr-send" class="about-btn about-btn-primary">Gönder</button><button type="button" id="pr-cancel">Vazgeç</button></div>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#pr-cancel').addEventListener('click', () => ov.remove());
+    ov.addEventListener('click', (e) => { if (e.target === ov) ov.remove(); });
+    ov.querySelector('#pr-send').addEventListener('click', async (e) => {
+        e.target.disabled = true;
+        try {
+            await fetch('/api/client-report', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code, message: scrubReportText(message).slice(0, 400), stack: scrubReportText(stack).slice(0, 1500), path: location.pathname + (document.body.className ? ' [' + document.body.className.split(' ').slice(0, 6).join(' ') + ']' : ''), note: ov.querySelector('#pr-note').value }) });
+            ov.remove();
+            showToast('Teşekkürler! Bildirimin bize ulaştı.');
+        } catch (_) { e.target.disabled = false; showToast(friendly('generic')); }
+    });
+}
+window.addEventListener('error', (e) => {
+    const stack = e.error && e.error.stack;
+    if (e.error && e.error.name && IGNORABLE_ERROR_NAMES.test(e.error.name)) return;
+    if (isIgnorableError(e.message, e.filename, stack)) return;
+    showAppCrash({ message: e.message, stack });
+});
+window.addEventListener('unhandledrejection', (e) => {
+    const r = e.reason;
+    // Yalnızca gerçek Error nesneleri (Daily.js gibi kütüphanelerin düz nesne redleri ekran hatası değildir)
+    if (!(r instanceof Error)) return;
+    if (r.name && IGNORABLE_ERROR_NAMES.test(r.name)) return;
+    if (isIgnorableError(r.message, null, r.stack)) return;
+    showAppCrash({ message: r.message, stack: r.stack });
+});
+
 // ─── Güncellenen politikalar: kabul edilmeden uygulama kullanılamaz (kapatılamaz) ───
 // Kabul → (gerekiyorsa) doğum tarihi sorusu. Kabul etmeme → verilerini indir / hesabını sil / çıkış yap; fikrini değiştirebilir.
 function openPolicyUpdate() {
@@ -4994,7 +5083,7 @@ const I18N = {
     'friend-request-notif-text': { tr: 'sana arkadaşlık isteği gönderdi', en: 'sent you a friend request' },
     'friend-accepted-notif-text': { tr: 'arkadaşlık isteğini kabul etti', en: 'accepted your friend request' },
     'ok-got-it': { tr: 'Tamam', en: 'Got it' },
-    'friends-empty': { tr: 'Henüz arkadaşın yok.', en: "You don't have any friends yet." },
+    'friends-empty': { tr: 'Burası biraz sessiz… Bir arkadaş ekle, ortalık şenlensin.', en: "It's a bit quiet here… Add a friend and liven it up." },
     'back-to-hubs': { tr: 'Lobiler', en: 'Lobbies' },
     'start-something': { tr: 'Bir şey başlat', en: 'Start something' },
     'start-poll': { tr: 'Oylama', en: 'Poll' },
@@ -5025,7 +5114,7 @@ const I18N = {
     'delete-account-title': { tr: 'Hesabı kalıcı olarak sil', en: 'Permanently delete account' },
     'delete-account-continue': { tr: 'Devam et', en: 'Continue' },
     'voice-room-join': { tr: 'Katıl', en: 'Join' },
-    'voice-room-nobody-here': { tr: 'Bu odada henüz kimse yok.', en: 'Nobody is here yet.' },
+    'voice-room-nobody-here': { tr: 'Oda boş, sesler seni bekliyor. İlk giren sen ol!', en: 'The room is empty. Be the first to hop in!' },
     'voice-room-you': { tr: '(Sen)', en: '(You)' },
     'voice-mic-on': { tr: 'Mikrofon', en: 'Mic' },
     'voice-mic-off': { tr: 'Kapalı', en: 'Muted' },
@@ -5331,8 +5420,72 @@ const I18N = {
     'export-data-error': { tr: 'Verilerin indirilemedi.', en: 'Could not export your data.' }
 };
 
+// ─── Samimi bildirim dili: her durum için birkaç cümle, rastgele biri seçilir (hep aynı cümle sıkıcı olmasın).
+// Her cümle ne olduğunu ve ne yapılacağını söyler. EN karşılıkları da var.
+var FRIENDLY = {
+    generic: {
+        tr: ['Offf, bir şeyler ters gitti. Bir daha dener misin?', 'Yapma be, bir aksilik çıktı. Tekrar denemeye ne dersin?', 'Hoppala, bu sefer olmadı. Bir kez daha deneyelim mi?', 'Hay aksi! Bir şeyler takıldı, tekrar dener misin?'],
+        en: ['Oops, something went wrong. Mind trying again?', 'Well, that didn\'t go as planned. Try once more?', 'Whoops, that didn\'t work this time. Give it another go?']
+    },
+    conn_lost: {
+        tr: ['Hoppala, bağlantı koptu. Yeniden bağlanıyoruz…', 'Bağlantı bir anlığına gitti. Seni geri getiriyoruz…', 'Hay aksi, sunucuyla aramız bozuldu. Hemen düzeltiyoruz…'],
+        en: ['Whoops, connection lost. Reconnecting…', 'The connection dropped for a moment. Bringing you back…']
+    },
+    offline: {
+        tr: ['İnternetin kaçmış gibi görünüyor. Gelir gelmez kaldığın yerden devam ederiz.', 'Çevrimdışısın gibi duruyor. Bağlantı gelince her şey kendiliğinden toparlanır.'],
+        en: ['Looks like your internet wandered off. We\'ll pick up where you left off as soon as it\'s back.']
+    },
+    conn_back: {
+        tr: ['Geri döndük! Her şey yerli yerinde.', 'Oh be, bağlantı geldi. Kaldığın yerden devam!', 'Tekrar buradayız.'],
+        en: ['We\'re back! Everything\'s in place.', 'Phew, reconnected. Carry on!']
+    },
+    maintenance: {
+        tr: ['Sauran\'a yeni şeyler ekliyoruz. Birkaç saniye içinde buradayız, sayfa kendiliğinden yenilenecek.', 'Kısa bir bakım molası… Birazdan buradayız, sen bir şey yapmana gerek yok.'],
+        en: ['We\'re adding new things to Sauran. Back in a few seconds — the page will refresh by itself.']
+    },
+    crash: {
+        tr: ['Yapma be, ekranda bir aksilik çıktı. Yenilemek genelde işe yarar.', 'Offf, bir şey takıldı. Sayfayı yenilersen düzelmesi gerek.', 'Hoppala, ekran tökezledi. Bir yenileme her şeyi toparlar.'],
+        en: ['Oops, something on this screen broke. A refresh usually fixes it.']
+    },
+    voice_lost: {
+        tr: ['Sesin bir anlığına gitti, seni geri getiriyoruz…', 'Sesli bağlantı tökezledi. Yeniden bağlanıyoruz…'],
+        en: ['Your audio dropped for a moment. Bringing you back…']
+    },
+    voice_back: {
+        tr: ['Tekrar buradasın, seni duyuyoruz.', 'Ses geri geldi!'],
+        en: ['You\'re back, we can hear you.']
+    },
+    slow: {
+        tr: ['Bu biraz uzun sürdü. Bağlantın yavaş olabilir, mesajın yolda.', 'Mesajın yolda ama ağ biraz ağır. Sabrın için teşekkürler.'],
+        en: ['This is taking a while. Your connection may be slow — your message is on its way.']
+    }
+};
+var FRIENDLY_LABELS = { retry_now: { tr: 'Şimdi dene', en: 'Try now' }, reload: { tr: 'Yenile', en: 'Refresh' }, report: { tr: 'Sorunu bildir', en: 'Report problem' }, code: { tr: 'Hata kodu', en: 'Error code' } };
+var FRIENDLY_T = { 'generic-error': 'generic', 'conn-lost': 'conn_lost', 'conn-back': 'conn_back' };
+function friendly(kind) {
+    const lang = (localStorage.getItem('sauran_lang') || 'tr') === 'en' ? 'en' : 'tr';
+    const list = (FRIENDLY[kind] && (FRIENDLY[kind][lang] || FRIENDLY[kind].tr)) || FRIENDLY.generic.tr;
+    return list[Math.floor(Math.random() * list.length)];
+}
+function friendlyLabel(key) {
+    const lang = (localStorage.getItem('sauran_lang') || 'tr') === 'en' ? 'en' : 'tr';
+    return (FRIENDLY_LABELS[key] || {})[lang] || key;
+}
+// Sunucudan gelen kuru başarısızlık cümlelerinin ("Mesaj gönderilemedi.") başına samimi bir giriş eklenir.
+function friendlyFailure(message) {
+    const m = String(message || '');
+    if (!m || m.length > 90 || /^(Hay aksi|Offf|Hoppala|Yapma be)/.test(m)) return m;
+    if (/engel|sustur|yetki|izin|yaş|askı|yasak|sınır|limit|kural|kapalı|üye değil|bulunamadı|zaten|en fazla|çok fazla/i.test(m)) return m;
+    if (!/(gönderilemedi|yüklenemedi|kaydedilemedi|alınamadı|güncellenemedi|silinemedi|oluşturulamadı|bir hata oluştu)\.?$/i.test(m)) return m;
+    const openers = ['Hay aksi! ', 'Offf, ', 'Hoppala, '];
+    const o = openers[Math.floor(Math.random() * openers.length)];
+    const body = o.endsWith(', ') ? m.charAt(0).toLocaleLowerCase('tr') + m.slice(1) : m;
+    return `${o}${body} Bir daha dener misin?`;
+}
+
 function t(key) {
     const lang = localStorage.getItem('sauran_lang') || 'tr';
+    if (FRIENDLY_T[key]) return friendly(FRIENDLY_T[key]);
     const entry = I18N[key];
     if (!entry) return key;
     return entry[lang] || entry.tr;
@@ -8046,7 +8199,7 @@ function renderUsersList(list, isHubMembers) {
 
     if (list.length === 0) {
 
-        usersList.innerHTML = `<div class="users-list-empty">${isHubMembers ? 'Bu Lobi\'da kimse yok.' : 'Henüz arkadaşın yok. Yukarıdan ekleyebilirsin.'}</div>`;
+        usersList.innerHTML = `<div class="users-list-empty">${isHubMembers ? 'Bu lobide henüz kimse yok. Bir davet bağlantısı paylaş, ortam ısınsın.' : 'Burası biraz sessiz… Yukarıdan bir arkadaş ekle, ortalık şenlensin.'}</div>`;
         return;
 
     }
@@ -8281,7 +8434,7 @@ const NOTIF_UI = {
         clearAll: 'Bildirimleri sil',
         del: 'Sil',
         confirmClear: 'Yanıt bekleyenler (arkadaşlık isteği, lobi daveti, kabul bekleyen görev) hariç tüm bildirimler kalıcı olarak silinecek. Emin misin?',
-        empty: 'Bildirim yok.',
+        empty: 'Her şey sakin, yeni bildirim yok. 🌙',
         openNotice: 'Görev Bildirimini Aç'
     },
     en: {
@@ -10511,6 +10664,7 @@ async function openDm(userId, username) {
         if (data.success && activeDmUserId === userId) {
             dmFeed._stickBottom = true;
             data.messages.forEach((m) => appendDmMessage(m));
+            if (!data.messages.length) dmFeed.innerHTML = `<div class="hub-feed-empty dm-feed-empty">${escapeHtml(username || '')} ile sohbetin burada başlıyor. İlk mesajı sen yaz, buzu kır! 👋</div>`;
             resetFeedPaging('dm', userId, data.messages, data.has_more);
             if (data.first_unread_id) openFeedAtUnread('dm', data.first_unread_id, data.unread_count);
             else pinFeedToBottom(dmFeed);
@@ -10578,6 +10732,7 @@ function appendDmCallLog(msg, opts) {
 function appendDmMessage(msg, opts) {
 
     if (msg && msg.id && dmFeed.querySelector(`[data-message-id="${Number(msg.id)}"]`)) return;
+    dmFeed.querySelector('.dm-feed-empty')?.remove();
 
     if (msg.kind === 'dm_call') { appendDmCallLog(msg, opts); return; }
 
@@ -10708,7 +10863,12 @@ function trackPendingSend(clientId, el, kind, msg) {
     // Süre dolunca "gönderilemedi" görünür ama kayıt bir süre tutulur: bağlantı geri gelip mesaj geç ulaşırsa
     // sunucunun yanıtı bu balonla eşleşir (ikinci bir kopya eklenmez, "gönderilemedi" kalkar).
     const timer = setTimeout(() => markPendingFailed(clientId, { final: false }), 15000);
-    pendingSends.set(clientId, { el, kind, timer });
+    const slowTimer = setTimeout(() => {
+        if (!pendingSends.has(clientId) || !el.classList.contains('msg-pending')) return;
+        el.classList.add('msg-slow');
+        if (Date.now() - (window.__slowToastAt || 0) > 60000) { window.__slowToastAt = Date.now(); showToast(friendly('slow'), 4500); }
+    }, 3000);
+    pendingSends.set(clientId, { el, kind, timer, slowTimer });
 }
 
 // Yalnızca kimliği verilen mesaj işaretlenir; kimliksiz bir hata başka bir mesajı yanlışlıkla "gönderilemedi" yapmaz.
@@ -10716,7 +10876,8 @@ function markPendingFailed(clientId, { final = true } = {}) {
     const entry = clientId && pendingSends.get(clientId);
     if (!entry) return;
     clearTimeout(entry.timer);
-    entry.el.classList.remove('msg-pending');
+    clearTimeout(entry.slowTimer);
+    entry.el.classList.remove('msg-pending', 'msg-slow');
     entry.el.classList.add('msg-failed');
     entry.el.title = t('msg-send-failed');
     showFailedSendBar(entry.el);
@@ -10768,9 +10929,10 @@ function resolvePendingSend(msg) {
     const entry = msg?.client_id && pendingSends.get(msg.client_id);
     if (!entry) return false;
     clearTimeout(entry.timer);
+    clearTimeout(entry.slowTimer);
     pendingSends.delete(msg.client_id);
     if (!entry.el.isConnected) return false; // akış bu arada yeniden çizildiyse mesaj normal yoldan eklenir
-    entry.el.classList.remove('msg-pending', 'msg-failed');
+    entry.el.classList.remove('msg-pending', 'msg-failed', 'msg-slow');
     entry.el.removeAttribute('title');
     entry.el.querySelector(':scope > .msg-fail-bar')?.remove();
     if (entry.kind === 'hub') {
@@ -11233,7 +11395,8 @@ function showToast(message, durationMs = 3200) {
 
     const toast = document.createElement('div');
     toast.className = 'toast';
-    toast.textContent = window.translateServerError ? window.translateServerError(message) : message;
+    const translated = window.translateServerError ? window.translateServerError(message) : message;
+    toast.textContent = (localStorage.getItem('sauran_lang') || 'tr') === 'en' ? translated : friendlyFailure(translated);
 
     container.appendChild(toast);
 
@@ -11675,10 +11838,20 @@ function startMessageReply(msg, opts) {
 
 }
 
-// ─── Bağlantı durumu şeridi ───
+// ─── Bağlantı durumu şeridi (samimi dil) ───
+// Kopunca: "Hoppala, bağlantı koptu…" + Şimdi dene. İnternet yoksa ayrı metin. İnternet varken 8 sn'den uzun sürerse
+// sunucu yoklanır: yanıt vermiyorsa (yayına alma / yeniden başlatma) "Yeni şeyler ekliyoruz" bakım görünümü; sunucu
+// dönünce istemci sürümü değiştiyse sayfa kendiliğinden yenilenir (taslaklar oturum belleğine yazılır), değişmediyse şerit "Geri döndük".
 let connBannerTimer = null;
 let connBannerShown = false;
-function setConnectionBanner(state) {
+let connProbeTimer = null;
+let connLostAt = 0;
+let connBannerKind = null;
+let connProbeDelay = 4000;
+function nextProbeDelay() { connProbeDelay = Math.min(30000, connProbeDelay * 1.6); return connProbeDelay * (0.75 + Math.random() * 0.5); }
+let clientBuildId = null;
+fetch('/api/version', { cache: 'no-store' }).then((r) => r.json()).then((d) => { clientBuildId = d && d.build; }).catch(() => {});
+function connBannerEl() {
     let bar = document.getElementById('conn-banner');
     if (!bar) {
         bar = document.createElement('div');
@@ -11689,23 +11862,94 @@ function setConnectionBanner(state) {
         bar.hidden = true;
         document.body.appendChild(bar);
     }
+    return bar;
+}
+function renderConnBanner(kind) {
+    const bar = connBannerEl();
+    if (kind === connBannerKind && !bar.hidden) return; // aynı durum: cümle her yoklamada değişip titremesin
+    connBannerKind = kind;
+    const icon = { lost: '🔌', offline: '📶', maint: '🛠️', ok: '✅' }[kind] || '';
+    const text = kind === 'offline' ? friendly('offline') : kind === 'maint' ? friendly('maintenance') : kind === 'ok' ? friendly('conn_back') : friendly('conn_lost');
+    bar.className = 'conn-banner' + (kind === 'ok' ? ' ok' : kind === 'maint' ? ' maint' : '');
+    bar.innerHTML = `<span class="conn-ic" aria-hidden="true">${icon}</span><span class="conn-txt"></span>${kind === 'lost' ? `<button type="button" class="conn-retry">${escapeHtml(friendlyLabel('retry_now'))}</button>` : ''}`;
+    bar.querySelector('.conn-txt').textContent = text;
+    bar.querySelector('.conn-retry')?.addEventListener('click', () => { try { if (socket && !socket.connected) socket.connect(); } catch (_) {} connProbeDelay = 4000; probeServerDuringOutage(); });
+    bar.hidden = false;
+}
+async function probeServerDuringOutage() {
+    clearTimeout(connProbeTimer);
+    if (!connBannerShown) return;
+    if (document.hidden) { connProbeTimer = setTimeout(probeServerDuringOutage, 5000); return; } // arka planda yoklama yok
+    if (navigator.onLine === false) { renderConnBanner('offline'); connProbeTimer = setTimeout(probeServerDuringOutage, nextProbeDelay()); return; }
+    let up = false, build = null;
+    try {
+        const r = await fetch('/api/version', { cache: 'no-store' });
+        if (r.ok) { up = true; build = (await r.json()).build; }
+    } catch (_) { /* sunucu yanıt vermiyor */ }
+    if (!up) {
+        if (Date.now() - connLostAt > 8000) renderConnBanner('maint');
+        connProbeTimer = setTimeout(probeServerDuringOutage, nextProbeDelay());
+        return;
+    }
+    if (clientBuildId && build && build !== clientBuildId) { reloadForNewBuild(); return; }
+    // Sunucu ayakta: socket.io kendi yeniden bağlanmayı denemiyorsa başlat (deniyorsa ikinci deneme açma)
+    if (socket && !socket.connected && !socket.active) { try { socket.connect(); } catch (_) {} }
+    if (connBannerKind === 'maint') renderConnBanner('lost');
+    connProbeTimer = setTimeout(probeServerDuringOutage, nextProbeDelay());
+}
+function reloadForNewBuild({ manual = false } = {}) {
+    if (!manual) {
+        let hist = [];
+        try { hist = JSON.parse(sessionStorage.getItem('sauran_auto_reloads') || '[]').filter((x) => Date.now() - x < 5 * 60 * 1000); } catch (_) {}
+        if (hist.some((x) => Date.now() - x < 60000) || hist.length >= 2) return; // döngü olmasın: kullanıcı "Yenile" ile yapabilir
+        try { sessionStorage.setItem('sauran_auto_reloads', JSON.stringify([...hist, Date.now()])); } catch (_) {}
+    }
+    // Yarım kalmış mesajlar kaybolmasın: açık kutulardaki metin oturum belleğine yazılır, açılışta geri konur.
+    try {
+        const drafts = { hub: document.getElementById('message-input')?.value || '', dm: document.getElementById('dm-message-input')?.value || '' };
+        if (drafts.hub || drafts.dm) sessionStorage.setItem('sauran_reload_drafts', JSON.stringify(drafts));
+    } catch (_) {}
+    location.reload();
+}
+(function restoreReloadDrafts() {
+    try {
+        const d = JSON.parse(sessionStorage.getItem('sauran_reload_drafts') || 'null');
+        sessionStorage.removeItem('sauran_reload_drafts');
+        if (!d) return;
+        setTimeout(() => {
+            const h = document.getElementById('message-input'); if (h && d.hub && !h.value) h.value = d.hub;
+            const m = document.getElementById('dm-message-input'); if (m && d.dm && !m.value) m.value = d.dm;
+        }, 2500);
+    } catch (_) {}
+})();
+function setConnectionBanner(state) {
+    const bar = connBannerEl();
     clearTimeout(connBannerTimer);
-    if (state === 'reset') { connBannerShown = false; bar.hidden = true; return; }
+    if (state === 'reset') { connBannerShown = false; clearTimeout(connProbeTimer); bar.hidden = true; return; }
     if (state === 'lost') {
+        if (!connBannerShown) connLostAt = Date.now();
         connBannerTimer = setTimeout(() => {
-            bar.textContent = navigator.onLine === false ? t('conn-offline') : t('conn-lost');
-            bar.className = 'conn-banner';
-            bar.hidden = false;
             connBannerShown = true;
+            connBannerKind = null;
+            connProbeDelay = 4000;
+            renderConnBanner(navigator.onLine === false ? 'offline' : 'lost');
+            clearTimeout(connProbeTimer);
+            connProbeTimer = setTimeout(probeServerDuringOutage, 5000 + Math.random() * 3000);
         }, 1500);
         return;
     }
+    clearTimeout(connProbeTimer);
     if (!connBannerShown) { bar.hidden = true; return; }
     connBannerShown = false;
-    bar.textContent = t('conn-back');
-    bar.className = 'conn-banner ok';
-    connBannerTimer = setTimeout(() => { bar.hidden = true; }, 2500);
+    // Kesinti sırasında yeni sürüm yayına alındıysa sayfa yenilenir; değilse kısa bir "geri döndük".
+    fetch('/api/version', { cache: 'no-store' }).then((r) => r.json()).then((d) => {
+        if (clientBuildId && d && d.build && d.build !== clientBuildId) reloadForNewBuild();
+    }).catch(() => {});
+    connBannerKind = null;
+    renderConnBanner('ok');
+    connBannerTimer = setTimeout(() => { bar.hidden = true; connBannerKind = null; }, 3000);
 }
+window.addEventListener('online', () => { if (connBannerShown) probeServerDuringOutage(); });
 window.addEventListener('offline', () => { if (socket && currentUser) setConnectionBanner('lost'); });
 
 // Sohbet başına taslak: başka bir sohbete geçince yarım mesaj kaybolmaz ve yeni açılan sohbetin kutusunda kalıp yanlış kişiye gitmez.
@@ -17255,6 +17499,16 @@ async function joinCallFrame(roomUrl, token) {
 
     // Bağlantı kalitesi: paket kaybı varsa hangi yönde olduğu gösterilir (ses pürüzlüyse sebep ağ mı, görülsün).
     callFrame.on('network-quality-change', (event) => { if (frame === callFrame) renderCallNetQuality(event); });
+    // Sesli bağlantı kesintisi: samimi bilgi; geri gelince kısa bir "tekrar buradasın" (art arda gelen olaylar tek bildirim).
+    callFrame.on('network-connection', (event) => {
+        if (frame !== callFrame) return;
+        if (event?.type === 'interrupted') {
+            if (!window.__voiceLostShown) { window.__voiceLostShown = true; showToast(friendly('voice_lost'), 6000); }
+        } else if (event?.type === 'connected' && window.__voiceLostShown) {
+            window.__voiceLostShown = false;
+            showToast(friendly('voice_back'), 2500);
+        }
+    });
 
     callFrame.on('left-meeting', () => { if (frame === callFrame) leaveCall(); });
     callFrame.on('error', (event) => {

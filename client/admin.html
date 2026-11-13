@@ -692,7 +692,7 @@ Sauran Geliştirici Ekibi</textarea>
             $('au-next').disabled = audit.page >= pages;
         }
 
-        const SH_KIND = { unexpected_restart: 'Beklenmedik yeniden başlama', uncaught_exception: 'Yakalanmamış hata', unhandled_rejection: 'Yakalanmamış söz hatası', memory_high: 'Yüksek bellek', server_start: 'Sunucu başladı', hub_push: 'Bildirim hatası', db_vacuum: 'Veritabanı sıkıştırıldı', media: 'Dosya gönderim hatası', media_file: 'Dosya okuma hatası', media_migration: 'Taşıma hatası', media_sweep: 'Dosya temizliği hatası', admin_storage: 'Depolama işlemi hatası' };
+        const SH_KIND = { unexpected_restart: 'Beklenmedik yeniden başlama', uncaught_exception: 'Yakalanmamış hata', unhandled_rejection: 'Yakalanmamış söz hatası', memory_high: 'Yüksek bellek', server_start: 'Sunucu başladı', hub_push: 'Bildirim hatası', db_vacuum: 'Veritabanı sıkıştırıldı', media: 'Dosya gönderim hatası', media_file: 'Dosya okuma hatası', media_migration: 'Taşıma hatası', media_sweep: 'Dosya temizliği hatası', admin_storage: 'Depolama işlemi hatası', client_report: 'Kullanıcı hata bildirimi' };
         const MB = (b) => { const mb = (Number(b) || 0) / 1048576; return mb >= 1024 ? `${(mb / 1024).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} GB` : `${Math.round(mb)} MB`; };
         function renderStorage(st, mig) {
             if (!st) return;

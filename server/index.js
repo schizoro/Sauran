@@ -694,12 +694,65 @@ if (require('./backup').isInsidePublicDir(process.env.DATA_DIR || path.join(__di
   process.exit(1);
 }
 
+// İstemci sürüm kimliği: açılışta istemci dosyalarının özetinden üretilir. Bağlantı geri geldiğinde istemci bunu
+// karşılaştırır; değiştiyse (yeni sürüm yayına alındı) sayfayı kendiliğinden yeniler.
+const CLIENT_BUILD_ID = (() => {
+  const commit = process.env.RENDER_GIT_COMMIT || process.env.SOURCE_VERSION || '';
+  if (/^[0-9a-f]{12,}$/i.test(commit)) return commit.slice(0, 12).toLowerCase(); // her örnekte aynı (dağıtım kimliği)
+  try {
+    const fs = require('fs');
+    const dir = path.join(__dirname, '..', 'client');
+    const h = crypto.createHash('sha1');
+    for (const f of fs.readdirSync(dir).filter((n) => /\.(js|css|html)$/.test(n)).sort()) {
+      // Satır sonu farkı (CRLF/LF) kimliği değiştirmesin
+      try { h.update(f); h.update(fs.readFileSync(path.join(dir, f), 'utf8').replace(/\r\n/g, '\n')); } catch (_) { /* okunamayan dosya atlanır */ }
+    }
+    return h.digest('hex').slice(0, 12);
+  } catch (_) { return 'unknown00000'; }
+})();
+app.get('/api/version', (req, res) => { res.setHeader('Cache-Control', 'no-store'); res.json({ build: CLIENT_BUILD_ID }); });
+
+// "Sorunu bildir": istemcide bir hata ekranı çıktığında kullanıcı teknik ayrıntıları (hata kodu, kısa hata metni,
+// sayfa yolu, tarayıcı) ve isteğe bağlı kısa bir not gönderir. Mesaj içeriği gönderilmez. Sunucu olaylarına yazılır
+// (yönetim paneli > Sunucu sağlığı); kayıt sayısı sınırlıdır, eskileri kendiliğinden silinir.
+const clientReportLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 10, keyFn: byIp, message: 'Çok fazla bildirim gönderdin. Biraz sonra tekrar dene.' });
+const clientReportAnonLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 3, keyFn: byIp, message: 'Çok fazla bildirim gönderdin. Biraz sonra tekrar dene.' });
+const CLIENT_REPORT_KEEP = 50; // sunucu olaylarının (yeniden başlama, bellek…) yerini kullanıcı bildirimleri doldurmasın
+app.post('/api/client-report', clientReportLimiter, (req, res, next) => {
+  if (getUserFromRequest(req)) return next();
+  return clientReportAnonLimiter(req, res, next);
+}, (req, res) => {
+  try {
+    const user = getUserFromRequest(req);
+    // Tek satır (sahte satır eklenemez), kontrol karakteri yok; URL'lerin sorgu/parça kısmı (davet/sıfırlama anahtarı olabilir) silinir.
+    const scrubUrls = (v) => String(v == null ? '' : v).replace(/(https?:\/\/[^\s?#]+)[?#][^\s)]*/g, '$1');
+    const line = (v, n) => scrubUrls(v).replace(/[\x00-\x1F\x7F]+/g, ' ').slice(0, n);
+    const multi = (v, n) => scrubUrls(v).replace(/[\x00-\x09\x0B-\x1F\x7F]+/g, ' ').slice(0, n);
+    const b = req.body || {};
+    const code = /^SR-[0-9A-F]{4}$/.test(String(b.code || '')) ? b.code : 'SR-?';
+    const note = line(b.note, 500).trim();
+    const detail = [
+      `kullanıcı: ${user ? user.id : 'oturumsuz'}`,
+      `sayfa: ${line(b.path, 120)}`,
+      `tarayıcı: ${line(req.headers['user-agent'], 200)}`,
+      `hata: ${line(b.message, 400)}`,
+      b.stack ? `yığın:\n${multi(b.stack, 1500)}` : ''
+    ].filter(Boolean).join('\n');
+    recordServerEvent('client_report', `${code}${note ? ' · ' + note : ''}`, detail, null);
+    db.prepare(`DELETE FROM server_events WHERE kind = 'client_report' AND id NOT IN (SELECT id FROM server_events WHERE kind = 'client_report' ORDER BY id DESC LIMIT ?)`).run(CLIENT_REPORT_KEEP);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('İstemci hata bildirimi kaydedilemedi:', error && error.message);
+    return res.status(500).json({ success: false, error: 'Bildirim kaydedilemedi.' });
+  }
+});
+
 // Kişisel veri taşıyan API yanıtları (dışa aktarım dahil) tarayıcı/proxy önbelleğine alınmaz.
 app.use('/api', (req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 
 // Güncellenen Kullanım Şartları'nı kabul etmemiş hesap (geçiş süresi bittikten sonra): yalnızca oturum bilgisi, kabul,
 // veri indirme, hesap silme ve çıkış çalışır; diğer istekler 428 'policy_required' alır. Oturumsuz istekler etkilenmez.
-const POLICY_OPEN_ROUTES = new Set(['GET /api/me', 'POST /api/policy/accept', 'GET /api/account/export', 'DELETE /api/account', 'POST /api/logout']);
+const POLICY_OPEN_ROUTES = new Set(['GET /api/me', 'POST /api/policy/accept', 'GET /api/account/export', 'DELETE /api/account', 'POST /api/logout', 'GET /api/version', 'POST /api/client-report']);
 const policyCache = new Map(); // userId -> { needs, at } (30 sn)
 function userNeedsPolicyNow(userId) {
   const c = policyCache.get(userId);

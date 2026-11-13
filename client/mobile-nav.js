@@ -55,7 +55,7 @@
         const q = ($('lc-msgs-q').value || '').trim().toLocaleLowerCase('tr');
         const rows = convs.filter((c) => !q || c.username.toLocaleLowerCase('tr').includes(q));
         if (!rows.length) {
-            list.innerHTML = `<div class="lc-msgs-empty">${q ? 'Eşleşen sohbet yok.' : 'Henüz özel sohbetin yok.<br><small>Arkadaşlar sekmesinden birine mesaj göndererek başlayabilirsin.</small>'}</div>`;
+            list.innerHTML = `<div class="lc-msgs-empty">${q ? 'Eşleşen sohbet yok.' : 'Burası biraz sessiz… 💬<br><small>Arkadaşlar sekmesinden birine merhaba de, sohbet başlasın.</small>'}</div>`;
             return;
         }
         list.innerHTML = rows.map((c) => {
@@ -120,7 +120,7 @@
         if (!list) return;
         const q = ($('fd-input').value || '').trim().toLowerCase();
         const friends = (window.__friendsCache || []).filter((f) => !q || f.username.toLowerCase().includes(q));
-        if (!friends.length) { list.innerHTML = `<div class="fd-empty">${q ? 'Eşleşen arkadaş yok.' : 'Henüz arkadaşın yok. Sağ üstteki + ile ekleyebilirsin.'}</div>`; return; }
+        if (!friends.length) { list.innerHTML = `<div class="fd-empty">${q ? 'Eşleşen arkadaş yok.' : 'Burası biraz sessiz… Sağ üstteki + ile bir arkadaş ekle, ortalık şenlensin.'}</div>`; return; }
         friends.sort((a, b) => Number(Boolean(b.online)) - Number(Boolean(a.online)) || a.username.localeCompare(b.username, 'tr'));
         list.innerHTML = friends.map((f) => {
             const color = typeof resolveUserColor === 'function' ? resolveUserColor(f.id, f.username, f.profile_color) : '#5b6cff';
