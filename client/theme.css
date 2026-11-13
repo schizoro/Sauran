@@ -3689,3 +3689,16 @@ body #dm-modal .dmreq-hide, body.lc #dm-modal .dm-call-btn.dmreq-hide { display:
 .voice-meter-fill { height: 100%; width: 100%; transform-origin: left center; transform: scaleX(0); background: linear-gradient(90deg, #2fd16a, #b8e05a 70%, #ffb14a); transition: transform .05s linear; }
 .voice-loopback { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: var(--text-secondary); }
 .voice-loopback[hidden] { display: none; }
+
+/* ── Giriş hassasiyeti ── */
+.voice-gate { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.07); }
+.voice-gate-row { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: #e8eef7; cursor: pointer; }
+.voice-gate-row input:disabled + span { opacity: .5; }
+.voice-gate-slider { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.voice-gate-slider[hidden] { display: none; }
+.voice-gate-slider input { flex: 1; accent-color: var(--accent); }
+.voice-gate-slider output { min-width: 54px; text-align: right; font-size: 12.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.voice-meter { position: relative; }
+.voice-meter-mark { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: #fff; border-radius: 2px; box-shadow: 0 0 0 1px rgba(0,0,0,.4); }
+.voice-meter-mark[hidden] { display: none; }
+.voice-meter-fill.below-gate { filter: grayscale(1) brightness(.7); }

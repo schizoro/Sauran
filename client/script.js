@@ -5135,6 +5135,10 @@ const I18N = {
     'vp-agc': { tr: 'Otomatik kazanç kontrolü', en: 'Automatic gain control' },
     'vp-agc-d': { tr: 'Mikrofon ses seviyesini temiz ve tutarlı tutacak şekilde otomatik ayarlar. Profesyonel mikrofonda kapatabilirsin.', en: 'Automatically keeps your mic level clean and consistent. You can turn it off with a pro mic.' },
     'vp-mic': { tr: 'Mikrofon', en: 'Microphone' },
+    'vp-gate': { tr: 'Giriş hassasiyetini elle ayarla', en: 'Set input sensitivity manually' },
+    'vp-gate-tag': { tr: 'deneysel', en: 'experimental' },
+    'vp-gate-d': { tr: 'Bu seviyenin altındaki sesler (klavye, nefes, uzaktaki konuşma) gönderilmez. Testi açıp konuş: çubuk çizginin sağına geçtiğinde sesin gider. Gelişmiş gürültü azaltma açıkken kullanılamaz.', en: 'Sound below this level (keyboard, breathing, distant talk) is not sent. Start the test and speak: your voice is sent when the bar passes the line. Not available with advanced noise suppression.' },
+    'vp-gate-failed': { tr: 'Giriş hassasiyeti bu cihazda başlatılamadı; normal mikrofonla devam ediliyor.', en: 'Input sensitivity could not start on this device; continuing with the normal microphone.' },
     'vp-test': { tr: 'Mikrofonu test et', en: 'Test microphone' },
     'vp-test-stop': { tr: 'Testi durdur', en: 'Stop test' },
     'vp-loop': { tr: 'Kendimi duy (kulaklık tak, yoksa cızırtı olur)', en: 'Hear myself (use headphones to avoid feedback)' },
@@ -18047,6 +18051,8 @@ let callCustomMicTrack = null; // getUserMedia ile kendimizin aldığı yedek iz
 
 function localAudioHealth() {
     if (!callFrame) return { ok: true, reason: 'no-call' };
+    // Giriş hassasiyeti açıkken iz "canlı" görünse de ses bağlamı askıdaysa ses gitmez
+    if (gateWanted() && noiseGate.track && !gateHealthy()) return { ok: false, reason: 'gate', track: noiseGate.track };
     const audio = callFrame.participants()?.local?.tracks?.audio;
     const track = audio?.persistentTrack || null;
     if (!callFrame.localAudio()) return { ok: false, reason: 'disabled', track };
@@ -18069,6 +18075,7 @@ function watchLocalAudioTrack() {
 
 // Kendi aldığımız izi (seçili cihazla) Daily'ye verir; seçili cihaz artık yoksa varsayılana düşer.
 async function reacquireLocalMic() {
+    if (gateWanted()) { noiseGate.key = ''; await syncGateInCall(); return; } // kapı zincirde yeniden kurulur
     const frame = callFrame;
     let stream = null;
     const wanted = audioSession.selectedInputId;
@@ -18284,19 +18291,98 @@ const noiseCancel = { supported: null, enabled: false, failedShown: false };
 // echo: yankı engelleme · agc: otomatik kazanç. Yalnızca bu cihazda saklanır. Varsayılan: standart + yankı + kazanç açık.
 // Gelişmiş modda tarayıcının bastırması KAPALI tutulur: ikisi üst üste binince ses robotik/pürüzlü olabiliyor.
 const VOICE_PROC_KEY = 'sauran_voice_proc';
-const voiceProc = { nc: 'standard', echo: true, agc: true, applied: false, lastBasic: 'standard' };
+const voiceProc = { nc: 'standard', echo: true, agc: true, applied: false, lastBasic: 'standard', gate: false, gateDb: -50 };
 try {
     const saved = JSON.parse(localStorage.getItem(VOICE_PROC_KEY) || 'null');
     if (saved && typeof saved === 'object') {
         if (['advanced', 'standard', 'off'].includes(saved.nc)) voiceProc.nc = saved.nc;
         if (typeof saved.echo === 'boolean') voiceProc.echo = saved.echo;
         if (typeof saved.agc === 'boolean') voiceProc.agc = saved.agc;
+        if (typeof saved.gate === 'boolean') voiceProc.gate = saved.gate;
+        if (Number.isFinite(saved.gateDb)) voiceProc.gateDb = Math.max(-80, Math.min(-20, saved.gateDb));
     } else if (localStorage.getItem(NC_STORAGE_KEY) === 'on') {
         voiceProc.nc = 'advanced'; // eski "gürültü engelleme açık" tercihi taşınır
     }
 } catch (_) { /* depolama yok → varsayılanlar */ }
 noiseCancel.enabled = voiceProc.nc === 'advanced';
-function saveVoiceProc() { try { localStorage.setItem(VOICE_PROC_KEY, JSON.stringify({ nc: voiceProc.nc, echo: voiceProc.echo, agc: voiceProc.agc })); } catch (_) { /* yoksay */ } }
+function saveVoiceProc() { try { localStorage.setItem(VOICE_PROC_KEY, JSON.stringify({ nc: voiceProc.nc, echo: voiceProc.echo, agc: voiceProc.agc, gate: voiceProc.gate, gateDb: voiceProc.gateDb })); } catch (_) { /* yoksay */ } }
+
+// ─── Giriş hassasiyeti (deneysel gürültü kapısı) ───
+// Mikrofon → AudioWorklet kapısı → işlenmiş iz → Daily (setInputDevicesAsync). Yalnızca açan kişide; Gelişmiş azaltmayla birlikte değil.
+// Başlatılamazsa (desteklenmeyen tarayıcı, askıdaki ses bağlamı) o oturumda normal mikrofona dönülür.
+var noiseGate = { ctx: null, raw: null, node: null, track: null, failed: false, key: '' };
+var noiseGateChain = Promise.resolve();
+function gateWanted() { return voiceProc.gate && voiceProc.nc !== 'advanced' && !noiseGate.failed; }
+// Kapının kurulduğu koşullar: bunlardan biri değişirse (mikrofon, yankı, kazanç, bastırma) kapı yeniden kurulur.
+function gateKey() { return JSON.stringify([audioSession.selectedInputId || audioSession.preferredInputId || '', voiceProc.echo, voiceProc.agc, voiceProc.nc]); }
+function teardownGate() {
+    try { noiseGate.raw && noiseGate.raw.getTracks().forEach((tr) => tr.stop()); } catch (_) {}
+    try { noiseGate.track && noiseGate.track.stop(); } catch (_) {}
+    try { noiseGate.ctx && noiseGate.ctx.close(); } catch (_) {}
+    noiseGate = { ctx: null, raw: null, node: null, track: null, failed: noiseGate.failed, key: '' };
+}
+function gateHealthy() {
+    return Boolean(noiseGate.track && noiseGate.track.readyState === 'live' && noiseGate.ctx && noiseGate.ctx.state === 'running');
+}
+async function startGateInCall() {
+    const frame = callFrame;
+    if (!frame || !window.AudioWorkletNode) throw new Error('AudioWorklet yok');
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new Ctx({ latencyHint: 'interactive' });
+    const key = gateKey();
+    let raw = null;
+    const abandon = () => { try { raw && raw.getTracks().forEach((tr) => tr.stop()); } catch (_) {} try { ctx.close(); } catch (_) {} };
+    try {
+        try { await ctx.resume(); } catch (_) {}
+        await ctx.audioWorklet.addModule('/noise-gate-worklet.js');
+        const device = audioSession.selectedInputId || audioSession.preferredInputId || null;
+        try { raw = await navigator.mediaDevices.getUserMedia({ audio: voiceAudioConstraints(device) }); }
+        catch (e) { if (!device) throw e; raw = await navigator.mediaDevices.getUserMedia({ audio: voiceAudioConstraints(null) }); }
+        if (ctx.state !== 'running') { try { await ctx.resume(); } catch (_) {} } // dokunuş dışında kurulduysa bir kez daha dene
+    } catch (e) { abandon(); throw e; }
+    if (frame !== callFrame) { abandon(); return; }
+    if (ctx.state !== 'running') { abandon(); throw new Error('ses bağlamı askıda'); }
+    const src = ctx.createMediaStreamSource(raw);
+    const node = new AudioWorkletNode(ctx, 'sauran-noise-gate', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
+    node.port.postMessage({ thresholdDb: voiceProc.gateDb });
+    const dest = ctx.createMediaStreamDestination();
+    src.connect(node).connect(dest);
+    const track = dest.stream.getAudioTracks()[0];
+    // iOS/Safari kesintisinde bağlam askıya alınırsa yeniden başlatılır (iz "canlı" görünse de ses sessiz kalmasın)
+    ctx.onstatechange = () => { if (ctx.state === 'suspended' || ctx.state === 'interrupted') ctx.resume().catch(() => { if (callFrame) applyNoiseCancellation(); }); };
+    teardownGate(); // eski kapı (varsa) yenisi hazır olunca kapatılır
+    noiseGate = { ctx, raw, node, track, failed: false, key };
+    await frame.setInputDevicesAsync({ audioSource: track });
+    if (frame === callFrame && !voiceUserMuted) frame.setLocalAudio(true);
+}
+// Görüşmede kapının durumunu tercihle eşitler. Tüm çağrılar TEK zincirde sırayla çalışır (aynı anda iki kurulum mikrofonu açık bırakmasın).
+function syncGateInCall() {
+    noiseGateChain = noiseGateChain.then(syncGateInCallNow).catch(() => {});
+    return noiseGateChain;
+}
+async function syncGateInCallNow() {
+    if (!callFrame) { teardownGate(); return; }
+    const frame = callFrame;
+    if (gateWanted()) {
+        if (gateHealthy() && noiseGate.key === gateKey()) { noiseGate.node?.port.postMessage({ thresholdDb: voiceProc.gateDb }); return; }
+        // Daily'nin işlemcisi (Gelişmiş'ten dönülünce) kapının izine binmesin
+        if (voiceProc.applied) { try { await frame.updateInputSettings({ audio: { processor: { type: 'none' } } }); } catch (_) {} }
+        try { await startGateInCall(); }
+        catch (e) {
+            if (frame !== callFrame) return; // görüşme bu arada bittiyse hata gösterilmez
+            console.warn('Giriş hassasiyeti başlatılamadı:', e?.message || e);
+            noiseGate.failed = true; teardownGate();
+            showToast(t('vp-gate-failed'));
+            try { await frame.setInputDevicesAsync({ audioDeviceId: audioSession.selectedInputId || 'default' }); } catch (_) {}
+            if (frame === callFrame && !voiceUserMuted) { try { frame.setLocalAudio(true); } catch (_) {} }
+        }
+    } else if (noiseGate.track) {
+        teardownGate();
+        try { await frame.setInputDevicesAsync({ audioDeviceId: audioSession.selectedInputId || 'default' }); } catch (_) {}
+        if (frame === callFrame && !voiceUserMuted) { try { frame.setLocalAudio(true); } catch (_) {} }
+        if (frame === callFrame) { voiceProc.applied = true; await applyVoiceProcessingNow().catch(() => {}); } // Daily izine kısıtlar/işlemci geri verilir
+    }
+}
 
 // getUserMedia / Daily kısıtları: seçili mikrofon + yankı/kazanç/bastırma (Daily kısıtları birleştirmez, hepsi birlikte verilir).
 function voiceAudioConstraints(deviceId) {
@@ -18317,11 +18403,12 @@ var vpPending = false;
 function applyNoiseCancellation() {
     if (vpPending) return vpQueue;
     vpPending = true;
-    vpQueue = vpQueue.then(() => { vpPending = false; return applyVoiceProcessingNow(); }).catch(() => { vpPending = false; });
+    vpQueue = vpQueue.then(() => { vpPending = false; return applyVoiceProcessingNow(); }).then(() => syncGateInCall()).catch(() => { vpPending = false; });
     return vpQueue;
 }
 async function applyVoiceProcessingNow() {
     if (!callFrame || typeof callFrame.updateInputSettings !== 'function') return;
+    if (gateWanted()) return; // kapı kendi izini veriyor; kısıtlar zaten getUserMedia'da uygulandı
     const wantAdvanced = voiceProc.nc === 'advanced' && noiseCancel.supported !== false;
     // Gelişmiş bu cihazda çalışmadıysa (yalnızca bu oturum için) standart bastırma kullanılır; kullanıcının seçimi değişmez.
     const effective = { ...voiceProc, nc: voiceProc.nc === 'advanced' && noiseCancel.supported === false ? 'standard' : voiceProc.nc };
@@ -18385,6 +18472,13 @@ function syncNoiseCancelUi() {
         if (b.dataset.nc === 'advanced') b.disabled = noiseCancel.supported === false;
     });
     const echo = document.getElementById('settings-echo-toggle'); if (echo) echo.checked = voiceProc.echo;
+    const gt = document.getElementById('settings-gate-toggle');
+    if (gt) { gt.checked = voiceProc.gate; gt.disabled = voiceProc.nc === 'advanced'; }
+    const gRow = document.getElementById('settings-gate-slider-row'); if (gRow) gRow.hidden = !voiceProc.gate || voiceProc.nc === 'advanced';
+    const gs = document.getElementById('settings-gate-slider'); if (gs) gs.value = String(voiceProc.gateDb);
+    const go = document.getElementById('settings-gate-out'); if (go) go.textContent = `${voiceProc.gateDb} dB`;
+    const mark = document.getElementById('settings-gate-mark');
+    if (mark) { mark.hidden = !voiceProc.gate || voiceProc.nc === 'advanced'; mark.style.left = `${Math.max(0, Math.min(100, (voiceProc.gateDb + 60) / 50 * 100)).toFixed(1)}%`; }
     const agc = document.getElementById('settings-agc-toggle'); if (agc) agc.checked = voiceProc.agc;
     const note = document.getElementById('settings-nc-note');
     if (note) note.style.display = noiseCancel.supported === false ? 'block' : 'none';
@@ -18459,7 +18553,11 @@ async function startMicTest() {
         const db = 20 * Math.log10(Math.sqrt(sum / buf.length) + 1e-8);      // ~ -60 (sessiz) … 0 (çok yüksek)
         const level = Math.min(1, Math.max(0, (db + 60) / 50));
         smooth = level > smooth ? level : smooth * 0.9 + level * 0.1;      // yükselişte hızlı, düşüşte yumuşak
-        if (fill) fill.style.transform = `scaleX(${smooth.toFixed(3)})`;
+        if (fill) {
+            fill.style.transform = `scaleX(${smooth.toFixed(3)})`;
+            if (voiceProc.gate && voiceProc.nc !== 'advanced') fill.classList.toggle('below-gate', db < voiceProc.gateDb);
+            else fill.classList.remove('below-gate');
+        }
         micTest.raf = requestAnimationFrame(tick);
     };
     tick();
@@ -18485,6 +18583,10 @@ async function fillMicSelect() {
     document.querySelectorAll('#settings-nc-seg [data-nc]').forEach((b) => b.addEventListener('click', () => setVoiceProc({ nc: b.dataset.nc })));
     document.getElementById('settings-echo-toggle')?.addEventListener('change', (e) => setVoiceProc({ echo: e.target.checked }));
     document.getElementById('settings-agc-toggle')?.addEventListener('change', (e) => setVoiceProc({ agc: e.target.checked }));
+    document.getElementById('settings-gate-toggle')?.addEventListener('change', (e) => { noiseGate.failed = false; setVoiceProc({ gate: e.target.checked }); });
+    const gs = document.getElementById('settings-gate-slider');
+    gs?.addEventListener('input', () => { voiceProc.gateDb = Number(gs.value); syncNoiseCancelUi(); noiseGate.node?.port.postMessage({ thresholdDb: voiceProc.gateDb }); });
+    gs?.addEventListener('change', () => saveVoiceProc());
     document.getElementById('settings-mic-test')?.addEventListener('click', () => { if (micTest.stream) stopMicTest(); else startMicTest().then(fillMicSelect); });
     document.getElementById('settings-mic-loop')?.addEventListener('change', (e) => {
         if (!micTest.stream) return;
@@ -18733,6 +18835,13 @@ async function chooseInputDevice(id) {
 
 async function switchInputDevice(id) {
     if (!callFrame) return;
+    if (gateWanted()) {
+        audioSession.selectedInputId = id === 'default' ? null : id;
+        noiseGate.key = ''; // zincirde yeni mikrofonla yeniden kurulur (doğrudan kapatma yarış yaratırdı)
+        await syncGateInCall();
+        updateAudioControls();
+        return;
+    }
     try {
         await callFrame.setInputDevicesAsync({ audioDeviceId: id });
         audioSession.selectedInputId = id === 'default' ? null : id;
@@ -18892,6 +19001,7 @@ function renderCallNetQuality(event) {
 
 function leaveCall() {
     voiceProc.applied = false; // sonraki görüşme Daily'nin varsayılan kısıtlarıyla başlar
+    teardownGate(); noiseGate.failed = false;
 
     renderCallNetQuality(null);
     voiceJoinInFlight = false; // süren bir oda katılımı varsa iptal edilmiş sayılır

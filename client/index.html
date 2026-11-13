@@ -2253,7 +2253,15 @@
                         <select id="settings-mic-select" class="voice-mic-select"><option value="">Varsayılan</option></select>
                         <div class="voice-mic-test">
                             <button type="button" id="settings-mic-test" class="voice-test-btn" data-i18n="vp-test">Mikrofonu test et</button>
-                            <div class="voice-meter" aria-hidden="true"><div class="voice-meter-fill" id="settings-mic-meter"></div></div>
+                            <div class="voice-meter" aria-hidden="true"><div class="voice-meter-fill" id="settings-mic-meter"></div><i class="voice-meter-mark" id="settings-gate-mark" hidden></i></div>
+                        </div>
+                        <div class="voice-gate">
+                            <label class="voice-gate-row"><input type="checkbox" id="settings-gate-toggle"> <span><b data-i18n="vp-gate">Giriş hassasiyetini elle ayarla</b> <span class="share-fps-tag" data-i18n="vp-gate-tag">deneysel</span></span></label>
+                            <div class="voice-gate-slider" id="settings-gate-slider-row" hidden>
+                                <input type="range" id="settings-gate-slider" min="-80" max="-20" step="1" aria-label="Hassasiyet eşiği">
+                                <output id="settings-gate-out">-50 dB</output>
+                            </div>
+                            <p class="settings-voice-hint" id="settings-gate-hint" data-i18n="vp-gate-d">Bu seviyenin altındaki sesler (klavye, nefes, uzaktaki konuşma) gönderilmez. Testi açıp konuş: çubuk çizginin sağına geçtiğinde sesin gider. Gelişmiş gürültü azaltma açıkken kullanılamaz.</p>
                         </div>
                         <label class="voice-loopback" id="settings-mic-loop-row" hidden><input type="checkbox" id="settings-mic-loop"> <span data-i18n="vp-loop">Kendimi duy (kulaklık tak, yoksa cızırtı olur)</span></label>
                         <p class="settings-voice-hint" id="settings-mic-test-hint" data-i18n="vp-test-d">Konuş; çubuk hareket ediyorsa mikrofonun çalışıyor. Seçtiğin yankı ve kazanç ayarları testte de uygulanır; gelişmiş gürültü azaltma yalnızca görüşmede devrede.</p>
