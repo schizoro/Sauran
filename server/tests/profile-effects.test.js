@@ -24,7 +24,7 @@ async function login(name) {
 
 test('Yeni sahne efektleri seçilebilir ve /api/me ile geri gelir', async () => {
   const c = await login('pfxplus');
-  for (const fx of ['catparty', 'neon', 'koi', 'astral', 'cherry']) {
+  for (const fx of ['catparty', 'neon', 'koi', 'astral', 'cherry', 'hellocat']) {
     const r = await c.patch('/api/profile/effect', { profile_effect: fx });
     assert.equal(r.status, 200);
     assert.equal(r.body.profile_effect, fx);

@@ -9831,7 +9831,7 @@ const ATMO_LABELS = {
     bubble_style: { default: 'Klasik', round: 'Yuvarlak', glass: 'Cam', outline: 'Çerçeveli', shadow: 'Gölgeli' },
     chat_theme: { classic: 'Klasik', soft: 'Yumuşak', contrast: 'Kontrast' },
     name_effect: { none: '', gradient: 'Gradyan', glow: 'Parıltı', rainbow: 'Gökkuşağı', shimmer: 'Işıltı' },
-    profile_effect: { none: '', sakura: 'Sakura', stagelights: 'Sahne ışıkları', flame: 'Alev', ink: 'Mürekkep', storm: 'Yıldırım', sweet: 'Tatlı', catparty: 'Kedi Partisi', neon: 'Neon Devre', koi: 'Ay Işığı Koileri', astral: 'Astral Mercek', cherry: 'Kiraz Bahçesi' }
+    profile_effect: { none: '', sakura: 'Sakura', stagelights: 'Sahne ışıkları', flame: 'Alev', ink: 'Mürekkep', storm: 'Yıldırım', sweet: 'Tatlı', catparty: 'Kedi Partisi', neon: 'Neon Devre', koi: 'Ay Işığı Koileri', astral: 'Astral Mercek', cherry: 'Kiraz Bahçesi', hellocat: 'Selam Kedi' }
 };
 function atmoChips(a) {
     const b = a.bundle || {};

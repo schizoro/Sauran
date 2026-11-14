@@ -29,8 +29,8 @@ function openSettingsAt(tab, sel) {
 const FEATURE_CATALOG = [
     // ── Profil efektleri (2026-11-14) ──
     { id: 'profile-scenes', since: '2026-11-14', highlight: true, icon: '🐱', title: 'Yeni profil efektleri',
-      desc: 'Kedi Partisi, Neon Devre, Ay Işığı Koileri, Astral Mercek ve Kiraz Bahçesi: profilin her açılışında kısa bir giriş, sonra sakin bir döngü.',
-      where: 'Özelleştirme › Profil efekti', keywords: ['profil efekti', 'kedi', 'neon', 'koi', 'astral', 'kiraz'],
+      desc: 'Kedi Partisi, Neon Devre, Ay Işığı Koileri, Astral Mercek, Kiraz Bahçesi ve Selam Kedi: profilin her açılışında kısa bir giriş.',
+      where: 'Özelleştirme › Profil efekti', keywords: ['profil efekti', 'kedi', 'neon', 'koi', 'astral', 'kiraz', 'selam', 'giris videosu'],
       open: () => (typeof openCustomizeCenter === 'function' ? openCustomizeCenter('look') : document.getElementById('plusfx-open-btn')?.click()) },
     // ── Kasım güncellemesi (2026-11-13) ──
     { id: 'settings-search', since: '2026-11-13', highlight: true, icon: '🔎', title: 'Ayarlarda arama',
