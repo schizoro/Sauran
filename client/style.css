@@ -347,6 +347,8 @@ html.reduce-motion .login-box { animation: none; } html.reduce-motion .login-par
 }
 .profile-about-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .about-me-count { font-size: 11px; color: #6b7280; }
+#about-me-input { resize: none; overflow-y: hidden; }   /* yükseklik fitAboutInput ile içeriğe göre, sınır kadar */
+.about-me-count.is-over { color: #f87171; }
 /* Hakkımda: güvenlik notu küçük ⓘ balonunda (alanın içinde değil) */
 .about-label-row { position: relative; display: flex; align-items: center; gap: 6px; }
 .about-label-row .profile-field-label { margin-bottom: 0; }

@@ -6246,10 +6246,11 @@ profileBtn.addEventListener(
         const aboutInput = document.getElementById('about-me-input');
         const aboutCount = document.getElementById('about-me-count');
         if (aboutInput) {
-            const max = currentUser?.plus_active ? 600 : 300;
+            const max = currentUser?.plus_active ? ABOUT_ME_MAX_PLUS : ABOUT_ME_MAX_FREE;
             aboutInput.maxLength = max;
             aboutInput.value = currentUser?.about_me || '';
-            if (aboutCount) aboutCount.textContent = `${aboutInput.value.length}/${max}`;
+            updateAboutCount(aboutInput);
+            requestAnimationFrame(() => fitAboutInput(aboutInput));   // modal görünür olunca genişlik belli olur
         }
         renderActivityControls();
 
@@ -6261,10 +6262,48 @@ profileBtn.addEventListener(
 // HAKKIMDA (kendi profilim)
 // =====================================================
 
-document.getElementById('about-me-input')?.addEventListener('input', (event) => {
+// Sınırlar sunucudakiyle aynı (server/db.js ABOUT_ME_MAX_*); sunucu da bu uzunlukta keser.
+const ABOUT_ME_MAX_FREE = 150;
+const ABOUT_ME_MAX_PLUS = 300;
+function updateAboutCount(input) {
     const count = document.getElementById('about-me-count');
-    if (count) count.textContent = `${event.target.value.length}/${event.target.maxLength}`;
+    if (!count) return;
+    count.textContent = `${input.value.length}/${input.maxLength}`;
+    // Eski (daha yüksek) sınırla yazılmış uzun metin: kaydedince sunucu sınıra keser, sayaç uyarır
+    count.classList.toggle('is-over', input.value.length > input.maxLength);
+}
+// Alan yazdıkça aşağı uzar ama en fazla sınır kadar metnin sığacağı yüksekliğe kadar; elle büyütme kapalı.
+// Tavan, o anki genişlikte sınır uzunluğundaki örnek metnin yüksekliğidir (telefonda daha uzun, masaüstünde daha kısa).
+const aboutCapCache = new Map();
+function aboutCapHeight(input) {
+    const key = `${input.clientWidth}:${input.maxLength}`;
+    if (aboutCapCache.has(key)) return aboutCapCache.get(key);
+    const probe = input.cloneNode(false);
+    probe.removeAttribute('id');
+    probe.style.cssText = `position:absolute;visibility:hidden;left:-9999px;top:0;height:0;min-height:0;max-height:none;width:${input.offsetWidth}px`;
+    probe.value = 'Merhaba, oyun oynamayı ve müzik dinlemeyi seviyorum. '.repeat(20).slice(0, input.maxLength);
+    input.parentNode.appendChild(probe);
+    // Gerçek metin kelime kırılımına göre örnekten 1-2 satır uzun sürebilir → 2 satır pay (yalnızca çok satır atlamalı metin tavana değer)
+    const cs = getComputedStyle(probe);
+    const line = parseFloat(cs.lineHeight) || (parseFloat(cs.fontSize) || 13) * 1.3;
+    const cap = probe.scrollHeight + (input.offsetHeight - input.clientHeight) + Math.ceil(line * 2);   // kenarlık dahil
+    probe.remove();
+    if (input.clientWidth > 0) aboutCapCache.set(key, cap);
+    return cap;
+}
+function fitAboutInput(input) {
+    if (!input || !input.offsetParent) return;
+    const cap = aboutCapHeight(input);
+    input.style.height = 'auto';
+    const need = input.scrollHeight + (input.offsetHeight - input.clientHeight);
+    input.style.height = `${Math.min(need, cap)}px`;
+    input.style.overflowY = need > cap ? 'auto' : 'hidden';   // çok satır atlamalı metin tavanda kaydırılır
+}
+document.getElementById('about-me-input')?.addEventListener('input', (event) => {
+    updateAboutCount(event.target);
+    fitAboutInput(event.target);
 });
+window.addEventListener('resize', () => fitAboutInput(document.getElementById('about-me-input')));
 
 // Sauran Plus: Sohbet Teması seçici — Plus olmayanlar seçenekleri görür ama seçemez, "yakında" değil
 // "Plus gerekli" ipucu görürler (özellik gerçekten var, sadece abonelik şartlı).
@@ -10621,7 +10660,7 @@ document.getElementById('inventory-open-btn')?.addEventListener('click', () => {
     document.getElementById('inventory-modal').style.display = 'flex';
     loadInventoryModal();
 });
-const SUBS_PLUS_ITEMS = `<li><span class="subs-ic">✦</span><span>Mor <b>PLUS</b> rozeti ve parıltılı isim kartı</span></li><li><span class="subs-ic">🪙</span><span>Her ay <b>100 Sauran Coin</b></span></li><li><span class="subs-ic">📎</span><span><b>50 MB</b> dosya/video yükleme <small>(ücretsiz: 25 MB)</small></span></li><li><span class="subs-ic">📝</span><span>Hakkımda alanı <b>600 karakter</b> <small>(ücretsiz: 300)</small></span></li><li><span class="subs-ic">🎨</span><span>Sohbet teması, <b>profil teması</b> ve <b>profil efekti</b></span></li><li><span class="subs-ic">🔤</span><span><b>İsim efektleri</b> (gradyan, parıltı, gökkuşağı, ışıltı)</span></li><li><span class="subs-ic">🖼️</span><span><b>Animasyonlu (GIF)</b> kapak fotoğrafı</span></li><li><span class="subs-ic">💬</span><span><b>Mesaj balonu stilleri</b> (yuvarlak, cam, çerçeve, gölge)</span></li><li><span class="subs-ic">🎙️</span><span>Sesli odada özel konuşma göstergesi</span></li><li><span class="subs-ic">🖥️</span><span>Yüksek kalite ekran paylaşımı</span></li><li><span class="subs-ic">🌌</span><span><b>Atmosphere</b> paketleri <small>(görsel + ses + efekt; Plus paketleri)</small></span></li><li><span class="subs-ic">🏠</span><span>Lobi için <b>tema</b> ve <b>özel arka plan görseli</b></span></li><li><span class="subs-ic">🧸</span><span><b>26 hareketli çıkartma</b></span></li><li><span class="subs-ic">😍</span><span><b>12 ek tepki emojisi</b></span></li><li><span class="subs-ic">👑</span><span>Lobi sahibi olarak Keşfet'te Plus rozeti</span></li>`;
+const SUBS_PLUS_ITEMS = `<li><span class="subs-ic">✦</span><span>Mor <b>PLUS</b> rozeti ve parıltılı isim kartı</span></li><li><span class="subs-ic">🪙</span><span>Her ay <b>100 Sauran Coin</b></span></li><li><span class="subs-ic">📎</span><span><b>50 MB</b> dosya/video yükleme <small>(ücretsiz: 25 MB)</small></span></li><li><span class="subs-ic">📝</span><span>Hakkımda alanı <b>300 karakter</b> <small>(ücretsiz: 150)</small></span></li><li><span class="subs-ic">🎨</span><span>Sohbet teması, <b>profil teması</b> ve <b>profil efekti</b></span></li><li><span class="subs-ic">🔤</span><span><b>İsim efektleri</b> (gradyan, parıltı, gökkuşağı, ışıltı)</span></li><li><span class="subs-ic">🖼️</span><span><b>Animasyonlu (GIF)</b> kapak fotoğrafı</span></li><li><span class="subs-ic">💬</span><span><b>Mesaj balonu stilleri</b> (yuvarlak, cam, çerçeve, gölge)</span></li><li><span class="subs-ic">🎙️</span><span>Sesli odada özel konuşma göstergesi</span></li><li><span class="subs-ic">🖥️</span><span>Yüksek kalite ekran paylaşımı</span></li><li><span class="subs-ic">🌌</span><span><b>Atmosphere</b> paketleri <small>(görsel + ses + efekt; Plus paketleri)</small></span></li><li><span class="subs-ic">🏠</span><span>Lobi için <b>tema</b> ve <b>özel arka plan görseli</b></span></li><li><span class="subs-ic">🧸</span><span><b>26 hareketli çıkartma</b></span></li><li><span class="subs-ic">😍</span><span><b>12 ek tepki emojisi</b></span></li><li><span class="subs-ic">👑</span><span>Lobi sahibi olarak Keşfet'te Plus rozeti</span></li>`;
 
 function subsStatusHtml(state, otherActive) {
     if (state.active) {

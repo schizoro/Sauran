@@ -3193,8 +3193,8 @@ function setHubAtmosphere(hubId, userId, key) {
   return { success: true, atmosphere: atmo.key, theme: atmo.hub_theme || 'default' };
 }
 
-const ABOUT_ME_MAX_FREE = 300;
-const ABOUT_ME_MAX_PLUS = 600;
+const ABOUT_ME_MAX_FREE = 150;
+const ABOUT_ME_MAX_PLUS = 300;
 
 function updateAboutMe(userId, aboutMe) {
   try {
