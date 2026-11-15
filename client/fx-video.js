@@ -8,7 +8,8 @@
    - Dosyalar yalnızca efekt seçili bir profil açılınca indirilir.
    Bağlantı: fx-scenes.js gibi applyProfileEffect'i sarar; script.js, fx-pack.js ve fx-scenes.js'ten sonra yüklenir.
    - Döngü (loop, isteğe bağlı): giriş önde bir kez oynarken kartın ARKASINDA tam sahne bir MP4 sürekli döner
-     (Discord'daki giriş + döngü). MP4/H.264 her cihazda donanımla çözülür; saydamlık gerekmez. Kendi parlaklık zarfı
+     (Discord'daki giriş + döngü). İsteğe bağlı introEnd: dosyanın başı (0 → introEnd) profil her açıldığında
+     bir kez oynar, sonra yalnızca introEnd → son arası döner (tek MP4 ile giriş + sakin döngü). MP4/H.264 her cihazda donanımla çözülür; saydamlık gerekmez. Kendi parlaklık zarfı
      vardır (sakinken soluk, sahnedeki şimşek/enerji anlarında parlak) ve videonun zamanına bağlı kalır.
      Kart görünmezken / sekme gizliyken durur; hareketi azaltta sabit kapak (poster) görünür.
    Yeni video eklemek: VIDEOS'a kayıt + client/fx/ altına .webm/.webp/-poster.webp + sunucu izin listesi (server/db.js PROFILE_EFFECTS). */
@@ -25,7 +26,15 @@
         violetgaze: { name: 'Mor Bakış',
             loop: { src: '/fx/mor-bakis.mp4', poster: '/fx/mor-bakis-poster.webp', dur: 8.75, pos: 'center 30%', zoom: 1.4, origin: '0% 51%', reveal: 1.4,   // mor göz avatarın/düğmenin altında kalmasın: adın sağına gelir
                 // yumuşak nefes: sert sıçrama yok (kullanıcı geri bildirimi 2026-11-15)
-                glow: [[0, 0.55], [4.375, 0.72], [8.75, 0.55]] } }
+                glow: [[0, 0.55], [4.375, 0.72], [8.75, 0.55]] } },
+        // Hilal Mührü: kullanıcının Kling ile ürettiği özgün karakter (fx-studio/video/hilal-kaynak.mp4, 6,6 sn).
+        // Giriş (0–6,6 sn): el yüzden iner, göz yanar, avuçta hilal oluşur, yumruk kapanır. Döngü (6,6–10,47 sn): son sakin
+        // bölüm ileri + geri ve yarı hızda (saç/göz parıltısı), giriş sonundan dikişsiz devam eder.
+        crescent: { name: 'Hilal Mührü',
+            loop: { src: '/fx/hilal.mp4', poster: '/fx/hilal-poster.webp', dur: 10.467, introEnd: 6.6, pos: 'center 100%', reveal: 0.6,
+                // giriş: sakin → göz yanınca parlak → hilal anında tam → yumrukla yumuşakça söner
+                introGlow: [[0, 0.5], [1.4, 0.55], [2.2, 0.85], [3.4, 0.95], [5.0, 0.95], [6.0, 0.7], [6.6, 0.6]],
+                glow: [[0, 0.6], [1.93, 0.68], [3.867, 0.6]] } }
     };
     const has = (k) => Object.prototype.hasOwnProperty.call(VIDEOS, k);
     const ua = navigator.userAgent || '';
@@ -120,11 +129,22 @@
             if (document.hidden) return;
             if (!b.vid) {
                 const vid = document.createElement('video');
-                vid.className = 'pfxv-bgv'; vid.muted = true; vid.defaultMuted = true; vid.playsInline = true; vid.loop = true;
+                vid.className = 'pfxv-bgv'; vid.muted = true; vid.defaultMuted = true; vid.playsInline = true; vid.loop = !L.introEnd;
                 vid.setAttribute('playsinline', ''); vid.setAttribute('muted', ''); vid.preload = 'metadata'; vid.disablePictureInPicture = true;
                 frame(vid, L);   // poster özniteliği yok: ilk karede parlak kapak görünüp sonra kararmasın (reveal ile karanlıktan açılır)
                 // Parlaklık zarfı videonun kendi zamanına bağlı: oynamaya başlayınca ve her başa dönüşte eşitlenir
-                const sync = () => { if (b.anim) b.anim.currentTime = (vid.currentTime % L.dur) * 1000; };
+                const start = L.introEnd || 0, span = L.dur - start;
+                const sync = () => {
+                    const t = vid.currentTime;
+                    if (b.intro && t < start) { b.intro.currentTime = t * 1000; b.intro.play(); }
+                    else if (b.intro) b.intro.cancel();      // giriş bitti: döngü zarfı devralır
+                    if (b.anim) b.anim.currentTime = (Math.max(0, t - start) % span) * 1000;
+                };
+                // Giriş + döngü: dosya sonuna gelince döngü başına (introEnd) atlar; giriş bir daha ancak profil yeniden açılınca oynar
+                if (start) vid.addEventListener('ended', () => {
+                    try { vid.currentTime = start; } catch (_) {}
+                    const p2 = vid.play(); if (p2 && p2.catch) p2.catch(() => {});
+                });
                 vid.addEventListener('playing', () => {
                     if (b.reveal && L.reveal && typeof vid.animate === 'function') {   // karanlıktan yumuşakça belirme
                         vid.animate([{ opacity: 0 }, { opacity: 1 }], { duration: L.reveal * 1000, easing: 'ease-out' });
@@ -132,7 +152,9 @@
                     vid.style.opacity = '';
                     b.reveal = false;
                     if (!b.anim && typeof b.layer.animate === 'function') {
-                        b.anim = b.layer.animate(L.glow.map(([t, o]) => ({ offset: Math.min(1, t / L.dur), opacity: o })), { duration: L.dur * 1000, iterations: Infinity });
+                        b.anim = b.layer.animate(L.glow.map(([t, o]) => ({ offset: Math.min(1, t / span), opacity: o })), { duration: span * 1000, iterations: Infinity });
+                        // giriş zarfı döngününkinden sonra oluşturulur: oynarken onu ezer, bitince (fill yok) döngü zarfı görünür
+                        if (start && L.introGlow) b.intro = b.layer.animate(L.introGlow.map(([t, o]) => ({ offset: Math.min(1, t / start), opacity: o })), { duration: start * 1000 });
                     }
                     if (b.anim) b.anim.play();
                     sync();
@@ -158,6 +180,7 @@
             const b = inst.bg; if (!b || !b.vid) return;
             try { b.vid.pause(); } catch (_) {}
             if (b.anim) b.anim.pause();
+            if (b.intro) b.intro.pause();
         };
 
         inst.clear = () => {
@@ -235,6 +258,7 @@
         if (inst.bg) {
             if (inst.bg.vid) { try { inst.bg.vid.removeAttribute('src'); inst.bg.vid.load(); } catch (_) {} }
             if (inst.bg.anim) inst.bg.anim.cancel();
+            if (inst.bg.intro) inst.bg.intro.cancel();
             inst.bg.layer.remove();
         }
         inst.unscroll();

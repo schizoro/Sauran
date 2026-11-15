@@ -9,7 +9,7 @@
 
 // Sürümler: en yenisi en üstte. Yenilikler penceresi, kullanıcının görmediği en yeni sürümü gösterir.
 const RELEASES = [
-    { id: '2026-11-15', title: 'Mor Bakış', date: '15 Kasım 2026' },
+    { id: '2026-11-15', title: 'Mor Bakış ve Hilal Mührü', date: '15 Kasım 2026' },
     { id: '2026-11-14', title: 'Yeni profil efektleri', date: '14 Kasım 2026' },
     { id: '2026-11-13', title: 'Kasım güncellemesi', date: '13 Kasım 2026' }
 ];
@@ -28,9 +28,9 @@ function openSettingsAt(tab, sel) {
 // id: küçük harf + tire (sunucu bu biçimi kabul eder). where: kullanıcıya gösterilen konum.
 // highlight: Yenilikler penceresinde büyük kart olarak öne çıkar (en fazla 6).
 const FEATURE_CATALOG = [
-    { id: 'violetgaze-bg', since: '2026-11-15', highlight: true, icon: '🔮', title: 'Mor Bakış profil efekti',
-      desc: 'Profilin açılınca kartın arkasında gümüş saçlı bir karakter karanlıktan belirir; mor gözü parlar, saçları hafifçe dalgalanır.',
-      where: 'Özelleştirme › Profil efekti', keywords: ['mor bakis', 'video arka plan', 'profil efekti', 'anime'],
+    { id: 'violetgaze-bg', since: '2026-11-15', highlight: true, icon: '🔮', title: 'Mor Bakış ve Hilal Mührü profil efektleri',
+      desc: 'Profilin açılınca kartın arkasında gümüş saçlı bir karakter belirir. Hilal Mührü\'nde gözü yanar, avucunda mor bir hilal oluşur.',
+      where: 'Özelleştirme › Profil efekti', keywords: ['mor bakis', 'hilal muhru', 'video arka plan', 'profil efekti', 'anime'],
       open: () => (typeof openCustomizeCenter === 'function' ? openCustomizeCenter('look') : document.getElementById('plusfx-open-btn')?.click()) },
     // ── Profil efektleri (2026-11-14) ──
     { id: 'profile-scenes', since: '2026-11-14', highlight: true, icon: '🐱', title: 'Yeni profil efektleri',
