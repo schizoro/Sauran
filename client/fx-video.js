@@ -7,6 +7,10 @@
    - Hareketi azalt açıksa oynatılmaz. Mağaza küçük resminde sabit kapak görseli (poster) gösterilir.
    - Dosyalar yalnızca efekt seçili bir profil açılınca indirilir.
    Bağlantı: fx-scenes.js gibi applyProfileEffect'i sarar; script.js, fx-pack.js ve fx-scenes.js'ten sonra yüklenir.
+   - Döngü (loop, isteğe bağlı): giriş önde bir kez oynarken kartın ARKASINDA tam sahne bir MP4 sürekli döner
+     (Discord'daki giriş + döngü). MP4/H.264 her cihazda donanımla çözülür; saydamlık gerekmez. Kendi parlaklık zarfı
+     vardır (sakinken soluk, sahnedeki şimşek/enerji anlarında parlak) ve videonun zamanına bağlı kalır.
+     Kart görünmezken / sekme gizliyken durur; hareketi azaltta sabit kapak (poster) görünür.
    Yeni video eklemek: VIDEOS'a kayıt + client/fx/ altına .webm/.webp/-poster.webp + sunucu izin listesi (server/db.js PROFILE_EFFECTS). */
 (function () {
     'use strict';
@@ -14,7 +18,14 @@
     // behind: true → animasyon kartın içeriğinin ARKASINDA oynar (butonlar/yazılar hep üstte ve okunur), false → önünde.
     const VIDEOS = {
         hellocat: { name: 'Selam Kedi', base: '/fx/selam-kedi', dur: 3.0, size: 0.78, anchor: 'bottom', behind: false,   // kullanıcı tercihi (2026-11-14): kedi butonların önünde
-            glow: [[0, 0.35], [0.3, 0.35], [0.55, 1], [2.3, 1], [2.75, 0.35], [3.0, 0]] }
+            glow: [[0, 0.35], [0.3, 0.35], [0.55, 1], [2.3, 1], [2.75, 0.35], [3.0, 0]] },
+        // Mor Bakış: kullanıcının Kling ile ürettiği özgün karakter (fx-studio/video/kling-arkaplan-1.mov).
+        // Yalnızca döngü (giriş videosu yok). 1,6 sn sonrası ileri + geri (ping-pong) birleştirildi: başa dönüşte dikiş/atlama yok.
+        // Videodaki karanlıktan açılma, reveal ile (ilk açılışta 0 → tam, yumuşak) yapılır; böylece her turda kararmaz.
+        violetgaze: { name: 'Mor Bakış',
+            loop: { src: '/fx/mor-bakis.mp4', poster: '/fx/mor-bakis-poster.webp', dur: 8.75, pos: 'center 30%', zoom: 1.4, origin: '0% 51%', reveal: 1.4,   // mor göz avatarın/düğmenin altında kalmasın: adın sağına gelir
+                // yumuşak nefes: sert sıçrama yok (kullanıcı geri bildirimi 2026-11-15)
+                glow: [[0, 0.55], [4.375, 0.72], [8.75, 0.55]] } }
     };
     const has = (k) => Object.prototype.hasOwnProperty.call(VIDEOS, k);
     const ua = navigator.userAgent || '';
@@ -41,6 +52,19 @@
         if (v.anchor === 'center') el.style.top = '50%', el.style.transform = 'translateY(-50%)';
         else el.style.bottom = '0';
     }
+    // Döngü sahnesinin kadrajı: pos = object-position; zoom + origin = yakınlaştırıp önemli noktayı (ör. göz) boş alana taşır
+    function frame(el, L) {
+        el.style.objectPosition = L.pos || 'center';
+        if (L.zoom) { el.style.transform = 'scale(' + L.zoom + ')'; el.style.transformOrigin = L.origin || 'center'; }
+    }
+    function showPoster(b, L) {
+        if (b.vid) b.vid.style.display = 'none';
+        if (!b.img) {
+            const img = new Image(); img.alt = ''; img.decoding = 'async'; img.src = L.poster; img.className = 'pfxv-bgv';
+            frame(img, L); b.layer.insertBefore(img, b.layer.firstChild); b.img = img;
+        }
+        b.img.style.display = '';
+    }
     function glow(el, v) {
         if (typeof el.animate !== 'function') return null;
         const kf = v.glow.map(([t, o]) => ({ offset: Math.min(1, t / v.dur), opacity: o }));
@@ -52,21 +76,89 @@
         const layer = document.createElement('div');
         layer.className = 'pfxv' + (v.behind ? ' pfxv-behind' : '');
         layer.setAttribute('aria-hidden', 'true');
-        box.appendChild(layer);
+        if (v.base) box.appendChild(layer);
         box.classList.add('has-pfxc');
         if (v.behind) box.classList.add('has-pfxv-behind');
         // Kart kendi içinde kayıyorsa (uzun profil) katman görünen alana sabitlenir (fx-scenes ile aynı)
-        const onScroll = () => { layer.style.transform = box.scrollTop ? `translateY(${box.scrollTop}px)` : ''; };
+        const onScroll = () => {
+            const tr = box.scrollTop ? `translateY(${box.scrollTop}px)` : '';
+            layer.style.transform = tr;
+            if (inst.bg) inst.bg.layer.style.transform = tr;
+        };
         box.addEventListener('scroll', onScroll, { passive: true });
-        onScroll();
-        const inst = { box, key, v, layer, media: null, timer: 0, url: '', visible: false, playId: 0, unscroll: () => box.removeEventListener('scroll', onScroll) };
+        const inst = { box, key, v, layer, media: null, timer: 0, url: '', visible: false, playId: 0, bg: null, unscroll: () => box.removeEventListener('scroll', onScroll) };
+        const thumb = box.classList.contains('st-prof');
 
-        if (box.classList.contains('st-prof')) {        // mağaza küçük resmi: sabit kapak
+        // Döngü katmanı: içeriğin arkasında, kartın zemininin üstünde
+        if (v.loop) {
+            const L = v.loop;
+            box.classList.add('has-pfxv-behind');
+            const bgl = document.createElement('div');
+            bgl.className = 'pfxv pfxv-behind pfxv-bg';
+            bgl.setAttribute('aria-hidden', 'true');
+            bgl.style.opacity = String(L.glow[0][1]);
+            box.insertBefore(bgl, box.firstChild);
+            inst.bg = { layer: bgl, vid: null, img: null, anim: null, last: 0 };
+            if (thumb || reduced()) showPoster(inst.bg, L);
+        }
+        onScroll();
+
+        if (thumb) {        // mağaza küçük resmi: sabit kapak
+            if (v.base) {
             const img = new Image(); img.alt = ''; img.decoding = 'async'; img.src = v.base + '-poster.webp'; img.className = 'pfxv-media';
             place(img, v); layer.appendChild(img);
+            }
             all.add(inst); byBox.set(box, inst);
             return inst;
         }
+
+        // restart: profil yeni açıldı → baştan + karanlıktan belirme. false: sekmeye dönüş / ayar değişimi → kaldığı yerden.
+        inst.startBg = (restart) => {
+            const b = inst.bg; if (!b) return;
+            const L = v.loop;
+            if (reduced()) { inst.stopBg(); showPoster(b, L); return; }   // hareketi azalt: sabit kapak
+            if (document.hidden) return;
+            if (!b.vid) {
+                const vid = document.createElement('video');
+                vid.className = 'pfxv-bgv'; vid.muted = true; vid.defaultMuted = true; vid.playsInline = true; vid.loop = true;
+                vid.setAttribute('playsinline', ''); vid.setAttribute('muted', ''); vid.preload = 'metadata'; vid.disablePictureInPicture = true;
+                frame(vid, L);   // poster özniteliği yok: ilk karede parlak kapak görünüp sonra kararmasın (reveal ile karanlıktan açılır)
+                // Parlaklık zarfı videonun kendi zamanına bağlı: oynamaya başlayınca ve her başa dönüşte eşitlenir
+                const sync = () => { if (b.anim) b.anim.currentTime = (vid.currentTime % L.dur) * 1000; };
+                vid.addEventListener('playing', () => {
+                    if (b.reveal && L.reveal && typeof vid.animate === 'function') {   // karanlıktan yumuşakça belirme
+                        vid.animate([{ opacity: 0 }, { opacity: 1 }], { duration: L.reveal * 1000, easing: 'ease-out' });
+                    }
+                    vid.style.opacity = '';
+                    b.reveal = false;
+                    if (!b.anim && typeof b.layer.animate === 'function') {
+                        b.anim = b.layer.animate(L.glow.map(([t, o]) => ({ offset: Math.min(1, t / L.dur), opacity: o })), { duration: L.dur * 1000, iterations: Infinity });
+                    }
+                    if (b.anim) b.anim.play();
+                    sync();
+                });
+                vid.addEventListener('timeupdate', () => { if (vid.currentTime < b.last) sync(); b.last = vid.currentTime; });
+                vid.src = L.src;
+                b.vid = vid; b.layer.appendChild(vid);
+            }
+            b.vid.style.display = '';
+            if (b.img) b.img.style.display = 'none';
+            if (restart || b.vid.paused && !b.vid.currentTime) {
+                try { b.vid.currentTime = 0; } catch (_) {}
+                b.last = 0; b.reveal = true;
+                if (L.reveal) b.vid.style.opacity = '0';   // 'playing' gelene kadar karanlık
+            }
+            const p = b.vid.play();
+            if (p && p.catch) p.catch(() => {          // ör. iPhone düşük güç modu: video yerine sabit kapak
+                if (!inst.visible || reduced()) return;
+                b.vid.style.display = 'none'; showPoster(b, L);
+            });
+        };
+        inst.stopBg = () => {
+            const b = inst.bg; if (!b || !b.vid) return;
+            try { b.vid.pause(); } catch (_) {}
+            if (b.anim) b.anim.pause();
+        };
 
         inst.clear = () => {
             inst.playId++;
@@ -119,7 +211,7 @@
         }
         inst.play = () => {
             inst.clear();
-            if (reduced() || document.hidden) return;
+            if (!v.base || reduced() || document.hidden) return;   // yalnızca döngülü efektte giriş yok
             const id = inst.playId;
             // Dosya 2,5 sn içinde oynamaya başlamazsa (yavaş ağ) vazgeç: kedi profil açıldıktan çok sonra beklenmedik anda çıkmasın
             inst.deadline = setTimeout(() => { inst.deadline = 0; if (!inst.timer) finish(id); }, 2500);
@@ -128,10 +220,10 @@
         // Kart görünür olunca (profil açıldı) baştan oynar; görünmez olunca (kapandı) durur ve temizlenir.
         inst.io = 'IntersectionObserver' in window ? new IntersectionObserver((es) => {
             const vis = es[es.length - 1].isIntersecting;
-            if (vis && !inst.visible) { inst.visible = true; inst.play(); }
-            else if (!vis && inst.visible) { inst.visible = false; inst.clear(); if (!box.isConnected) destroy(inst); }
+            if (vis && !inst.visible) { inst.visible = true; inst.play(); inst.startBg(true); }
+            else if (!vis && inst.visible) { inst.visible = false; inst.clear(); inst.stopBg(); if (!box.isConnected) destroy(inst); }
         }) : null;
-        if (inst.io) inst.io.observe(box); else { inst.visible = true; inst.play(); }
+        if (inst.io) inst.io.observe(box); else { inst.visible = true; inst.play(); inst.startBg(true); }
         all.add(inst); byBox.set(box, inst);
         return inst;
     }
@@ -139,6 +231,12 @@
         if (inst.dead) return;
         inst.dead = true;
         if (inst.clear) inst.clear();
+        if (inst.stopBg) inst.stopBg();
+        if (inst.bg) {
+            if (inst.bg.vid) { try { inst.bg.vid.removeAttribute('src'); inst.bg.vid.load(); } catch (_) {} }
+            if (inst.bg.anim) inst.bg.anim.cancel();
+            inst.bg.layer.remove();
+        }
         inst.unscroll();
         if (inst.io) inst.io.disconnect();
         inst.layer.remove();
@@ -153,10 +251,24 @@
         if (has(effect)) mount(box, effect);
         all.forEach((i) => { if (!i.box.isConnected) destroy(i); });
     }
-    document.addEventListener('visibilitychange', () => { if (document.hidden) all.forEach((i) => i.clear && i.clear()); });
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) all.forEach((i) => { if (i.clear) i.clear(); if (i.stopBg) i.stopBg(); });
+        else all.forEach((i) => { if (i.visible && i.startBg) i.startBg(false); });
+    });
+    // Hareketi azalt açık profil kartındayken değişirse döngü hemen durur (kapak) / kaldığı yerden sürer
+    const onMotionPref = () => all.forEach((i) => { if (i.visible && i.startBg) i.startBg(false); });
+    if (reducedMq && reducedMq.addEventListener) reducedMq.addEventListener('change', onMotionPref);
+    if ('MutationObserver' in window) {
+        let was = document.documentElement.classList.contains('reduce-motion');
+        new MutationObserver(() => {
+            const now = document.documentElement.classList.contains('reduce-motion');
+            if (now !== was) { was = now; onMotionPref(); }
+        }).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    }
 
     window.SauranVideoFx = { VIDEOS, applyVideo, format: canWebm ? 'webm' : 'webp', size: () => all.size,
-        state: () => [...all].map((i) => ({ key: i.key, visible: i.visible, playing: Boolean(i.media), tag: i.media && i.media.tagName })) };
+        state: () => [...all].map((i) => ({ key: i.key, visible: i.visible, playing: Boolean(i.media), tag: i.media && i.media.tagName,
+            bg: i.bg ? { video: Boolean(i.bg.vid), paused: i.bg.vid ? i.bg.vid.paused : null, t: i.bg.vid ? +i.bg.vid.currentTime.toFixed(2) : null, op: +getComputedStyle(i.bg.layer).opacity } : null })) };
 
     const orig = window.applyProfileEffect;
     if (typeof orig === 'function') {
