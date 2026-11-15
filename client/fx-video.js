@@ -28,13 +28,16 @@
                 // yumuşak nefes: sert sıçrama yok (kullanıcı geri bildirimi 2026-11-15)
                 glow: [[0, 0.55], [4.375, 0.72], [8.75, 0.55]] } },
         // Hilal Mührü: kullanıcının Kling ile ürettiği özgün karakter (fx-studio/video/hilal-kaynak.mp4, 6,6 sn).
-        // Giriş (0–6,6 sn): el yüzden iner, göz yanar, avuçta hilal oluşur, yumruk kapanır. Döngü (6,6–10,47 sn): son sakin
-        // bölüm ileri + geri ve yarı hızda (saç/göz parıltısı), giriş sonundan dikişsiz devam eder.
+        // İlk açılış: el yüzden iner, göz yanar, avuçta hilal oluşur, yumruk kapanır.
         crescent: { name: 'Hilal Mührü',
-            loop: { src: '/fx/hilal.mp4', poster: '/fx/hilal-poster.webp', dur: 10.467, introEnd: 6.6, pos: 'center 100%', reveal: 0.6,
-                // giriş: sakin → göz yanınca parlak → hilal anında tam → yumrukla yumuşakça söner
-                introGlow: [[0, 0.5], [1.4, 0.55], [2.2, 0.85], [3.4, 0.95], [5.0, 0.95], [6.0, 0.7], [6.6, 0.6]],
-                glow: [[0, 0.6], [1.93, 0.68], [3.867, 0.6]] } }
+            // Kullanıcı isteği (2026-11-15): yüzü kapatan el yalnızca ilk açılışta; sonra yumruk etrafındaki enerji sürerken
+            // ~7 sn'de bir el açılır, hilal şimşeklerle parlar, el yeniden kapanır. Kaynakta yumruğun açıldığı an yok: kapanış
+            // bölümü (kare 162→148) tersten oynatılarak açılış yapıldı; tüm eklemler aynı karede (atlama/erime yok).
+            // Dosya: giriş 0–5,4 sn (kare 0–161) + döngü 5,4–12,2 sn: sakin yumruk (162↔190 ×2) → açılış → parlama (147↔116) → kapanış.
+            loop: { src: '/fx/hilal.mp4', poster: '/fx/hilal-poster.webp', dur: 12.2, introEnd: 5.4, pos: 'center 100%', reveal: 0.6,
+                introGlow: [[0, 0.5], [1.4, 0.55], [2.2, 0.85], [3.4, 0.95], [4.9, 0.95], [5.4, 0.62]],
+                // döngü (6,8 sn): sakin → el açılırken yükselir → hilal parlarken tam → kapanınca sakin
+                glow: [[0, 0.62], [3.6, 0.62], [4.1, 0.85], [4.4, 0.95], [6.2, 0.95], [6.6, 0.72], [6.8, 0.62]] } }
     };
     const has = (k) => Object.prototype.hasOwnProperty.call(VIDEOS, k);
     const ua = navigator.userAgent || '';
@@ -140,7 +143,11 @@
                     const t = vid.currentTime;
                     if (b.intro && t < start) { b.intro.currentTime = t * 1000; b.intro.play(); }
                     else if (b.intro) b.intro.cancel();      // giriş bitti: döngü zarfı devralır
-                    if (b.anim) b.anim.currentTime = (Math.max(0, t - start) % span) * 1000;
+                    if (!b.anim) return;
+                    // giriş sürerken döngü zarfı başında bekler; giriş bitince (t ≥ introEnd) videoyla aynı anda başlar
+                    if (t < start) { b.anim.pause(); b.anim.currentTime = 0; return; }
+                    b.anim.currentTime = ((t - start) % span) * 1000;
+                    if (!vid.paused) b.anim.play();
                 };
                 // Giriş + döngü: dosya sonuna gelince döngü başına (introEnd) atlar; giriş bir daha ancak profil yeniden açılınca oynar
                 if (start) vid.addEventListener('ended', () => {
@@ -161,7 +168,8 @@
                     if (b.anim) b.anim.play();
                     sync();
                 });
-                vid.addEventListener('timeupdate', () => { if (vid.currentTime < b.last) sync(); b.last = vid.currentTime; });
+                // başa dönüşte ve girişten döngüye geçişte zarf yeniden eşitlenir
+                vid.addEventListener('timeupdate', () => { const t = vid.currentTime; if (t < b.last || (start && b.last < start && t >= start)) sync(); b.last = t; });
                 vid.src = L.src;
                 b.vid = vid; b.layer.appendChild(vid);
             }
