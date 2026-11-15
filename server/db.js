@@ -6868,7 +6868,8 @@ function sanitizeUiPrefs(input) {
   if (input && UI_THEMES.includes(input.theme)) p.theme = input.theme;
   if (input && Number.isInteger(input.chatFont) && input.chatFont >= 12 && input.chatFont <= 20) p.chatFont = input.chatFont;
   if (input && ['cozy', 'compact'].includes(input.density)) p.density = input.density;
-  if (input && typeof input.reduceMotion === 'boolean') p.reduceMotion = input.reduceMotion;
+  if (input && typeof input.reduceMotion === 'boolean') p.reduceMotion = input.reduceMotion;   // hafif mod
+  if (input && typeof input.motionOff === 'boolean') p.motionOff = input.motionOff;            // tamamen kapalı
   if (input && typeof input.motionSync === 'boolean') p.motionSync = input.motionSync;
   if (input && typeof input.streamer === 'boolean') p.streamer = input.streamer;
   if (input && typeof input.streamerAuto === 'boolean') p.streamerAuto = input.streamerAuto;

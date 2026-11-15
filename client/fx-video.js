@@ -6,7 +6,7 @@
    - Kart ekrandan çıkınca (pencere kapandı) medya durur ve silinir; yeniden açılınca baştan oynar.
    - Hareketi azalt açıksa oynatılmaz. Mağaza küçük resminde sabit kapak görseli (poster) gösterilir.
    - Dosyalar yalnızca efekt seçili bir profil açılınca indirilir.
-   Bağlantı: fx-scenes.js gibi applyProfileEffect'i sarar; script.js, fx-pack.js ve fx-scenes.js'ten sonra yüklenir.
+   Bağlantı: fx-scenes.js gibi applyProfileEffect'i sarar; script.js ve fx-scenes.js'ten sonra yüklenir.
    - Döngü (loop, isteğe bağlı): giriş önde bir kez oynarken kartın ARKASINDA tam sahne bir MP4 sürekli döner
      (Discord'daki giriş + döngü). İsteğe bağlı introEnd: dosyanın başı (0 → introEnd) profil her açıldığında
      bir kez oynar, sonra yalnızca introEnd → son arası döner (tek MP4 ile giriş + sakin döngü). MP4/H.264 her cihazda donanımla çözülür; saydamlık gerekmez. Kendi parlaklık zarfı
@@ -48,7 +48,7 @@
     const canWebm = !appleWebKit && !firefox && (() => { try { return document.createElement('video').canPlayType('video/webm; codecs="vp9"') !== ''; } catch (_) { return false; } })();
     const reducedMq = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
     // Uygulamanın kendi ayarı esas (Ayarlar › Genel › Animasyonları azalt; 'Sistemle eşitle' açıksa sistem ayarını da bu sınıf taşır).
-    // Sistem ayarına doğrudan bakılmaz: Windows'ta animasyon efektleri kapalıyken efektler hiç oynamıyordu (fx-pack ile aynı kural).
+    // Sistem ayarına doğrudan bakılmaz: Windows'ta animasyon efektleri kapalıyken efektler hiç oynamıyordu (uygulama ayarı esas).
     const reduced = () => document.documentElement.classList.contains('reduce-motion');
 
     const blobs = {};   // WebP: her oynatmada yeni bir nesne adresi (aynı adres animasyonu baştan başlatmaz)

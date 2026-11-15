@@ -10,7 +10,7 @@
     <script>try { if (localStorage.getItem('sauran_session_hint') === '1') { document.documentElement.classList.add('auth-pending'); setTimeout(function () { document.documentElement.classList.remove('auth-pending'); }, 12000); } } catch (e) { /* depolama yok */ }</script>
 
     <!-- Görünüm tercihleri (hareket azaltma, mesaj sıklığı, sohbet yazı boyutu) ilk çizimden önce uygulanır; tema ve tam uygulama script.js'te. -->
-    <script>try { var u = JSON.parse(localStorage.getItem('sauran_ui') || '{}') || {}; var h = document.documentElement; if (u.reduceMotion || (u.motionSync && window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) h.classList.add('reduce-motion'); if (u.density === 'compact') h.classList.add('density-compact'); if (u.chatFont && u.chatFont !== 15) { h.classList.add('chat-fs-custom'); h.style.setProperty('--chat-fs', u.chatFont + 'px'); } if (u.theme === 'light' || (u.theme === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches)) { h.classList.add('theme-light'); document.write('<link rel="stylesheet" href="light.css" id="light-css"><link rel="stylesheet" href="light-manual.css" id="light-manual-css">'); } } catch (e) { /* depolama yok */ }</script>
+    <script>try { var u = JSON.parse(localStorage.getItem('sauran_ui') || '{}') || {}; var h = document.documentElement; if (u.motionOff || (u.reduceMotion === true && typeof u.motionOff !== 'boolean')) h.classList.add('reduce-motion'); else if (u.reduceMotion || (u.motionSync && window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) h.classList.add('motion-lite'); if (u.density === 'compact') h.classList.add('density-compact'); if (u.chatFont && u.chatFont !== 15) { h.classList.add('chat-fs-custom'); h.style.setProperty('--chat-fs', u.chatFont + 'px'); } if (u.theme === 'light' || (u.theme === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches)) { h.classList.add('theme-light'); document.write('<link rel="stylesheet" href="light.css" id="light-css"><link rel="stylesheet" href="light-manual.css" id="light-manual-css">'); } } catch (e) { /* depolama yok */ }</script>
 
     <!-- Kritik dosya bekçisi: sunucu güncellenirken (deploy) ya da ağ kesildiğinde bir stil/betik dosyası yüklenemezse yarım
          biçimlenmiş arayüz gösterilmez. Onun yerine "Bağlanıyor…" ekranı çıkar ve sayfa artan aralıklarla kendiliğinden yeniden
@@ -2199,8 +2199,9 @@
                     </div>
 
                     <span class="profile-field-label" data-i18n="ui-motion">Hareket</span>
-                    <label class="notif-pref-row"><input type="checkbox" id="settings-reduce-motion"><span><span data-i18n="ui-reduce-motion">Animasyonları azalt</span><span class="settings-voice-hint" data-i18n="ui-reduce-motion-d">Efektler, çerçeve ve isim animasyonları durur; geçişler sadeleşir.</span></span></label>
-                    <label class="notif-pref-row"><input type="checkbox" id="settings-motion-sync"><span><span data-i18n="ui-motion-sync">Cihazın ayarına uy</span><span class="settings-voice-hint" data-i18n="ui-motion-sync-d">Cihazında "hareketi azalt" açıksa Sauran'da da animasyonlar azalır.</span></span></label>
+                    <label class="notif-pref-row"><input type="checkbox" id="settings-reduce-motion"><span><span data-i18n="ui-reduce-motion">Animasyonları azalt (hafif mod)</span><span class="settings-voice-hint" data-i18n="ui-reduce-motion-d">Efektler durmaz; daha yavaş oynar, ani parlamalar kapanır. Pili ve ısınmayı azaltır.</span></span></label>
+                    <label class="notif-pref-row"><input type="checkbox" id="settings-motion-off"><span><span data-i18n="ui-motion-off">Animasyonları tamamen kapat</span><span class="settings-voice-hint" data-i18n="ui-motion-off-d">Efektler, çerçeve ve isim animasyonları durur; geçişler sadeleşir.</span></span></label>
+                    <label class="notif-pref-row"><input type="checkbox" id="settings-motion-sync"><span><span data-i18n="ui-motion-sync">Cihazın ayarına uy</span><span class="settings-voice-hint" data-i18n="ui-motion-sync-d">Cihazında "hareketi azalt" açıksa Sauran hafif moda geçer.</span></span></label>
 
                     <div class="sidedock-setting">
                         <span class="profile-field-label">Lobi yan panelleri (üyeler, sesli odalar)</span>
@@ -2890,7 +2891,6 @@
     <script src="store.js"></script>
     <script src="mobile-nav.js"></script>
     <script src="swipe-back.js"></script>
-    <script src="fx-pack.js"></script>
     <script src="fx-scenes.js"></script>
     <script src="fx-video.js"></script>
     <script src="notif-ui.js"></script>

@@ -2270,14 +2270,9 @@ function applyProfileEffect(el, effect) {
     if (!el) return;
     PROFILE_EFFECT_CLASSES.forEach((c) => el.classList.remove(c));
     el.querySelectorAll(':scope > .pfx-mask').forEach((n) => n.remove());
-    if (effect === 'sakura') {
-        el.classList.add('profile-effect-sakura');
-        el.insertAdjacentHTML('beforeend', '<span class="pfx-mask">' + '<i class="pfx-petal"></i>'.repeat(12) + '</span>');
-    } else if (effect === 'stagelights') {
-        el.classList.add('profile-effect-stagelights');
-        // 4 ince ışık huzmesi, alt kısımlara yayılmış, sürekli sağa-sola sallanıyor (hiç kaybolup yeniden belirmiyor).
-        el.insertAdjacentHTML('beforeend', '<span class="pfx-mask">' + '<i class="pfx-stagelight"></i>'.repeat(4) + '</span>');
-    }
+    // 2026-11-15: Sakura ve Sahne Işıkları artık fx-scenes.js'te tüm kartı kullanan sahneler (eskiden yalnızca avatarın
+    // içinde küçük yapraklar / huzmeler vardı). Burada yalnızca eski katman temizlenir; efektleri sarmalayıcılar ekler.
+    void effect;
 }
 // Yalnızca başkasının profilinde: kendi profilinde aynı avatar tıklaması zaten "avatarı değiştir" anlamına geliyor.
 document.addEventListener('click', (event) => {
@@ -5059,7 +5054,8 @@ langConfirmBtn.addEventListener('click', () => {
 
 // ─── Görünüm tercihleri: tema, sohbet yazı boyutu, mesaj sıklığı, hareket azaltma ───
 // Hızlı açılış için bu cihazda önbellek (localStorage 'sauran_ui'); asıl kayıt hesapta (/api/me/ui-prefs), girişte eşitlenir.
-var UI_DEFAULTS = { theme: 'dark', chatFont: 15, density: 'cozy', reduceMotion: false, motionSync: false, streamer: false, streamerAuto: false, dataSaver: 'off', mediaFilter: null };
+// reduceMotion = hafif mod (efektler yavaş/flaşsız sürer), motionOff = tamamen kapalı (2026-11-15'ten beri ayrı; varsayılan hepsi kapalı)
+var UI_DEFAULTS = { theme: 'dark', chatFont: 15, density: 'cozy', reduceMotion: false, motionOff: false, motionSync: false, streamer: false, streamerAuto: false, dataSaver: 'off', mediaFilter: null };
 // Hassas içerik filtresi: seçilmediyse 18 yaş altında "arkadaş olmayanlardan", yetişkinde kapalı
 function mediaFilterMode() { return uiPrefs.mediaFilter || (currentUser && currentUser.is_minor ? 'nonfriends' : 'off'); }
 function friendIdSet() { return new Set((window.__friendsCache || []).map((f) => Number(f.id))); }
@@ -5101,8 +5097,15 @@ var uiPrefs = (() => {
     try { p = JSON.parse(localStorage.getItem('sauran_ui') || '{}') || {}; } catch (_) {}
     const legacy = localStorage.getItem('sauran_theme');
     if (!p.theme && legacy) p.theme = legacy;
-    return { ...UI_DEFAULTS, ...p };
+    return migrateMotionPrefs({ ...UI_DEFAULTS, ...p }, p);
 })();
+// 2026-11-15 öncesi "Animasyonları azalt" her şeyi durduruyordu; o gün hafif moda dönüştü. Daha önce açmış olanların seçimi
+// korunur: bir kerelik "Tamamen kapat"a taşınır (motionOff hiç kaydedilmemişse). Yeni açanlar hafif mod alır.
+function migrateMotionPrefs(p, raw) {
+    const src = raw || p;
+    if (src && src.reduceMotion === true && typeof src.motionOff !== 'boolean') { p.motionOff = true; p.reduceMotion = false; }
+    return p;
+}
 var systemDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 var systemReduce = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
 function effectiveTheme() {
@@ -5129,7 +5132,9 @@ function applyUiPrefs() {
     root.style.setProperty('--chat-fs', `${uiPrefs.chatFont}px`);
     root.classList.toggle('chat-fs-custom', uiPrefs.chatFont !== UI_DEFAULTS.chatFont);
     root.classList.toggle('density-compact', uiPrefs.density === 'compact');
-    root.classList.toggle('reduce-motion', Boolean(uiPrefs.reduceMotion || (uiPrefs.motionSync && systemReduce && systemReduce.matches)));
+    // reduce-motion: her şey durur (yalnızca 'tamamen kapat'). motion-lite: efektler sürer ama yavaş ve flaşsız.
+    root.classList.toggle('reduce-motion', Boolean(uiPrefs.motionOff));
+    root.classList.toggle('motion-lite', !uiPrefs.motionOff && Boolean(uiPrefs.reduceMotion || (uiPrefs.motionSync && systemReduce && systemReduce.matches)));
     root.classList.toggle('streamer-mode', streamerOn());
     try { localStorage.setItem('sauran_ui', JSON.stringify(uiPrefs)); localStorage.setItem('sauran_theme', uiPrefs.theme); } catch (_) {}
 }
@@ -5147,7 +5152,9 @@ function setUiPref(patch) {
 // Girişte hesaptaki tercihler uygulanır; hesapta hiç yoksa bu cihazdakiler hesaba yazılır (ilk eşitleme).
 function adoptServerUiPrefs(server) {
     if (server && Object.keys(server).length) {
-        uiPrefs = { ...UI_DEFAULTS, ...server };
+        const migrated = server.reduceMotion === true && typeof server.motionOff !== 'boolean';
+        uiPrefs = migrateMotionPrefs({ ...UI_DEFAULTS, ...server }, server);
+        if (migrated) fetch('/api/me/ui-prefs', { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(uiPrefs) }).catch(() => {});
         applyUiPrefs();
         syncAppearanceUi();
     } else {
@@ -5161,6 +5168,7 @@ function syncAppearanceUi() {
     const fo = document.getElementById('settings-chat-font-out'); if (fo) fo.textContent = `${uiPrefs.chatFont} px`;
     const pv = document.getElementById('settings-chat-font-preview'); if (pv) pv.style.fontSize = `${uiPrefs.chatFont}px`;
     const rm = document.getElementById('settings-reduce-motion'); if (rm) rm.checked = Boolean(uiPrefs.reduceMotion);
+    const mo = document.getElementById('settings-motion-off'); if (mo) mo.checked = Boolean(uiPrefs.motionOff);
     const ms = document.getElementById('settings-motion-sync'); if (ms) ms.checked = Boolean(uiPrefs.motionSync);
     const st = document.getElementById('settings-streamer'); if (st) st.checked = Boolean(uiPrefs.streamer);
     const sa = document.getElementById('settings-streamer-auto'); if (sa) sa.checked = Boolean(uiPrefs.streamerAuto);
@@ -5174,6 +5182,7 @@ systemDark?.addEventListener?.('change', () => { if (uiPrefs.theme === 'auto') a
 document.querySelectorAll('[data-density]').forEach((b) => b.addEventListener('click', () => setUiPref({ density: b.dataset.density })));
 document.getElementById('settings-chat-font')?.addEventListener('input', (e) => setUiPref({ chatFont: Number(e.target.value) }));
 document.getElementById('settings-reduce-motion')?.addEventListener('change', (e) => setUiPref({ reduceMotion: e.target.checked }));
+document.getElementById('settings-motion-off')?.addEventListener('change', (e) => setUiPref({ motionOff: e.target.checked }));
 document.getElementById('settings-motion-sync')?.addEventListener('change', (e) => setUiPref({ motionSync: e.target.checked }));
 document.getElementById('settings-streamer')?.addEventListener('change', (e) => { setUiPref({ streamer: e.target.checked }); if (e.target.checked) showToast(t('sm-on-toast')); });
 document.getElementById('settings-streamer-auto')?.addEventListener('change', (e) => setUiPref({ streamerAuto: e.target.checked }));
@@ -5323,10 +5332,12 @@ const I18N = {
     'ui-compact': { tr: 'Sıkışık', en: 'Compact' },
     'ui-compact-desc': { tr: 'Küçük fotoğraflar, ekrana daha çok mesaj sığar', en: 'Small avatars, more messages on screen' },
     'ui-motion': { tr: 'Hareket', en: 'Motion' },
-    'ui-reduce-motion': { tr: 'Animasyonları azalt', en: 'Reduce motion' },
-    'ui-reduce-motion-d': { tr: 'Efektler, çerçeve ve isim animasyonları durur; geçişler sadeleşir.', en: 'Stops effects, frame and name animations; simplifies transitions.' },
+    'ui-reduce-motion': { tr: 'Animasyonları azalt (hafif mod)', en: 'Reduce motion (light mode)' },
+    'ui-reduce-motion-d': { tr: 'Efektler durmaz; daha yavaş oynar, ani parlamalar kapanır. Pili ve ısınmayı azaltır.', en: 'Effects keep playing, slower and without sudden flashes. Saves battery and heat.' },
+    'ui-motion-off': { tr: 'Animasyonları tamamen kapat', en: 'Turn off animations' },
+    'ui-motion-off-d': { tr: 'Efektler, çerçeve ve isim animasyonları durur; geçişler sadeleşir.', en: 'Stops effects, frame and name animations; simplifies transitions.' },
     'ui-motion-sync': { tr: 'Cihazın ayarına uy', en: 'Sync with device' },
-    'ui-motion-sync-d': { tr: 'Cihazında "hareketi azalt" açıksa Sauran\'da da animasyonlar azalır.', en: 'If "reduce motion" is on in your device settings, Sauran reduces animations too.' },
+    'ui-motion-sync-d': { tr: 'Cihazında "hareketi azalt" açıksa Sauran hafif moda geçer.', en: 'If "reduce motion" is on in your device settings, Sauran switches to light mode.' },
     'theme-purple-desc': { tr: 'Derin mor, karanlık arayüz', en: 'Deep purple, dark interface' },
     'label-lang': { tr: 'Dil', en: 'Language' },
     'label-notifications': { tr: 'Bildirimler', en: 'Notifications' },

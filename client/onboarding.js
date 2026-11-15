@@ -9,7 +9,7 @@
 
 // Sürümler: en yenisi en üstte. Yenilikler penceresi, kullanıcının görmediği en yeni sürümü gösterir.
 const RELEASES = [
-    { id: '2026-11-15', title: 'Mor Bakış ve Hilal Mührü', date: '15 Kasım 2026' },
+    { id: '2026-11-15', title: 'Yeni ve yenilenen profil efektleri, hafif mod', date: '15 Kasım 2026' },
     { id: '2026-11-14', title: 'Yeni profil efektleri', date: '14 Kasım 2026' },
     { id: '2026-11-13', title: 'Kasım güncellemesi', date: '13 Kasım 2026' }
 ];
@@ -28,6 +28,14 @@ function openSettingsAt(tab, sel) {
 // id: küçük harf + tire (sunucu bu biçimi kabul eder). where: kullanıcıya gösterilen konum.
 // highlight: Yenilikler penceresinde büyük kart olarak öne çıkar (en fazla 6).
 const FEATURE_CATALOG = [
+    { id: 'motion-lite', since: '2026-11-15', highlight: true, icon: '🪶', title: 'Hafif animasyon modu',
+      desc: '"Animasyonları azalt" artık efektleri durdurmuyor: daha yavaş ve ani parlamasız oynatıyor, pili ve ısınmayı azaltıyor. Tamamen durdurmak için yeni "Animasyonları tamamen kapat" seçeneği var. İkisi de varsayılan olarak kapalı.',
+      where: 'Ayarlar › Genel › Hareket', keywords: ['hafif mod', 'animasyon', 'hareket', 'pil', 'isinma', 'tamamen kapat'],
+      go: { tab: 'general', sel: '#settings-reduce-motion' } },
+    { id: 'effects-renewed', since: '2026-11-15', highlight: true, icon: '🔥', title: 'Yenilenen profil efektleri',
+      desc: 'Sakura, Sahne Işıkları, Alev, Mürekkep, Yıldırım ve Tatlı artık tüm profil kartını kullanıyor. Alev ve Mürekkep gerçekçi simülasyonla yeniden yapıldı.',
+      where: 'Özelleştirme › Profil efekti', keywords: ['alev', 'murekkep', 'sakura', 'yildirim', 'tatli', 'sahne isiklari', 'profil efekti'],
+      open: () => (typeof openCustomizeCenter === 'function' ? openCustomizeCenter('look') : document.getElementById('plusfx-open-btn')?.click()) },
     { id: 'violetgaze-bg', since: '2026-11-15', highlight: true, icon: '🔮', title: 'Mor Bakış ve Hilal Mührü profil efektleri',
       desc: 'Profilin açılınca kartın arkasında gümüş saçlı bir karakter belirir. Hilal Mührü\'nde gözü yanar, avucunda mor bir hilal oluşur.',
       where: 'Özelleştirme › Profil efekti', keywords: ['mor bakis', 'hilal muhru', 'video arka plan', 'profil efekti', 'anime'],
@@ -75,7 +83,7 @@ const FEATURE_CATALOG = [
       desc: 'Mobil veride GIF ve videoları sen dokununca yükler.',
       where: 'Ayarlar › Genel', go: { tab: 'general', sel: '[data-i18n="ds-title"]' } },
     { id: 'reduce-motion', since: '2026-11-13', icon: '🌀', title: 'Animasyonları azalt',
-      desc: 'Hareketli efektleri ve geçişleri sadeleştirir.',
+      desc: 'Hafif mod: efektler durmaz, daha yavaş ve flaşsız oynar.',
       where: 'Ayarlar › Genel', go: { tab: 'general', sel: '#settings-reduce-motion' } },
     { id: 'account-standing', since: '2026-11-13', icon: '✅', title: 'Hesap durumu',
       desc: 'Hesabında bir kısıtlama olup olmadığını tek bakışta gör.',

@@ -3059,10 +3059,9 @@ html.reduce-motion #notifications-modal .modal-box { animation: none; }
 }
 
 
-/* ══ Profil kartı efektleri (fx-pack.js) ve isim plakaları ═══════════════════════════════════════════════════ */
+/* ══ Profil kartı efektleri (fx-scenes.js, fx-video.js) ve isim plakaları ═══════════════════════════════════════════════════ */
 .profile-modal-box.has-pfxc, .st-prof, .pv-profile { position: relative; }
 .st-prof { overflow: hidden; }
-.pfxc { position: absolute; inset: 0; z-index: 4; pointer-events: none; overflow: hidden; border-radius: inherit; }
 /* Sahne efektleri (fx-scenes.js): tek tuval, kartın tamamı; tıklamaları engellemez */
 .pfxs { position: absolute; inset: 0; z-index: 4; pointer-events: none; overflow: hidden; border-radius: inherit; }
 .pfxs > canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
@@ -3076,46 +3075,6 @@ html.reduce-motion #notifications-modal .modal-box { animation: none; }
 /* iPhone düşük güç modunda otomatik oynatma reddedilirse WebKit'in oynat düğmesi görünmesin (kapak resmi gösterilir) */
 .pfxv-bgv::-webkit-media-controls-start-playback-button { display: none !important; -webkit-appearance: none; }
 .pfxv-media { position: absolute; aspect-ratio: 1 / 1; height: auto; display: block; object-fit: contain; pointer-events: none; user-select: none; -webkit-user-drag: none; }
-.pfxc > svg { position: absolute; left: 0; width: 100%; display: block; }
-.pfxc .fxc-top { top: 0; height: clamp(44px, 9%, 78px); -webkit-mask-image: linear-gradient(to bottom, #000 45%, transparent); mask-image: linear-gradient(to bottom, #000 45%, transparent); }
-.pfxc .fxc-bot { bottom: 0; height: clamp(64px, 14%, 120px); -webkit-mask-image: linear-gradient(to top, #000 50%, transparent); mask-image: linear-gradient(to top, #000 50%, transparent); }
-.pfxc .fxc-full { top: 0; height: 100%; }
-.pfxc i { position: absolute; display: block; }
-
-/* Alev */
-.pfxc-flame::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 118%, rgba(255, 90, 20, .38), transparent 55%), radial-gradient(ellipse at 50% -18%, rgba(255, 60, 10, .26), transparent 50%); animation: fxGlow 2.2s ease-in-out infinite alternate; }
-.pfxc-flame .fxc-top { transform: scaleY(-1); -webkit-mask-image: linear-gradient(to top, #000 45%, transparent); mask-image: linear-gradient(to top, #000 45%, transparent); }
-.pfxc-flame .fl { transform-box: fill-box; transform-origin: 50% 100%; animation: fxFlick 1.2s ease-in-out infinite; }
-.pfxc-flame .fxc-ember { bottom: 0; width: 4px; height: 4px; border-radius: 50%; background: #ffd27a; box-shadow: 0 0 6px 2px rgba(255, 150, 40, .85); opacity: 0; animation: fxEmber var(--t) ease-out var(--d) infinite; }
-@keyframes fxFlick { 0%, 100% { transform: scaleY(.9) skewX(-2deg); } 50% { transform: scaleY(1.1) skewX(2deg); } }
-@keyframes fxGlow { from { opacity: .6; } to { opacity: 1; } }
-@keyframes fxEmber { 0% { transform: translate(0, 0) scale(1); opacity: 0; } 10% { opacity: 1; } 85% { opacity: .9; } 100% { transform: translate(var(--x), calc(-1 * var(--rise, 260px))) scale(.45); opacity: 0; } }
-
-/* Mürekkep */
-.pfxc-ink::before { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0, 0, 0, .55), transparent 28%, transparent 66%, rgba(0, 0, 0, .6)); }
-.pfxc-ink .dr { transform-box: fill-box; transform-origin: 50% 0; animation: fxDrip 5s ease-in-out infinite; }
-.pfxc-ink .fxc-smoke { bottom: -8%; width: 70%; height: 34%; border-radius: 50%; background: radial-gradient(ellipse, rgba(10, 8, 24, .85), rgba(40, 20, 80, .35) 55%, transparent 72%); animation: fxSmoke 8s ease-in-out infinite alternate; }
-.pfxc-ink .s1 { left: -15%; } .pfxc-ink .s2 { right: -18%; animation-duration: 10s; animation-delay: -3s; } .pfxc-ink .s3 { left: 20%; bottom: -14%; animation-duration: 12s; animation-delay: -6s; opacity: .8; }
-.pfxc-ink .fxc-ash { bottom: 4%; width: 3px; height: 3px; border-radius: 50%; background: rgba(210, 200, 255, .75); opacity: 0; animation: fxEmber var(--t) linear var(--d) infinite; }
-@keyframes fxDrip { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.2); } }
-@keyframes fxSmoke { from { transform: translateX(-6%) scale(1); } to { transform: translateX(8%) scale(1.12); } }
-
-/* Yıldırım */
-.pfxc-storm::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 50%, transparent 52%, rgba(70, 60, 210, .38) 100%); animation: fxGlow 1.8s ease-in-out infinite alternate; }
-.pfxc-storm .bo { opacity: 0; animation: fxBolt 6s linear infinite; }
-.pfxc-storm .arc { animation: fxArc 1.4s linear infinite; }
-.pfxc-storm .arc2 { animation-duration: 2.1s; animation-direction: reverse; }
-.pfxc-storm .fxc-spark { top: 6%; width: 4px; height: 4px; border-radius: 50%; background: #cfe0ff; box-shadow: 0 0 8px 2px rgba(120, 160, 255, .9); animation: fxTwinkle 1.6s ease-in-out var(--d) infinite; }
-.pfxc-storm .fxc-spark:nth-of-type(odd) { top: auto; bottom: 8%; }
-@keyframes fxBolt { 0%, 52%, 58%, 66%, 100% { opacity: 0; } 54% { opacity: 1; } 56% { opacity: .25; } 60% { opacity: .95; } 63% { opacity: .2; } }
-@keyframes fxArc { to { stroke-dashoffset: -68; } }
-@keyframes fxTwinkle { 0%, 100% { opacity: 0; transform: scale(.5); } 50% { opacity: 1; transform: scale(1.2); } }
-
-/* Tatlı */
-.pfxc-sweet::before { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 46px rgba(255, 140, 200, .5), inset 0 0 0 1.5px rgba(255, 190, 220, .55); }
-.pfxc-sweet .fxc-sw { bottom: -6%; font-style: normal; line-height: 1; text-shadow: 0 0 8px rgba(255, 140, 200, .7); opacity: 0; animation: fxSweet var(--t) ease-in var(--d) infinite; }
-@keyframes fxSweet { 0% { transform: translate(0, 0) rotate(-10deg); opacity: 0; } 10% { opacity: .95; } 55% { transform: translate(var(--x), -280px) rotate(10deg); } 100% { transform: translate(calc(var(--x) * -1), -560px) rotate(-8deg); opacity: 0; } }
-html.reduce-motion .pfxc *, html.reduce-motion .pfxc::before { animation: none !important; } html.reduce-motion .pfxc .fxc-ember, html.reduce-motion .pfxc .fxc-ash, html.reduce-motion .pfxc .fxc-sw { opacity: .6; }
 
 /* İsim plakası: üye listesi satırının ve profil adının arkasında zemin (listelerde sabit; önizleme/profilde .plate-anim ışıltı) */
 .has-plate { position: relative; overflow: hidden; background-color: #101018; background-repeat: no-repeat; border-radius: 14px; }
@@ -3147,7 +3106,7 @@ html.reduce-motion .pfxc *, html.reduce-motion .pfxc::before { animation: none !
 
 /* Ekran paylaşımı izlenirken arka plandaki sürekli animasyonlar duraklatılır (izleyicide kare düşmesi/donma). */
 /* Ayrıca pencere arka plandayken (ör. masaüstü uygulaması oyunun yanında açık) aynı süs animasyonları durur. */
-body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.watching-share .hub-feed *::after, body.watching-share #hub-member-list *, body.watching-share #hub-member-list *::before, body.watching-share #hub-member-list *::after, body.watching-share .pfxc, body.watching-share .pfxc::before, body.watching-share .pfxc::after, body.watching-share .pfxc *, body.app-unfocused .hub-feed *, body.app-unfocused .hub-feed *::before, body.app-unfocused .hub-feed *::after, body.app-unfocused #hub-member-list *, body.app-unfocused #hub-member-list *::before, body.app-unfocused #hub-member-list *::after, body.app-unfocused .pfxc, body.app-unfocused .pfxc::before, body.app-unfocused .pfxc::after, body.app-unfocused .pfxc * { animation-play-state: paused !important; }
+body.watching-share .hub-feed *, body.watching-share .hub-feed *::before, body.watching-share .hub-feed *::after, body.watching-share #hub-member-list *, body.watching-share #hub-member-list *::before, body.watching-share #hub-member-list *::after, body.app-unfocused .hub-feed *, body.app-unfocused .hub-feed *::before, body.app-unfocused .hub-feed *::after, body.app-unfocused #hub-member-list *, body.app-unfocused #hub-member-list *::before, body.app-unfocused #hub-member-list *::after { animation-play-state: paused !important; }
 
 /* Bildirimler (eski alert kutuları dahil): satır sonları korunur, dokununca kapanır. */
 .toast { pointer-events: auto; cursor: pointer; white-space: pre-line; max-width: min(520px, 92vw); background: rgba(18, 24, 32, 0.96); box-shadow: 0 0 0 1px var(--border-soft-strong), 0 10px 30px rgba(0, 0, 0, 0.55); }
@@ -3949,3 +3908,9 @@ html.reduce-motion .ob-cl-ring .fg, html.reduce-motion .ob-cl-bar span { transit
 .pv-profile .pfxv-bgv { object-position: center 18% !important; transform: none !important; }
 /* Kendi profilini düzenlerken video arka planı koyulaşır (Hakkımda/durum/renk alanları okunur); başkası bakınca tam parlak */
 #profile-modal .pfxv-bg::after { content: ''; position: absolute; inset: 0; background: rgba(10, 13, 17, .62); pointer-events: none; }
+/* Simülasyon videoları (Alev, Mürekkep): siyah zemin 'screen' ile kaybolur, ateş/duman karta ışık gibi biner */
+.pfxs-vid { position: absolute; left: 0; width: 100%; z-index: 4; display: block; pointer-events: none; mix-blend-mode: screen; border-radius: inherit; opacity: 0; transition: opacity .9s ease; }
+.pfxs-vid.on { opacity: 1; }
+.pfxs-vid-bottom { bottom: 0; height: auto; aspect-ratio: 2 / 1; object-fit: cover; -webkit-mask-image: linear-gradient(to right, #000 0%, rgba(0,0,0,.42) 30%, rgba(0,0,0,.32) 50%, rgba(0,0,0,.42) 70%, #000 100%); mask-image: linear-gradient(to right, #000 0%, rgba(0,0,0,.42) 30%, rgba(0,0,0,.32) 50%, rgba(0,0,0,.42) 70%, #000 100%); }  /* ortada (alt butonlar) sönük */
+.pfxs-vid-full { top: 0; height: 100%; object-fit: cover; }
+html.theme-light .pfxs-vid { display: none; }   /* açık temada 'screen' beyaz zeminde görünmez; korlar ve çizim kalır */

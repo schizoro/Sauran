@@ -1476,15 +1476,6 @@ html.theme-light #notifications-modal .notifications-empty small { color: var(--
   html.theme-light .lobby-nav, html.theme-light .mnav, html.theme-light .app-rail { background-color: #eceff4 !important; }
   html.theme-light .modal-overlay { background: rgba(15, 23, 42, 0.165); }
 }
-html.theme-light .pfxc-flame::before { background: radial-gradient(ellipse at 50% 118%, rgba(255, 90, 20, .38), transparent 55%), radial-gradient(ellipse at 50% -18%, rgba(255, 60, 10, .26), transparent 50%); }
-html.theme-light .pfxc-flame .fxc-ember { background: #ffd27a; box-shadow: 0 0 6px 2px rgba(255, 150, 40, .85); }
-html.theme-light .pfxc-ink::before { background: linear-gradient(to bottom, rgba(15, 23, 42, 0.138), transparent 28%, transparent 66%, rgba(15, 23, 42, 0.15)); }
-html.theme-light .pfxc-ink .fxc-smoke { background: radial-gradient(ellipse, rgba(243, 242, 247, 0.85), rgba(229, 225, 237, 0.35) 55%, transparent 72%); }
-html.theme-light .pfxc-ink .fxc-ash { background: rgba(210, 200, 255, .75); }
-html.theme-light .pfxc-storm::before { background: radial-gradient(ellipse at 50% 50%, transparent 52%, rgba(70, 60, 210, .38) 100%); }
-html.theme-light .pfxc-storm .fxc-spark { background: #cfe0ff; box-shadow: 0 0 8px 2px rgba(120, 160, 255, .9); }
-html.theme-light .pfxc-sweet::before { box-shadow: inset 0 0 46px rgba(255, 140, 200, .5), inset 0 0 0 1.5px rgba(255, 190, 220, .55); }
-html.theme-light .pfxc-sweet .fxc-sw { text-shadow: 0 0 8px rgba(255, 140, 200, .7); }
 html.theme-light .has-plate { background-color: #f1f1f6; }
 html.theme-light .has-plate::after { background: linear-gradient(100deg, transparent, rgba(15, 23, 42, 0.231), transparent); }
 html.theme-light .plate-flame { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 40' preserveAspectRatio='none'%3E%3Cpath d='M0 40C6 20 10 26 14 6C20 24 26 20 30 40ZM28 40C36 14 44 24 52 2C58 22 64 18 70 40ZM68 40C76 22 82 28 90 8C96 26 104 22 110 40Z' fill='%23ffc23a' opacity='.6'/%3E%3C/svg%3E"), linear-gradient(90deg, rgba(150, 18, 8, .96), rgba(255, 92, 18, .6) 62%, rgba(255, 190, 70, .2)) !important; }

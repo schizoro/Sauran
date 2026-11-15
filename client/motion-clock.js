@@ -14,6 +14,8 @@
     if (!document.getAnimations || typeof CSSAnimation === 'undefined') return; // eski tarayıcı: hiçbir şey değişmez
     const FPS = 12;
     const STEP = 1000 / FPS;
+    // Hafif mod (Ayarlar › Animasyonları azalt): animasyonlar durmaz, saniyede 6 kareye iner
+    const step = () => (document.documentElement.classList.contains('motion-lite') ? STEP * 2 : STEP);
     const EXCLUDE = /spin|loader|loading|skeleton|skShimmer|btn-spinner|typing|speak/i;
     const controlled = new Map();   // Animation → { el, watch, offset }
     const watchCount = new Map();   // kapsayıcı → kaç animasyon izliyor (unobserve için)
@@ -69,7 +71,7 @@
         if (document.hidden) return; // gizli sekmede hiç uyanmaz; görünür olunca visibilitychange yeniden başlatır
         if (performance.now() - lastScan > 10000) scan(); // animationstart kaçırırsa diye seyrek emniyet taraması
         if (controlled.size) {
-            const q = Math.floor((performance.now() - t0) / STEP) * STEP; // 12 fps'e yuvarlanmış zaman
+            const st = step(), q = Math.floor((performance.now() - t0) / st) * st; // 12 (hafif modda 6) fps'e yuvarlanmış zaman
             requestAnimationFrame(() => {
                 for (const [a, c] of controlled) {
                     if (!c.el.isConnected || a.playState === 'idle') { release(a, c); continue; }
@@ -82,7 +84,7 @@
         schedule();
     }
     function schedule() {
-        if (!timer && !document.hidden) timer = setTimeout(tick, controlled.size ? STEP : 10000);
+        if (!timer && !document.hidden) timer = setTimeout(tick, controlled.size ? step() : 10000);
     }
 
     // Yeni başlayan animasyonlar (mesaj, profil, kart açıldıkça). Sözde öğeler (::before/::after) dahil.
