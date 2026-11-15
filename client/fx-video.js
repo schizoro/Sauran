@@ -44,7 +44,9 @@
     const firefox = /Firefox\//.test(ua);
     const canWebm = !appleWebKit && !firefox && (() => { try { return document.createElement('video').canPlayType('video/webm; codecs="vp9"') !== ''; } catch (_) { return false; } })();
     const reducedMq = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
-    const reduced = () => (reducedMq && reducedMq.matches) || document.documentElement.classList.contains('reduce-motion');
+    // Uygulamanın kendi ayarı esas (Ayarlar › Genel › Animasyonları azalt; 'Sistemle eşitle' açıksa sistem ayarını da bu sınıf taşır).
+    // Sistem ayarına doğrudan bakılmaz: Windows'ta animasyon efektleri kapalıyken efektler hiç oynamıyordu (fx-pack ile aynı kural).
+    const reduced = () => document.documentElement.classList.contains('reduce-motion');
 
     const blobs = {};   // WebP: her oynatmada yeni bir nesne adresi (aynı adres animasyonu baştan başlatmaz)
     function webpBlob(v) {

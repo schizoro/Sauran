@@ -2271,3 +2271,4 @@ html.theme-light .lc-notify-pop button:hover { background: rgba(15, 23, 42, 0.06
 html.theme-light .lc-notify-pop button.on { background: rgba(179, 102, 245, 0.16); }
 html.theme-light .lc-notify-pop small { color: var(--text-tertiary, var(--text-secondary)); }
 html.theme-light .lc-notify-ico { background: rgba(15, 23, 42, 0.063); color: #6200c2; }
+html.theme-light #profile-modal .pfxv-bg::after { background: rgba(240, 243, 246, .66); }

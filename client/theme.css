@@ -3939,3 +3939,13 @@ html.reduce-motion .ob-cl-ring .fg, html.reduce-motion .ob-cl-bar span { transit
 }
 .discover-card, .friends-favorites, .mk-card, .hubset-savebar { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
 .discover-card, .friends-favorites { background: var(--bg-surface-2); }
+
+/* Özelleştir › Profil Efekti: 16+ efekt tek satıra sığmıyordu (eşitsiz kutular, taşan adlar) → 3 sütunlu eşit ızgara */
+#profile-effect-picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+#profile-effect-picker .chat-theme-option { min-width: 0; min-height: 66px; justify-content: center; text-align: center; line-height: 1.25; overflow-wrap: anywhere; }
+@media (min-width: 560px) { #profile-effect-picker { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+/* Önizleme sayfası: video arka planlı efektlerde kart gerçek profil gibi uzun, kadraj yüze (karakter görünsün) */
+.pv-profile.has-pfxv-behind { min-height: min(440px, 52vh); }
+.pv-profile .pfxv-bgv { object-position: center 18% !important; transform: none !important; }
+/* Kendi profilini düzenlerken video arka planı koyulaşır (Hakkımda/durum/renk alanları okunur); başkası bakınca tam parlak */
+#profile-modal .pfxv-bg::after { content: ''; position: absolute; inset: 0; background: rgba(10, 13, 17, .62); pointer-events: none; }

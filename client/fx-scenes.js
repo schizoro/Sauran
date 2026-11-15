@@ -282,7 +282,9 @@
     const all = new Set();
     const byBox = new WeakMap();
     const reducedMq = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
-    const reduced = () => (reducedMq && reducedMq.matches) || document.documentElement.classList.contains('reduce-motion');
+    // Uygulamanın kendi ayarı esas (Ayarlar › Genel › Animasyonları azalt; 'Sistemle eşitle' açıksa sistem ayarını da bu sınıf taşır).
+    // Sistem ayarına doğrudan bakılmaz: Windows'ta animasyon efektleri kapalıyken efektler hiç oynamıyordu (fx-pack ile aynı kural).
+    const reduced = () => document.documentElement.classList.contains('reduce-motion');
 
     function mount(box, effect) {
         const still = box.classList.contains('st-prof');      // mağaza küçük resmi: tek sabit kare
