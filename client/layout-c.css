@@ -563,6 +563,7 @@ body.lc .lc-modal input[type="text"], body.lc .lc-modal input[type="search"], bo
   font: inherit !important; font-size: 14px !important; outline: none !important; box-shadow: none !important; margin: 0 !important;
 }
 body.lc .lc-modal textarea { min-height: 96px; resize: vertical; }
+body.lc .lc-modal textarea.about-me-input { resize: none; }   /* Hakkımda/lobi kutuları yazdıkça uzar (fitAboutInput), elle sınırsız uzatılmaz */
 body.lc .lc-modal input:focus, body.lc .lc-modal textarea:focus, body.lc .lc-modal select:focus { border-color: var(--accent) !important; box-shadow: 0 0 0 3px rgba(92, 200, 255, 0.16) !important; }
 body.lc .lc-modal .poll-submit-btn, body.lc .lc-modal .about-btn-primary, body.lc .lc-modal .hubset-save-btn, body.lc .lc-modal .hub-create-submit, body.lc .lc-modal #friend-add-btn {
   width: auto !important; min-height: 42px; padding: 10px 18px !important; border: 0 !important; border-radius: 12px !important;
@@ -969,3 +970,29 @@ html.reduce-motion .lc-members-hint { animation: none; }
 .lc-notify-pop b { display: block; font-size: 13.5px; font-weight: 700; }
 .lc-notify-pop small { display: block; font-size: 11.5px; color: var(--text-tertiary, var(--text-secondary)); }
 .lc-notify-ico { flex: none; width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.06); color: #d3a6ff; }
+
+/* ── Profil paneli: sıkı tek satır düzeni (2026-11-20, kullanıcının seçtiği "B") ── */
+@media (min-width: 700px) { body.lc #profile-modal .lc-modal-profile-modal, #profile-modal .profile-modal-box { width: 380px !important; } }
+#profile-modal .profile-tab-panel { padding: 12px 16px 14px !important; gap: 8px !important; }
+#profile-modal .profile-identity-section { padding-bottom: 10px !important; margin-bottom: 4px !important; }
+#profile-modal .about-btn { padding: 4px 12px !important; font-size: 12px !important; min-height: 0 !important; height: 28px !important; line-height: 1 !important; border-radius: 999px !important; }
+#profile-modal .about-btn-icon { width: 28px !important; padding: 0 !important; font-size: 14px !important; display: inline-flex !important; align-items: center; justify-content: center; }
+#profile-modal #about-me-input { min-height: 52px !important; padding: 7px 10px !important; font-size: 13px !important; }
+#profile-modal .profile-about-actions { margin-top: -2px; }
+#profile-modal .profile-field-block { margin-top: 4px !important; padding-top: 8px !important; }
+#profile-modal .profile-field-block[hidden] { display: none !important; }
+#profile-modal .profile-field-inline { display: flex !important; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+#profile-modal .profile-field-inline .about-label-row { width: auto !important; }
+#profile-modal .profile-field-inline .profile-color-row { margin-top: 0 !important; gap: 6px !important; }
+#profile-modal .profile-field-inline .hubset-hint { flex-basis: 100%; }
+#profile-modal .profile-field-inline .hubset-hint:empty { display: none; }
+#profile-modal .profile-color-row input[type="color"] { width: 28px !important; height: 26px !important; }
+#profile-modal #activity-input { padding: 5px 10px !important; font-size: 13px !important; height: 30px !important; }
+#profile-modal .activity-row { gap: 6px !important; }
+#profile-modal .activity-toggle { font-size: 12px !important; }
+#profile-modal .hubset-hint { font-size: 11px !important; margin: 2px 0 0 !important; line-height: 1.35 !important; }
+#profile-modal .profile-customize-btn { padding: 7px 12px !important; min-height: 0 !important; margin: 2px 0 4px !important; }
+#profile-modal .profile-customize-btn small { display: none !important; }
+#profile-modal .profile-customize-btn .pcb-ic { width: 22px !important; height: 22px !important; font-size: 14px !important; }
+#profile-modal .profile-customize-btn strong { font-size: 13px !important; }
+#profile-modal .logout-btn { width: auto !important; align-self: center !important; padding: 5px 14px !important; font-size: 12.5px !important; }

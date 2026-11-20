@@ -5463,6 +5463,8 @@ const I18N = {
     'about-me-placeholder': { tr: 'Kendinden bahset...', en: 'Tell us about yourself...' },
     'about-me-info': { tr: 'Güvenliğin için adres, telefon numarası, şifre veya başka kişisel bilgilerini paylaşmaktan kaçın.', en: 'For your safety, avoid sharing your address, phone number, password or other personal information.' },
     'about-me-saved': { tr: 'Hakkımda güncellendi.', en: 'About me updated.' },
+    'about-me-trimmed': { tr: 'Hakkımda kaydedildi, ancak sınır nedeniyle {n} karaktere kısaltıldı.', en: 'About me saved, but it was shortened to {n} characters due to the limit.' },
+    'about-me-trim-confirm': { tr: 'Metnin {n} karakter sınırını aşıyor. Kaydedersen fazlası silinecek. Devam edilsin mi?', en: 'Your text is over the {n} character limit. Saving will cut off the rest. Continue?' },
     'label-change-password': { tr: 'Şifre Değiştir', en: 'Change Password' },
     'label-blocked-users': { tr: 'Engellenenler', en: 'Blocked Users' },
     'blocked-empty': { tr: 'Engellediğin kimse yok.', en: "You haven't blocked anyone." },
@@ -6249,6 +6251,7 @@ profileBtn.addEventListener(
             const max = currentUser?.plus_active ? ABOUT_ME_MAX_PLUS : ABOUT_ME_MAX_FREE;
             aboutInput.maxLength = max;
             aboutInput.value = currentUser?.about_me || '';
+            aboutInput._aboutPrev = aboutInput.value;
             updateAboutCount(aboutInput);
             requestAnimationFrame(() => fitAboutInput(aboutInput));   // modal görünür olunca genişlik belli olur
         }
@@ -6265,6 +6268,15 @@ profileBtn.addEventListener(
 // Sınırlar sunucudakiyle aynı (server/db.js ABOUT_ME_MAX_*); sunucu da bu uzunlukta keser.
 const ABOUT_ME_MAX_FREE = 150;
 const ABOUT_ME_MAX_PLUS = 300;
+const ABOUT_ME_MAX_BREAKS = 2;   // en fazla 2 satır atlama (sunucu da aynı kuralı uygular)
+// Sunucudaki normalizeAboutMe ile aynı: fazladan satır atlamaları boşluğa çevirir, sınırda keser, yarım emoji bırakmaz
+function normalizeAboutText(raw, max) {
+    let n = 0;
+    let text = String(raw || '').replace(/\r\n?/g, '\n').replace(/\n/g, () => (++n <= ABOUT_ME_MAX_BREAKS ? '\n' : ' '));
+    text = text.trim().slice(0, max);
+    if (/[\uD800-\uDBFF]$/.test(text)) text = text.slice(0, -1);
+    return text.trimEnd();   // kesim sonda boşluk/satır bırakmasın
+}
 function updateAboutCount(input) {
     const count = document.getElementById('about-me-count');
     if (!count) return;
@@ -6272,15 +6284,17 @@ function updateAboutCount(input) {
     // Eski (daha yüksek) sınırla yazılmış uzun metin: kaydedince sunucu sınıra keser, sayaç uyarır
     count.classList.toggle('is-over', input.value.length > input.maxLength);
 }
-// Alan yazdıkça aşağı uzar ama en fazla sınır kadar metnin sığacağı yüksekliğe kadar; elle büyütme kapalı.
+// Metin kutuları (.about-me-input: Hakkımda + lobi açıklama/kurallar/duyuru/karşılama) yazdıkça aşağı uzar ama en fazla
+// karakter sınırı kadar metnin sığacağı yüksekliğe kadar; elle büyütme kapalı.
 // Tavan, o anki genişlikte sınır uzunluğundaki örnek metnin yüksekliğidir (telefonda daha uzun, masaüstünde daha kısa).
 const aboutCapCache = new Map();
+window.addEventListener('resize', () => aboutCapCache.clear());
 function aboutCapHeight(input) {
     const key = `${input.clientWidth}:${input.maxLength}`;
     if (aboutCapCache.has(key)) return aboutCapCache.get(key);
     const probe = input.cloneNode(false);
     probe.removeAttribute('id');
-    probe.style.cssText = `position:absolute;visibility:hidden;left:-9999px;top:0;height:0;min-height:0;max-height:none;width:${input.offsetWidth}px`;
+    probe.style.cssText = `position:absolute;visibility:hidden;left:-9999px;top:0;height:0;min-height:0;max-height:none;overflow:hidden;width:${input.offsetWidth}px`;
     probe.value = 'Merhaba, oyun oynamayı ve müzik dinlemeyi seviyorum. '.repeat(20).slice(0, input.maxLength);
     input.parentNode.appendChild(probe);
     // Gerçek metin kelime kırılımına göre örnekten 1-2 satır uzun sürebilir → 2 satır pay (yalnızca çok satır atlamalı metin tavana değer)
@@ -6292,18 +6306,51 @@ function aboutCapHeight(input) {
     return cap;
 }
 function fitAboutInput(input) {
-    if (!input || !input.offsetParent) return;
+    if (!input) return;
+    if (!input.offsetParent) { input.style.height = ''; input.style.overflowY = ''; return; }   // gizliyken eski yükseklik kalmasın
     const cap = aboutCapHeight(input);
     input.style.height = 'auto';
     const need = input.scrollHeight + (input.offsetHeight - input.clientHeight);
     input.style.height = `${Math.min(need, cap)}px`;
     input.style.overflowY = need > cap ? 'auto' : 'hidden';   // çok satır atlamalı metin tavanda kaydırılır
 }
-document.getElementById('about-me-input')?.addEventListener('input', (event) => {
-    updateAboutCount(event.target);
-    fitAboutInput(event.target);
+window.fitAboutInput = fitAboutInput;   // hub-l4.js kutuyu doldurunca çağırır
+// Tüm kutular için tek dinleyici (lobi kutuları sonradan oluşturuluyor); odaklanınca da ölçülür (kod ile doldurulan değerler)
+document.addEventListener('input', (event) => { if (event.target.classList?.contains('about-me-input')) fitAboutInput(event.target); });
+document.addEventListener('focusin', (event) => { if (event.target.classList?.contains('about-me-input')) fitAboutInput(event.target); });
+window.addEventListener('resize', () => document.querySelectorAll('.about-me-input').forEach(fitAboutInput));
+// Hakkımda: en fazla 2 satır atlama; Enter sınırda engellenir, yapıştırmada fazlası boşluğa çevrilir
+document.getElementById('about-me-input')?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229) return;   // IME aday onayı engellenmez
+    const el = event.target;
+    const breaks = (el.value.match(/\n/g) || []).length;
+    const selected = el.value.slice(el.selectionStart, el.selectionEnd);
+    if (breaks - (selected.match(/\n/g) || []).length >= ABOUT_ME_MAX_BREAKS) event.preventDefault();
 });
-window.addEventListener('resize', () => fitAboutInput(document.getElementById('about-me-input')));
+// Telefon klavyelerinde Enter keydown'da tanınmayabilir → girişten sonra düzeltilir. Yalnızca YENİ eklenen kısımdaki
+// satır atlamaları boşluğa çevrilir (önceki değerle ortak baş/son çıkarılır); var olan satırlar ve eski metin korunur.
+const countBreaks = (s) => (s.match(/\n/g) || []).length;
+function limitAboutBreaks(el) {
+    const prev = el._aboutPrev ?? '';
+    const cur = el.value;
+    if (countBreaks(cur) > ABOUT_ME_MAX_BREAKS && countBreaks(cur) > countBreaks(prev)) {
+        let a = 0;
+        while (a < prev.length && a < cur.length && prev[a] === cur[a]) a++;
+        let b = 0;
+        while (b < prev.length - a && b < cur.length - a && prev[prev.length - 1 - b] === cur[cur.length - 1 - b]) b++;
+        const head = cur.slice(0, a), mid = cur.slice(a, cur.length - b), tail = cur.slice(cur.length - b);
+        let room = Math.max(0, ABOUT_ME_MAX_BREAKS - countBreaks(head) - countBreaks(tail));
+        const fixed = mid.replace(/\n/g, () => (room-- > 0 ? '\n' : ' '));   // uzunluk aynı kalır
+        if (fixed !== mid) { const pos = el.selectionStart; el.value = head + fixed + tail; el.setSelectionRange(pos, pos); }
+    }
+    el._aboutPrev = el.value;
+}
+document.getElementById('about-me-input')?.addEventListener('input', (event) => {
+    const el = event.target;
+    if (!event.isComposing) limitAboutBreaks(el);   // IME yazımı sürerken değere dokunulmaz (compositionend'de bakılır)
+    updateAboutCount(el);
+});
+document.getElementById('about-me-input')?.addEventListener('compositionend', (event) => { limitAboutBreaks(event.target); updateAboutCount(event.target); });
 
 // Sauran Plus: Sohbet Teması seçici — Plus olmayanlar seçenekleri görür ama seçemez, "yakında" değil
 // "Plus gerekli" ipucu görürler (özellik gerçekten var, sadece abonelik şartlı).
@@ -6351,6 +6398,10 @@ function renderProfileColorPicker() {
     const resetBtn = document.getElementById('profile-color-reset-btn');
     const hint = document.getElementById('profile-color-hint');
     if (!input || !currentUser) return;
+    // Renk, fotoğrafı olmayan avatarın zeminidir; fotoğraf yüklüyken seçici gizlenir, fotoğraf kaldırılınca geri gelir
+    // (avatar yükleme/kaldırma renderProfile → buradan geçer)
+    const block = document.getElementById('profile-color-block');
+    if (block) block.hidden = Boolean(currentUser.avatar_data);
     input.disabled = false;
     saveBtn.disabled = false;
     resetBtn.disabled = !currentUser.profile_color;
@@ -6831,6 +6882,10 @@ document.getElementById('about-me-save-btn')?.addEventListener('click', async ()
     const input = document.getElementById('about-me-input');
     if (!input) return;
 
+    // Eski (daha yüksek) sınırla yazılmış metin sınırı aşıyorsa sessizce kısalmasın: önce sor
+    const saved = normalizeAboutText(input.value, input.maxLength);
+    if (input.value.trim().length > input.maxLength && !confirm(t('about-me-trim-confirm').replace('{n}', input.maxLength))) return;
+
     try {
 
         const response = await fetch('/api/profile/about', {
@@ -6844,7 +6899,12 @@ document.getElementById('about-me-save-btn')?.addEventListener('click', async ()
 
         if (data.success) {
             if (currentUser) currentUser.about_me = data.about_me;
-            showToast(t('about-me-saved'));
+            input.value = data.about_me ?? saved;   // kutu, sunucunun gerçekten kaydettiğini göstersin
+            input._aboutPrev = input.value;
+            updateAboutCount(input);
+            fitAboutInput(input);
+            // Sunucu daha kısa kaydettiyse (ör. Plus süresi oturum açıkken bittiyse) sessiz geçme
+            showToast(input.value.length < saved.length ? t('about-me-trimmed').replace('{n}', input.value.length) : t('about-me-saved'));
         } else {
             showToast(data.error || 'Güncellenemedi.');
         }
@@ -16287,6 +16347,7 @@ function populateHubDiscoverSettings(isOwner) {
     document.getElementById('hubset-topic').value = currentHub.topic || '';
     document.getElementById('hubset-description').value = currentHub.description || '';
     document.getElementById('hubset-rules').value = currentHub.rules || '';
+    ['hubset-description', 'hubset-rules'].forEach((id) => { const el = document.getElementById(id); el.style.height = ''; requestAnimationFrame(() => fitAboutInput(el)); });
     document.getElementById('hubset-language').value = currentHub.language || '';
     document.getElementById('hubset-join-policy').value = currentHub.join_policy || 'everyone';
     document.getElementById('hubset-mic').value = currentHub.mic_requirement || 'none';

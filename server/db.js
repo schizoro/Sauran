@@ -3195,11 +3195,22 @@ function setHubAtmosphere(hubId, userId, key) {
 
 const ABOUT_ME_MAX_FREE = 150;
 const ABOUT_ME_MAX_PLUS = 300;
+const ABOUT_ME_MAX_BREAKS = 2;   // en fazla 2 satır atlama (profil Enter'la uzatılamasın)
+
+// İstemcideki normalizeAboutText ile aynı kural: \r\n → \n, ilk 2 satır atlamadan sonrakiler boşluk olur,
+// sınırda kesilir; kesim bir emojinin ortasına (yarım vekil çift) denk gelirse o yarım karakter atılır.
+function normalizeAboutMe(raw, max) {
+  let n = 0;
+  let text = String(raw || '').replace(/\r\n?/g, '\n').replace(/\n/g, () => (++n <= ABOUT_ME_MAX_BREAKS ? '\n' : ' '));
+  text = text.trim().slice(0, max);
+  if (/[\uD800-\uDBFF]$/.test(text)) text = text.slice(0, -1);
+  return text.trimEnd();   // kesim sonda boşluk/satır bırakmasın
+}
 
 function updateAboutMe(userId, aboutMe) {
   try {
     const max = hasActivePlus(userId) ? ABOUT_ME_MAX_PLUS : ABOUT_ME_MAX_FREE;
-    const text = String(aboutMe || '').trim().slice(0, max);
+    const text = normalizeAboutMe(aboutMe, max);
 
     db.prepare(`UPDATE users SET about_me = ? WHERE id = ?`).run(text, userId);
 

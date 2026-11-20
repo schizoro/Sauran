@@ -2052,7 +2052,7 @@
                     </div>
                     <textarea id="about-me-input" class="about-me-input" maxlength="150" data-i18n-placeholder="about-me-placeholder" placeholder="Kendinden bahset..."></textarea>
                     <div class="profile-about-actions">
-                        <span id="about-me-count" class="about-me-count">0/300</span>
+                        <span id="about-me-count" class="about-me-count">0/150</span>
                         <button id="about-me-save-btn" class="about-btn about-btn-primary" type="button" data-i18n="save">Kaydet</button>
                     </div>
                 </div>
@@ -2063,7 +2063,7 @@
                     <span class="pcb-chev" aria-hidden="true">›</span>
                 </button>
 
-                <div class="profile-field-block">
+                <div id="profile-color-block" class="profile-field-block profile-field-inline">
                     <div class="about-label-row">
                         <span class="profile-field-label">Profil Rengi</span>
                         <button class="about-info-btn" type="button" aria-label="Bilgi" aria-expanded="false" aria-describedby="profile-color-info-tip">ⓘ</button>
@@ -2072,7 +2072,7 @@
                     <div class="profile-color-row">
                         <input type="color" id="profile-color-input" value="#5cc8ff">
                         <button type="button" id="profile-color-save-btn" class="about-btn about-btn-primary">Uygula</button>
-                        <button type="button" id="profile-color-reset-btn" class="about-btn about-btn-ghost">Varsayılana Dön</button>
+                        <button type="button" id="profile-color-reset-btn" class="about-btn about-btn-ghost about-btn-icon" aria-label="Varsayılana dön" title="Varsayılana dön">↺</button>
                     </div>
                     <p id="profile-color-hint" class="hubset-hint"></p>
                 </div>
@@ -2082,7 +2082,7 @@
                     <div class="activity-row">
                         <input type="text" id="activity-input" class="hub-name-input" maxlength="40" placeholder="Örn. Mobile Legends">
                         <button type="button" id="activity-save-btn" class="about-btn about-btn-primary">Kaydet</button>
-                        <button type="button" id="activity-clear-btn" class="about-btn about-btn-ghost">Temizle</button>
+                        <button type="button" id="activity-clear-btn" class="about-btn about-btn-ghost about-btn-icon" aria-label="Oynadığım oyunu temizle" title="Temizle">✕</button>
                     </div>
                     <label class="activity-toggle"><input type="checkbox" id="activity-show-toggle"> <span>Arkadaşlarım profilimde ne oynadığımı görsün</span></label>
                     <label id="activity-auto-row" class="activity-toggle" style="display:none;"><input type="checkbox" id="activity-auto-toggle"> <span>Oynadığım oyunu otomatik algıla <small>(bu bilgisayarda çalışan tanınmış oyunlar; süreç listesi sunucuya gönderilmez)</small></span></label>

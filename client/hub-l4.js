@@ -63,6 +63,7 @@
             <div class="cz-card-title" style="margin-top:16px;">Lobi vurgu rengi</div>
             <div class="hub-bg-row"><input type="color" id="hubset-accent" value="${esc(h.accent_color || '#5cc8ff')}" aria-label="Vurgu rengi"><button id="hubset-accent-save" class="hub-create-image-btn" type="button">Uygula</button><button id="hubset-accent-clear" class="hub-create-image-btn" type="button" ${h.accent_color ? '' : 'disabled'}>Sıfırla</button></div>
             <p class="hubset-hint">Bu renk yalnızca bu lobinin içinde düğmeleri, sekmeleri ve vurguları boyar.</p>`;
+        requestAnimationFrame(() => box.querySelectorAll('.about-me-input').forEach((ta) => window.fitAboutInput?.(ta)));
     };
 
     document.addEventListener('click', async (e) => {
