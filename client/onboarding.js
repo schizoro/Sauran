@@ -9,6 +9,7 @@
 
 // Sürümler: en yenisi en üstte. Yenilikler penceresi, kullanıcının görmediği en yeni sürümü gösterir.
 const RELEASES = [
+    { id: '2026-11-21', title: 'Yeni sohbet yazma alanı ve sade profil paneli', date: '21 Kasım 2026' },
     { id: '2026-11-15', title: 'Yeni ve yenilenen profil efektleri, hafif mod', date: '15 Kasım 2026' },
     { id: '2026-11-14', title: 'Yeni profil efektleri', date: '14 Kasım 2026' },
     { id: '2026-11-13', title: 'Kasım güncellemesi', date: '13 Kasım 2026' }
@@ -28,6 +29,12 @@ function openSettingsAt(tab, sel) {
 // id: küçük harf + tire (sunucu bu biçimi kabul eder). where: kullanıcıya gösterilen konum.
 // highlight: Yenilikler penceresinde büyük kart olarak öne çıkar (en fazla 6).
 const FEATURE_CATALOG = [
+    { id: 'composer-pill', since: '2026-11-21', highlight: true, icon: '💬', title: 'Yeni yazma alanı',
+      desc: 'Sohbetlerde mesaj alanı yenilendi: yazınca mikrofon gönder düğmesine dönüşür, emoji paneli hızlı açılır. Telefonda boşluğa dokununca klavye ve panel kapanır.',
+      where: 'Sohbetler › Mesaj alanı', keywords: ['mesaj', 'yazma', 'emoji', 'mikrofon', 'gonder', 'klavye'] },
+    { id: 'profile-compact', since: '2026-11-21', icon: '🪪', title: 'Sade profil paneli',
+      desc: 'Profil paneli daha derli toplu. Hakkımda en fazla 2 satır atlayabilir; Profil Rengi yalnızca avatar fotoğrafın yokken görünür.',
+      where: 'Profil', keywords: ['profil', 'hakkimda', 'profil rengi', 'panel'] },
     { id: 'motion-lite', since: '2026-11-15', highlight: true, icon: '🪶', title: 'Hafif animasyon modu',
       desc: '"Animasyonları azalt" artık efektleri durdurmuyor: daha yavaş ve ani parlamasız oynatıyor, pili ve ısınmayı azaltıyor. Tamamen durdurmak için yeni "Animasyonları tamamen kapat" seçeneği var. İkisi de varsayılan olarak kapalı.',
       where: 'Ayarlar › Genel › Hareket', keywords: ['hafif mod', 'animasyon', 'hareket', 'pil', 'isinma', 'tamamen kapat'],

@@ -98,9 +98,17 @@
         panel.querySelector('#ep-search-input').value = '';
         panel.style.display = 'flex';
         position();
-        renderBody();
+        // Telefonda panel klavyenin yerini alır: yazma alanı odaktaysa bırakılır (klavye + panel üst üste binmesin)
+        if (panel.classList.contains('ep-sheet')) { const inp = el(prefix + '-message-input'); if (inp && document.activeElement === inp) inp.blur(); }
+        const key = prefix + ':' + (prefix === 'hub' && typeof currentHub !== 'undefined' && currentHub ? currentHub.id : '');
+        const cached = state.data && state.dataKey === key;
+        renderBody();   // önbellekteki veriyle anında
+        const before = cached ? JSON.stringify(state.data) : '';
         await loadData();
-        renderBody();
+        const nowKey = state.prefix + ':' + (state.prefix === 'hub' && typeof currentHub !== 'undefined' && currentHub ? currentHub.id : '');
+        if (nowKey !== key) return;   // bu arada başka sohbete geçildi; o açılış kendi verisini yükler
+        state.dataKey = key;
+        if (!cached || JSON.stringify(state.data) !== before) renderBody(true);   // yalnızca değiştiyse yeniden çiz
     }
     function closePanel() { if (panel) panel.style.display = 'none'; }
 
@@ -216,9 +224,11 @@
         const a = input.selectionStart != null ? input.selectionStart : input.value.length;
         const b = input.selectionEnd != null ? input.selectionEnd : a;
         input.value = input.value.slice(0, a) + text + input.value.slice(b);
-        input.focus();
         const p = a + text.length;
+        // Telefonda (alt sayfa) odaklanmak klavyeyi açıp paneli örter → yalnızca imleç konumu korunur
+        if (!(panel && panel.classList.contains('ep-sheet'))) input.focus();
         input.setSelectionRange(p, p);
+        input.dispatchEvent(new Event('input', { bubbles: true }));   // yükseklik ve gönder düğmesi güncellensin
     }
 
     // GIF, adresi tek başına metin mesajı olarak gönderilir (mevcut gönderim akışı + sunucu doğrulaması aynen kullanılır).

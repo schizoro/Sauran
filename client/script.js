@@ -6035,6 +6035,8 @@ const I18N = {
     'message-pinned': { tr: '📌 Sabitlendi', en: '📌 Pinned' },
     'message-unpinned': { tr: 'Sabitleme kaldırıldı', en: 'Unpinned' },
     'message-replying': { tr: '↩ Yanıtlanıyor', en: '↩ Replying' },
+    'dm-message-input-ph-fallback': { tr: 'Bir mesaj yaz...', en: 'Type a message...' },
+    'dm-placeholder-named': { tr: '@{name} kullanıcısına mesaj gönder', en: 'Message @{name}' },
     'message-cancel-reply': { tr: 'Yanıtı iptal et', en: 'Cancel reply' },
     'message-more-actions': { tr: 'Diğer aksiyonlar', en: 'More actions' },
     'message-reply-deleted': { tr: 'Silinmiş mesaj', en: 'Deleted message' },
@@ -11374,6 +11376,9 @@ async function openDm(userId, username) {
 
     setDmReadOnlyMode(false);
     clearTyping('dm');
+    // Yer tutucu, sohbet edilen kişiyi gösterir (referans: "@ad kullanıcısına mesaj gönder")
+    const dmPh = document.getElementById('dm-message-input');
+    if (dmPh) dmPh.placeholder = username ? t('dm-placeholder-named').replace('{name}', username) : t('dm-message-input-ph-fallback');
     if (msgSearchPanel?.dataset.kind === 'dm') closeMessageSearch();
     const dmChanged = activeDmUserId !== userId;
     if (dmChanged) { stashDraft('dm'); cancelMessageReply('dm'); }
@@ -13709,6 +13714,23 @@ async function loadNewerMessages(kind) {
 hubFeed.addEventListener('scroll', () => { if (hubFeed.scrollHeight - hubFeed.scrollTop - hubFeed.clientHeight < 160) loadNewerMessages('hub'); }, { passive: true });
 dmFeed.addEventListener('scroll', () => { if (dmFeed.scrollHeight - dmFeed.scrollTop - dmFeed.clientHeight < 160) loadNewerMessages('dm'); }, { passive: true });
 keepComposerFocus(document.getElementById('hub-send-btn'), document.getElementById('hub-message-input'));
+// Dokunmatik ekranda sohbet akışına/boşluğa dokunmak (kaydırma değil) yazma alanından çıkar → klavye kapanır.
+// Kaydırma (parmak 10 px'ten fazla kayarsa) ve metin seçimi klavyeyi kapatmaz; yazma alanı, emoji paneli, yanıt
+// çubuğu ve başka bir giriş kutusu hariç.
+(() => {
+    if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) return;
+    let start = null;
+    document.addEventListener('pointerdown', (e) => { start = { x: e.clientX, y: e.clientY, t: e.target }; }, { passive: true, capture: true });
+    document.addEventListener('pointerup', (e) => {
+        const s = start; start = null;
+        if (!s || Math.hypot(e.clientX - s.x, e.clientY - s.y) > 10) return;
+        const a = document.activeElement;
+        if (!a || !a.classList || !a.classList.contains('composer-textarea')) return;
+        if (s.t.closest && s.t.closest('.composer-form, #emoji-panel, .composer-reply-preview, input, textarea, select, [contenteditable="true"]')) return;
+        if (String(window.getSelection && window.getSelection()).length) return;
+        a.blur();
+    }, { passive: true, capture: true });
+})();
 keepComposerFocus(document.querySelector('#dm-form .composer-send-btn, form .composer-send-btn:not(#hub-send-btn)'), dmMessageInput);
 
 // ─── Sayfanın en altına in butonu ─────────────────────────────────────────
